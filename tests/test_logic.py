@@ -74,12 +74,11 @@ def test_no_prompt_or_canon_calls_the_agent_a_model_or_bot():
     from pathlib import Path
 
     from agents.logic import build_instruction
-    banned = ("бот", "модел", "штучн", " ai", "ші ", "llm", "gemini", "асистент")
+    from tests.test_memory import BANNED
     texts = [build_instruction("Ада", "Канон.", "підсумок")]
     texts += [p.read_text(encoding="utf-8") for p in Path("agents/canon").glob("*.md")]
     for text in texts:
-        low = f" {text.lower()} "
-        assert not any(b in low for b in banned), text[:80]
+        assert not BANNED.search(text), text[:80]
 
 
 def test_instruction_is_the_literal_ukrainian_contract():

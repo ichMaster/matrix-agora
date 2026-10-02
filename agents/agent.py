@@ -10,6 +10,7 @@ import asyncio
 import logging
 import os
 import random
+import signal
 import sys
 import time
 import urllib.parse
@@ -35,6 +36,7 @@ from agents.logic import (
     should_handle,
     should_join_invite,
 )
+from agents.memory import build_summary_request, cap_words, load_memory, save_memory, session_ended
 from agents.session import load_session, save_session
 from agents.turns import bot_streak, decide_reply, is_pass, streak_frees_at
 
@@ -63,6 +65,15 @@ class Agent:
             self.names[self.other] = "Ада" if "ada" in self.other else "Бруно"
         self.other_name = self.names.get(self.other) if self.other else None
         self.summary: str | None = None  # last-session memory (v2.1)
+        self.memory_file = cfg.memory_file
+        self.session: list[tuple[str, str]] = []  # every room message since the last summary
+        self.session_max = int(os.environ.get("SESSION_MAX_MESSAGES", "200"))
+        self.idle_ms = int(float(os.environ.get("SESSION_IDLE_S", "900")) * 1000)
+        self.summary_max_words = int(os.environ.get("SUMMARY_MAX_WORDS", "200"))
+        self.clock = lambda: int(time.time() * 1000)  # injectable
+        self.last_activity_ms: int | None = None
+        self.last_attempt_ms: int | None = None
+        self._summary_lock = asyncio.Lock()
         self._tasks: set[asyncio.Task] = set()  # strong refs: pending tasks are only weakly referenced
 
     async def login(self) -> None:
@@ -135,6 +146,10 @@ class Agent:
                 speaker = self.names.get(event.sender, event.sender)
                 self.history = append_history(self.history, speaker, event.body, self.history_n)
                 self.timeline = [*self.timeline, (speaker, now_ms)][-max(self.history_n, 1):]
+                self.session.append((speaker, event.body))
+                self.last_activity_ms = self.clock()
+                if len(self.session) >= self.session_max:
+                    self._spawn(self.summarize())  # timeline cap → early summary
             verdict = should_handle(room.room_id, event.sender, self.cfg, self.other)
             if not verdict.handle:
                 log.info("ignored: %s (room %s)", verdict.reason, room.room_id)
@@ -225,7 +240,52 @@ class Agent:
         finally:
             await self.client.room_typing(room_id, False)
 
+    async def summarize(self) -> bool:
+        """Previous summary + this session → a new summary file. On failure the
+        previous summary and the session are kept for a later retry."""
+        async with self._summary_lock:
+            snapshot = list(self.session)
+            if not snapshot:
+                return False
+            self.last_attempt_ms = self.clock()
+            system, contents = build_summary_request(
+                self.cfg.name, self.cfg.canon, self.summary, snapshot, self.summary_max_words,
+            )
+            text = await self.llm.generate(contents, system, max_output_tokens=self.summary_max_words * 3)
+            if text is None:
+                log.error("session summary failed — keeping the previous one")
+                return False
+            text = cap_words(text, self.summary_max_words)
+            save_memory(self.memory_file, text)
+            self.summary = text
+            self.session = self.session[len(snapshot):]  # keep what arrived meanwhile
+            return True
+
+    async def idle_watcher(self) -> None:
+        """Ends a session after SESSION_IDLE_S of silence (retries a failed summary
+        only after another idle period)."""
+        interval = max(1.0, min(30.0, self.idle_ms / 4000))
+        while True:
+            await asyncio.sleep(interval)
+            now = self.clock()
+            if (
+                self.session
+                and session_ended(self.last_activity_ms, now, self.idle_ms)
+                and (self.last_attempt_ms is None or now - self.last_attempt_ms >= self.idle_ms)
+            ):
+                await self.summarize()
+
+    async def shutdown(self, timeout_s: float = 20.0) -> None:
+        """The shutdown summary, bounded so Ctrl+C never hangs."""
+        try:
+            await asyncio.wait_for(self.summarize(), timeout=timeout_s)
+        except TimeoutError:
+            log.error("shutdown summary timed out after %.0fs — keeping the previous one", timeout_s)
+
     async def run(self) -> None:
+        self.summary = load_memory(self.memory_file)
+        if self.summary:
+            log.info("%s: last-session memory loaded", self.cfg.localpart)
         await self.login()
         # First sync: only to obtain next_batch; its events are never handled.
         first = await self.client.sync(timeout=10000, full_state=True)
@@ -236,7 +296,20 @@ class Agent:
         self.client.add_event_callback(self.on_message, RoomMessageText)
         self.client.add_event_callback(self.on_invite, InviteMemberEvent)
         log.info("%s: entering sync_forever", self.cfg.localpart)
-        await self.client.sync_forever(timeout=30000)
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, stop.set)
+        sync_task = asyncio.create_task(self.client.sync_forever(timeout=30000))
+        watcher = asyncio.create_task(self.idle_watcher())
+        stop_task = asyncio.create_task(stop.wait())
+        await asyncio.wait({sync_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
+        log.info("%s: stopping — writing the session summary", self.cfg.localpart)
+        for t in (sync_task, watcher, stop_task):
+            t.cancel()
+        await self.shutdown()
+        await self.client.close()
+        log.info("%s: stopped", self.cfg.localpart)
 
 
 def main() -> None:
@@ -246,10 +319,7 @@ def main() -> None:
         raise SystemExit(2)
     cfg = load_config(sys.argv[1])
     agent = Agent(cfg)
-    try:
-        asyncio.run(agent.run())
-    except KeyboardInterrupt:
-        log.info("%s: stopped", cfg.localpart)
+    asyncio.run(agent.run())
 
 
 if __name__ == "__main__":

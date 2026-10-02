@@ -20,14 +20,16 @@ class GeminiClient:
     def __init__(self) -> None:
         self._client = genai.Client()  # reads GEMINI_API_KEY from the environment
 
-    async def generate(self, transcript: str, system_instruction: str) -> str | None:
+    async def generate(
+        self, transcript: str, system_instruction: str, max_output_tokens: int = 400,
+    ) -> str | None:
         try:
             resp = await self._client.aio.models.generate_content(
                 model=MODEL,
                 contents=transcript,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
-                    max_output_tokens=400,
+                    max_output_tokens=max_output_tokens,
                     thinking_config=types.ThinkingConfig(thinking_budget=0),
                 ),
             )

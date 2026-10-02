@@ -39,6 +39,10 @@ class AgentConfig:
     def state_file(self) -> Path:
         return Path("state") / f"{self.localpart}.json"
 
+    @property
+    def memory_file(self) -> Path:
+        return Path("state") / f"{self.localpart}.memory.md"
+
 
 def _require(env: dict[str, str], key: str) -> str:
     value = env.get(key, "").strip()

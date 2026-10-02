@@ -18,7 +18,7 @@ class FakeLLM:
         self.text = text
         self.calls = []
 
-    async def generate(self, transcript, system_instruction):
+    async def generate(self, transcript, system_instruction, max_output_tokens=400):
         self.calls.append((transcript, system_instruction))
         return self.text
 
