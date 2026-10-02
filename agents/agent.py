@@ -66,6 +66,7 @@ class Agent:
                 "Content-Type": "application/json",
             },
         )
+        await resp.read()  # consume the body — never leak the connection back unconsumed
         ok = resp.status == 200
         if ok:
             log.info("joined %s", room_id)

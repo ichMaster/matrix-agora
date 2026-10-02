@@ -45,3 +45,9 @@ def test_v05_echoes_the_owner_only_no_bot_loop():
     from agents.logic import should_echo
     assert should_echo("@ich:agora.lan", CFG) is True
     assert should_echo(OTHER, CFG) is False  # otherwise ada and bruno echo each other forever
+
+
+def test_huge_messages_are_echoed_truncated():
+    from agents.logic import ECHO_MAX_CHARS
+    out = echo_reply("Ада", "x" * (ECHO_MAX_CHARS + 500))
+    assert out.endswith("…") and len(out) < ECHO_MAX_CHARS + 50

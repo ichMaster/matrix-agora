@@ -39,6 +39,12 @@ def should_echo(sender: str, cfg: AgentConfig) -> bool:
     return sender == cfg.owner
 
 
+ECHO_MAX_CHARS = 4000
+
+
 def echo_reply(name: str, text: str) -> str:
-    """The literal v0.5 reply format (the bot sends exactly this)."""
+    """The literal v0.5 reply format (the bot sends exactly this), bounded so a
+    pasted huge text is never doubled in full."""
+    if len(text) > ECHO_MAX_CHARS:
+        text = text[:ECHO_MAX_CHARS] + "…"
     return f"{name} чує: {text}"
