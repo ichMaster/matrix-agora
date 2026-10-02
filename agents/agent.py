@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import random
 import sys
 import urllib.parse
 from pathlib import Path
@@ -32,9 +33,9 @@ from agents.logic import (
     build_transcript,
     should_handle,
     should_join_invite,
-    should_reply,
 )
 from agents.session import load_session, save_session
+from agents.turns import bot_streak, decide_reply, is_pass
 
 log = logging.getLogger("agent")
 
@@ -50,9 +51,14 @@ class Agent:
         self.llm = llm or GeminiClient()
         self.history: list[tuple[str, str]] = []
         self.history_n = int(os.environ.get("HISTORY_N", "30"))
+        self.max_bot_turns = int(os.environ.get("MAX_BOT_TURNS", "2"))
+        self.bot_reply_p = float(os.environ.get("BOT_REPLY_P", "0.5"))
+        self.reply_delay_s = float(os.environ.get("REPLY_DELAY_S", "4"))
+        self.rng = random.random  # injectable in tests
         self.names = {cfg.user_id: cfg.name, cfg.owner: "Ich"}
         if self.other:
             self.names[self.other] = "Ада" if "ada" in self.other else "Бруно"
+        self.other_name = self.names.get(self.other) if self.other else None
 
     async def login(self) -> None:
         stored = load_session(self.cfg.state_file)
@@ -126,15 +132,33 @@ class Agent:
             if not verdict.handle:
                 log.info("ignored: %s (room %s)", verdict.reason, room.room_id)
                 return
-            if not should_reply(event.sender, self.cfg):
-                log.info("ignored: agent-message (owner-only replies until v1.2)")
+            decision = decide_reply(
+                event.sender, event.body,
+                bot_streak(self.history[:-1], "Ich"),
+                self.cfg, self.other, self.other_name,
+                max_bot_turns=self.max_bot_turns,
+                bot_reply_p=self.bot_reply_p,
+                reply_delay_s=self.reply_delay_s,
+                rng=self.rng,
+            )
+            if not decision.reply:
+                log.info("silent: %s", decision.reason)
                 return
-            await self.reply(room.room_id)
+            # scheduled, so the sync loop keeps running; context is read at fire time
+            asyncio.create_task(self.reply_later(room.room_id, decision.delay_s))
         except Exception:
             log.exception("message handler failed (bot keeps running)")
 
+    async def reply_later(self, room_id: str, delay_s: float) -> None:
+        try:
+            if delay_s > 0:
+                await asyncio.sleep(delay_s)
+            await self.reply(room_id)
+        except Exception:
+            log.exception("scheduled reply failed (bot keeps running)")
+
     async def reply(self, room_id: str) -> None:
-        """Typing on → Gemini → m.text; silence on failure; typing reset in finally."""
+        """Typing on → Gemini → m.text; silence on failure or PASS; typing reset in finally."""
         try:
             await self.client.room_typing(room_id, True)
             text = await self.llm.generate(
@@ -143,6 +167,9 @@ class Agent:
             )
             if text is None:
                 return  # already logged; stay silent
+            if is_pass(text):
+                log.info("silent: model passed")
+                return
             await self.client.room_send(
                 room_id=room_id,
                 message_type="m.room.message",

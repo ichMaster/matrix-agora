@@ -41,12 +41,6 @@ def test_echo_format_is_the_literal_contract():
     assert echo_reply("Ада", "привіт") == "Ада чує: привіт"
 
 
-def test_replies_go_to_the_owner_only_until_v12():
-    from agents.logic import should_reply
-    assert should_reply("@ich:agora.lan", CFG) is True
-    assert should_reply(OTHER, CFG) is False  # two LLM bots answering each other would loop
-
-
 def test_huge_messages_are_echoed_truncated():
     from agents.logic import ECHO_MAX_CHARS
     out = echo_reply("Ада", "x" * (ECHO_MAX_CHARS + 500))
@@ -70,7 +64,8 @@ def test_instruction_is_the_literal_ukrainian_contract():
     from agents.logic import build_instruction
     out = build_instruction("Ада", "Персона.")
     assert out.startswith("Персона.")
-    assert out.endswith("Ти — Ада. Відповідай лише від себе, коротко, без префікса з іменем.")
+    assert "Ти — Ада. Відповідай лише від себе, коротко, без префікса з іменем." in out
+    assert out.endswith("Якщо тобі нема чого додати — відповідай рівно PASS.")
 
 
 def test_history_entries_are_bounded():
