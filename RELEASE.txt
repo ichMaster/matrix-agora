@@ -1,3 +1,13 @@
+Version 0.4.0 (2026-10-02)
+---------------------------
+- Bot accounts @ada and @bruno registered (AGORA-006); passwords only in the
+  gitignored .env
+- Registration closed and deployed via server/deploy.sh (AGORA-007); live
+  probe returns M_FORBIDDEN
+- Room "Agora" created (private, invite-only, unencrypted) with both bot
+  invites pending (AGORA-008); ROOM_ID recorded in .env
+- Docs fix: room ids are MSC-style with no server suffix
+
 Version 0.3.0 (2026-10-02)
 ---------------------------
 - Element Desktop installed on the Mac (AGORA-005)
