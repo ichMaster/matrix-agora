@@ -25,7 +25,7 @@ flagging it.
 /review-and-fix-issues [target]
 ```
 
-- `/review-and-fix-issues v0.4`: review what the phase delivered (through its tag `v0.4.0` if released).
+- `/review-and-fix-issues v0.5`: review what the phase delivered (through its tag `v0.5.0` if released).
 - `/review-and-fix-issues agents`: scope the review to one component (`agents` / `panel` / `server` / `tests`).
 - `/review-and-fix-issues`: review the **current branch**, i.e. everything built so far.
 
@@ -84,7 +84,7 @@ defects, not restatements of what works.
   - Does a missing `usage_metadata` crash the bot?
   - Are prices hardcoded?
   - Does the report break on a corrupt line, or on its sums?
-- **Web panel (v3.2):**
+- **Web panel (v3.3):**
   - Does it bind only `127.0.0.1`?
   - Are the `Host` and `Origin` checks applied on every route, including errors and static files?
   - Can an agent name from the request reach the filesystem or argv (path traversal, injection)?
@@ -141,7 +141,7 @@ Decide **FIX NOW vs DEFER** honestly:
 
 - **FIX NOW** means real, small, self-contained, high-value and in scope now: an allowlist hole, a replay on
   restart, a crash that kills sync, a secret in a log.
-- **DEFER →** means larger work, or work a later phase already owns. Give the home: a later phase (`v1.1`…`v3.2`),
+- **DEFER →** means larger work, or work a later phase already owns. Give the home: a later phase (`v1.1`…`v3.3`),
   `backlog` (no phase owns it) or `cleanup (/simplify)`. Do **not** pull it forward.
 
 Commit the doc as the plan (`docs: vA.B code review`) **and push it** if a remote exists. The review is worth

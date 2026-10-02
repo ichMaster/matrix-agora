@@ -13,7 +13,7 @@ Bump the project version, update every version reference, write release notes, c
 /release-version <version> [changelog line 1; changelog line 2; ...]
 ```
 
-- `/release-version 0.4.0`: release phase v0.4 and generate the changelog from the commits.
+- `/release-version 0.5.0`: release phase v0.5 and generate the changelog from the commits.
 - `/release-version 1.2.1 Fix replay on restart; typing reset in finally`: a patch with given notes.
 
 **Version scheme (`A.B.C`):** `A` = roadmap version (v0→0 … v3→3), `B` = phase within it, `C` = a
@@ -28,7 +28,7 @@ that calls it, is that confirmation.
 
 ### Step 0: Parse arguments
 
-1. The first argument is the target version. Accept `0.4.0` or `v0.4.0` and normalize to `0.4.0`.
+1. The first argument is the target version. Accept `0.5.0` or `v0.5.0` and normalize to `0.5.0`.
 2. The remaining arguments, split on `;`, become the changelog bullets.
 3. Validate that the version matches `A.B.C` (digits only) and that `vA.B` is a real ROADMAP phase.
 
@@ -61,7 +61,7 @@ Touch only files that exist, except `VERSION` and `RELEASE.txt`, which are creat
    project version; otherwise the next `uv run` rewrites the lock and dirties the tree.
 3. **`README.md`:** update it only if it already carries a version string. Never add one.
 4. **`CLAUDE.md`:** update the `Latest release:` line under **Project status**, e.g.
-   `Latest release: v0.4.0 (phase v0.4 — echo bot).`
+   `Latest release: v0.5.0 (phase v0.5 — echo bot).`
 5. **`RELEASE.txt`:** prepend a block at the top (after any header) and keep the older entries unchanged:
 
    ```

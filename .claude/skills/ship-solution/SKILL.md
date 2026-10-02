@@ -72,7 +72,7 @@ A **selector** is a phase (`v0.4` or `0.4`), a version (`v1` = all its phases), 
    sub-skills are idempotent.
 5. **Sort into roadmap order.** If the order differs from what was typed, say so.
 6. **Clean tree and baseline.** Check the tree is clean. Run the automated gates, which must be green (or
-   `n/a` before v0.4), and **record the baseline test count** as the "before" for the statistics.
+   `n/a` before v0.5), and **record the baseline test count** as the "before" for the statistics.
 7. **Start the run clock:** `RUN_START=$(date +%s)`. Append each phase's row to `.ship-solution-progress.md`
    in the repo root as it finishes. The file is gitignored, so a long run never loses a measurement.
 8. **Size the work.** Count the issues per phase from each file's summary table, with their sizes
@@ -81,7 +81,7 @@ A **selector** is a phase (`v0.4` or `0.4`), a version (`v1` = all its phases), 
    - the ordered phases, grouped by version;
    - the filled-in phases, any reordering and the skips;
    - the sizing;
-   - the expected owner pauses (v0.1–v0.3 are mostly owner steps, and every phase's DoD has Manual (owner)
+   - the expected owner pauses (v0.1, v0.3 and v0.4 are mostly owner steps, and every phase's DoD has Manual (owner)
      checks);
    - whether HARDEN runs.
 
@@ -152,7 +152,7 @@ summary to chat.
 ## By phase
 | Phase | Duration | Issues | Commits | Tests (before→after) | Reconcile (corr/moot/kept) | Review (fixed/deferred) | Owner checks | Release tag |
 |-------|----------|--------|---------|----------------------|----------------------------|-------------------------|--------------|-------------|
-| v0.4  | mm:ss    | …      | …       | … → …                | …                          | …                       | …            | v0.4.0      |
+| v0.5  | mm:ss    | …      | …       | … → …                | …                          | …                       | …            | v0.5.0      |
 
 ## HARDEN
 - Duration, findings fixed (with commits), held (with reasons), patch tag — or "skipped (--no-harden)" with the outstanding findings.

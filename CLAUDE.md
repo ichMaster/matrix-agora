@@ -20,21 +20,23 @@ Latest release: none yet.
 
 | Version | Phases | What it delivers |
 |---|---|---|
-| `v0` Platform | v0.1 homeserver · v0.2 client · v0.3 accounts+room · v0.4 echo bot | mostly owner steps; first code in v0.4 |
+| `v0` Platform | v0.1 homeserver · v0.2 server deploy · v0.3 client · v0.4 accounts+room · v0.5 echo bot | owner steps + the deploy script; first real code in v0.5 |
 | `v1` Conversation | v1.1 Gemini replies · v1.2 turn-taking | code |
 | `v2` Persona & memory | v2.1 canons + session memory · v2.2 world awareness | code + canon files |
-| `v3` Operations | v3.1 token accounting · v3.2 web panel | code |
+| `v3` Operations | v3.1 token accounting · v3.2 agent images + CI/CD · v3.3 web panel | code |
 
 ## Layout and commands
 
 See ARCHITECTURE.md §Stack and repository layout for the full tree. The essentials:
 
 - Run an agent (one terminal per agent): `uv run agents/agent.py agents/ada.toml`, and the same for `agents/bruno.toml`
-- Panel (from v3.2): `uv run panel/app.py` → `http://127.0.0.1:8090`
+- Agents in Docker on the Mac (from v3.2): `docker compose up -d`; stop with `docker stop -t 30 <name>` so the session summary runs
+- Deploy the repo's server config to the Ubuntu host (from v0.2): `server/deploy.sh` (`--dry-run` first); never hand-edit files on the host
+- Panel (from v3.3): `uv run panel/app.py` → `http://127.0.0.1:8090`
 - Token report (from v3.1): `uv run agents/usage_report.py --days 7`
 - Server (on the Ubuntu host, from `server/`): `docker compose up -d`, then `docker compose logs -f homeserver`
 - Homeserver smoke test from the Mac: `curl http://192.168.1.197:8008/_matrix/client/versions`
-- `server_con.yaml` (gitignored) holds the SSH host, user and password for the Ubuntu host. Never print it, commit it, or put the password on a command line. Act on the host only when the owner asks.
+- `server_con.yaml` (gitignored) holds the SSH host, user and password for the Ubuntu host; `server/deploy.sh` (v0.2) is its only consumer. Never print it, commit it, or put the password on a command line. Deploy or act on the host only when the owner asks.
 
 ## Acceptance gates
 
@@ -44,10 +46,11 @@ Automated gates need no network: tests mock `matrix-nio` and `google-genai` and 
 |---|---|---|
 | Lint | `uv run ruff check .` | any Python change |
 | Tests | `uv run pytest` (one test: `uv run pytest tests/test_x.py::test_name`) | any Python change |
-| Compose | `REGISTRATION_TOKEN=dummy docker compose -f server/docker-compose.yml config -q` | `server/` changed |
+| Compose (server) | `REGISTRATION_TOKEN=dummy docker compose -f server/docker-compose.yml config -q` | `server/` changed |
+| Compose (Mac, from v3.2) | `docker compose -f compose.yml config -q` | `compose.yml` or `agents/Dockerfile` changed |
 
 - **Compose gate:** keep `-q`. Without it, the command prints the resolved config.
-- **Before v0.4:** there is no `pyproject.toml`, so the Python gates are `n/a`, not passed. ruff and pytest are dev dependencies, added by the issue that creates `pyproject.toml`.
+- **Before v0.5:** there is no `pyproject.toml`, so the Python gates are `n/a`, not passed. ruff and pytest are dev dependencies, added by the issue that creates `pyproject.toml`.
 - **Manual gates:** the ROADMAP DoD items marked **Manual (owner)** need the live homeserver, Element or (from v1.1) a real Gemini key.
   - Claude may run the read-only `curl` checks from the Mac.
   - Anything on the Ubuntu host, in Element, or that makes a live Gemini call is done or confirmed by the owner.

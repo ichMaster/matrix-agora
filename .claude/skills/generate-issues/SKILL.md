@@ -15,7 +15,7 @@ Decompose one ROADMAP **phase** (`vA.B`) into a small, dependency-ordered **issu
 /generate-issues <phase>
 ```
 
-- `/generate-issues v0.4` or `/generate-issues 0.4`: ROADMAP phase **v0.4** (echo bot) → `specification/implementation/v0.4-issues.md`
+- `/generate-issues v0.5` or `/generate-issues 0.5`: ROADMAP phase **v0.5** (echo bot) → `specification/implementation/v0.5-issues.md`
 
 One file per phase. Issue ids (`AGORA-###`) are **globally sequential** across phase files **and across
 regeneration runs**. Never reset them.
@@ -74,7 +74,7 @@ fixes and hardening in earlier phases may have moved the code away from the docs
 
 ### Step 1: Decompose the phase
 
-Turn the phase's tasks into a small set of issues, typically **2–5**. An owner-only phase such as v0.2 may
+Turn the phase's tasks into a small set of issues, typically **2–5**. An owner-only phase such as v0.3 may
 be a single issue. Don't pad. Each issue is a coherent, independently verifiable slice:
 
 - **Size** by complexity:
@@ -85,11 +85,11 @@ be a single issue. Don't pad. Each issue is a coherent, independently verifiable
   - `agents`: `agents/`.
   - `panel`: `panel/`.
   - `server`: `server/`.
-  - `config`: `pyproject.toml`, `.env.example`, `.gitignore`.
+  - `config`: `pyproject.toml`, `.env.example`, `.gitignore`, `agents/Dockerfile`, `compose.yml`, `server/deploy.sh`, `.github/workflows/`.
   - `tests`.
   - `docs`: the `specification/` files, README.md, CLAUDE.md.
   - `ops`: steps the owner performs on the Ubuntu host or in Element.
-- **Order by dependency.** The first issue is usually the gate that everything builds on. In v0.4 that is
+- **Order by dependency.** The first issue is usually the gate that everything builds on. In v0.5 that is
   the project skeleton plus config loading and the session login; in v1.2 it is the pure turn-taking module.
 - **Tests in every code issue.** Keep decision logic pure so it can be unit-tested with plain data: the
   message filter, mention detection, `bot_streak`, who replies, prompt assembly, the session-end decision,
@@ -103,7 +103,7 @@ be a single issue. Don't pad. Each issue is a coherent, independently verifiable
   - List the exact commands from ROADMAP.md.
   - Mark which checks Claude can run read-only from the Mac.
   - Name any repo artifact the issue produces (e.g. `server/.env.example`).
-- **Stay within the phase.** No Gemini in v0.4, no turn-taking rules in v1.1 beyond what its section asks
+- **Stay within the phase.** No Gemini in v0.5, no turn-taking rules in v1.1 beyond what its section asks
   for, nothing from VISION.md's non-goals.
 
 ### Step 2: Write the issues file

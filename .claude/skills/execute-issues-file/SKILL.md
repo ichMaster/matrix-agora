@@ -18,7 +18,7 @@ from the markdown file instead of `gh issue list`.
 /execute-issues-file <vA.B | path-to-issues-file> [--issue AGORA-###] [--dry-run]
 ```
 
-- `/execute-issues-file v0.4` → executes `specification/implementation/v0.4-issues.md`.
+- `/execute-issues-file v0.5` → executes `specification/implementation/v0.5-issues.md`.
 - `/execute-issues-file @specification/implementation/v1.1-issues.md`.
 - `--issue AGORA-###`: only that issue. Its file-listed dependencies must already be committed.
 - `--dry-run`: print the execution plan without changing anything.
@@ -56,7 +56,7 @@ Show the ordered plan and proceed. With `--dry-run`, stop here.
    `/execute-issues` Step 2c:
    - `agents/agent.py` holds session, invites, first-sync, filter, history, Gemini and turn-taking, with the
      decisions kept as pure functions.
-   - From v2.1 on, canon, session memory, world and token accounting follow ARCHITECTURE.md §Canon, §Memory, §World awareness and §Token accounting, with the clock injected. The v3.2 panel follows ARCHITECTURE.md §Web panel.
+   - From v2.1 on, canon, session memory, world and token accounting follow ARCHITECTURE.md §Canon, §Memory, §World awareness and §Token accounting, with the clock injected. The v3.3 panel follows ARCHITECTURE.md §Web panel.
    - `server/docker-compose.yml`'s environment is a contract.
    - `ops` issues produce their repo artifacts plus a numbered checklist for the owner. Don't act on the
      host or in Element unless the owner asks.

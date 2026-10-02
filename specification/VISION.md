@@ -6,7 +6,7 @@ matrix-agora is a private Matrix room on a home LAN where the owner and two smal
 
 ## What we are building
 
-A deliberately simple proof of concept: a self-hosted Matrix homeserver on the home network, Element Desktop as the owner's client, and two Python agents that share one codebase and differ only in config. The agents see both the owner and each other; nobody from outside can message them. The build order validates the setup itself (server → client → bots → three-way conversation) before any sophistication: first an echo bot, then Gemini replies, then turn-taking rules so the agents don't loop, then identity (canons) and memory (session summaries, day-by-day memories, a sense of place and time), and finally operations (token accounting and a local web panel that starts, stops and observes the agents).
+A deliberately simple proof of concept: a self-hosted Matrix homeserver on the home network, Element Desktop as the owner's client, and two Python agents that share one codebase and differ only in config. The agents see both the owner and each other; nobody from outside can message them. The build order validates the setup itself (server → client → bots → three-way conversation) before any sophistication: first an echo bot, then Gemini replies, then turn-taking rules so the agents don't loop, then identity (canons) and memory (session summaries, day-by-day memories, a sense of place and time), and finally operations (token accounting, Docker images with CI behind them, and a local web panel that starts, stops and observes the agents).
 
 ## For whom
 
@@ -25,6 +25,7 @@ After the PoC the project will be reworked into an **admin panel for running age
 - **Memory is compressed, not archived.** An agent keeps a rolling summary of the last session and short auto-generated memories of recent days — never full logs, vector stores or RAG. Old topics fade by compression.
 - **Invention is bounded by the record.** Day memories may invent what the agent did alone in Lviv, but anything involving the owner or the other agent comes only from the conversation journal — otherwise the two agents' memories would contradict each other.
 - **Every model call is counted.** Each Gemini call appends a usage line (tokens, kind, ok) so the owner can always see what conversations cost. Counting and reporting only — no limits, budgets or billing.
+- **The repo deploys itself.** Configuration lives in the repo and reaches machines by script: `server/deploy.sh` pushes `server/` to the Ubuntu host, and the agents run on the Mac from one Docker image via compose. Nothing is hand-edited on a host. CI runs the gates and builds the image, but it never reaches the LAN — deploys always run from the Mac.
 - **The agents run without the panel.** The panel is a convenience for supervision; starting agents from a terminal always works, and closing the panel never stops them.
 - **The agents' world is Ukrainian; the project's code is English.** Conversation, prompts, calendar strings and the panel UI are Ukrainian. Code, comments, tests and specification are English.
 - **No secrets in the public repo.** Canons are committed and therefore hold no secrets and no private data about the owner. Keys, passwords, tokens, logs and everything the agents remember stay in gitignored files.
@@ -36,6 +37,7 @@ After the PoC the project will be reworked into an **admin panel for running age
 - Live world data (weather, news, city events, external APIs). World awareness is only place, calendar and clock.
 - Token limits, budgets or billing — accounting only counts and reports.
 - Public or multi-user access of any kind: no open registration, no internet exposure, no panel access from other devices.
+- Cloud-to-LAN CD, container orchestration beyond docker compose, registries beyond GHCR.
 - Lili herself. This PoC runs simple stand-in agents; connecting real agents is the follow-up rework, not a phase here.
 
 ## Glossary
@@ -53,4 +55,6 @@ After the PoC the project will be reworked into an **admin panel for running age
 - **`bot_streak`** — the count of consecutive agent messages since the owner's last message; both agents derive it from the shared room timeline, which is what keeps them from looping.
 - **`PASS`** — the literal reply with which a model declines to answer; the agent then sends nothing.
 - **Usage line** — one JSON line per Gemini call in `state/<name>.usage.jsonl`: timestamp, kind, token counts, ok — never any text.
+- **Server deploy** — `server/deploy.sh`: the one scripted path by which the repo's `server/` config reaches the Ubuntu host (sync + `docker compose up -d` + verify).
+- **Agent image** — the single Docker image both agents run from on the Mac (`compose.yml`, services `ada`/`bruno`), with `state/` bind-mounted from the host.
 - **Panel** — the local web panel (`uv run panel/app.py`, `127.0.0.1:8090`) that starts/stops agents and shows logs, memory, tokens and server status.

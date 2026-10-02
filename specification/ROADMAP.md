@@ -1,6 +1,6 @@
 # Roadmap — matrix-agora
 
-Four self-contained versions, built in order: **v0** Platform (homeserver, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, web panel). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Four self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD, web panel). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
 **Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v3→3), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
@@ -8,9 +8,9 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 ---
 
-## v0 — Platform: homeserver, client, accounts, echo bot
+## v0 — Platform: homeserver, server deploy, client, accounts, echo bot
 
-The working skeleton with no LLM: the Continuwuity homeserver in Docker on the Ubuntu box, Element Desktop as the owner's client, the bot accounts and the private room, and an echo bot that proves the whole Matrix side — login and session reuse, invites, the first-sync rule, the message filter and allowlist. v0.1–v0.3 are mostly steps the owner performs on the host and in Element; v0.4 is the first code. Depends on: nothing — this is the foundation.
+The working skeleton with no LLM: the Continuwuity homeserver in Docker on the Ubuntu box, a scripted deploy of the repo's server config to that box, Element Desktop as the owner's client, the bot accounts and the private room, and an echo bot that proves the whole Matrix side — login and session reuse, invites, the first-sync rule, the message filter and allowlist. v0.1, v0.3 and v0.4 are mostly steps the owner performs on the host and in Element; v0.2 is the first script, v0.5 the first real code. Depends on: nothing — this is the foundation.
 
 ### v0.1 — Homeserver (Ubuntu, 192.168.1.197)
 
@@ -39,7 +39,7 @@ Continuwuity in one Docker container: embedded RocksDB, federation and encryptio
         CONTINUWUITY_PORT: 8008
         CONTINUWUITY_ALLOW_FEDERATION: "false"     # fully closed off from the Matrix network
         CONTINUWUITY_ALLOW_ENCRYPTION: "false"     # no E2EE rooms at all — simpler for the bots
-        CONTINUWUITY_ALLOW_REGISTRATION: "true"    # temporarily, until v0.3
+        CONTINUWUITY_ALLOW_REGISTRATION: "true"    # temporarily, until v0.4
         CONTINUWUITY_REGISTRATION_TOKEN: "${REGISTRATION_TOKEN}"
   volumes:
     db:
@@ -56,7 +56,30 @@ Continuwuity in one Docker container: embedded RocksDB, federation and encryptio
 
 **Tests:** the compose gate — `REGISTRATION_TOKEN=dummy docker compose -f server/docker-compose.yml config -q` passes. The rest is the manual DoD.
 
-### v0.2 — Client (Element Desktop on the Mac)
+### v0.2 — Server deploy from the repo
+
+**Goal:** any configuration under `server/` reaches the Ubuntu host with one command — never by hand-editing files on the host.
+
+The repo is the source of truth for the server. A deploy script reads the gitignored `server_con.yaml` (SSH host, user, password), syncs `server/` to `~/matrix-agora/server/` on the host and applies it with `docker compose up -d`. From now on every server-config change (e.g. closing registration in v0.4) goes through this script.
+
+**Tasks:**
+- `server/deploy.sh`:
+  - Preflight: `REGISTRATION_TOKEN=dummy docker compose -f server/docker-compose.yml config -q` locally; abort on failure.
+  - One-time key setup: if key auth to the host fails, run `ssh-copy-id` (the owner types the password interactively). After that, key auth only; the password from `server_con.yaml` never appears on a command line, in logs or in output.
+  - Sync `server/docker-compose.yml` and `server/.env` to `~/matrix-agora/server/` (rsync over ssh).
+  - Apply: `ssh <host> 'cd ~/matrix-agora/server && docker compose up -d'`.
+  - Verify: poll `http://<host>:8008/_matrix/client/versions` with bounded retries; report success or failure.
+- `--dry-run`: show what would be copied and run, change nothing.
+- Idempotent: re-running with no changes does nothing but the verify.
+
+**DoD:**
+- (Manual, owner) Change a comment in `server/docker-compose.yml`, run `server/deploy.sh` → the file lands on the host, `docker compose up -d` runs there, and the homeserver still answers.
+- (Manual, owner) `server/deploy.sh --dry-run` changes nothing on the host.
+- The password never appears in the script's output, argv (`ps`) or logs.
+
+**Tests:** the compose gate (the script's preflight). The rest is the manual DoD.
+
+### v0.3 — Client (Element Desktop on the Mac)
 
 **Goal:** the owner is logged in to the homeserver as its admin.
 
@@ -69,23 +92,23 @@ Continuwuity in one Docker container: embedded RocksDB, federation and encryptio
 
 **Tests:** none (owner steps only).
 
-### v0.3 — Bot accounts and the room
+### v0.4 — Bot accounts and the room
 
 **Goal:** the agents' accounts exist, the room is ready, and the server is closed.
 
 **Tasks:**
 - Create the accounts `ada` and `bruno` — via token registration (log out/in in Element, or `curl` to `/_matrix/client/v3/register`), or with an admin-room command (`!admin users create-user ada`).
-- **Close registration:** `CONTINUWUITY_ALLOW_REGISTRATION: "false"`, `docker compose up -d`. From now on only the admin creates accounts.
+- **Close registration:** set `CONTINUWUITY_ALLOW_REGISTRATION: "false"` in the repo's `server/docker-compose.yml` and apply it with `server/deploy.sh` (v0.2). From now on only the admin creates accounts.
 - In Element create the room **«Агора»**: private (invite-only), encryption disabled (forbidden on the server anyway). Invite `@ada:agora.lan` and `@bruno:agora.lan`.
 - Record the room's `room_id` (Room settings → Advanced, of the form `!xxxx:agora.lan`).
 
 **DoD** (Manual, owner):
 - Registering a new account without the admin is refused.
-- The room contains the owner + two pending invites (the bots accept them in v0.4).
+- The room contains the owner + two pending invites (the bots accept them in v0.5).
 
 **Tests:** the compose gate again (registration flag changed). The rest is the manual DoD.
 
-### v0.4 — Echo bot (Matrix without the LLM)
+### v0.5 — Echo bot (Matrix without the LLM)
 
 **Goal:** the whole Matrix side proven separately from any LLM.
 
@@ -219,9 +242,9 @@ Place and calendar in the prompt; auto-generated day memories bounded by the con
 
 **Tests:** unit — the Ukrainian date/time line (incl. DST switches, injected clock), which days need generating, "a past day is never rewritten", prompt section order, journal appending. Gemini mocked, clock injected.
 
-## v3 — Operations: token accounting and the web panel
+## v3 — Operations: token accounting, agent images + CI/CD, and the web panel
 
-Running the agents becomes observable and convenient: every model call is counted, and a local web panel starts, stops and watches everything. Depends on: v2 (the panel shows memory and tokens).
+Running the agents becomes observable and convenient: every model call is counted, the agents ship as one Docker image with CI behind every push, and a local web panel starts, stops and watches everything. Depends on: v2 (the panel shows memory and tokens).
 
 ### v3.1 — Token accounting and report
 
@@ -240,15 +263,38 @@ One usage line per Gemini call, and a report command (ARCHITECTURE §Token accou
 
 **Tests:** unit — `usage_metadata` parsing (incl. missing fields), aggregation, cost calculation, corrupt-line skipping.
 
-### v3.2 — Web panel on the Mac
+### v3.2 — Agent images and CI/CD
+
+**Goal:** the agents run on the Mac as Docker containers built from one image, and every push is linted, tested and built by CI.
+
+One image for both agents (the TOML picks the identity), a Mac compose file with services `ada` and `bruno`, and a GitHub Actions pipeline: the gates on every push/PR, the image published to GHCR on a release tag. A GitHub runner cannot reach the home LAN, so nothing deploys from CI — deploys run from the Mac (`docker compose pull && docker compose up -d` for the agents; the server side stays v0.2's script). See ARCHITECTURE §Deployment and CI/CD.
+
+**Tasks:**
+- `agents/Dockerfile`: one image for both agents — python slim + uv, the project installed, entrypoint running `agents/agent.py` with the TOML given per container; `TZ` set from `TIMEZONE`.
+- `compose.yml` at the repo root: services `ada` and `bruno` from the same image; `env_file: .env` (marked `required: false`, so the config gate passes without a local `.env`); `./state` bind-mounted so memory, usage and logs stay host-side files (the v3.1 report and the v3.3 panel keep reading them); `restart: unless-stopped`.
+- Stop semantics: `docker stop -t 30` sends SIGTERM → the v2.1 shutdown summary runs before SIGKILL.
+- Logs still land in `state/logs/<name>.log` (via the mount) as well as `docker logs`.
+- `.github/workflows/ci.yml`: on every push/PR — ruff, pytest (nio/Gemini mocked; no paid APIs, no secrets in CI), both compose config gates, and the image build. On a `vA.B.C` tag — push the image to GHCR (`ghcr.io/<owner>/matrix-agora-agent`, tagged with the version and `latest`) using only `GITHUB_TOKEN`.
+- README: the Mac deploy commands (`docker compose pull && docker compose up -d`); terminal mode `uv run agents/agent.py …` keeps working for development.
+
+**DoD:**
+- (Manual, owner) `docker compose up -d` on the Mac starts both agents from the image; they join the room and reply; the `state/` files appear on the host as before.
+- (Manual, owner) `docker stop -t 30 ada` → Ada's session summary is written before the container exits.
+- CI is green on a push: lint, tests, both compose gates, image build; no paid API keys exist in CI.
+- (Manual, owner) Pushing a `vA.B.C` tag publishes the image to GHCR.
+- The image contains no secrets; `.env` and `state/` come only from the host.
+
+**Tests:** CI runs the existing gates unchanged (everything mocked); the image build and the compose config gates are the new checks — the pipeline itself is configuration, not unit-tested code.
+
+### v3.3 — Web panel on the Mac
 
 **Goal:** agents are started, stopped and observed from one local page instead of two terminals and raw files.
 
-The panel from ARCHITECTURE §Web panel: `aiohttp.web` on `127.0.0.1:8090`, one vanilla-JS page, Ukrainian UI. Supervision (start/stop/restart, single-instance lock, logs), views (memory, canons, tokens, settings, server health) and the panel security rules.
+The panel from ARCHITECTURE §Web panel: `aiohttp.web` on `127.0.0.1:8090`, one vanilla-JS page, Ukrainian UI. Supervision of the v3.2 agent containers (start/stop/restart, single-instance lock, logs), views (memory, canons, tokens, settings, server health) and the panel security rules.
 
 **Tasks:**
 - `panel/app.py` + `panel/static/index.html`; bind `127.0.0.1` (`PANEL_PORT`); `Host` check on every request; mutating actions `POST`-only with the panel's `Origin`; no CORS.
-- The supervisor: spawn agents in their own process session; SIGINT then SIGKILL after 30 s; agent names from a fixed list; detect terminal-started agents via the lock; PID verified before signaling.
+- The supervisor drives the v3.2 containers: Start = `docker compose up -d <name>`, Stop = `docker stop -t 30 <name>` (SIGTERM → the v2.1 shutdown summary, SIGKILL after the grace period); agent names from a fixed list. It also detects terminal-started (`uv run`) agents via the lock file and can stop them by verified PID.
 - The single-instance `flock` on `state/<name>.lock` (in the agent), with the PID inside.
 - Agent file logging: `state/logs/<name>.log`, rotating 1 MB × 3, alongside the console; the panel tails 200 lines, refresh 2 s.
 - Views: homeserver health (30 s), session summary + day memories per agent, canons read-only, the 7-day token table (shared aggregation code), masked settings.
@@ -264,4 +310,4 @@ The panel from ARCHITECTURE §Web panel: `aiohttp.web` on `127.0.0.1:8090`, one 
 - "Forget" works only for a stopped agent, after confirmation.
 - The token table matches `usage_report.py --days 7`; secrets are masked; foreign `Origin`/`Host` requests are refused.
 
-**Tests:** unit — the supervisor on fake processes (start, stop, timeout → kill), the single-instance lock, secret masking, `Host`/`Origin` checks; the API handlers via the aiohttp test client.
+**Tests:** unit — the supervisor against a fake docker client and fake processes (start, stop, timeout → kill), the single-instance lock, secret masking, `Host`/`Origin` checks; the API handlers via the aiohttp test client.

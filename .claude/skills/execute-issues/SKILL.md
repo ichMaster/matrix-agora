@@ -14,11 +14,11 @@ Then write an execution report.
 /execute-issues <label|phase> [--issue AGORA-###] [--dry-run]
 ```
 
-The label is the phase label exactly as it appears on GitHub (`v0.4::phase`). A bare `v0.4` also works.
+The label is the phase label exactly as it appears on GitHub (`v0.5::phase`). A bare `v0.5` also works.
 
-- `/execute-issues v0.4::phase`: execute every open issue of phase v0.4.
-- `/execute-issues v0.4::phase --issue AGORA-007`: one issue (its dependencies must already be closed).
-- `/execute-issues v0.4::phase --dry-run`: show the execution plan without changing anything.
+- `/execute-issues v0.5::phase`: execute every open issue of phase v0.5.
+- `/execute-issues v0.5::phase --issue AGORA-007`: one issue (its dependencies must already be closed).
+- `/execute-issues v0.5::phase --dry-run`: show the execution plan without changing anything.
 
 ## Instructions
 
@@ -75,7 +75,7 @@ Follow `CLAUDE.md` and ARCHITECTURE.md. Route by component:
   - turn-taking (v1.2);
   - canon loading and session memory (v2.1), place / calendar / time and day memories (v2.2), usage accounting
     (v3.1). See ARCHITECTURE.md §Canon, §Memory, §World awareness and §Token accounting.
-- **`panel/`** (v3.2): `aiohttp.web` plus one static page; see ARCHITECTURE.md §Web panel. It binds `127.0.0.1`
+- **`panel/`** (v3.3): `aiohttp.web` plus one static page; see ARCHITECTURE.md §Web panel. It binds `127.0.0.1`
   only, checks `Host` and `Origin`, takes agent names from a fixed list, and keeps the process supervisor
   testable with fake processes.
 - **Pure decisions:** keep the filter, mention detection, `bot_streak`, who-replies, transcript and prompt
@@ -110,7 +110,7 @@ Follow `CLAUDE.md` and ARCHITECTURE.md. Route by component:
    - **Recording:** record each item as `confirmed by owner` or `pending owner`, never as `pass` on your own.
 5. **Acceptance criteria:** walk each criterion against the phase DoD in ROADMAP.md §vA.B.
 
-Gates that don't apply yet (there is no `pyproject.toml` before v0.4) are recorded as `n/a`. Never commit on
+Gates that don't apply yet (there is no `pyproject.toml` before v0.5) are recorded as `n/a`. Never commit on
 a red gate.
 
 #### 2e. Commit

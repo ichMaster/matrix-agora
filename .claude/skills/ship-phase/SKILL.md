@@ -49,8 +49,8 @@ ignored.
 - `/ship-phase v1`: ship v1.1 and v1.2 (and any unreleased earlier phases), then HARDEN, then a summary.
 - `/ship-phase v2,v1 --no-harden`: ships v1.1 → v1.2 → v2.1 → v2.2 (reordered), with no HARDEN sweep.
 
-> **The list is a target, not the whole plan.** The roadmap is cumulative: the echo bot (v0.4) needs the
-> homeserver, the client and the room (v0.1–v0.3), and v2 cannot be built without v1. So missing earlier
+> **The list is a target, not the whole plan.** The roadmap is cumulative: the echo bot (v0.5) needs the
+> homeserver, the deploy, the client and the room (v0.1–v0.4), and v2 cannot be built without v1. So missing earlier
 > phases are **added automatically**, and anything already released is skipped. On a repo released through
 > `v2.2.0`, `/ship-phase v3.1` does exactly one phase's work.
 
@@ -78,9 +78,9 @@ ignored.
    - `gh` is authenticated and the repo has a GitHub remote. If either is missing, stop and offer
      `gh repo create` (run by the user) or the offline `/ship-solution`.
    - The tree is clean.
-   - The automated gates are green, or `n/a` before v0.4. Never start on a red suite.
-8. **Flag the owner's work up front.** Phases v0.1–v0.3 are mostly steps the owner performs on the Ubuntu
-   host and in Element, and every phase's DoD has **Manual (owner)** checks. Tell the user at confirmation
+   - The automated gates are green, or `n/a` before v0.5. Never start on a red suite.
+8. **Flag the owner's work up front.** Most of v0 (v0.1, v0.3, v0.4) is steps the owner performs on the Ubuntu host
+   and in Element, and every phase's DoD has **Manual (owner)** checks. Tell the user at confirmation
    that the run **will pause** for them.
 9. **Confirm the plan once.** Show:
    - the ordered phase list, grouped by version;
@@ -90,13 +90,13 @@ ignored.
 
    Then run. Don't re-confirm before each sub-step; pause only for the blockers in the rules below.
 
-**Worked example:** `/ship-phase v2.1,v1` on a repo where v0 is fully released (`v0.1.0`–`v0.4.0` tagged).
+**Worked example:** `/ship-phase v2.1,v1` on a repo where v0 is fully released (`v0.1.0`–`v0.5.0` tagged).
 
 ```
 selectors : v2.1 · v1
 expanded  : v2.1 | v1.1 v1.2
 filled    : (nothing missing below v2.1 beyond the set)
-skipped   : v0.1–v0.4                ← already released
+skipped   : v0.1–v0.5                ← already released
 ordered   : v1.1 → v1.2 → v2.1      (v2.1 was listed first; roadmap order is required)
 
 PLAN: v1.1, v1.2, v2.1 → HARDEN v1-v2 → summary

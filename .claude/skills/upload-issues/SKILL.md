@@ -14,7 +14,7 @@ with dependency links. Then record the `AGORA-###` → GitHub number mapping.
 /upload-issues <phase-issues-file>
 ```
 
-Example: `/upload-issues @specification/implementation/v0.4-issues.md`
+Example: `/upload-issues @specification/implementation/v0.5-issues.md`
 
 If the file doesn't exist yet, run `/generate-issues vA.B` first.
 
@@ -44,13 +44,13 @@ Labels have the form `vA.B::{category}` or `vA.B::{category}:{value}`. The phase
 description comes from its `### vA.B` heading in `specification/ROADMAP.md`.
 
 ```bash
-gh label create "v0.4::phase"  --color "0E8A16" --description "Phase v0.4 — Echo bot" 2>/dev/null || true
-gh label create "v0.4::size:S" --color "28A745" --description "Small — one function or file" 2>/dev/null || true
-gh label create "v0.4::size:M" --color "FFC107" --description "Medium — a feature across a few files" 2>/dev/null || true
-gh label create "v0.4::size:L" --color "DC3545" --description "Large — a new component or a contract change" 2>/dev/null || true
+gh label create "v0.5::phase"  --color "0E8A16" --description "Phase v0.5 — Echo bot" 2>/dev/null || true
+gh label create "v0.5::size:S" --color "28A745" --description "Small — one function or file" 2>/dev/null || true
+gh label create "v0.5::size:M" --color "FFC107" --description "Medium — a feature across a few files" 2>/dev/null || true
+gh label create "v0.5::size:L" --color "DC3545" --description "Large — a new component or a contract change" 2>/dev/null || true
 # one per area used in this phase: agents, panel, server, config, tests, docs, ops
-gh label create "v0.4::area:agents" --color "1D76DB" 2>/dev/null || true
-gh label create "v0.4::area:ops"    --color "D93F0B" --description "Owner performs on the host or in Element" 2>/dev/null || true
+gh label create "v0.5::area:agents" --color "1D76DB" 2>/dev/null || true
+gh label create "v0.5::area:ops"    --color "D93F0B" --description "Owner performs on the host or in Element" 2>/dev/null || true
 ```
 
 ### Step 4: Create issues one by one
@@ -117,7 +117,7 @@ Write `specification/implementation/vA.B-github-report.md`:
 
 | AGORA ID | GitHub # | Title | Phase | Labels | URL |
 |----------|----------|-------|-------|--------|-----|
-| AGORA-001 | #5 | ... | v0.4 | v0.4::phase, v0.4::size:S, v0.4::area:agents | {url} |
+| AGORA-001 | #5 | ... | v0.5 | v0.5::phase, v0.5::size:S, v0.5::area:agents | {url} |
 
 ## Labels Created
 
