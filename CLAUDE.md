@@ -16,7 +16,7 @@ Read these before planning work; they are the project's contract with itself.
 
 Proof of concept: a private Matrix room where the owner and two LLM agents ("Ada" and "Bruno", Gemini 2.5 Flash) talk together. So far the repo holds only the specification. The panel is the point of the project: it will grow into an admin panel for simulations and agents like Lili; the chat is the first simulation (VISION §The direction).
 
-Latest release: v1.2.2 (phase v1.2 + direct addressing + time-windowed turn limit). Version v1 (Conversation) is complete.
+Latest release: v2.1.0 (phase v2.1 — canons and session memory).
 
 | Version | Phases | What it delivers |
 |---|---|---|

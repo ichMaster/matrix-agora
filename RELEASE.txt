@@ -1,3 +1,17 @@
+Version 2.1.0 (2026-10-03)
+---------------------------
+- Canons (AGORA-016): agents/canon/common.md + ada.md + bruno.md describe
+  people; the TOML 'canon' replaces 'persona'; a missing/empty canon refuses
+  to start; prompt order canon -> last-session memory -> rules
+- Session memory (AGORA-017): a first-person summary of each session in
+  state/<name>.memory.md (atomic, 0600), written after SESSION_IDLE_S of
+  silence, on graceful SIGINT/SIGTERM shutdown (20 s bound), or early at
+  SESSION_MAX_MESSAGES; loaded at startup
+- Live-proven (AGORA-018): agents speak as people, remember across restarts
+- Fixes from the live run and review: reply cleaning (the model no longer
+  writes other speakers' lines), one pending reply per agent, duplicate
+  guard, rate-limited cap-triggered summaries with a bounded session
+
 Version 1.2.2 (2026-10-02)
 ---------------------------
 - The agent-turn limit is a rate, not a lock: MAX_BOT_TURNS per BOT_WINDOW_S
