@@ -1,0 +1,11 @@
+.env
+server/.env
+state/
+.venv/
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
+.DS_Store
+server_con.yaml
+.ship-solution-progress.md
