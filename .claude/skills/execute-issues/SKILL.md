@@ -33,7 +33,7 @@ The label is the phase label exactly as it appears on GitHub (`p3::phase`). A ba
 5. **Read the phase files:** the issues file `specification/implementation/pN-issues.md`, and
    `pN-github-report.md` for the `AGORA-###` → `#number` mapping.
 6. **Read the spec:** [specification/SPEC.md](../../../specification/SPEC.md) §{N+2} (the phase's tasks and
-   DoD), §8 (security) and §9 (out of scope), plus `CLAUDE.md`: invariants, contracts and gates.
+   DoD), §11 (security) and §12 (out of scope), plus `CLAUDE.md`: invariants, contracts and gates.
 7. **Green baseline:** run the automated gates that apply (see `CLAUDE.md` **Acceptance gates**), so a
    later failure can be attributed. Never start on a red suite.
 
@@ -70,12 +70,15 @@ Follow `CLAUDE.md` and SPEC.md. Route by component:
   - the message filter and allowlist;
   - the `HISTORY_N` history buffer;
   - the Gemini call, typing, and sending as `m.text`;
-  - turn-taking (p5).
-- **Pure decisions:** keep the filter, mention detection, `bot_streak`, who-replies and transcript building
-  as functions over plain data. That way tests need no nio objects, and the nio callbacks stay thin
+  - turn-taking (p5);
+  - canon loading and session memory (p6), place / calendar / time and day memories (p7), usage accounting
+    (p8). See CLAUDE.md **Canon, memory, world and tokens**.
+- **Pure decisions:** keep the filter, mention detection, `bot_streak`, who-replies, transcript and prompt
+  assembly, the session-end decision, calendar formatting, the missing-days calculation and usage aggregation
+  as functions over plain data, with the clock injected. That way tests need no nio objects, and the nio callbacks stay thin
   adapters.
 - **Gemini** (`google-genai`, from p4): `client.aio.models.generate_content` with `gemini-2.5-flash`, the
-  persona as `system_instruction`, `max_output_tokens=400` and `thinking_budget=0`. On failure or empty
+  persona (canon from p6) as `system_instruction`, `max_output_tokens=400` and `thinking_budget=0`. On failure or empty
   text: log, send nothing, keep running.
 - **`server/docker-compose.yml`:** its environment is a contract. `CONTINUWUITY_SERVER_NAME` never changes.
   Registration closes in p2 and stays closed.
@@ -85,7 +88,7 @@ Follow `CLAUDE.md` and SPEC.md. Route by component:
   - Don't act on the Ubuntu host, in Element, or on accounts and rooms unless the owner asks in this session.
 - **Contract changes** (the CLAUDE.md **Contracts** list) update SPEC.md, SPEC-UA.md, CLAUDE.md and the
   test that pins the contract, in the same commit.
-- **Scope:** stay inside the phase and outside SPEC.md §9. Follow the existing style.
+- **Scope:** stay inside the phase and outside SPEC.md §12. Follow the existing style.
 
 #### 2d. Validate
 
@@ -235,9 +238,11 @@ Commit the report (`docs: pN execution report`, with the trailer) and push.
   - Registration stays closed after p2.
   - Port 8008 is never exposed beyond the LAN.
 - **Secrets stay out:**
-  - Never print `.env`, `server/.env`, `state/*.json` or `server_con.yaml`. To check that a value is set,
+  - Never print `.env`, `server/.env`, `server_con.yaml` or anything under `state/` (tokens, summaries, day
+    memories). To check that a value is set,
     test it without echoing it (`grep -q '^GEMINI_API_KEY=.' .env`).
   - Passwords, tokens and the API key never go into argv, logs, commits or issue comments.
-  - Message texts are never logged.
+  - Message, summary and memory texts are never logged.
+  - The agents believe they are human: no code path or prompt says an agent is a model or a bot.
 - **Ask on ambiguity.** If an issue is unclear, ask rather than guess.
 - **Progress updates.** Print a short status line after each issue.

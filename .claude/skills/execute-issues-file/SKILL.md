@@ -33,8 +33,8 @@ from the markdown file instead of `gh issue list`.
 2. **Remote:** check `git remote -v`. Without a remote, the run commits but doesn't push; say so up front.
 3. **Read the issues file:** resolve the target to `specification/implementation/pN-issues.md` and read the
    summary table, the Dependency Tree and every `### AGORA-###` section. **No `gh` is used.**
-4. **Read the spec:** [specification/SPEC.md](../../../specification/SPEC.md) §{N+2} (tasks and DoD), §8 and
-   §9, plus `CLAUDE.md` (invariants, contracts, acceptance gates).
+4. **Read the spec:** [specification/SPEC.md](../../../specification/SPEC.md) §{N+2} (tasks and DoD), §11 and
+   §12, plus `CLAUDE.md` (invariants, contracts, acceptance gates).
 5. **Green baseline:** run the automated gates that apply, so a later failure can be attributed.
 
 ### Step 1: Build the execution queue from the file
@@ -54,6 +54,8 @@ Show the ordered plan and proceed. With `--dry-run`, stop here.
    `/execute-issues` Step 2c:
    - `agents/agent.py` holds session, invites, first-sync, filter, history, Gemini and turn-taking, with the
      decisions kept as pure functions.
+   - From p6 on, canon, session memory, world and token accounting follow CLAUDE.md **Canon, memory, world
+     and tokens**, with the clock injected.
    - `server/docker-compose.yml`'s environment is a contract.
    - `ops` issues produce their repo artifacts plus a numbered checklist for the owner. Don't act on the
      host or in Element unless the owner asks.
@@ -125,7 +127,7 @@ exists.
   API.
 - **Manual checks need the owner.** Never report one as passed on your own.
 - **Contracts stay stable**: SPEC.md, SPEC-UA.md, CLAUDE.md and the pinning test change together.
-- **Secrets stay out.** Never print `.env`, `server/.env`, `state/*.json` or `server_con.yaml`; no secrets
-  in argv, logs or commits; no message texts in logs.
+- **Secrets stay out.** Never print `.env`, `server/.env`, `server_con.yaml` or anything under
+  `state/`; no secrets in argv, logs or commits; no message, summary or memory texts in logs.
 - **Ask on ambiguity.** If an issue's scope is unclear, ask rather than guess.
 - **Progress updates.** Print a short status line after each issue.

@@ -1,11 +1,11 @@
 ---
 name: generate-issues
-description: Decompose one SPEC.md phase (p0–p5) into a dependency-ordered issues file at specification/implementation/pN-issues.md, grounded in the real current code. The output feeds /upload-issues (GitHub flow) or /execute-issues-file (offline flow).
+description: Decompose one SPEC.md phase (p0–p8) into a dependency-ordered issues file at specification/implementation/pN-issues.md, grounded in the real current code. The output feeds /upload-issues (GitHub flow) or /execute-issues-file (offline flow).
 ---
 
 # Skill: Generate Phase Issues
 
-Decompose one SPEC.md **phase** (`p0`–`p5`) into a small, dependency-ordered **issues file** at
+Decompose one SPEC.md **phase** (`p0`–`p8`) into a small, dependency-ordered **issues file** at
 `specification/implementation/pN-issues.md`. The file is the input to `/upload-issues` → `/execute-issues`
 (GitHub flow), or straight to `/execute-issues-file` (offline flow).
 
@@ -24,13 +24,14 @@ regeneration runs**. Never reset them.
 
 ### Step 0: Read inputs
 
-1. Normalize the argument to `pN`, with N in 0–5. For anything else, name it and ask.
+1. Normalize the argument to `pN`, with N in 0–8. For anything else, name it and ask.
 2. Read the phase's section of [specification/SPEC.md](../../../specification/SPEC.md). The section number is
    **N + 2**: phase 3 is §5 (see the phase table in `CLAUDE.md`). Take its **Tasks**, **Behavior** and **Project
    structure** where present, and its **DoD**. `specification/SPEC-UA.md` is the Ukrainian original of the
    same file; read it only to check a translation.
-3. Read SPEC.md §1 (architecture), §8 (security) and §9 (out of scope). §9 is the scope fence: E2EE, media,
-   memory across restarts and the Lili integration are never pulled into a phase.
+3. Read SPEC.md §1 (architecture), §11 (security) and §12 (out of scope). §12 is the scope fence: E2EE,
+   media, long-term memory beyond the last session and recent days, live world data, token budgets and the
+   Lili integration are never pulled into a phase.
 4. Read `CLAUDE.md`: the agent invariants, the turn-taking rules, the **Contracts** list and the
    **Acceptance gates**.
 5. **Find the next free `AGORA-###` id. Never restart the numbering.** Check both sources and continue
@@ -101,7 +102,7 @@ a single issue. Don't pad. Each issue is a coherent, independently verifiable sl
   - Mark which checks Claude can run read-only from the Mac.
   - Name any repo artifact the issue produces (e.g. `server/.env.example`).
 - **Stay within the phase.** No Gemini in p3, no turn-taking rules in p4 beyond what §6 asks for, nothing
-  from §9.
+  from §12.
 
 ### Step 2: Write the issues file
 
@@ -173,7 +174,7 @@ AGORA-{first} ({gate})
 **Phase DoD (SPEC.md §{N+2}):** {restate the DoD}.
 **Contracts touched:** {contracts + their tests, or "none"}.
 **Owner steps:** {what the owner must do on the host or in Element, or "none"}.
-**Out of scope:** {nearby work that belongs to a later phase or SPEC.md §9}.
+**Out of scope:** {nearby work that belongs to a later phase or SPEC.md §12}.
 **Generated later:** `pN-github-report.md` (on upload), `pN-execution-report.md` (on execution).
 ````
 
@@ -198,7 +199,7 @@ read and edit it first.
 - **Tests in every code issue**, with nio and Gemini mocked. Manual DoD checks are labeled
   **Manual (owner):**.
 - **Contract change = SPEC.md + SPEC-UA.md + CLAUDE.md + the pinning test**, all in the same issue.
-- **Stay within the phase** and outside SPEC.md §9. PoC simplicity beats completeness.
+- **Stay within the phase** and outside SPEC.md §12. PoC simplicity beats completeness.
 - **Honor the DoD.** Together, the issues must satisfy the phase DoD in SPEC.md §{N+2}.
 - **Ask on ambiguity.** If a task is under-specified, ask before inventing scope.
 - **Don't touch GitHub.** `/upload-issues` does that.

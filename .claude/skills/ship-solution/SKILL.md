@@ -54,7 +54,7 @@ issues file.
 ### Step 0: Scope, baseline, plan, and start the clock
 
 1. **Parse the selector list.** Split on commas and trim. With no argument, take every phase that has an
-   issues file. Record whether `--no-harden` was passed. If an element doesn't resolve to a phase in 0–5,
+   issues file. Record whether `--no-harden` was passed. If an element doesn't resolve to a phase in 0–8,
    **name it and ask**; never drop it.
 2. **Expand and de-duplicate** the elements into a set of phases.
 3. **Fill the dependencies.** Add every earlier phase below the highest selected one. Report what was added,

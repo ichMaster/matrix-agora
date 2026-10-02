@@ -64,6 +64,26 @@ defects, not restatements of what works.
   - Does mention detection handle Ukrainian case forms? SPEC's own DoD uses the vocative «Адо» for Ада.
   - Is `PASS` handled with surrounding whitespace or punctuation?
   - Is the randomness (`BOT_REPLY_P`, the delay) injectable for tests?
+- **Canon and memory (p6):**
+  - Does a missing or empty canon stop the bot at startup?
+  - Does any prompt or reply rule say the agent is a model or a bot?
+  - Are memory writes atomic?
+  - Does shutdown summarization hang past its timeout?
+  - Is the session timeline capped by `SESSION_MAX_MESSAGES`?
+  - Are summaries ever logged?
+- **World and day memories (p7):**
+  - Is the time computed in `TIMEZONE`, including across DST switches?
+  - Are weekday and month names independent of the system locale?
+  - Is the clock injectable?
+  - Is a past day's memory ever rewritten?
+  - Is the catch-up bounded by `MEMORY_DAYS`?
+  - Does the memory prompt forbid invented words or actions by the owner or the other agent?
+  - Are the prompt sections in the specified order?
+- **Token accounting (p8):**
+  - Does a usage line ever carry message or prompt text?
+  - Does a missing `usage_metadata` crash the bot?
+  - Are prices hardcoded?
+  - Does the report break on a corrupt line, or on its sums?
 - **Robustness:**
   - Can an exception in a nio callback or the Gemini call kill `sync_forever`?
   - Is typing left on after a failure (no `finally`)?
@@ -84,7 +104,7 @@ defects, not restatements of what works.
   - Is registration closed after p2?
   - Does the registration token live only in `server/.env`?
   - Is the port published as intended (LAN plus ufw)?
-- **Spec drift:** does the code diverge from the CLAUDE.md contracts or SPEC.md, or pull in §9 scope?
+- **Spec drift:** does the code diverge from the CLAUDE.md contracts or SPEC.md, or pull in §12 scope?
 
 For each finding, capture:
 
@@ -112,8 +132,8 @@ Decide **FIX NOW vs DEFER** honestly:
 
 - **FIX NOW** means real, small, self-contained, high-value and in scope now: an allowlist hole, a replay on
   restart, a crash that kills sync, a secret in a log.
-- **DEFER →** means larger work, or work a later phase already owns. Give the home: `p4`, `p5`,
-  `post-PoC (SPEC.md §9)` or `cleanup (/simplify)`. Do **not** pull it forward.
+- **DEFER →** means larger work, or work a later phase already owns. Give the home: a later phase (`p4`…`p8`),
+  `post-PoC (SPEC.md §12)` or `cleanup (/simplify)`. Do **not** pull it forward.
 
 Commit the doc as the plan (`docs: pN code review`) **and push it** if a remote exists. The review is worth
 keeping even if the fix pass is interrupted.
