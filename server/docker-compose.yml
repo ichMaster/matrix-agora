@@ -19,3 +19,5 @@ services:
       CONTINUWUITY_REGISTRATION_TOKEN: "${REGISTRATION_TOKEN}"
 volumes:
   db:
+
+# deploy-loop proven: v0.2 (AGORA-004)
