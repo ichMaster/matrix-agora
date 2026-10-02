@@ -86,7 +86,7 @@ The invariants every reply path must honor:
 
 1. **Login once, then the token.** First run logs in with the password and saves `access_token` + `device_id` to `state/<name>.json`; later runs restore them. Logging in with the password on every start would create a new device on the server each time.
 2. **Invites:** join only invites from `OWNER` into `ROOM_ID`. Ignore or leave every other invite.
-3. **Start without the past:** the first `sync` is used only to obtain `next_batch` and its events are **not processed** — otherwise a restarted bot replies to the whole room history. After that, `sync_forever`.
+3. **Start without the past:** the first `sync` is used only to obtain `next_batch` and its events are **not processed** — otherwise a restarted bot replies to the whole room history. After that, `sync_forever`. **Context survives a restart (from v2.2):** right after the first sync the agent fetches the last `HISTORY_N` messages of `ROOM_ID` once from the server (`/messages`, backwards) and seeds its context window and the `bot_streak` timeline with them, in chronological order — **never replying to any of them** and never adding them to the session timeline (they were already summarized). Nothing is stored locally; the room itself is the source.
 4. **Message filter** (`RoomMessageText` only — edits, notices and other event types never trigger a reply). Handle a message only if all hold:
    - `room.room_id == ROOM_ID`;
    - `event.sender != own user_id`;
@@ -125,7 +125,7 @@ The agents see each other, so without rules they would reply to each other endle
 
 ## Memory
 
-- **Context window:** each agent keeps the last `HISTORY_N` (e.g. 30) room messages in RAM — its own and the other agent's included — and passes them to the model as one text, one `"Name: text"` line each. Raw history never persists.
+- **Context window:** each agent keeps the last `HISTORY_N` (e.g. 30) room messages in RAM — its own and the other agent's included — and passes them to the model as one text, one `"Name: text"` line each. Raw history never persists locally; after a restart the window is re-seeded from the room on the server (§Message flow, rule 3).
 - **Session:** ends after `SESSION_IDLE_S` (e.g. 900 s) of room silence, or on shutdown (Ctrl+C i.e. SIGINT, or SIGTERM — summarized with a ~20 s timeout so shutdown never hangs). The session timeline (messages since the last summary, capped at `SESSION_MAX_MESSAGES`) is kept separately from `HISTORY_N`.
 - **Session summary:** at session end, one Gemini call compresses *previous summary + session timeline* into a new first-person summary of at most `SUMMARY_MAX_WORDS` words — what was discussed, decided, promised, left open. Written atomically (temp file + rename) to `state/<name>.memory.md`. Each agent summarizes from its own point of view; Ada's and Bruno's summaries may differ.
 - **Conversation journal:** every session summary is also appended, with its time, to `state/<name>.days/YYYY-MM-DD.talk.md` — the per-day record that day memories draw on.
