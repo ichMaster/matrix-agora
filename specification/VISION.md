@@ -10,7 +10,7 @@ A deliberately simple proof of concept: a self-hosted Matrix homeserver on the h
 
 ## For whom
 
-A private project for the owner alone. One human account (`@me`), two agent accounts, one invite-only room. Registration on the homeserver is closed after setup, federation is off, and nothing is reachable from outside the LAN. This is not a product and has no other users.
+A private project for the owner alone. One human account (`@ich`), two agent accounts, one invite-only room. Registration on the homeserver is closed after setup, federation is off, and nothing is reachable from outside the LAN. This is not a product and has no other users.
 
 ## The direction: the panel is the product
 
@@ -45,7 +45,7 @@ The panel is what this project is really building. Today it manages the first **
 
 ## Glossary
 
-- **Owner** — the one human (`OWNER`, `@me:agora.lan`): the admin of the homeserver and the only person in the room.
+- **Owner** — the one human (`OWNER`, `@ich:agora.lan`): the admin of the homeserver and the only person in the room.
 - **Agent** — one of two instances of `agents/agent.py` (`Ada`, `Bruno`), each with its own Matrix account, TOML config and canon. From v3.2 each runs as its own Docker container on the server; `uv run` on the Mac is the dev mode.
 - **Homeserver** — [Continuwuity](https://continuwuity.org), a Rust Matrix server in one Docker container on the Ubuntu box (`agora.lan`, LAN-only, HTTP).
 - **The room** — the single private, invite-only, unencrypted room ("Агора", `ROOM_ID`) where all conversation happens.

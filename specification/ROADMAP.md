@@ -86,10 +86,10 @@ The repo is the source of truth for the server. A deploy script reads the gitign
 
 **Tasks:**
 - `brew install --cask element`.
-- Element → Create account → **Edit** homeserver → `http://192.168.1.197:8008` → register `me`. **The first account needs Continuwuity's one-time bootstrap token from the container logs** (`docker compose logs homeserver` on the host), not the configured `REGISTRATION_TOKEN` — that one starts working from the second account on (the bots, v0.4). The first account automatically becomes the admin and is invited to the admin room.
+- Element → Create account → **Edit** homeserver → `http://192.168.1.197:8008` → register the owner's username (`ich`). **The first account needs Continuwuity's one-time bootstrap token from the container logs** (`docker compose logs homeserver` on the host), not the configured `REGISTRATION_TOKEN` — that one starts working from the second account on (the bots, v0.4). The first account automatically becomes the admin and is invited to the admin room.
 
 **DoD** (Manual, owner):
-- Logged in as `@me:agora.lan` and can see the admin room.
+- Logged in as `@ich:agora.lan` and can see the admin room.
 
 **Tests:** none (owner steps only).
 

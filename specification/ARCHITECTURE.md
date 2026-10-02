@@ -14,7 +14,7 @@ Two small axes bound by one agent codebase. **The agents' capabilities** grow: e
 ┌─ Mac ─────────────────────────────────────────────┐  │                      │
 │  ┌──────────────────────────┐                     │  │                      │
 │  │ Element Desktop          │                     │  │                      │
-│  │ (the owner, @me)         │                     │  │                      │
+│  │ (the owner, @ich)        │                     │  │                      │
 │  └────┬─────────────────────┘                     │  │                      │
 │  the owner’s browser ─────────────┐               │  │                      │
 │  dev: uv run agents · gates ·     │               │  │                      │
