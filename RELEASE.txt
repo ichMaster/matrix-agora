@@ -1,3 +1,9 @@
+Version 1.2.1 (2026-10-02)
+---------------------------
+- Agent-to-agent addressing: when one agent names the other ("Адо, а ти?"),
+  the addressed agent always answers (the coin flip is skipped); the
+  MAX_BOT_TURNS streak bound still applies, so no loop
+
 Version 1.2.0 (2026-10-02)
 ---------------------------
 - Turn-taking (AGORA-014): mention routing with Ukrainian case forms (incl.
