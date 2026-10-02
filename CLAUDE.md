@@ -29,7 +29,7 @@ Latest release: v0.5.0 (phase v0.5 — echo bot). Version v0 (Platform) is compl
 
 See ARCHITECTURE.md §Repository layout for the full tree. The essentials:
 
-- Dev mode on the Mac (one terminal per agent): `uv run agents/agent.py agents/ada.toml`, and the same for `agents/bruno.toml`
+- Dev mode on the Mac (one terminal per agent): `scripts/run-agent.sh ada` / `scripts/run-agent.sh bruno`; Ctrl+C stops
 - Production (from v3.2): everything runs on the Ubuntu server; deploy the stack with `server/deploy.sh` (`--dry-run` first); never hand-edit files on the host. Each agent is its own container — stop with `docker stop -t 30 <name>` so the session summary runs
 - Panel (from v3.3): `http://192.168.1.197:8090`, Bearer `PANEL_TOKEN`
 - Token report (from v3.1): `uv run agents/usage_report.py --days 7`
