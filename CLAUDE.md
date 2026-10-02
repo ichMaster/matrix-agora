@@ -63,7 +63,7 @@ The full mechanisms live in ARCHITECTURE.md; these are the invariants most often
 - **The allowlist guards every reply path**: only `ROOM_ID`, only `{OWNER, other agent}`, only `RoomMessageText`; everything else logged as `ignored`.
 - **`bot_streak` is derived from the shared room timeline** — never add shared state or coordination between the agents.
 - **Send `m.text`, never `m.notice`**; typing reset in `finally`; on a failed/empty Gemini reply log and stay silent, never crash.
-- **The agents never know their future.** Future life-story chapters and the death date never reach a conversational prompt; only the plan generator sees the next chapter.
+- **The agents never know their future.** Future life-story chapters, the death date and the hidden plan-mutation tags never reach a conversational prompt; only the plan generator sees the next chapter.
 - **The agents believe they are human.** No code path or prompt — reply rules, summary prompts, memory prompts — may say an agent is a model or a bot.
 - **Nothing lived is deleted, and nothing past is rewritten**: day memories, digests (week/month/year) and plans stay forever, and room facts in memories, plans and the today block come only from the conversation journal.
 - **Keep decisions pure**: the filter, mentions, `bot_streak`, who-replies, prompt assembly, session-end, day and plan-period selection, the hourly today-refresh decision and usage aggregation are functions over plain data with an injected clock.
