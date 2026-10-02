@@ -22,7 +22,7 @@ Latest release: v2.1.0 (phase v2.1 — canons and session memory).
 |---|---|---|
 | `v0` Platform | v0.1 homeserver · v0.2 server deploy · v0.3 client · v0.4 accounts+room · v0.5 echo bot | owner steps + the deploy script; first real code in v0.5 |
 | `v1` Conversation | v1.1 Gemini replies · v1.2 turn-taking | code |
-| `v2` Persona & memory | v2.1 canons + session memory · v2.2 world awareness, plans + the hourly today block | code + canon files |
+| `v2` Persona & memory | v2.1 canons + session memory · v2.2 a life story, world awareness, plans (with mutations) + day memories + the hourly today block | code + canon files |
 | `v3` Operations | v3.1 token accounting · v3.2 agent images + CI/CD + server deployment · v3.3 the panel (simulations + agents) | code |
 
 ## Layout and commands
@@ -63,6 +63,7 @@ The full mechanisms live in ARCHITECTURE.md; these are the invariants most often
 - **The allowlist guards every reply path**: only `ROOM_ID`, only `{OWNER, other agent}`, only `RoomMessageText`; everything else logged as `ignored`.
 - **`bot_streak` is derived from the shared room timeline** — never add shared state or coordination between the agents.
 - **Send `m.text`, never `m.notice`**; typing reset in `finally`; on a failed/empty Gemini reply log and stay silent, never crash.
+- **The agents never know their future.** Future life-story chapters and the death date never reach a conversational prompt; only the plan generator sees the next chapter.
 - **The agents believe they are human.** No code path or prompt — reply rules, summary prompts, memory prompts — may say an agent is a model or a bot.
 - **A past day's memory or plan is never rewritten**, and room facts in memories, plans and the today block come only from the conversation journal.
 - **Keep decisions pure**: the filter, mentions, `bot_streak`, who-replies, prompt assembly, session-end, day and plan-period selection, the hourly today-refresh decision and usage aggregation are functions over plain data with an injected clock.

@@ -118,6 +118,10 @@ The agents see each other, so without rules they would reply to each other endle
 - The canons describe the agents as **humans** (see VISION.md §Principles). Nothing in code — reply rules, summary or memory prompts — may mention that the agent is a model or a bot.
 - The TOML points at it: `canon = "agents/canon/<name>.md"`. Read once at startup; a missing or empty canon stops the bot with a clear error.
 - Canons are committed to the public repo: no secrets, no private data about the owner.
+- **Life story (from v2.2):** `agents/canon/<name>.life.md` — the agent's whole life from birth to death, anchored to real dates: a header (`Народження: YYYY-MM-DD, place`, `Смерть: YYYY-MM-DD`) and chapters `## YYYY–YYYY · title` that never overlap. The chapter containing today's year is the **current chapter** — the most detailed one: the typical week, ongoing matters, places, people. The TOML points at it: `life = "agents/canon/<name>.life.md"`.
+  - **Visibility (hard rule):** the opening paragraph of each **past** chapter and the **current** chapter in full go into the conversational prompt as «Твоє життя досі» — what the agent remembers. **Future chapters and the death date never reach the conversational prompt** or any reply; only the plan generator sees the next chapter, as silent direction. The agent does not know its future, its death included.
+  - **Consistency:** where the two lives cross (how Ada and Bruno met, shared events) the stories agree. A story never invents shared history with the owner — that comes only from the conversation.
+  - **Time moves the story:** as real dates pass, a future chapter becomes the current one, so life events written for 2027 or 2030 start happening in the agents' days when those years arrive.
 
 ## Memory
 
@@ -125,10 +129,14 @@ The agents see each other, so without rules they would reply to each other endle
 - **Session:** ends after `SESSION_IDLE_S` (e.g. 900 s) of room silence, or on shutdown (Ctrl+C i.e. SIGINT, or SIGTERM — summarized with a ~20 s timeout so shutdown never hangs). The session timeline (messages since the last summary, capped at `SESSION_MAX_MESSAGES`) is kept separately from `HISTORY_N`.
 - **Session summary:** at session end, one Gemini call compresses *previous summary + session timeline* into a new first-person summary of at most `SUMMARY_MAX_WORDS` words — what was discussed, decided, promised, left open. Written atomically (temp file + rename) to `state/<name>.memory.md`. Each agent summarizes from its own point of view; Ada's and Bruno's summaries may differ.
 - **Conversation journal:** every session summary is also appended, with its time, to `state/<name>.days/YYYY-MM-DD.talk.md` — the per-day record that day memories draw on.
-- **Day memories:** once per past day (after local midnight; missed days caught up at startup, at most `MEMORY_DAYS` back) a separate Gemini call writes `state/<name>.days/YYYY-MM-DD.md` (≤ `DAY_MEMORY_MAX_WORDS` words, atomic write): a first-person text about that day — what the agent did and saw in Lviv, and what was discussed if there was a conversation. **A past day is never rewritten.** Inputs: canon, that day's date/weekday/season, the previous days' memories, the day's journal.
+- **Day memories — what actually happened (follow the life story):** once per past day, generated after local midnight by the periodic watcher (v2.1's idle watcher; missed days caught up at startup, but never before the agent's first run and at most `MEMORY_DAYS` back), a separate Gemini call writes `state/<name>.days/YYYY-MM-DD.md` (≤ `DAY_MEMORY_MAX_WORDS` words, atomic write): a first-person text about that day. **A past day is never rewritten.** Inputs: the canon, the **current chapter of the life story** (the frame of reality), that day's date/weekday/season, the previous days' memories, the day's journal, and that day's plan and final today block.
+  - **Generated from the story, never copied from it:** the story gives the frame (what the agent's life is like now: work, typical week, ongoing matters, people); the memory adds the concrete details of *that* day — what exactly, where, with whom, small sensations — consistent with the story and with earlier memories. A memory that copies a long verbatim span of the story (8+ words in a row) is regenerated once.
+  - **Plan vs reality:** reality follows the story. A plan item that drifted away from it (a mutation, see Plans) shows up as «хотіла…, але…» — intentions that didn't happen.
 - **Truth and invention (hard rule):** anything that happened in the room comes only from the journal. Invented episodes involve only the agent itself and the city — never words or actions of the owner or the other agent that did not happen.
-- **Plans (by day and by period):** a **week plan** (`state/<name>.plans/week-YYYY-MM-DD.md`, keyed by its Monday) generated lazily at the first prompt build of a new week — canon + season + the previous week's plan and memories, unfinished intentions carried over — and a **day plan** (`state/<name>.plans/YYYY-MM-DD.md`) generated at the first prompt build of a new day from the week plan + canon + yesterday's memory. Each ≤ `PLAN_MAX_WORDS` words, atomic write. A past day's or week's plan is **never rewritten** once its period ends; a past day's plan (with its final today block) feeds that day's memory (plan vs reality). Plans involve only the agent and the city — they never commit the owner or the other agent to anything.
-- **The today block (hourly):** `state/<name>.today.md` — two short first-person sections, «Сьогодні вже…» (done so far today) and «Ще сьогодні…» (still ahead), ≤ `TODAY_MAX_WORDS` words. Regenerated automatically whenever the local hour changes: the check is lazy at prompt build and cached per hour, so there is **at most one `today` call per hour** and no background threads. Inputs: the day plan, today's journal so far, the previous block, the current time. Reset at midnight.
+- **Plans — intentions, with mutations (deviate from the life story):** a **week plan** (`state/<name>.plans/week-YYYY-MM-DD.md`, keyed by its Monday) and a **day plan** (`state/<name>.plans/YYYY-MM-DD.md`), generated by the watcher at the week/day boundary (lazily at the first prompt build if the watcher missed it). Inputs: the canon, the current chapter, the **next chapter as silent direction** (never named), the previous week's plan and memories (unfinished intentions carried over), the weekday and season. Each ≤ `PLAN_MAX_WORDS` words, atomic write; a past plan is **never rewritten**.
+  - **Mutations:** people plan things that don't happen. Each plan item, with probability `PLAN_MUTATION_RATE` (default 0.3, injected rng), is mutated away from the story: a spontaneous idea, a changed place, a postponed or cancelled matter, a new whim. The code picks the mutations and tells the generator which items to bend; the day memory later resolves them against reality.
+  - Plans involve only the agent and the city — they never commit the owner or the other agent to anything.
+- **The today block (hourly):** `state/<name>.today.md` — two short first-person sections, «Сьогодні вже…» (done so far today — **reality**: the current chapter + today's journal) and «Ще сьогодні…» (still ahead — **intentions**: the mutated day plan), ≤ `TODAY_MAX_WORDS` words. Regenerated automatically whenever the local hour changes: the check is lazy at prompt build and cached per hour, so there is **at most one `today` call per hour** and no background threads. Inputs: the day plan, today's journal so far, the previous block, the current time. Reset at midnight.
 - **Failure:** a failed summary keeps the previous one; a failed day memory is retried later; a failed plan or today refresh keeps the previous file or block (stale by an hour, never missing); a corrupt memory file means starting without memory, logged. The bot never crashes over memory.
 
 ## World awareness
@@ -139,7 +147,7 @@ The agents see each other, so without rules they would reply to each other endle
 
 ## Prompt assembly
 
-`system_instruction` = canon (common + personal) → place, calendar and time → «Твої спогади за останні дні» (the last `MEMORY_DAYS` day memories, chronological, each labeled with its day) → «Твої плани» (this week's plan + today's plan) → «Сьогодні» (the today block: done so far, still ahead) → «Що ти пам'ятаєш з минулої розмови: <підсумок>» (the last-session summary) → the reply-format rules (speak only as yourself, no name prefix, `PASS` allowed). `contents` = the last `HISTORY_N` messages as `"Name: text"` lines. This order is a contract.
+`system_instruction` = canon (common + personal) → «Твоє життя досі» (past chapters' opening paragraphs + the current chapter; never the future) → place, calendar and time → «Твої спогади за останні дні» (the last `MEMORY_DAYS` day memories, chronological, each labeled with its day) → «Твої плани» (this week's plan + today's plan) → «Сьогодні» (the today block: done so far, still ahead) → «Що ти пам'ятаєш з минулої розмови: <підсумок>» (the last-session summary) → the reply-format rules (speak only as yourself, no name prefix, `PASS` allowed). `contents` = the last `HISTORY_N` messages as `"Name: text"` lines. This order is a contract.
 
 Earlier phases use the prefix of this order that exists at that point (v1.1: persona + rules; v2.1: canon + summary + rules).
 
@@ -170,7 +178,8 @@ The panel is the point of the whole project (VISION §The direction). One FastAP
 Changing any of these updates this document and the test that pins it, in the same commit:
 
 - The env var names in `.env.example` and `server/.env.example`.
-- The agent TOML schema (`name`, `user_id`, `canon`, `simulation`, …) and the `agents/canon/` layout.
+- The agent TOML schema (`name`, `user_id`, `canon`, `life`, `simulation`, …) and the `agents/canon/` layout.
+- The life-story format (header lines, `## YYYY–YYYY · title` chapters) and its visibility rule: future chapters and the death date never reach the conversational prompt (pinned by a test).
 - The `state/` files: `<name>.json` (session), `<name>.memory.md`, `<name>.days/YYYY-MM-DD.md` + `.talk.md`, `<name>.plans/` (week + day plans), `<name>.today.md`, `<name>.usage.jsonl` (its fields), `<name>.lock`, `logs/<name>.log`.
 - The message filter and allowlist rule.
 - The transcript format (`"Name: text"` per line), the `PASS` sentinel, and the prompt-assembly order.
@@ -211,7 +220,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `HISTORY_N`, `REPLY_DELAY_S`, `MAX_BOT_TURNS`, `BOT_REPLY_P`, `BOT_WINDOW_S` | v1.1–v1.2 | context size and turn-taking (30 / 4 / 2 / 0.5 / 600) |
 | `SESSION_IDLE_S`, `SESSION_MAX_MESSAGES`, `SUMMARY_MAX_WORDS` | v2.1 | session memory (900 / 200 / 200) |
 | `LOCATION`, `TIMEZONE`, `MEMORY_DAYS`, `DAY_MEMORY_MAX_WORDS` | v2.2 | world awareness (Львів / Europe/Kyiv / 7 / 120) |
-| `PLAN_MAX_WORDS`, `TODAY_MAX_WORDS` | v2.2 | plans and the today block (120 / 100) |
+| `PLAN_MAX_WORDS`, `TODAY_MAX_WORDS`, `PLAN_MUTATION_RATE` | v2.2 | plans, the today block, plan deviation from the life story (120 / 100 / 0.3) |
 | `PRICE_INPUT_PER_1M`, `PRICE_OUTPUT_PER_1M` | v3.1 | token prices for the cost column |
 | `PANEL_TOKEN` | v3.3 | the single owner token for the panel API |
 | `PANEL_PORT` | v3.3 | the panel port on the server (8090) |
