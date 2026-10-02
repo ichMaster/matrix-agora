@@ -4,7 +4,7 @@ from agents.config import AgentConfig
 from agents.logic import echo_reply, should_handle, should_join_invite
 
 CFG = AgentConfig(
-    name="Ада", user_id="@ada:agora.lan", persona="x",
+    name="Ада", user_id="@ada:agora.lan", canon="Канон.",
     homeserver="http://hs", room_id="!room", owner="@ich:agora.lan", password="pw",
 )
 OTHER = "@bruno:agora.lan"
@@ -58,6 +58,28 @@ def test_history_is_capped_and_keeps_everyone():
 def test_transcript_is_name_colon_text_lines():
     from agents.logic import build_transcript
     assert build_transcript([("Ich", "привіт"), ("Ада", "вітаю")]) == "Ich: привіт\nАда: вітаю"
+
+
+def test_instruction_order_canon_memory_rules():
+    from agents.logic import build_instruction
+    out = build_instruction("Ада", "Канон.", "ми говорили про каву")
+    i_canon = out.index("Канон.")
+    i_mem = out.index("Що ти пам'ятаєш з минулої розмови: ми говорили про каву")
+    i_rules = out.index("Ти — Ада.")
+    assert i_canon < i_mem < i_rules
+    assert "Що ти пам'ятаєш" not in build_instruction("Ада", "Канон.")  # no summary, no slot
+
+
+def test_no_prompt_or_canon_calls_the_agent_a_model_or_bot():
+    from pathlib import Path
+
+    from agents.logic import build_instruction
+    banned = ("бот", "модел", "штучн", " ai", "ші ", "llm", "gemini", "асистент")
+    texts = [build_instruction("Ада", "Канон.", "підсумок")]
+    texts += [p.read_text(encoding="utf-8") for p in Path("agents/canon").glob("*.md")]
+    for text in texts:
+        low = f" {text.lower()} "
+        assert not any(b in low for b in banned), text[:80]
 
 
 def test_instruction_is_the_literal_ukrainian_contract():

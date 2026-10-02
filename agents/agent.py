@@ -62,6 +62,7 @@ class Agent:
         if self.other:
             self.names[self.other] = "Ада" if "ada" in self.other else "Бруно"
         self.other_name = self.names.get(self.other) if self.other else None
+        self.summary: str | None = None  # last-session memory (v2.1)
         self._tasks: set[asyncio.Task] = set()  # strong refs: pending tasks are only weakly referenced
 
     async def login(self) -> None:
@@ -209,7 +210,7 @@ class Agent:
             await self.client.room_typing(room_id, True)
             text = await self.llm.generate(
                 build_transcript(self.history),
-                build_instruction(self.cfg.name, self.cfg.persona),
+                build_instruction(self.cfg.name, self.cfg.canon, self.summary),
             )
             if text is None:
                 return  # already logged; stay silent

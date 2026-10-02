@@ -47,12 +47,17 @@ def build_transcript(history: list[tuple[str, str]]) -> str:
     return "\n".join(f"{name}: {text}" for name, text in history)
 
 
-def build_instruction(name: str, persona: str) -> str:
-    """The system instruction: the persona plus the literal Ukrainian rules line."""
-    return (
-        f"{persona}\n\nТи — {name}. Відповідай лише від себе, коротко, без префікса з іменем. "
+def build_instruction(name: str, canon: str, summary: str | None = None) -> str:
+    """The system instruction, in contract order: canon → last-session memory → rules.
+    Nothing here may say the agent is a model or a bot."""
+    parts = [canon]
+    if summary:
+        parts.append(f"Що ти пам'ятаєш з минулої розмови: {summary}")
+    parts.append(
+        f"Ти — {name}. Відповідай лише від себе, коротко, без префікса з іменем. "
         "Якщо тобі нема чого додати — відповідай рівно PASS."
     )
+    return "\n\n".join(parts)
 
 
 ECHO_MAX_CHARS = 4000

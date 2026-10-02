@@ -22,7 +22,8 @@ def test_loads_both_agents(toml, localpart, password):
     assert cfg.password == password
     assert cfg.room_id == "!abc123"
     assert cfg.owner == "@ich:agora.lan"
-    assert cfg.name and cfg.persona
+    assert cfg.name and cfg.canon
+    assert cfg.canon.startswith("# Агора")  # common first, then personal
     assert str(cfg.state_file) == f"state/{localpart}.json"
 
 
@@ -40,5 +41,17 @@ def test_missing_toml_is_a_clear_error(tmp_path):
 def test_missing_toml_key_is_a_clear_error(tmp_path):
     p = tmp_path / "x.toml"
     p.write_text('name = "X"\nuser_id = "@x:agora.lan"\n')
-    with pytest.raises(ConfigError, match="persona"):
+    with pytest.raises(ConfigError, match="canon"):
         load_config(p, env=ENV)
+
+
+def test_missing_or_empty_canon_refuses_to_start(tmp_path):
+    from agents.config import load_canon
+    common = tmp_path / "common.md"
+    common.write_text("спільне")
+    with pytest.raises(ConfigError, match="not found"):
+        load_canon(common, tmp_path / "nope.md")
+    empty = tmp_path / "empty.md"
+    empty.write_text("   \n")
+    with pytest.raises(ConfigError, match="empty"):
+        load_canon(common, empty)

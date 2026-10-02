@@ -8,7 +8,7 @@ from agents.agent import Agent
 from agents.config import AgentConfig
 
 CFG = AgentConfig(
-    name="Ада", user_id="@ada:agora.lan", persona="x",
+    name="Ада", user_id="@ada:agora.lan", canon="Канон.",
     homeserver="http://hs", room_id="!room", owner="@ich:agora.lan", password="pw",
 )
 
