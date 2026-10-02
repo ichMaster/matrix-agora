@@ -100,7 +100,7 @@ The repo is the source of truth for the server. A deploy script reads the gitign
 **Tasks:**
 - Create the accounts `ada` and `bruno` — via token registration (log out/in in Element, or `curl` to `/_matrix/client/v3/register`), or with an admin-room command (`!admin users create-user ada`).
 - **Close registration:** set `CONTINUWUITY_ALLOW_REGISTRATION: "false"` in the repo's `server/docker-compose.yml` and apply it with `server/deploy.sh` (v0.2). From now on only the admin creates accounts.
-- In Element create the room **«Агора»**: private (invite-only), encryption disabled (forbidden on the server anyway). Invite `@ada:agora.lan` and `@bruno:agora.lan`.
+- In Element create the room **"Agora"**: private (invite-only), encryption disabled (forbidden on the server anyway). Invite `@ada:agora.lan` and `@bruno:agora.lan`.
 - Record the room's `room_id` (Room settings → Advanced, of the form `!xxxx:agora.lan`).
 
 **DoD** (Manual, owner):
@@ -124,7 +124,7 @@ The first code: the uv project, one `agents/agent.py` for both agents, TOML conf
 - Echo reply: `"<name> чує: <text>"` (Ukrainian for "<name> hears: <text>" — the literal format the bot sends).
 
 **DoD:**
-- (Manual, owner) A message in «Агора» → both bots reply with the echo.
+- (Manual, owner) A message in "Agora" → both bots reply with the echo.
 - (Manual, owner) Restarting a bot: it does not reply to old messages and does not create a new device.
 - (Manual, owner) A message in another room or a DM is ignored (visible in the log as `ignored`).
 

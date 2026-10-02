@@ -14,7 +14,7 @@ A private project for the owner alone. One human account (`@ich`), two agent acc
 
 ## The direction: the panel is the product
 
-The panel is what this project is really building. Today it manages the first **simulation** — the Matrix chat (the homeserver and the «Агора» room) — and the two agents connected to it. Later it will manage other simulations that agents join, and agents like Lili — the owner's existing text persona. That is why its model is generic from day one: a **registry of simulations** (deployment, health, logs and maintenance are written against a registry entry, never against "the chat") and agents connected to simulations. This roadmap implements exactly one simulation kind and no more; the simple Gemini agents are stand-ins that prove the scheme before a real agent is connected.
+The panel is what this project is really building. Today it manages the first **simulation** — the Matrix chat (the homeserver and the "Agora" room) — and the two agents connected to it. Later it will manage other simulations that agents join, and agents like Lili — the owner's existing text persona. That is why its model is generic from day one: a **registry of simulations** (deployment, health, logs and maintenance are written against a registry entry, never against "the chat") and agents connected to simulations. This roadmap implements exactly one simulation kind and no more; the simple Gemini agents are stand-ins that prove the scheme before a real agent is connected.
 
 ## Principles
 
@@ -48,7 +48,7 @@ The panel is what this project is really building. Today it manages the first **
 - **Owner** — the one human (`OWNER`, `@ich:agora.lan`): the admin of the homeserver and the only person in the room.
 - **Agent** — one of two instances of `agents/agent.py` (`Ada`, `Bruno`), each with its own Matrix account, TOML config and canon. From v3.2 each runs as its own Docker container on the server; `uv run` on the Mac is the dev mode.
 - **Homeserver** — [Continuwuity](https://continuwuity.org), a Rust Matrix server in one Docker container on the Ubuntu box (`agora.lan`, LAN-only, HTTP).
-- **The room** — the single private, invite-only, unencrypted room ("Агора", `ROOM_ID`) where all conversation happens.
+- **The room** — the single private, invite-only, unencrypted room ("Agora", `ROOM_ID`) where all conversation happens.
 - **Allowlist** — the in-code rule that an agent reacts only to messages in `ROOM_ID` from `{OWNER, the other agent}`.
 - **Canon** — the committed markdown description of who an agent is: `agents/canon/common.md` (shared world) + `agents/canon/<name>.md` (personal character). Replaces the early `persona` field.
 - **Session** — a stretch of conversation; it ends after `SESSION_IDLE_S` of silence or when the agent is stopped.
@@ -60,7 +60,7 @@ The panel is what this project is really building. Today it manages the first **
 - **`bot_streak`** — the count of consecutive agent messages since the owner's last message; both agents derive it from the shared room timeline, which is what keeps them from looping.
 - **`PASS`** — the literal reply with which a model declines to answer; the agent then sends nothing.
 - **Usage line** — one JSON line per Gemini call in `state/<name>.usage.jsonl`: timestamp, kind, token counts, ok — never any text.
-- **Simulation** — an environment agents join, managed by the panel as one unit: compose services + a health probe + log sources. The chat (the homeserver with the «Агора» room) is the first and only one here.
+- **Simulation** — an environment agents join, managed by the panel as one unit: compose services + a health probe + log sources. The chat (the homeserver with the "Agora" room) is the first and only one here.
 - **Simulation registry** — the declarative list of simulations; every panel mechanism is written against its entries.
 - **Server deploy** — `server/deploy.sh`: the one scripted path by which the repo's config reaches the Ubuntu host (sync + `docker compose pull && up -d` + verify).
 - **Agent image** — the single Docker image both agents run from, one container per agent (the `ada`/`bruno` services in `server/docker-compose.yml`), with `state/` bind-mounted from the server.
