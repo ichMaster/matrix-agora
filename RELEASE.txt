@@ -1,3 +1,13 @@
+Version 0.2.0 (2026-10-02)
+---------------------------
+- server/deploy.sh (AGORA-003): the only path for server config to reach the
+  Ubuntu host - compose preflight, key-auth check with one-time ssh-copy-id
+  fallback, rsync, remote compose up, bounded verify, --dry-run; the password
+  is never read by the script
+- Deploy loop proven live (AGORA-004): dry-run changes nothing, a comment-only
+  change travels end to end, re-runs are idempotent
+- Code-review fix: plain docker compose first, sudo fallback unsilenced
+
 Version 0.1.0 (2026-10-02)
 ---------------------------
 - Homeserver config in the repo (AGORA-001): Continuwuity compose for agora.lan
