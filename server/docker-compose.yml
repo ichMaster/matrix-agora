@@ -15,7 +15,7 @@ services:
       CONTINUWUITY_PORT: 8008
       CONTINUWUITY_ALLOW_FEDERATION: "false"     # fully closed off from the Matrix network
       CONTINUWUITY_ALLOW_ENCRYPTION: "false"     # no E2EE rooms at all — simpler for the bots
-      CONTINUWUITY_ALLOW_REGISTRATION: "true"    # temporarily, until v0.4
+      CONTINUWUITY_ALLOW_REGISTRATION: "false"   # closed since v0.4 — only the admin creates accounts
       CONTINUWUITY_REGISTRATION_TOKEN: "${REGISTRATION_TOKEN}"
 volumes:
   db:
