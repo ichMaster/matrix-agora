@@ -25,8 +25,9 @@ Continuwuity in one Docker container: embedded RocksDB, federation and encryptio
   ```yaml
   services:
     homeserver:
-      image: forgejo.ellis.link/continuwuation/continuwuity:latest
-      # mirror, if the main registry is unavailable: ghcr.io/continuwuity/continuwuity:latest
+      # pinned by digest (Continuwuity 26.9.1); upgrades are a conscious edit, never an implicit pull.
+      # mirror, if the main registry is unavailable: ghcr.io/continuwuity/continuwuity
+      image: forgejo.ellis.link/continuwuation/continuwuity@sha256:c9c62bc5c0a641f3f713945c701b069c7bc30d2612b54d4a5de80a5be19d5420
       restart: unless-stopped
       ports:
         - "8008:8008"
@@ -85,7 +86,7 @@ The repo is the source of truth for the server. A deploy script reads the gitign
 
 **Tasks:**
 - `brew install --cask element`.
-- Element → Create account → **Edit** homeserver → `http://192.168.1.197:8008` → register `me` with `REGISTRATION_TOKEN`. The first account automatically becomes the admin and is invited to the admin room.
+- Element → Create account → **Edit** homeserver → `http://192.168.1.197:8008` → register `me`. **The first account needs Continuwuity's one-time bootstrap token from the container logs** (`docker compose logs homeserver` on the host), not the configured `REGISTRATION_TOKEN` — that one starts working from the second account on (the bots, v0.4). The first account automatically becomes the admin and is invited to the admin room.
 
 **DoD** (Manual, owner):
 - Logged in as `@me:agora.lan` and can see the admin room.

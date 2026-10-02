@@ -1,7 +1,8 @@
 services:
   homeserver:
-    image: forgejo.ellis.link/continuwuation/continuwuity:latest
-    # mirror, if the main registry is unavailable: ghcr.io/continuwuity/continuwuity:latest
+    # pinned to the digest of Continuwuity 26.9.1 (code review #1): upgrades are a conscious
+    # edit of this line + deploy, never an implicit `pull`. Mirror registry: ghcr.io/continuwuity/continuwuity
+    image: forgejo.ellis.link/continuwuation/continuwuity@sha256:c9c62bc5c0a641f3f713945c701b069c7bc30d2612b54d4a5de80a5be19d5420
     restart: unless-stopped
     ports:
       - "8008:8008"
