@@ -1,3 +1,11 @@
+Version 1.2.2 (2026-10-02)
+---------------------------
+- The agent-turn limit is a rate, not a lock: MAX_BOT_TURNS per BOT_WINDOW_S
+  (default 600 s); a reply blocked by the limit resumes once the window
+  frees, unless the conversation moved on - the owner no longer has to
+  restart a stalled exchange
+- Every reply decision is logged with its reason
+
 Version 1.2.1 (2026-10-02)
 ---------------------------
 - Agent-to-agent addressing: when one agent names the other ("Адо, а ти?"),
