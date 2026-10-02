@@ -197,3 +197,36 @@ def test_resume_is_dropped_when_the_conversation_moved_on(monkeypatch):
         agent.client.room_send.assert_not_awaited()  # stale resume dropped
 
     asyncio.run(run())
+
+
+def test_one_pending_reply_per_agent_coalesces_triggers():
+    agent = make_agent()
+    agent.started = True
+    agent.rng = lambda: 0.0
+
+    async def run():
+        for body, ts in [("всім привіт", 1), ("ще одне", 2)]:  # two owner messages, no mentions
+            room, event = _agent_msg("@ich:agora.lan", body, ts)
+            await agent.on_message(room, event)
+        assert len(agent._tasks) == 1  # the second trigger joined the pending reply
+        for t in list(agent._tasks):
+            await t
+        agent.client.room_send.assert_awaited_once()
+        assert agent._reply_pending is False
+
+    asyncio.run(run())
+
+
+def test_script_continuation_never_reaches_the_room():
+    agent = make_agent(llm=FakeLLM("Ада: Привіт!\nIch: Я цього не казав"))
+    agent.started = True
+    agent.rng = lambda: 0.0
+
+    async def run():
+        room, event = _agent_msg("@ich:agora.lan", "Адо, привіт", 1)
+        await agent.on_message(room, event)
+        for t in list(agent._tasks):
+            await t
+
+    asyncio.run(run())
+    assert agent.client.room_send.await_args.kwargs["content"]["body"] == "Привіт!"

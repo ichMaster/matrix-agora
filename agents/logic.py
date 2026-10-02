@@ -47,6 +47,36 @@ def build_transcript(history: list[tuple[str, str]]) -> str:
     return "\n".join(f"{name}: {text}" for name, text in history)
 
 
+def clean_reply(text: str, own_name: str, other_names: list[str]) -> str | None:
+    """The model sometimes continues the "Name: text" script: it prefixes its own
+    name, or writes other speakers' lines (even the owner's). Keep only this
+    agent's own words: strip its prefix, stop at the first other speaker's line;
+    if the reply opens with someone else's line, take the first own-prefixed block.
+    Returns None when nothing of its own remains."""
+    own = f"{own_name}:"
+    others = tuple(f"{n}:" for n in other_names)
+    lines = [ln.rstrip() for ln in text.strip().splitlines()]
+    start = 0
+    if lines and lines[0].lstrip().startswith(others):
+        start = next((i for i, ln in enumerate(lines) if ln.lstrip().startswith(own)), len(lines))
+    kept: list[str] = []
+    for ln in lines[start:]:
+        s = ln.lstrip()
+        if s.startswith(others):
+            break
+        if s.startswith(own):
+            s = s[len(own):].lstrip()
+        kept.append(s)
+    out = "\n".join(kept).strip()
+    return out or None
+
+
+def same_message(a: str, b: str) -> bool:
+    """Near-duplicate check: equal after case and punctuation are dropped."""
+    norm = lambda s: "".join(ch for ch in s.lower() if ch.isalnum())
+    return bool(a) and norm(a) == norm(b)
+
+
 def build_instruction(name: str, canon: str, summary: str | None = None) -> str:
     """The system instruction, in contract order: canon → last-session memory → rules.
     Nothing here may say the agent is a model or a bot."""

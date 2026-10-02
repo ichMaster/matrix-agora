@@ -10,6 +10,7 @@ import asyncio
 import logging
 import os
 import random
+import re
 import signal
 import sys
 import time
@@ -33,6 +34,8 @@ from agents.logic import (
     append_history,
     build_instruction,
     build_transcript,
+    clean_reply,
+    same_message,
     should_handle,
     should_join_invite,
 )
@@ -74,6 +77,8 @@ class Agent:
         self.last_activity_ms: int | None = None
         self.last_attempt_ms: int | None = None
         self._summary_lock = asyncio.Lock()
+        self._reply_pending = False  # one pending reply per agent; it reads the latest context anyway
+        self._last_sent = ""
         self._tasks: set[asyncio.Task] = set()  # strong refs: pending tasks are only weakly referenced
 
     async def login(self) -> None:
@@ -161,8 +166,12 @@ class Agent:
             if not decision.reply:
                 log.info("silent: %s", decision.reason)
                 return
+            if self._reply_pending:
+                log.info("reply: %s — coalesced into the pending reply", decision.reason)
+                return
             log.info("reply: %s (in %.1fs)", decision.reason, decision.delay_s)
             # scheduled, so the sync loop keeps running; context is read at fire time
+            self._reply_pending = True
             self._spawn(self.reply_later(room.room_id, decision.delay_s))
         except Exception:
             log.exception("message handler failed (bot keeps running)")
@@ -218,6 +227,8 @@ class Agent:
             await self.reply(room_id)
         except Exception:
             log.exception("scheduled reply failed (bot keeps running)")
+        finally:
+            self._reply_pending = False
 
     async def reply(self, room_id: str) -> None:
         """Typing on → Gemini → m.text; silence on failure or PASS; typing reset in finally."""
@@ -229,9 +240,18 @@ class Agent:
             )
             if text is None:
                 return  # already logged; stay silent
+            others = [n for n in {*self.names.values()} if n != self.cfg.name]
+            text = clean_reply(text, self.cfg.name, others)
+            if text is None:
+                log.info("silent: the reply spoke only for others")
+                return
             if is_pass(text):
                 log.info("silent: model passed")
                 return
+            if same_message(text, self._last_sent):
+                log.info("silent: duplicate of my previous message")
+                return
+            self._last_sent = text
             await self.client.room_send(
                 room_id=room_id,
                 message_type="m.room.message",
@@ -255,7 +275,7 @@ class Agent:
             if text is None:
                 log.error("session summary failed — keeping the previous one")
                 return False
-            text = cap_words(text, self.summary_max_words)
+            text = cap_words(re.sub(r"^\s*Нотатка\s*:\s*", "", text), self.summary_max_words)
             save_memory(self.memory_file, text)
             self.summary = text
             self.session = self.session[len(snapshot):]  # keep what arrived meanwhile

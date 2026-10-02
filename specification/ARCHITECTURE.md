@@ -143,6 +143,8 @@ The agents see each other, so without rules they would reply to each other endle
 
 Earlier phases use the prefix of this order that exists at that point (v1.1: persona + rules; v2.1: canon + summary + rules).
 
+**Reply cleaning (since v2.1):** the model sometimes continues the `"Name: text"` script — prefixing its own name or writing other speakers' lines, even the owner's. Every reply is cleaned before sending: the own-name prefix is stripped, everything from the first other speaker's line is dropped (a reply that opens with someone else's line keeps only its first own-prefixed block), a reply with nothing of its own is silence, and a near-duplicate of the agent's previous message is skipped. Each agent has at most one pending reply; further triggers coalesce into it (it reads the latest context when it fires).
+
 ## Token accounting
 
 - After **every** Gemini call — reply, session summary, day memory, plan, today block — the agent appends one JSON line to `state/<name>.usage.jsonl`: `ts` (in `TIMEZONE`), `agent`, `kind` (`reply` / `summary` / `day_memory` / `plan` / `today`), `model`, `prompt_tokens`, `output_tokens`, `total_tokens`, `ok`. **Never any text.** Missing `usage_metadata` or fields → `null`s; a failed call → `ok: false`; a write error is logged and never blocks the conversation. Each agent writes only its own file.

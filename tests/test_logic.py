@@ -93,3 +93,34 @@ def test_history_entries_are_bounded():
     from agents.logic import ENTRY_MAX_CHARS, append_history
     h = append_history([], "Ich", "x" * (ENTRY_MAX_CHARS + 999), 30)
     assert len(h[0][1]) == ENTRY_MAX_CHARS + 1 and h[0][1].endswith("…")
+
+
+# --- reply cleaning: the model must speak only for itself ---
+def test_own_prefix_is_stripped():
+    from agents.logic import clean_reply
+    assert clean_reply("Ада: Розумію. А який маршрут?", "Ада", ["Бруно", "Ich"]) == "Розумію. А який маршрут?"
+
+
+def test_script_continuation_is_cut_at_the_first_other_speaker():
+    from agents.logic import clean_reply
+    raw = "О, це круто!\nIch: Поки що мій найкращий колега.\nАда: Я теж так думаю"
+    assert clean_reply(raw, "Бруно", ["Ада", "Ich"]) == "О, це круто!"
+
+
+def test_reply_opening_with_someone_elses_line_takes_the_own_block():
+    from agents.logic import clean_reply
+    raw = ("Ада: Зрозуміло.\nБруно: О, Клод-ШІ, це круто! Ада, нам роботи поменшає!\n"
+           "Ich: Поки що це мій колега.\nБруно: Ідеальний колега!")
+    assert clean_reply(raw, "Бруно", ["Ада", "Ich"]) == "О, Клод-ШІ, це круто! Ада, нам роботи поменшає!"
+
+
+def test_reply_speaking_only_for_others_is_dropped():
+    from agents.logic import clean_reply
+    assert clean_reply("Ада: так\nIch: ні", "Бруно", ["Ада", "Ich"]) is None
+
+
+def test_near_duplicates_are_detected():
+    from agents.logic import same_message
+    assert same_message("Саме так. Йому потрібен провідник.", "саме так! Йому потрібен \"провідник\"")
+    assert not same_message("так", "ні")
+    assert not same_message("", "")
