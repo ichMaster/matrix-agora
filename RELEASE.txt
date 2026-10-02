@@ -1,0 +1,8 @@
+Version 0.1.0 (2026-10-02)
+---------------------------
+- Homeserver config in the repo (AGORA-001): Continuwuity compose for agora.lan
+  with federation and encryption off and token-gated registration; .env example
+- Homeserver live on 192.168.1.197 (AGORA-002): Docker installed, ufw limits
+  :8008 to the LAN, container survives reboot; SSH key auth prepared for v0.2
+- Code-review fixes: image pinned by digest (26.9.1); the first-account
+  bootstrap-token behaviour documented in the roadmap
