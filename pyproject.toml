@@ -19,6 +19,11 @@ dev = [
 line-length = 110
 target-version = "py312"
 
+[tool.ruff.lint]
+# TRY004 misfires on nio's response-object API (isinstance checks on returned
+# values are how matrix-nio signals errors; TypeError would be wrong there).
+ignore = ["TRY004"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
