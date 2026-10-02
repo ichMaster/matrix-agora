@@ -101,7 +101,7 @@ The repo is the source of truth for the server. A deploy script reads the gitign
 - Create the accounts `ada` and `bruno` — via token registration (log out/in in Element, or `curl` to `/_matrix/client/v3/register`), or with an admin-room command (`!admin users create-user ada`).
 - **Close registration:** set `CONTINUWUITY_ALLOW_REGISTRATION: "false"` in the repo's `server/docker-compose.yml` and apply it with `server/deploy.sh` (v0.2). From now on only the admin creates accounts.
 - In Element create the room **"Agora"**: private (invite-only), encryption disabled (forbidden on the server anyway). Invite `@ada:agora.lan` and `@bruno:agora.lan`.
-- Record the room's `room_id` (Room settings → Advanced, of the form `!xxxx:agora.lan`).
+- Record the room's `room_id` (Room settings → Advanced). It is an opaque MSC-style id with **no server suffix** (e.g. `!U2jJ…`), not `!xxxx:agora.lan`.
 
 **DoD** (Manual, owner):
 - Registering a new account without the admin is refused.
