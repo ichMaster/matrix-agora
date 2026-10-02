@@ -65,7 +65,7 @@ The full mechanisms live in ARCHITECTURE.md; these are the invariants most often
 - **Send `m.text`, never `m.notice`**; typing reset in `finally`; on a failed/empty Gemini reply log and stay silent, never crash.
 - **The agents never know their future.** Future life-story chapters and the death date never reach a conversational prompt; only the plan generator sees the next chapter.
 - **The agents believe they are human.** No code path or prompt — reply rules, summary prompts, memory prompts — may say an agent is a model or a bot.
-- **A past day's memory or plan is never rewritten**, and room facts in memories, plans and the today block come only from the conversation journal.
+- **Nothing lived is deleted, and nothing past is rewritten**: day memories, digests (week/month/year) and plans stay forever, and room facts in memories, plans and the today block come only from the conversation journal.
 - **Keep decisions pure**: the filter, mentions, `bot_streak`, who-replies, prompt assembly, session-end, day and plan-period selection, the hourly today-refresh decision and usage aggregation are functions over plain data with an injected clock.
 - **Secrets stay out**: never print `.env`, `server/.env`, `server_con.yaml` or anything under `state/`; no tokens, passwords, keys or message/summary/memory texts in logs, argv, commits or issue comments. To check a value is set, test it without echoing it (`grep -q '^GEMINI_API_KEY=.' .env`).
 

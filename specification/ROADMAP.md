@@ -232,9 +232,11 @@ Each agent has a **life story** (`agents/canon/<name>.life.md`, dated chapters f
 - The conversation journal: each session summary appended with its time to `state/<name>.days/YYYY-MM-DD.talk.md`.
 - **Plans with mutations** (week + day, `state/<name>.plans/`): from the current chapter + the next chapter as hidden direction + carry-overs; each item mutated with probability `PLAN_MUTATION_RATE` (injected rng: spontaneous idea / changed place / postponed / cancelled / new whim); never rewritten after their period.
 - **Day memories that follow the story:** after midnight (the watcher; catch-up at startup, never before the agent's first run, ≤ `MEMORY_DAYS` back): frame from the current chapter, concrete new details of that day, room facts only from the journal, the plan resolved against reality («хотіла…, але…»); a memory copying 8+ words of the story verbatim is regenerated once; never rewritten.
+- **Memory digests — keep everything, compress the old:** day memories, journals and plans are never deleted; after each week, month and year the watcher writes a first-person digest from the finer layer (`weeks/`, `months/`, `years/`), generated not copied, never rewritten, caught up at startup (never before the first run).
+- The prompt's «Твої спогади» in layers without overlap: all years → the last `MEMORY_MONTHS` months → the last `MEMORY_WEEKS` weeks → the last `MEMORY_DAYS` days, each labeled with its period.
 - The hourly today block: «Сьогодні вже…» from reality (chapter + journal), «Ще сьогодні…» from the mutated plan; at most one call per hour; reset at midnight.
 - Prompt order per ARCHITECTURE §Prompt assembly.
-- Failures keep the previous file or block; never fatal. Settings: `LOCATION`, `TIMEZONE`, `MEMORY_DAYS`, `DAY_MEMORY_MAX_WORDS`, `PLAN_MAX_WORDS`, `TODAY_MAX_WORDS`, `PLAN_MUTATION_RATE`.
+- Failures keep the previous file or block; never fatal. Settings: `LOCATION`, `TIMEZONE`, `MEMORY_DAYS`, `MEMORY_WEEKS`, `MEMORY_MONTHS`, `DAY_MEMORY_MAX_WORDS`, `WEEK_MEMORY_MAX_WORDS`, `MONTH_MEMORY_MAX_WORDS`, `YEAR_MEMORY_MAX_WORDS`, `PLAN_MAX_WORDS`, `TODAY_MAX_WORDS`, `PLAN_MUTATION_RATE`.
 
 **DoD:**
 - (Manual, owner) «Адо, де ти навчалась?», «Бруно, як ви з Адою познайомились?» — answers consistent with the life stories, told in the agents' own words.
@@ -242,9 +244,10 @@ Each agent has a **life story** (`agents/canon/<name>.life.md`, dated chapters f
 - (Manual, owner) «Котра година?», «Який сьогодні день?», «Де ти?» — correct Lviv time, date and place.
 - (Manual, owner) The day plan has a couple of items off the story; the next day's memory follows the story and resolves those items («хотіла…, але…»), with concrete details the story doesn't contain.
 - (Manual, owner) Asking «Що ти вже зробила сьогодні?» in the morning and in the evening gives different, time-appropriate answers without a restart.
-- Past memories and plans are never rewritten; failures keep the previous files; the bot stays alive.
+- After a week has passed, `state/<name>.weeks/<monday>.md` exists and «Що було минулого тижня?» is answered from it; day files stay in place.
+- Past memories, digests and plans are never rewritten or deleted; failures keep the previous files; the bot stays alive.
 
-**Tests:** unit — life-story parsing and current-chapter selection by date (incl. year boundaries); the visibility rule (no future chapter text and no death date ever in the conversational prompt); plan mutations with injected rng (rate edges 0 and 1, which items are bent); the verbatim-copy detector (8-word spans); the Ukrainian date/time line (incl. DST, injected clock); which days and plan periods need generating (never before the first run); the hourly today-refresh decision; "past memories and plans are never rewritten"; prompt section order. Gemini mocked, clock and rng injected.
+**Tests:** unit — life-story parsing and current-chapter selection by date (incl. year boundaries); the visibility rule (no future chapter text and no death date ever in the conversational prompt); plan mutations with injected rng (rate edges 0 and 1, which items are bent); the verbatim-copy detector (8-word spans); the Ukrainian date/time line (incl. DST, injected clock); which days and plan periods need generating (never before the first run); the hourly today-refresh decision; digest periods due (week/month/year boundaries, catch-up, never before the first run); the layered memory selection (no overlap, oldest and coarsest first, window sizes); "past memories, digests and plans are never rewritten"; prompt section order. Gemini mocked, clock and rng injected.
 
 ## v3 — Operations: token accounting, server deployment, and the panel
 

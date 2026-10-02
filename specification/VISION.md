@@ -25,7 +25,7 @@ The panel is what this project is really building. Today it manages the first **
 - **Rules live in code, identity lives in the canon.** The reply-format rules (speak only as yourself, no name prefix, `PASS` allowed) are code, so editing a canon cannot break them. Who the agent *is* — character, voice, attitudes — is an authored markdown file.
 - **A whole life, not a loop.** Each agent has a written life story from birth to death, anchored to real dates. The past and the present chapter are what the agent remembers and lives; future chapters silently steer its plans as real time catches up with them. The agent never knows its future, its death included.
 - **Memories follow the life; plans drift from it.** Day memories are generated *from* the life story — new concrete details of each day, never copied text. Plans are intentions with mutations: people plan things that don't happen, and the next day's memory tells what really did.
-- **Memory is compressed, not archived.** An agent keeps a rolling summary of the last session, short auto-generated memories of recent days, auto-generated plans (per day and per week) and an hourly today note — never full logs, vector stores or RAG. Old topics fade by compression.
+- **Everything is kept; what is old is compressed.** Nothing the agents lived is ever deleted: every day memory, day journal and plan stays in `state/`. Older time is summarized in layers — weeks from days, months from days, years from months — so the prompt carries yesterday in detail and last year in a paragraph. No full conversation logs, vector stores or RAG.
 - **Invention is bounded by the record.** Day memories, plans and the today block may invent what the agent does alone in Lviv, but anything involving the owner or the other agent comes only from the conversation journal — otherwise the two agents' memories would contradict each other — and a plan never commits the owner or the other agent to anything.
 - **Every model call is counted.** Each Gemini call appends a usage line (tokens, kind, ok) so the owner can always see what conversations cost. Counting and reporting only — no limits, budgets or billing.
 - **The repo deploys itself.** Configuration lives in the repo and reaches the server by script: `server/deploy.sh` pushes the whole stack — homeserver, panel, one container per agent — to the Ubuntu host, which pulls the images from GHCR. Nothing is hand-edited on a host. CI runs the gates and builds the images, but never reaches the LAN; `uv run` on the Mac stays as the dev mode.
@@ -36,7 +36,7 @@ The panel is what this project is really building. Today it manages the first **
 ## Non-goals
 
 - E2EE, voice/video calls, media (images, voice messages) — text only.
-- Long-term memory beyond the last-session summary and the last `MEMORY_DAYS` day memories: no full conversation logs, no vector DB, no RAG.
+- Raw archives of conversations (full message logs), vector DBs and RAG — long-term memory is the layered digests, not search.
 - Live world data (weather, news, city events, external APIs). World awareness is only place, calendar and clock.
 - Token limits, budgets or billing — accounting only counts and reports.
 - Public or multi-user access of any kind: no open registration, no internet exposure, no accounts — the panel takes a single owner token.
@@ -57,6 +57,7 @@ The panel is what this project is really building. Today it manages the first **
 - **Session summary** — the rolling first-person summary of the last session, `state/<name>.memory.md`, injected into the prompt after a restart.
 - **Life story** — `agents/canon/<name>.life.md`: dated chapters from birth to death; the current chapter frames everyday life; future chapters and the death date are never shown to the agent.
 - **Plan mutation** — a deliberate, random deviation of a plan item from the life story (probability `PLAN_MUTATION_RATE`).
+- **Memory digest** — a first-person summary of a finished week (`weeks/`), month (`months/`) or year (`years/`), generated from the finer layer and never rewritten.
 - **Day memory** — a short auto-generated first-person text about one past day, `state/<name>.days/YYYY-MM-DD.md`; never rewritten once made.
 - **Plan** — a short auto-generated first-person intention file: per week (`state/<name>.plans/week-YYYY-MM-DD.md`) and per day (`state/<name>.plans/YYYY-MM-DD.md`); frozen once its period ends.
 - **Today block** — `state/<name>.today.md`: what the agent has already done today and what is still ahead, regenerated automatically every hour and reset at midnight.
