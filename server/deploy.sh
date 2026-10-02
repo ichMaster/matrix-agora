@@ -52,7 +52,7 @@ if [ "$DRY_RUN" = 1 ]; then
   say "deploy: --dry-run: would run: ssh $TARGET 'cd ~/$REMOTE_DIR && docker compose up -d'"
 else
   say "deploy: apply (docker compose up -d)"
-  ssh "$TARGET" "cd ~/$REMOTE_DIR && (sudo -n docker compose up -d 2>/dev/null || docker compose up -d)" \
+  ssh "$TARGET" "cd ~/$REMOTE_DIR && (docker compose up -d || sudo -n docker compose up -d)" \
     || die "compose up failed on the host"
 fi
 
