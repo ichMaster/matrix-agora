@@ -1,3 +1,15 @@
+Version 0.5.0 (2026-10-02)
+---------------------------
+- The first code: uv project, config loader, agents/agent.py with the session
+  file (atomic, 0600, password fallback), the invite rule, the first-sync
+  rule, the message filter/allowlist and the echo reply (AGORA-009..011)
+- 27 unit tests, nio mocked; lint green
+- Live-proven in Agora: both bots echo the owner, restart keeps the device
+  and never replays history, foreign invites are ignored
+- Fixes from the live run and review: pending invites joined at startup,
+  owner-only echo (no bot loop), Continuwuity-compatible join with a JSON
+  body, bounded echo, consumed join responses
+
 Version 0.4.0 (2026-10-02)
 ---------------------------
 - Bot accounts @ada and @bruno registered (AGORA-006); passwords only in the
