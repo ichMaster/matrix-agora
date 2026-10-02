@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import urllib.parse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -54,6 +55,24 @@ class Agent:
         save_session(self.cfg.state_file, resp.user_id, resp.device_id, resp.access_token)
         log.info("%s: logged in with the password; token stored", self.cfg.localpart)
 
+    async def join_room(self, room_id: str) -> bool:
+        """Join with an explicit '{}' body: Continuwuity rejects nio's body-less
+        POST /join with M_BAD_JSON, so client.join() fails silently."""
+        path = f"/_matrix/client/v3/rooms/{urllib.parse.quote(room_id)}/join"
+        resp = await self.client.send(
+            "POST", path, data="{}",
+            headers={
+                "Authorization": f"Bearer {self.client.access_token}",
+                "Content-Type": "application/json",
+            },
+        )
+        ok = resp.status == 200
+        if ok:
+            log.info("joined %s", room_id)
+        else:
+            log.error("join %s failed: HTTP %s", room_id, resp.status)
+        return ok
+
     async def join_pending_invites(self) -> None:
         """Invites that arrived before this start sit in the first sync; the
         callback never sees them, so they are handled here once."""
@@ -61,7 +80,7 @@ class Agent:
             inviter = getattr(room, "inviter", None)
             if inviter and should_join_invite(room_id, inviter, self.cfg):
                 log.info("joining %s (pending invite from owner)", room_id)
-                await self.client.join(room_id)
+                await self.join_room(room_id)
             else:
                 log.info("ignored: pending invite to %s from %s", room_id, inviter)
                 await self.client.room_leave(room_id)
@@ -72,7 +91,7 @@ class Agent:
                 return
             if should_join_invite(room.room_id, event.sender, self.cfg):
                 log.info("joining %s (invited by owner)", room.room_id)
-                await self.client.join(room.room_id)
+                await self.join_room(room.room_id)
             else:
                 log.info("ignored: invite to %s from %s", room.room_id, event.sender)
                 await self.client.room_leave(room.room_id)
