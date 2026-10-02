@@ -13,9 +13,21 @@ CFG = AgentConfig(
 )
 
 
-def make_agent() -> Agent:
-    agent = Agent(CFG)
-    agent.client = SimpleNamespace(room_send=AsyncMock(), join=AsyncMock(), room_leave=AsyncMock())
+class FakeLLM:
+    def __init__(self, text="(відповідь)"):
+        self.text = text
+        self.calls = []
+
+    async def generate(self, transcript, system_instruction):
+        self.calls.append((transcript, system_instruction))
+        return self.text
+
+
+def make_agent(llm=None) -> Agent:
+    agent = Agent(CFG, llm=llm or FakeLLM())
+    agent.client = SimpleNamespace(
+        room_send=AsyncMock(), join=AsyncMock(), room_leave=AsyncMock(), room_typing=AsyncMock(),
+    )
     return agent
 
 
@@ -30,7 +42,7 @@ def test_backlog_before_first_sync_is_never_answered():
     agent.client.room_send.assert_not_awaited()
 
 
-def test_after_first_sync_the_owner_gets_an_echo():
+def test_after_first_sync_the_owner_gets_a_reply():
     agent = make_agent()
     agent.started = True
     room, event = msg()
@@ -39,7 +51,33 @@ def test_after_first_sync_the_owner_gets_an_echo():
     kwargs = agent.client.room_send.await_args.kwargs
     assert kwargs["room_id"] == "!room"
     assert kwargs["content"]["msgtype"] == "m.text"
-    assert kwargs["content"]["body"] == "Ада чує: привіт"
+    assert kwargs["content"]["body"] == "(відповідь)"
+    # typing toggled on and off around the call
+    states = [c.args for c in agent.client.room_typing.await_args_list]
+    assert states == [("!room", True), ("!room", False)]
+
+
+def test_failed_llm_means_silence_and_typing_reset():
+    class FailingLLM(FakeLLM):
+        async def generate(self, transcript, system_instruction):
+            return None
+
+    agent = make_agent(llm=FailingLLM())
+    agent.started = True
+    room, event = msg()
+    asyncio.run(agent.on_message(room, event))
+    agent.client.room_send.assert_not_awaited()
+    states = [c.args for c in agent.client.room_typing.await_args_list]
+    assert states == [("!room", True), ("!room", False)]
+
+
+def test_history_includes_everyone_in_the_room():
+    agent = make_agent()
+    agent.started = True
+    for sender, body in [("@ich:agora.lan", "питання"), ("@bruno:agora.lan", "думка"), ("@ada:agora.lan", "своє")]:
+        room, event = msg(sender=sender, body=body)
+        asyncio.run(agent.on_message(room, event))
+    assert agent.history == [("Ich", "питання"), ("Бруно", "думка"), ("Ада", "своє")]
 
 
 def test_handler_exception_never_escapes():

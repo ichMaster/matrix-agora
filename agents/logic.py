@@ -33,10 +33,27 @@ def should_join_invite(room_id: str, inviter: str, cfg: AgentConfig) -> bool:
     return room_id == cfg.room_id and inviter == cfg.owner
 
 
-def should_echo(sender: str, cfg: AgentConfig) -> bool:
-    """v0.5 only: echo the owner alone. Echoing the other agent would make the
-    two bots echo each other forever — turn-taking arrives in v1.2."""
+def should_reply(sender: str, cfg: AgentConfig) -> bool:
+    """Reply to the owner alone until v1.2's turn-taking: two LLM bots that
+    answer each other would loop forever."""
     return sender == cfg.owner
+
+
+def append_history(history: list[tuple[str, str]], name: str, text: str, cap: int) -> list[tuple[str, str]]:
+    """The rolling context window: the last `cap` (name, text) pairs, own and
+    the other agent's messages included. Pure: returns the new list."""
+    out = [*history, (name, text)]
+    return out[-cap:] if cap > 0 else out
+
+
+def build_transcript(history: list[tuple[str, str]]) -> str:
+    """One "Name: text" line per message — the literal contract."""
+    return "\n".join(f"{name}: {text}" for name, text in history)
+
+
+def build_instruction(name: str, persona: str) -> str:
+    """The system instruction: the persona plus the literal Ukrainian rules line."""
+    return f"{persona}\n\nТи — {name}. Відповідай лише від себе, коротко, без префікса з іменем."
 
 
 ECHO_MAX_CHARS = 4000

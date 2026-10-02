@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
 import urllib.parse
 from pathlib import Path
@@ -24,7 +25,15 @@ from nio import (
 )
 
 from agents.config import AgentConfig, load_config
-from agents.logic import echo_reply, should_echo, should_handle, should_join_invite
+from agents.llm import GeminiClient
+from agents.logic import (
+    append_history,
+    build_instruction,
+    build_transcript,
+    should_handle,
+    should_join_invite,
+    should_reply,
+)
 from agents.session import load_session, save_session
 
 log = logging.getLogger("agent")
@@ -33,11 +42,17 @@ OTHER = {"ada": "@bruno:agora.lan", "bruno": "@ada:agora.lan"}
 
 
 class Agent:
-    def __init__(self, cfg: AgentConfig) -> None:
+    def __init__(self, cfg: AgentConfig, llm: GeminiClient | None = None) -> None:
         self.cfg = cfg
         self.other = OTHER.get(cfg.localpart)
         self.client = AsyncClient(cfg.homeserver, cfg.user_id)
         self.started = False  # flips True after the first sync; nothing earlier is handled
+        self.llm = llm or GeminiClient()
+        self.history: list[tuple[str, str]] = []
+        self.history_n = int(os.environ.get("HISTORY_N", "30"))
+        self.names = {cfg.user_id: cfg.name, cfg.owner: "Ich"}
+        if self.other:
+            self.names[self.other] = "Ада" if "ada" in self.other else "Бруно"
 
     async def login(self) -> None:
         stored = load_session(self.cfg.state_file)
@@ -103,20 +118,38 @@ class Agent:
         try:
             if not self.started:
                 return  # first-sync backlog: never replay history
+            if room.room_id == self.cfg.room_id:
+                # the context window sees every room message, own and the other agent's included
+                speaker = self.names.get(event.sender, event.sender)
+                self.history = append_history(self.history, speaker, event.body, self.history_n)
             verdict = should_handle(room.room_id, event.sender, self.cfg, self.other)
             if not verdict.handle:
                 log.info("ignored: %s (room %s)", verdict.reason, room.room_id)
                 return
-            if not should_echo(event.sender, self.cfg):
-                log.info("ignored: agent-message (no echo in v0.5, loop protection)")
+            if not should_reply(event.sender, self.cfg):
+                log.info("ignored: agent-message (owner-only replies until v1.2)")
                 return
-            await self.client.room_send(
-                room_id=room.room_id,
-                message_type="m.room.message",
-                content={"msgtype": "m.text", "body": echo_reply(self.cfg.name, event.body)},
-            )
+            await self.reply(room.room_id)
         except Exception:
             log.exception("message handler failed (bot keeps running)")
+
+    async def reply(self, room_id: str) -> None:
+        """Typing on → Gemini → m.text; silence on failure; typing reset in finally."""
+        try:
+            await self.client.room_typing(room_id, True)
+            text = await self.llm.generate(
+                build_transcript(self.history),
+                build_instruction(self.cfg.name, self.cfg.persona),
+            )
+            if text is None:
+                return  # already logged; stay silent
+            await self.client.room_send(
+                room_id=room_id,
+                message_type="m.room.message",
+                content={"msgtype": "m.text", "body": text},
+            )
+        finally:
+            await self.client.room_typing(room_id, False)
 
     async def run(self) -> None:
         await self.login()

@@ -9,7 +9,7 @@ from tests.test_first_sync import CFG
 
 
 def test_pending_owner_invite_is_joined_others_left():
-    agent = Agent(CFG)
+    agent = Agent(CFG, llm=SimpleNamespace())
     agent.client = SimpleNamespace(
         room_leave=AsyncMock(), room_send=AsyncMock(),
         invited_rooms={

@@ -41,13 +41,33 @@ def test_echo_format_is_the_literal_contract():
     assert echo_reply("Ада", "привіт") == "Ада чує: привіт"
 
 
-def test_v05_echoes_the_owner_only_no_bot_loop():
-    from agents.logic import should_echo
-    assert should_echo("@ich:agora.lan", CFG) is True
-    assert should_echo(OTHER, CFG) is False  # otherwise ada and bruno echo each other forever
+def test_replies_go_to_the_owner_only_until_v12():
+    from agents.logic import should_reply
+    assert should_reply("@ich:agora.lan", CFG) is True
+    assert should_reply(OTHER, CFG) is False  # two LLM bots answering each other would loop
 
 
 def test_huge_messages_are_echoed_truncated():
     from agents.logic import ECHO_MAX_CHARS
     out = echo_reply("Ада", "x" * (ECHO_MAX_CHARS + 500))
     assert out.endswith("…") and len(out) < ECHO_MAX_CHARS + 50
+
+
+def test_history_is_capped_and_keeps_everyone():
+    from agents.logic import append_history
+    h = []
+    for i in range(35):
+        h = append_history(h, "Ich" if i % 3 == 0 else ("Ада" if i % 3 == 1 else "Бруно"), f"m{i}", 30)
+    assert len(h) == 30 and h[-1] == ("Ада", "m34") and h[0] == ("Бруно", "m5")
+
+
+def test_transcript_is_name_colon_text_lines():
+    from agents.logic import build_transcript
+    assert build_transcript([("Ich", "привіт"), ("Ада", "вітаю")]) == "Ich: привіт\nАда: вітаю"
+
+
+def test_instruction_is_the_literal_ukrainian_contract():
+    from agents.logic import build_instruction
+    out = build_instruction("Ада", "Персона.")
+    assert out.startswith("Персона.")
+    assert out.endswith("Ти — Ада. Відповідай лише від себе, коротко, без префікса з іменем.")
