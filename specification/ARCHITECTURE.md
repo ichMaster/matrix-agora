@@ -106,8 +106,9 @@ The agents see each other, so without rules they would reply to each other endle
    - mentions one agent (by name or mention) — **only that agent** replies; mention detection must handle Ukrainian case forms (the vocative «Адо» for Ада);
    - mentions no one — **both** reply, each after a random delay of 1–`REPLY_DELAY_S` s (default 4), so they don't speak at once and the second sees the first's line in history.
 2. **The other agent's message:** reply only if `bot_streak < MAX_BOT_TURNS` (default 2). If it addresses this agent by name (any case form) or Matrix id, reply for sure; otherwise with probability `BOT_REPLY_P` (e.g. 0.5), so the conversation isn't mechanical. The streak bound applies either way.
-   - `bot_streak` = consecutive agent messages since the owner's last message. Both agents compute it from the same room timeline, so the count agrees **without any shared state or coordination** — never add any.
+   - `bot_streak` = consecutive agent messages since the owner's last message **within the last `BOT_WINDOW_S`** (default 600 s), counted by server timestamps. Both agents compute it from the same room timeline, so the count agrees **without any shared state or coordination** — never add any.
    - An owner message resets it to 0.
+   - The limit is a **rate, not a lock**: when an agent's reply is blocked by the streak, it pauses until the window frees (the oldest counted turn ages out) and then resumes — only if nothing newer arrived meanwhile. So the agents talk in bursts of at most `MAX_BOT_TURNS` per window until `PASS` or the probability gate ends the exchange; the owner never has to restart it.
 3. **`PASS`:** if the model returns exactly `PASS` (tolerating surrounding whitespace), send nothing. The prompt must explicitly allow this.
 
 ## Canon
@@ -205,7 +206,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `HOMESERVER`, `ROOM_ID`, `OWNER` | v0.4 | where and with whom the agents talk |
 | `ADA_PASSWORD`, `BRUNO_PASSWORD` | v0.4 | first-login passwords |
 | `GEMINI_API_KEY` | v1.1 | read by `google-genai` from the environment |
-| `HISTORY_N`, `REPLY_DELAY_S`, `MAX_BOT_TURNS`, `BOT_REPLY_P` | v1.1–v1.2 | context size and turn-taking (30 / 4 / 2 / 0.5) |
+| `HISTORY_N`, `REPLY_DELAY_S`, `MAX_BOT_TURNS`, `BOT_REPLY_P`, `BOT_WINDOW_S` | v1.1–v1.2 | context size and turn-taking (30 / 4 / 2 / 0.5 / 600) |
 | `SESSION_IDLE_S`, `SESSION_MAX_MESSAGES`, `SUMMARY_MAX_WORDS` | v2.1 | session memory (900 / 200 / 200) |
 | `LOCATION`, `TIMEZONE`, `MEMORY_DAYS`, `DAY_MEMORY_MAX_WORDS` | v2.2 | world awareness (Львів / Europe/Kyiv / 7 / 120) |
 | `PLAN_MAX_WORDS`, `TODAY_MAX_WORDS` | v2.2 | plans and the today block (120 / 100) |
@@ -224,7 +225,7 @@ From v3.2 the production values live in `server/.env` on the Ubuntu box (synced 
 | Someone from the internet | Port 8008 not forwarded on the router; ufw allows only `192.168.1.0/24`; federation disabled |
 | Someone messages the bots (DM, another room) | The in-code allowlist: only `ROOM_ID` + `{OWNER, other agent}` |
 | Key leak | `.env`, `server/.env`, `state/` gitignored; tokens and texts never logged |
-| Agents burn credits chatting with each other | `MAX_BOT_TURNS`, `BOT_REPLY_P`, `max_output_tokens`; one summary per session; one memory per day; one plan per day and per week; the today block at most once per hour; the usage report shows the spend |
+| Agents burn credits chatting with each other | at most `MAX_BOT_TURNS` agent turns per `BOT_WINDOW_S`, `BOT_REPLY_P`, `PASS`, `max_output_tokens`; one summary per session; one memory per day; one plan per day and per week; the today block at most once per hour; the usage report shows the spend |
 | Conversation leak | Summaries, journals and day memories live only in `state/`; their texts are never logged |
 | Private data in the public repo | Canons are committed — no secrets, no private data about the owner |
 | Someone on the LAN opens the panel | Bearer `PANEL_TOKEN` required on every API call; ufw limits :8090 to the LAN; secrets masked in views |

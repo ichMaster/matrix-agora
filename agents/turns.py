@@ -37,14 +37,41 @@ def mentions(text: str, name: str, user_id: str) -> bool:
     return any(re.search(rf"(?<!\w){re.escape(f)}(?!\w)", low) for f in forms)
 
 
-def bot_streak(history: list[tuple[str, str]], owner_name: str) -> int:
-    """Consecutive agent messages since the owner's last one (from the tail)."""
+def bot_streak(
+    timeline: list[tuple[str, int]] | list[tuple[str, str]],
+    owner_name: str,
+    now_ms: int | None = None,
+    window_ms: int | None = None,
+) -> int:
+    """Consecutive agent messages since the owner's last one (from the tail).
+
+    With a window, only agent messages newer than `now_ms - window_ms` count, so
+    the limit is a rate (MAX_BOT_TURNS per window), not a lock until the owner
+    speaks. Timeline entries are (name, server_ts_ms) — the same server
+    timestamps both agents see, so they still agree with no shared state.
+    """
     n = 0
-    for name, _ in reversed(history):
+    for name, ts in reversed(timeline):
         if name == owner_name:
+            break
+        if window_ms is not None and now_ms is not None and int(ts) < now_ms - window_ms:
             break
         n += 1
     return n
+
+
+def streak_frees_at(
+    timeline: list[tuple[str, int]], owner_name: str, now_ms: int, window_ms: int, max_turns: int,
+) -> int | None:
+    """When a blocked streak drops below `max_turns` (server ms), or None if not blocked."""
+    counted: list[int] = []
+    for name, ts in reversed(timeline):
+        if name == owner_name or ts < now_ms - window_ms:
+            break
+        counted.append(ts)
+    if len(counted) < max_turns or max_turns <= 0:
+        return None
+    return counted[max_turns - 1] + window_ms + 1
 
 
 def decide_reply(

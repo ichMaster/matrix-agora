@@ -11,6 +11,7 @@ import logging
 import os
 import random
 import sys
+import time
 import urllib.parse
 from pathlib import Path
 
@@ -35,7 +36,7 @@ from agents.logic import (
     should_join_invite,
 )
 from agents.session import load_session, save_session
-from agents.turns import bot_streak, decide_reply, is_pass
+from agents.turns import bot_streak, decide_reply, is_pass, streak_frees_at
 
 log = logging.getLogger("agent")
 
@@ -54,6 +55,8 @@ class Agent:
         self.max_bot_turns = int(os.environ.get("MAX_BOT_TURNS", "2"))
         self.bot_reply_p = float(os.environ.get("BOT_REPLY_P", "0.5"))
         self.reply_delay_s = float(os.environ.get("REPLY_DELAY_S", "4"))
+        self.bot_window_ms = int(float(os.environ.get("BOT_WINDOW_S", "600")) * 1000)
+        self.timeline: list[tuple[str, int]] = []  # (name, server_ts_ms), parallel to history
         self.rng = random.random  # injectable in tests
         self.names = {cfg.user_id: cfg.name, cfg.owner: "Ich"}
         if self.other:
@@ -125,33 +128,72 @@ class Agent:
         try:
             if not self.started:
                 return  # first-sync backlog: never replay history
+            now_ms = int(getattr(event, "server_timestamp", 0) or time.time() * 1000)
             if room.room_id == self.cfg.room_id:
                 # the context window sees every room message, own and the other agent's included
                 speaker = self.names.get(event.sender, event.sender)
                 self.history = append_history(self.history, speaker, event.body, self.history_n)
+                self.timeline = [*self.timeline, (speaker, now_ms)][-max(self.history_n, 1):]
             verdict = should_handle(room.room_id, event.sender, self.cfg, self.other)
             if not verdict.handle:
                 log.info("ignored: %s (room %s)", verdict.reason, room.room_id)
                 return
-            decision = decide_reply(
-                event.sender, event.body,
-                bot_streak(self.history[:-1], "Ich"),
-                self.cfg, self.other, self.other_name,
-                max_bot_turns=self.max_bot_turns,
-                bot_reply_p=self.bot_reply_p,
-                reply_delay_s=self.reply_delay_s,
-                rng=self.rng,
-            )
+            decision = self.decide(event.sender, event.body, now_ms)
+            if decision.reason == "streak-limit":
+                self.pause_until_window_frees(room.room_id, event.sender, event.body, now_ms)
+                return
             if not decision.reply:
                 log.info("silent: %s", decision.reason)
                 return
             log.info("reply: %s (in %.1fs)", decision.reason, decision.delay_s)
             # scheduled, so the sync loop keeps running; context is read at fire time
-            task = asyncio.create_task(self.reply_later(room.room_id, decision.delay_s))
-            self._tasks.add(task)
-            task.add_done_callback(self._tasks.discard)
+            self._spawn(self.reply_later(room.room_id, decision.delay_s))
         except Exception:
             log.exception("message handler failed (bot keeps running)")
+
+    def decide(self, sender: str, text: str, now_ms: int):
+        return decide_reply(
+            sender, text,
+            bot_streak(self.timeline[:-1], "Ich", now_ms, self.bot_window_ms),
+            self.cfg, self.other, self.other_name,
+            max_bot_turns=self.max_bot_turns,
+            bot_reply_p=self.bot_reply_p,
+            reply_delay_s=self.reply_delay_s,
+            rng=self.rng,
+        )
+
+    def _spawn(self, coro) -> None:
+        task = asyncio.create_task(coro)
+        self._tasks.add(task)  # strong ref: pending tasks are only weakly referenced
+        task.add_done_callback(self._tasks.discard)
+
+    def pause_until_window_frees(self, room_id: str, sender: str, text: str, now_ms: int) -> None:
+        """The streak limit is a rate, not a lock: resume once the window frees,
+        but only if the conversation hasn't moved on in the meantime."""
+        frees = streak_frees_at(self.timeline[:-1], "Ich", now_ms, self.bot_window_ms, self.max_bot_turns)
+        if frees is None:
+            log.info("silent: streak-limit")
+            return
+        wait_s = (frees - now_ms) / 1000 + 1.0 + self.rng() * max(self.reply_delay_s - 1.0, 0.0)
+        log.info("paused: streak-limit; resume check in %.0fs", wait_s)
+        self._spawn(self.resume_later(room_id, sender, text, self.timeline[-1], frees, wait_s))
+
+    async def resume_later(
+        self, room_id: str, sender: str, text: str, marker: tuple[str, int], at_ms: int, wait_s: float,
+    ) -> None:
+        try:
+            await asyncio.sleep(wait_s)
+            if not self.timeline or self.timeline[-1] != marker:
+                log.info("resume dropped: the conversation moved on")
+                return
+            decision = self.decide(sender, text, at_ms)
+            if not decision.reply:
+                log.info("resume: silent (%s)", decision.reason)
+                return
+            log.info("resume: %s", decision.reason)
+            await self.reply(room_id)
+        except Exception:
+            log.exception("resume failed (bot keeps running)")
 
     async def reply_later(self, room_id: str, delay_s: float) -> None:
         try:

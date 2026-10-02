@@ -120,3 +120,80 @@ def test_scheduled_replies_hold_a_strong_reference():
         assert not agent._tasks  # discarded when done
 
     asyncio.run(run())
+
+
+def _agent_msg(sender, body, ts):
+    return SimpleNamespace(room_id="!room"), SimpleNamespace(sender=sender, body=body, server_timestamp=ts)
+
+
+def test_streak_limit_pauses_then_resumes_when_the_window_frees(monkeypatch):
+    real_sleep = asyncio.sleep
+
+    async def fast_sleep(_):
+        await real_sleep(0)
+
+    monkeypatch.setattr("agents.agent.asyncio.sleep", fast_sleep)
+    agent = make_agent()
+    agent.started = True
+    agent.rng = lambda: 0.0  # passes every probability gate
+    agent.max_bot_turns = 2
+    agent.bot_window_ms = 600_000
+
+    async def run():
+        for sender, body, ts in [("@ich:agora.lan", "тема", 0), ("@bruno:agora.lan", "б1", 1_000),
+                                 ("@ada:agora.lan", "а1", 2_000)]:
+            room, event = _agent_msg(sender, body, ts)
+            await agent.on_message(room, event)
+        stale = list(agent._tasks)
+        for t in stale:
+            t.cancel()
+        await asyncio.gather(*stale, return_exceptions=True)  # let the cancellations settle
+        agent.client.room_send.reset_mock()
+        # Bruno's second turn hits the limit (streak = 2) → paused, then resumed
+        room, event = _agent_msg("@bruno:agora.lan", "б2", 3_000)
+        await agent.on_message(room, event)
+        assert len(agent._tasks) == 1
+        for t in list(agent._tasks):
+            await t
+        agent.client.room_send.assert_awaited_once()  # the conversation continued after the pause
+
+    asyncio.run(run())
+
+
+def test_resume_is_dropped_when_the_conversation_moved_on(monkeypatch):
+    real_sleep = asyncio.sleep
+    async def slow_then_fast(_):
+        await real_sleep(0.05)
+
+    monkeypatch.setattr("agents.agent.asyncio.sleep", slow_then_fast)
+    agent = make_agent()
+    agent.started = True
+    agent.rng = lambda: 0.0
+    agent.max_bot_turns = 2
+    agent.bot_window_ms = 600_000
+
+    async def run():
+        for sender, body, ts in [("@ich:agora.lan", "тема", 0), ("@bruno:agora.lan", "б1", 1_000),
+                                 ("@ada:agora.lan", "а1", 2_000)]:
+            room, event = _agent_msg(sender, body, ts)
+            await agent.on_message(room, event)
+        stale = list(agent._tasks)
+        for t in stale:
+            t.cancel()
+        await asyncio.gather(*stale, return_exceptions=True)  # let the cancellations settle
+        agent.client.room_send.reset_mock()
+        room, event = _agent_msg("@bruno:agora.lan", "б2", 3_000)
+        await agent.on_message(room, event)  # paused
+        pending = list(agent._tasks)
+        # the owner speaks before the resume fires; the owner's own reply task is cancelled
+        room, event = _agent_msg("@ich:agora.lan", "нова тема", 4_000)
+        await agent.on_message(room, event)
+        others = [t for t in agent._tasks if t not in pending]
+        for t in others:
+            t.cancel()
+        await asyncio.gather(*others, return_exceptions=True)
+        for t in pending:
+            await t
+        agent.client.room_send.assert_not_awaited()  # stale resume dropped
+
+    asyncio.run(run())

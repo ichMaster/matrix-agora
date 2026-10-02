@@ -82,3 +82,21 @@ def test_streak_counts_and_resets_on_owner():
 ])
 def test_pass_detection(text, expect):
     assert is_pass(text) is expect
+
+
+# --- the streak is a rate over BOT_WINDOW_S, not a lock until the owner speaks ---
+def test_window_drops_old_agent_messages_from_the_streak():
+    tl = [("Ich", 0), ("Ада", 1_000), ("Бруно", 2_000), ("Ада", 700_000)]
+    assert bot_streak(tl, "Ich") == 3                                   # no window: lock semantics
+    assert bot_streak(tl, "Ich", now_ms=701_000, window_ms=600_000) == 1  # only the recent one counts
+
+
+def test_streak_frees_at_the_moment_the_window_allows_another_turn():
+    from agents.turns import streak_frees_at
+    tl = [("Ich", 0), ("Бруно", 10_000), ("Ада", 20_000)]
+    # max 2 turns, both inside the window → frees when the older of the two leaves it
+    assert streak_frees_at(tl, "Ich", 30_000, 600_000, 2) == 10_000 + 600_000 + 1
+    # under the limit → not blocked
+    assert streak_frees_at(tl, "Ich", 30_000, 600_000, 3) is None
+    # after the owner speaks, nothing is blocked
+    assert streak_frees_at([*tl, ("Ich", 40_000)], "Ich", 50_000, 600_000, 2) is None
