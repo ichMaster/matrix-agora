@@ -1,6 +1,6 @@
 # Roadmap — matrix-agora
 
-Four self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD, web panel). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Four self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
 **Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v3→3), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
@@ -247,9 +247,9 @@ Place and calendar in the prompt; auto-generated day memories, plans (per day an
 
 **Tests:** unit — the Ukrainian date/time line (incl. DST switches, injected clock), which days and plan periods need generating, the hourly today-refresh decision (hour change → regenerate; same hour → cached; midnight → reset), "a past day's memory or plan is never rewritten", prompt section order (memories → plans → today → summary), word caps, journal appending. Gemini mocked, clock injected.
 
-## v3 — Operations: token accounting, agent images + CI/CD, and the web panel
+## v3 — Operations: token accounting, server deployment, and the panel
 
-Running the agents becomes observable and convenient: every model call is counted, the agents ship as one Docker image with CI behind every push, and a local web panel starts, stops and watches everything. Depends on: v2 (the panel shows memory and tokens).
+Running the system becomes one operations surface: every model call is counted; the agents ship as one image and move to the Ubuntu server, **each as its own container**; and the panel — the point of the whole project — manages the first simulation (the chat) and the agents connected to it. Depends on: v2 (the panel shows memory and tokens).
 
 ### v3.1 — Token accounting and report
 
@@ -268,51 +268,53 @@ One usage line per Gemini call, and a report command (ARCHITECTURE §Token accou
 
 **Tests:** unit — `usage_metadata` parsing (incl. missing fields), aggregation, cost calculation, corrupt-line skipping.
 
-### v3.2 — Agent images and CI/CD
+### v3.2 — Agent images, CI/CD and server deployment
 
-**Goal:** the agents run on the Mac as Docker containers built from one image, and every push is linted, tested and built by CI.
+**Goal:** each agent runs on the Ubuntu server as its own Docker container, built from one image by CI.
 
-One image for both agents (the TOML picks the identity), a Mac compose file with services `ada` and `bruno`, and a GitHub Actions pipeline: the gates on every push/PR, the image published to GHCR on a release tag. A GitHub runner cannot reach the home LAN, so nothing deploys from CI — deploys run from the Mac (`docker compose pull && docker compose up -d` for the agents; the server side stays v0.2's script). See ARCHITECTURE §Deployment and CI/CD.
+One image for both agents; **one compose service per agent** (`ada`, `bruno`) joins `server/docker-compose.yml`; `state/` becomes a server-side directory. `server/deploy.sh` (v0.2) now deploys the whole stack, pulling images from GHCR. A GitHub runner cannot reach the LAN, so CI never deploys — the deploy always runs from the Mac. Dev mode on the Mac (`uv run`, local `state/`) remains. See ARCHITECTURE §Deployment and CI/CD.
 
 **Tasks:**
-- `agents/Dockerfile`: one image for both agents — python slim + uv, the project installed, entrypoint running `agents/agent.py` with the TOML given per container; `TZ` set from `TIMEZONE`.
-- `compose.yml` at the repo root: services `ada` and `bruno` from the same image; `env_file: .env` (marked `required: false`, so the config gate passes without a local `.env`); `./state` bind-mounted so memory, usage and logs stay host-side files (the v3.1 report and the v3.3 panel keep reading them); `restart: unless-stopped`.
-- Stop semantics: `docker stop -t 30` sends SIGTERM → the v2.1 shutdown summary runs before SIGKILL.
-- Logs still land in `state/logs/<name>.log` (via the mount) as well as `docker logs`.
-- `.github/workflows/ci.yml`: on every push/PR — ruff, pytest (nio/Gemini mocked; no paid APIs, no secrets in CI), both compose config gates, and the image build. On a `vA.B.C` tag — push the image to GHCR (`ghcr.io/<owner>/matrix-agora-agent`, tagged with the version and `latest`) using only `GITHUB_TOKEN`.
-- README: the Mac deploy commands (`docker compose pull && docker compose up -d`); terminal mode `uv run agents/agent.py …` keeps working for development.
+- `agents/Dockerfile`: python slim + uv, entrypoint `agents/agent.py <toml>`; `TZ` from `TIMEZONE`.
+- `server/docker-compose.yml` gains `ada` and `bruno` — the same image (`ghcr.io/<owner>/matrix-agora-agent`), one container per agent: env from `server/.env` (which now also carries `GEMINI_API_KEY` and the agent settings), `~/matrix-agora/state` bind-mounted, `restart: unless-stopped`. On the server the agents reach the homeserver over the compose network (`HOMESERVER=http://homeserver:8008`); the LAN URL stays for dev mode.
+- Stop semantics: `docker stop -t 30` → SIGTERM → the v2.1 shutdown summary → SIGKILL after the grace period.
+- The single-instance `flock` on `state/<name>.lock` (PID inside) and file logging to `state/logs/<name>.log` (rotating, 1 MB × 3) land here: a second instance refuses to start, and the v3.3 panel has logs to tail.
+- `server/deploy.sh`: add `docker compose pull` before `up -d`.
+- `.github/workflows/ci.yml`: ruff, pytest (nio/Gemini mocked; no paid APIs, no secrets in CI), the compose gate, the image build on every push/PR; on a `vA.B.C` tag — push to GHCR using only `GITHUB_TOKEN`.
 
 **DoD:**
-- (Manual, owner) `docker compose up -d` on the Mac starts both agents from the image; they join the room and reply; the `state/` files appear on the host as before.
-- (Manual, owner) `docker stop -t 30 ada` → Ada's session summary is written before the container exits.
-- CI is green on a push: lint, tests, both compose gates, image build; no paid API keys exist in CI.
+- (Manual, owner) After `server/deploy.sh`, both agent containers run on the server, join the room and reply; `~/matrix-agora/state/` fills in on the server.
+- (Manual, owner) `docker stop -t 30 ada` on the server → Ada's session summary is written before the container exits.
+- CI is green on a push: lint, tests, the compose gate, the image build; no paid API keys exist in CI.
 - (Manual, owner) Pushing a `vA.B.C` tag publishes the image to GHCR.
-- The image contains no secrets; `.env` and `state/` come only from the host.
+- The image holds no secrets; env and `state/` come only from the host.
+- (Manual, owner) Dev mode on the Mac still works against the same homeserver.
 
-**Tests:** CI runs the existing gates unchanged (everything mocked); the image build and the compose config gates are the new checks — the pipeline itself is configuration, not unit-tested code.
+**Tests:** CI runs the existing gates unchanged; the image build and the compose gate are the new checks — the pipeline itself is configuration. Unit — the single-instance lock.
 
-### v3.3 — Web panel on the Mac
+### v3.3 — The panel: simulations and agents
 
-**Goal:** agents are started, stopped and observed from one local page instead of two terminals and raw files.
+**Goal:** one page, served from the server, runs everything — the chat simulation and the agents connected to it — and the model is ready for more simulations later.
 
-The panel from ARCHITECTURE §Web panel: `aiohttp.web` on `127.0.0.1:8090`, one vanilla-JS page, Ukrainian UI. Supervision of the v3.2 agent containers (start/stop/restart, single-instance lock, logs), views (memory, canons, tokens, settings, server health) and the panel security rules.
+The panel is the point of the whole project (VISION §The direction): a FastAPI backend plus one static vanilla-JS page (Ukrainian), the `panel` service in `server/docker-compose.yml` (port 8090, `/var/run/docker.sock` and the `state/` directory mounted), deployed by `server/deploy.sh`, Bearer `PANEL_TOKEN` on every API call. Internally everything is written against a **simulation registry** — maintenance, monitoring and deployment code never mentions "the chat"; the PoC registry holds exactly one entry (`agora`, kind `matrix-chat`) and this roadmap adds no second one. Depends on: v3.2 and v0.2.
 
 **Tasks:**
-- `panel/app.py` + `panel/static/index.html`; bind `127.0.0.1` (`PANEL_PORT`); `Host` check on every request; mutating actions `POST`-only with the panel's `Origin`; no CORS.
-- The supervisor drives the v3.2 containers: Start = `docker compose up -d <name>`, Stop = `docker stop -t 30 <name>` (SIGTERM → the v2.1 shutdown summary, SIGKILL after the grace period); agent names from a fixed list. It also detects terminal-started (`uv run`) agents via the lock file and can stop them by verified PID.
-- The single-instance `flock` on `state/<name>.lock` (in the agent), with the PID inside.
-- Agent file logging: `state/logs/<name>.log`, rotating 1 MB × 3, alongside the console; the panel tails 200 lines, refresh 2 s.
-- Views: homeserver health (30 s), session summary + day memories + plans + the today block per agent, canons read-only, the 7-day token table (shared aggregation code), masked settings.
-- «Забути останню сесію» ("Forget the last session"): deletes `state/<name>.memory.md`, confirmation required, stopped agents only.
+- `fastapi` + `uvicorn` join the project dependencies; `panel/app.py` + `panel/static/index.html` + `panel/Dockerfile`; the `panel` service in the server compose; ufw allows `:8090` from `192.168.1.0/24` only.
+- The model and registry: `Simulation{id, kind, title, services, health, endpoints}` and `Agent{name, container, canon, simulation}`; `agents/<name>.toml` gains `simulation = "agora"`, from which the agent's `HOMESERVER`/`ROOM_ID` resolve.
+- API (JSON, `Authorization: Bearer` on every route): `GET /health` (+ host basics), `GET /simulations`, `GET /simulations/{id}` (health probe + per-service container state), `POST /simulations/{id}/start|stop|restart`, `GET /simulations/{id}/logs?service=…&tail=200`; `GET /agents`, `POST /agents/{name}/start|stop|restart`, `GET /agents/{name}/logs|memory`, `POST /agents/{name}/forget`, `GET /usage?days=7`.
+- **The panel launches the agent containers**: start = `docker compose up -d <name>` (creates the container when it does not exist yet); stop = `docker stop -t 30` so the session summary runs; names resolve only through the registry and the fixed agent list (unknown → 404; no request data in paths, argv or the docker API).
+- UI cards: the simulation (health, services, logs, start/stop/restart), the agents (state, logs, memory/plans/today, forget, the token table), the host (uptime, disk, memory from `/proc` and a read-only host mount).
+- Confirmations for every stop/restart and forget; mutating actions are `POST` + token.
+- CI builds and publishes the panel image (`…-panel`) alongside the agent image.
+- Degrade by card: docker trouble greys the container cards, an unreadable `state/` greys the memory views; a stopped homeserver never crashes the agents (nio retries).
 
 **DoD:**
-- (Manual, owner) `uv run panel/app.py` → `http://127.0.0.1:8090` shows both agents with state; unreachable from another device.
-- (Manual, owner) Start/Stop/Restart work; after Stop a fresh session summary exists.
-- A second instance of an agent refuses to start, from the panel or a terminal.
-- (Manual, owner) A terminal-started agent shows as running; closing the panel stops nothing.
-- (Manual, owner) Logs visible and refreshing, with no tokens, passwords or message texts.
-- (Manual, owner) Homeserver container stopped → red indicator.
-- "Forget" works only for a stopped agent, after confirmation.
-- The token table matches `usage_report.py --days 7`; secrets are masked; foreign `Origin`/`Host` requests are refused.
+- (Manual, owner) `http://192.168.1.197:8090` with the token: the chat simulation and both agents show live state; without the token every API call is 401 and the page shows nothing.
+- (Manual, owner) Agent start/stop/restart from the panel work — including the first launch of a container that does not exist yet; after a stop the session summary exists.
+- (Manual, owner) Homeserver stop from the panel → red health, the agents keep retrying; start → everything recovers on its own.
+- (Manual, owner) Homeserver and agent log tails are readable; memory/plans/today visible; the token table matches `usage_report.py --days 7`; host metrics shown.
+- "Forget" works only for a stopped agent, after confirmation; unknown simulation/agent/service names are refused.
+- (Manual, owner) The panel is unreachable from outside the LAN; `server/deploy.sh` deploys it together with the rest of the stack.
+- The registry holds the single `agora` entry, and the panel resolves everything through it.
 
-**Tests:** unit — the supervisor against a fake docker client and fake processes (start, stop, timeout → kill), the single-instance lock, secret masking, `Host`/`Origin` checks; the API handlers via the aiohttp test client.
+**Tests:** unit — the Bearer-token gate (401), registry resolution (unknown simulation/agent/service → 404), the supervisor against a fake docker client (start, stop, timeout → kill; container creation on first start), forget gating, confirmation gating, host-metrics parsing from canned `/proc` files; the routes via FastAPI's `TestClient`. No real docker and no network in tests.

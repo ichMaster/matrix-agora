@@ -85,7 +85,7 @@ be a single issue. Don't pad. Each issue is a coherent, independently verifiable
   - `agents`: `agents/`.
   - `panel`: `panel/`.
   - `server`: `server/`.
-  - `config`: `pyproject.toml`, `.env.example`, `.gitignore`, `agents/Dockerfile`, `compose.yml`, `server/deploy.sh`, `.github/workflows/`.
+  - `config`: `pyproject.toml`, `.env.example`, `.gitignore`, `agents/Dockerfile`, `panel/Dockerfile`, `server/deploy.sh`, `.github/workflows/`.
   - `tests`.
   - `docs`: the `specification/` files, README.md, CLAUDE.md.
   - `ops`: steps the owner performs on the Ubuntu host or in Element.

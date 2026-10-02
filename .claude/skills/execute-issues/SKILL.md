@@ -75,22 +75,10 @@ Follow `CLAUDE.md` and ARCHITECTURE.md. Route by component:
   - turn-taking (v1.2);
   - canon loading and session memory (v2.1), place / calendar / time, day memories, plans and the today block (v2.2), usage accounting
     (v3.1). See ARCHITECTURE.md §Canon, §Memory, §World awareness and §Token accounting.
-- **`panel/`** (v3.3): `aiohttp.web` plus one static page; see ARCHITECTURE.md §Web panel. It binds `127.0.0.1`
-  only, checks `Host` and `Origin`, takes agent names from a fixed list, and keeps the process supervisor
-  testable with fake processes.
-- **Pure decisions:** keep the filter, mention detection, `bot_streak`, who-replies, transcript and prompt
-  assembly, the session-end decision, calendar formatting, the missing-days calculation and usage aggregation
-  as functions over plain data, with the clock injected. That way tests need no nio objects, and the nio callbacks stay thin
-  adapters.
-- **Gemini** (`google-genai`, from v1.1): `client.aio.models.generate_content` with `gemini-2.5-flash`, the
-  persona (canon from v2.1) as `system_instruction`, `max_output_tokens=400` and `thinking_budget=0`. On failure or empty
-  text: log, send nothing, keep running.
-- **`server/docker-compose.yml`:** its environment is a contract. `CONTINUWUITY_SERVER_NAME` never changes.
-  Registration closes in v0.3 and stays closed.
-- **Owner-run work (`ops` issues):**
-  - Write any repo artifact the issue names.
-  - Print the owner's steps as a numbered checklist, using the exact commands from ROADMAP.md.
-  - Don't act on the Ubuntu host, in Element, or on accounts and rooms unless the owner asks in this session.
+- **`panel/`** (v3.3): a FastAPI JSON API + one static page; see ARCHITECTURE.md §The panel. Bearer
+  `PANEL_TOKEN` on every route; simulation, service and agent names resolve only through the registry and
+  fixed lists (no request data in paths, argv or the docker API); the supervisor is testable with fakes
+  (docker client, processes, canned `/proc`); each agent is its own container and the panel launches them.
 - **Contract changes** (ARCHITECTURE.md §Contracts) update ARCHITECTURE.md and the
   test that pins the contract, in the same commit.
 - **Scope:** stay inside the phase; don't add what no phase asks for. Follow the existing style.
@@ -240,7 +228,7 @@ Commit the report (`docs: vA.B execution report`, with the trailer) and push.
   in the same commit.
 - **Security invariants:**
   - The allowlist (`ROOM_ID` + `{OWNER, other agent}`) guards every reply path.
-  - Registration stays closed after v0.3.
+  - Registration stays closed after v0.4.
   - Port 8008 is never exposed beyond the LAN.
 - **Secrets stay out:**
   - Never print `.env`, `server/.env`, `server_con.yaml` or anything under `state/` (tokens, summaries, day

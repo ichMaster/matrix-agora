@@ -2,30 +2,83 @@
 
 ## Overview
 
-Two small axes bound by one agent codebase. **The agents' capabilities** grow: echo → Gemini replies → turn-taking → canon + session memory → world awareness (place, clock, day memories) → token accounting. **The operations surface** grows separately: terminal processes first, then a local web panel that supervises them. The homeserver and the room stay the same throughout: everything the agents do rides on the plain Matrix client-server API.
+Two small axes bound by one agent codebase. **The agents' capabilities** grow: echo → Gemini replies → turn-taking → canon + session memory → world awareness (place, clock, day memories, plans, the hourly today block) → token accounting. **The operations surface** grows separately: terminal processes on the Mac first, then Docker images with CI behind them and deployment to the Ubuntu server, and finally the **panel** — the point of the whole project — served from that server. The panel manages **simulations** (environments agents join; the chat — the homeserver and the room — is the first and only one here) and the agents connected to them. Everything the agents do rides on the plain Matrix client-server API.
 
 ```
- ┌──────────────── Ubuntu server 192.168.1.197 ────────────────┐
- │  Docker: continuwuity (Matrix homeserver)  :8008  (HTTP, LAN) │
- │  server_name = agora.lan, federation OFF, encryption OFF      │
- └───────────────▲──────────────────▲──────────────────▲────────┘
-                 │ Client-Server API (http://192.168.1.197:8008)
-     ┌───────────┴───┐     ┌────────┴────────┐  ┌──────┴──────────┐
-     │ Element Desktop│     │ agent "Ada"     │  │ agent "Bruno"   │
-     │ (owner, @me)   │     │ Python + nio    │  │ Python + nio    │
-     └────────────────┘     │ → Gemini API    │  │ → Gemini API    │
-                            └─────────────────┘  └─────────────────┘
-          Mac (the client, both agents and the web panel run here)
+                                              ┌────────────────┐  ┌────────────┐
+                                              │ Gemini API     │  │ GitHub+GHCR│
+                                              │ (agent calls)  │  │ (CI→images)│
+                                              └────────▲───────┘  └───────────┬┘
+ Internet · outbound                                   │ google-genai compose │
+ HTTPS :443 only                                       │ (agents)     pull    │
+┌─ Mac ─────────────────────────────────────────────┐  │                      │
+│  ┌──────────────────────────┐                     │  │                      │
+│  │ Element Desktop          │                     │  │                      │
+│  │ (the owner, @me)         │                     │  │                      │
+│  └────┬─────────────────────┘                     │  │                      │
+│  the owner’s browser ─────────────┐               │  │                      │
+│  dev: uv run agents · gates ·     │               │  │                      │
+│  git push · server/deploy.sh ─────────────┐       │  │                      │
+└───────┼───────────────────────────┼───────┼──────┘   │                      │
+        │ Matrix                    │ panel │ SSH :22  │                      │
+        │ :8008                     │ :8090 │ deploy   │                      │
+┌───────┼─── Ubuntu · 192.168.1.197 ┼───────┼──────────┼──────────────────────┼┐
+│       ▼                           ▼       ▼          ▼                      ▼│
+│  ┌──────────────────────┐  ┌──────────────────┐  ┌────────────────────────┐  │
+│  │ continuwuity         │  │ panel: FastAPI   │  │ agents ada + bruno     │  │
+│  │ HTTP :8008 ·         │  │ UI + API :8090   │  │ one container each     │  │
+│  │ agora.lan            │  │ docker.sock      │  │ state/ bind mount      │  │
+│  └──────────────────────┘  └──────────────────┘  └────────────────────────┘  │
+│  internal: agents ⇄ homeserver (compose net) · panel → docker.sock + state/  │
+│  ufw: :8008 + :8090 from 192.168.1.0/24 · :22 deploy · no router forwarding  │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
+
+## Network, ports and protocols
+
+| From | To | Protocol / port | Purpose |
+|---|---|---|---|
+| Element Desktop (Mac) | homeserver (Ubuntu) | HTTP :8008, LAN | Matrix client-server API |
+| Owner's browser (LAN) | panel (Ubuntu) | HTTP :8090, LAN | the panel UI + API; Bearer `PANEL_TOKEN` on every API call |
+| Agents (Ubuntu) | homeserver (Ubuntu) | HTTP :8008, compose network | Matrix client-server API (`sync`, send, typing) |
+| Agents (Ubuntu) | Gemini API | HTTPS :443, outbound | replies, summaries, day memories, plans, today blocks |
+| Panel (Ubuntu) | Docker daemon (Ubuntu) | local socket | simulation + agent containers: state, start/stop, logs |
+| Panel (Ubuntu) | homeserver (Ubuntu) | HTTP :8008, compose network | the simulation health probe (`/_matrix/client/versions`) |
+| `server/deploy.sh` (Mac) | Ubuntu host | SSH :22, LAN | rsync `server/` + remote `docker compose pull && up -d` |
+| Ubuntu host | GHCR | HTTPS :443, outbound | pulls the agent and panel images |
+| Dev mode (Mac): `uv run` agents | homeserver (Ubuntu) | HTTP :8008, LAN | development against the same homeserver, local `state/` |
+| Developer (Mac) | GitHub | HTTPS :443, outbound | `git push` triggers CI |
+| **Inbound from the internet** | — | **nothing** | no forwarded ports, federation off, the panel token-gated and LAN-only |
+
+Everything is plain HTTP inside the LAN (the PoC trade-off in §Security and access) and HTTPS to the two cloud services. There are no other listeners.
+
+## Tech stack
+
+| Technology | Used by | Purpose |
+|---|---|---|
+| Python 3.12+ with uv | agents, report, panel | one language for all Mac-side code; deps pinned in `pyproject.toml` / `uv.lock` |
+| `matrix-nio` | agents | the async Matrix client-server API: `sync_forever`, invites, typing, sending |
+| `google-genai` | agents | every Gemini call (`gemini-2.5-flash`): replies, summaries, day memories, plans, today blocks |
+| `python-dotenv` + TOML (`tomllib`) | agents, panel, report | `.env` for shared config and secrets; per-agent TOML for `name`, `user_id`, `canon` |
+| FastAPI + uvicorn | panel | the panel's JSON API and static files; typed models and the token auth in one place |
+| Vanilla HTML + JS | panel UI | one static page: no build step, no CDN, nothing to maintain |
+| Continuwuity | Ubuntu host | the Matrix homeserver: one Rust container, embedded RocksDB, no Postgres |
+| Element Desktop | Mac | the owner's Matrix client (Desktop, because an HTTPS web client cannot call an HTTP LAN server) |
+| Docker + docker compose | Ubuntu server | runs the whole stack: the homeserver, the panel, and one container per agent (one shared image) |
+| bash + system `ssh`/`rsync` | `server/deploy.sh` | deploy the whole stack to the Ubuntu host |
+| GitHub Actions | CI | lint + tests + compose gates + image build on every push/PR; GHCR push on `vA.B.C` tags |
+| GHCR | registry | hosts the agent and panel images |
+| ruff + pytest | gates | lint and the unit/contract tests (nio/Gemini mocked, clock and randomness injected) |
+| Gemini API | external service | the only LLM and the only paid dependency; everything else is free and local |
 
 ## Components
 
 - **Homeserver:** [Continuwuity](https://continuwuity.org) — a Matrix homeserver in Rust: one Docker container, embedded RocksDB, no Postgres. `server_name = agora.lan` is only the domain part of user ids (`@ada:agora.lan`); clients connect to `http://192.168.1.197:8008` directly, so no DNS is needed. Federation and encryption are disabled; registration is open (token-gated) only during setup, then closed. The compose file is the deliverable of ROADMAP v0.1.
 - **Client:** Element Desktop on the Mac. Specifically Desktop, not app.element.io — the web version runs over HTTPS and will not connect to an HTTP homeserver on the LAN (mixed content).
-- **Agents:** two Python processes on the Mac running the same `agents/agent.py` with different TOML configs (account, canon). Libraries: `matrix-nio` (Matrix) + `google-genai` (Gemini, async `client.aio.models.generate_content`, model `gemini-2.5-flash`). The names "Ada" and "Bruno" are placeholders.
-- **Panel (from v3.2):** a local `aiohttp.web` process on the Mac (`127.0.0.1` only) serving one vanilla-JS page: start/stop/restart agents, logs, memory, token report, server status. aiohttp is already a dependency of matrix-nio, so no new framework.
-- **Deployment:** the repo is the source of truth for every machine. `server/deploy.sh` (v0.2) syncs `server/` to the Ubuntu host over SSH and applies it; on the Mac the agents run as Docker containers built from one image (v3.2), with `state/` bind-mounted from the host; GitHub Actions runs the gates and publishes the image (§Deployment and CI/CD).
-- **Storage:** the gitignored `state/` directory — each agent's Matrix session, memory files, day memories, usage log, lock and logs. There is no database.
+- **Agents:** the same `agents/agent.py` with different TOML configs (account, canon, simulation). Libraries: `matrix-nio` + `google-genai` (async `client.aio.models.generate_content`, model `gemini-2.5-flash`). **Each agent is its own Docker container** — one compose service per agent — on the Ubuntu server from v3.2; `uv run` on the Mac remains the dev mode. The names "Ada" and "Bruno" are placeholders.
+- **Panel (from v3.3):** the product of the project — a Docker container beside the homeserver: a FastAPI JSON API plus one static vanilla-JS page, `:8090`, LAN-only behind ufw, Bearer `PANEL_TOKEN`. It manages **simulations** through a declarative registry (the chat is the only entry) and the agents connected to them, via the local docker socket and the `state/` mount (§The panel).
+- **Deployment:** the repo is the source of truth. `server/deploy.sh` (v0.2) syncs `server/` to the Ubuntu host and applies the whole stack — homeserver, panel, one container per agent — with `docker compose pull && up -d`; the images come from GHCR, built by CI (§Deployment and CI/CD).
+- **Storage:** the gitignored `state/` directory — at `~/matrix-agora/state/` on the server in production (from v3.2), local on the Mac in dev mode — bind-mounted into the agent containers and the panel. Each agent's Matrix session, memory files, day memories, plans, today block, usage log, lock and logs. There is no database (§Data and state files).
 
 ## Message flow and the allowlist
 
@@ -94,28 +147,54 @@ Earlier phases use the prefix of this order that exists at that point (v1.1: per
 - After **every** Gemini call — reply, session summary, day memory, plan, today block — the agent appends one JSON line to `state/<name>.usage.jsonl`: `ts` (in `TIMEZONE`), `agent`, `kind` (`reply` / `summary` / `day_memory` / `plan` / `today`), `model`, `prompt_tokens`, `output_tokens`, `total_tokens`, `ok`. **Never any text.** Missing `usage_metadata` or fields → `null`s; a failed call → `ok: false`; a write error is logged and never blocks the conversation. Each agent writes only its own file.
 - **Report:** `uv run agents/usage_report.py [--days N] [--since YYYY-MM-DD] [--markdown]` — a table by day × agent × kind with calls, tokens and estimated cost. Prices come only from `.env` (`PRICE_INPUT_PER_1M`, `PRICE_OUTPUT_PER_1M`, USD per 1M tokens); unset prices → no cost column. Corrupt lines are skipped with a warning; no files → "no data". The panel reuses the same aggregation code.
 
-## Web panel
+## The panel: simulations and agents
 
-A separate process in the same uv project: `uv run panel/app.py` → `http://127.0.0.1:8090` (`PANEL_PORT`). One static HTML page with vanilla JS, no build step, no CDN; UI in Ukrainian. The agents work without it.
+The panel is the point of the whole project (VISION §The direction). One FastAPI app — a JSON API plus one static vanilla-JS page (Ukrainian) — running as the `panel` service beside the homeserver: port `8090`, ufw-limited to the LAN, Bearer `PANEL_TOKEN` on every API call. The agents and the terminal workflow keep working with the panel down.
 
-- **Supervision:** per agent — state (running/stopped), uptime, last activity; Start / Stop / Restart. The panel drives the v3.2 containers: Start = `docker compose up -d <name>` (closing the panel never stops agents), Stop = `docker stop -t 30 <name>`, whose SIGTERM runs the session summary before the SIGKILL. It also detects a terminal-started (`uv run`) agent via the lock file and can stop it by verified PID. Agent names come from a fixed list, never from a request path.
-- **Single instance:** at startup an agent takes `flock` on `state/<name>.lock` and writes its PID; a second instance (panel or terminal) refuses to start. The panel detects terminal-started agents through the lock and can stop them by PID (after checking the PID really is our agent).
-- **Logs:** agents always log to `state/logs/<name>.log` (rotating, 1 MB × 3) and the console; the panel tails the last 200 lines, refreshed every 2 s. Logs are safe to show because they never contain tokens, passwords or message texts.
-- **Views:** homeserver health (`/_matrix/client/versions`, every 30 s); each agent's session summary, day memories, plans and today block; canons (read-only); the token table (last 7 days); effective settings (read-only, anything matching `*_KEY` / `*_PASSWORD` / `*_TOKEN` masked). **"Forget the last session"** deletes `state/<name>.memory.md` after confirmation and only while that agent is stopped. The panel never edits `.env` or canons and never runs commands on the Ubuntu server.
-- **Security:** binds `127.0.0.1` only; CORS disabled; every request checks `Host` (`127.0.0.1:<port>` / `localhost:<port>` — anti DNS-rebinding); mutating actions are `POST`-only with the panel's own `Origin`.
+- **The model.** A **simulation** is an environment agents join, managed as one unit: a registry entry `Simulation{id, kind, title, services, health, endpoints}` names its compose services, health probe and log sources. An **agent** is a managed participant: `Agent{name, container, canon, simulation}`; `agents/<name>.toml` carries `simulation = "agora"`, and the agent's connection settings (`HOMESERVER`, `ROOM_ID`) resolve from that entry. The registry holds exactly one entry — `agora`, kind `matrix-chat` — and this roadmap adds no second one; but every panel mechanism (deploy state, health, start/stop, logs, maintenance) is written against a registry entry, never against "the chat", so a new simulation kind is a registry entry plus its compose services, not a panel rewrite.
+- **Each agent is its own container** (one compose service per agent), and the panel launches them: start = `docker compose up -d <name>` (creates the container if it does not exist yet), stop = `docker stop -t 30` (SIGTERM → the session summary → SIGKILL after the grace period), restart, log tail. Agent, simulation and service names resolve only through the registry and the fixed agent list — an unknown name is 404, and no request data ever reaches a filesystem path, an argv or the docker API.
+- **The simulation card (the chat):** the health probe (`/_matrix/client/versions`, every 30 s), per-service container state, start/stop/restart, log tails.
+- **The agent cards:** state, uptime, last activity; start/stop/restart; log tail; session summary, day memories, plans, the today block; **"Forget the last session"** (deletes `state/<name>.memory.md`, confirmation required, stopped agents only); the 7-day token table (the v3.1 aggregation).
+- **The host card:** uptime, disk, memory (from `/proc` and a read-only host mount).
+- **Auth:** the UI asks for the owner token once and sends `Authorization: Bearer` on every call — without it every route is 401 and the page shows nothing. One owner, no accounts.
+- **Confirmations:** every stop/restart and forget is confirmed in the UI; mutating actions are `POST` + token.
+- **Degrade by card:** docker trouble greys the container cards, an unreadable `state/` greys the memory views; a stopped homeserver never crashes the agents (nio retries until it is back).
+- **Views stay safe:** settings are read-only with anything matching `*_KEY` / `*_PASSWORD` / `*_TOKEN` masked; log views are safe because logs never contain tokens or texts; the panel never edits `.env` or canons.
+- **Single instance:** an agent takes `flock` on `state/<name>.lock` (PID inside) at startup, so a second instance refuses to start; the panel shows a terminal-started agent via the lock.
 
 ## Contracts
 
 Changing any of these updates this document and the test that pins it, in the same commit:
 
 - The env var names in `.env.example` and `server/.env.example`.
-- The agent TOML schema (`name`, `user_id`, `canon`, …) and the `agents/canon/` layout.
+- The agent TOML schema (`name`, `user_id`, `canon`, `simulation`, …) and the `agents/canon/` layout.
 - The `state/` files: `<name>.json` (session), `<name>.memory.md`, `<name>.days/YYYY-MM-DD.md` + `.talk.md`, `<name>.plans/` (week + day plans), `<name>.today.md`, `<name>.usage.jsonl` (its fields), `<name>.lock`, `logs/<name>.log`.
 - The message filter and allowlist rule.
 - The transcript format (`"Name: text"` per line), the `PASS` sentinel, and the prompt-assembly order.
 - The turn-taking semantics (who replies, `bot_streak`).
 - The `server/docker-compose.yml` environment (server name, federation, encryption, registration). `CONTINUWUITY_SERVER_NAME` cannot change without wiping the database.
-- The Mac `compose.yml` service names (`ada`, `bruno`) and the `state/` bind mount, and what `server/deploy.sh` syncs and applies.
+- The `server/docker-compose.yml` service set — `homeserver`, `panel` (v3.3), one service per agent (`ada`, `bruno`, v3.2) — the `state/` bind mount, and what `server/deploy.sh` syncs and applies.
+- The `server_con.yaml` shape (`host`, `user`, `password`) read by `server/deploy.sh`.
+- The panel API surface (the v3.3 endpoint set), the simulation-registry entry shape, and the Bearer `PANEL_TOKEN` auth.
+
+## Data and state files
+
+There is no database: all durable state is per-agent files under the gitignored `state/` — at `~/matrix-agora/state/` on the server in production (v3.2+), local on the Mac in dev mode — bind-mounted into the agent containers and the panel. Every write where a torn file would hurt is atomic (temp file + rename). Nothing here ever reaches git or the image.
+
+| File | Written | Content |
+|---|---|---|
+| `state/<name>.json` | first login | `access_token`, `device_id` — the Matrix session to reuse |
+| `state/<name>.memory.md` | session end (idle / shutdown) | last-session summary, ≤ `SUMMARY_MAX_WORDS` words |
+| `state/<name>.days/YYYY-MM-DD.talk.md` | each session end | the day's journal: session summaries with times |
+| `state/<name>.days/YYYY-MM-DD.md` | after midnight / catch-up | day memory, ≤ `DAY_MEMORY_MAX_WORDS` words; never rewritten |
+| `state/<name>.plans/week-YYYY-MM-DD.md` | first build of a new week | week plan, ≤ `PLAN_MAX_WORDS` words; frozen after its week |
+| `state/<name>.plans/YYYY-MM-DD.md` | first build of a new day | day plan, ≤ `PLAN_MAX_WORDS` words; frozen after its day |
+| `state/<name>.today.md` | hourly; reset at midnight | the today block (+ the hour it was built for), ≤ `TODAY_MAX_WORDS` words |
+| `state/<name>.usage.jsonl` | every Gemini call | one JSON line: `ts`, `agent`, `kind`, `model`, token counts, `ok` — no texts |
+| `state/<name>.lock` | startup (`flock`) | the PID of the running instance |
+| `state/logs/<name>.log` | continuously | rotating log, 1 MB × 3 — no tokens, passwords or texts |
+
+The agent TOML (`agents/<name>.toml`, committed) holds `name`, `user_id`, `canon` and `simulation` (v3.3); the shared `.env` holds everything in §Configuration and secrets. These shapes are contracts (§Contracts).
 
 ## Configuration and secrets
 
@@ -131,23 +210,25 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `LOCATION`, `TIMEZONE`, `MEMORY_DAYS`, `DAY_MEMORY_MAX_WORDS` | v2.2 | world awareness (Львів / Europe/Kyiv / 7 / 120) |
 | `PLAN_MAX_WORDS`, `TODAY_MAX_WORDS` | v2.2 | plans and the today block (120 / 100) |
 | `PRICE_INPUT_PER_1M`, `PRICE_OUTPUT_PER_1M` | v3.1 | token prices for the cost column |
-| `PANEL_PORT` | v3.2 | panel port (8090) |
+| `PANEL_TOKEN` | v3.3 | the single owner token for the panel API |
+| `PANEL_PORT` | v3.3 | the panel port on the server (8090) |
 | `REGISTRATION_TOKEN` | v0.1 | in `server/.env` on the Ubuntu box only |
 
-`.env`, `server/.env` and `state/` are gitignored. Tokens, passwords, keys and message/summary/memory texts never appear in logs, argv, commits or the panel.
+From v3.2 the production values live in `server/.env` on the Ubuntu box (synced by `server/deploy.sh`), including `GEMINI_API_KEY`; the Mac's `.env` serves the dev mode. `.env`, `server/.env`, `server_con.yaml` and `state/` are gitignored. Tokens, passwords, keys and message/summary/memory texts never appear in logs, argv, commits or the panel.
 
 ## Security and access
 
 | Threat | Protection |
 | --- | --- |
-| Someone registers on the server | Registration disabled after v0.3; the token only in `server/.env` |
+| Someone registers on the server | Registration disabled after v0.4; the token only in `server/.env` |
 | Someone from the internet | Port 8008 not forwarded on the router; ufw allows only `192.168.1.0/24`; federation disabled |
 | Someone messages the bots (DM, another room) | The in-code allowlist: only `ROOM_ID` + `{OWNER, other agent}` |
 | Key leak | `.env`, `server/.env`, `state/` gitignored; tokens and texts never logged |
 | Agents burn credits chatting with each other | `MAX_BOT_TURNS`, `BOT_REPLY_P`, `max_output_tokens`; one summary per session; one memory per day; one plan per day and per week; the today block at most once per hour; the usage report shows the spend |
 | Conversation leak | Summaries, journals and day memories live only in `state/`; their texts are never logged |
 | Private data in the public repo | Canons are committed — no secrets, no private data about the owner |
-| Someone controls the agents through the panel | `127.0.0.1` only; `Host` and `Origin` checks; secrets masked |
+| Someone on the LAN opens the panel | Bearer `PANEL_TOKEN` required on every API call; ufw limits :8090 to the LAN; secrets masked in views |
+| A compromised panel container | it holds the host's docker socket (root-equivalent) — an accepted PoC trade-off: token-gated, LAN-only, never internet-exposed |
 | The deploy password leaks | Key auth after a one-time `ssh-copy-id`; `server_con.yaml` gitignored; the password never in argv, logs or output |
 | Secrets in CI or in the image | CI uses mocks and `GITHUB_TOKEN` only; `.env` and `state/` stay on the host, never in the image |
 
@@ -155,10 +236,10 @@ HTTP without TLS on the LAN is a deliberate PoC trade-off: passwords travel in p
 
 ## Deployment and CI/CD
 
-- **Server deploy (from v0.2).** `server/deploy.sh` is the only way server config reaches the Ubuntu host: a local compose preflight → a one-time `ssh-copy-id` key setup (after that, key auth only; the password from `server_con.yaml` never appears in argv, logs or output) → rsync `server/docker-compose.yml` + `server/.env` to `~/matrix-agora/server/` → remote `docker compose up -d` → verify `/_matrix/client/versions`. Idempotent; `--dry-run` supported. Never hand-edit files on the host.
-- **Agent image (from v3.2).** One Docker image for both agents (`agents/Dockerfile`: python slim + uv). The Mac `compose.yml` runs services `ada` and `bruno` from it: `env_file: .env` (`required: false`, so the config gate passes without a local `.env`), the per-agent TOML, `TZ` from `TIMEZONE`, `restart: unless-stopped`, and `./state` bind-mounted — memory, usage and logs stay host-side files, so the report and the panel keep reading them. `docker stop -t 30` sends SIGTERM, which triggers the shutdown session summary. The image holds no secrets; `.env` and `state/` come only from the host. Terminal mode (`uv run agents/agent.py …`) remains for development.
-- **CI (from v3.2).** GitHub Actions on every push/PR: ruff, pytest (nio/Gemini mocked — no paid APIs, no secrets in CI), both compose config gates, and the image build. On a `vA.B.C` tag the image is pushed to GHCR (`ghcr.io/<owner>/matrix-agora-agent`) using only `GITHUB_TOKEN`.
-- **No cloud-to-LAN CD.** A GitHub runner cannot reach the home network, so CI never deploys. Deploys run from the Mac: `server/deploy.sh` for the host, `docker compose pull && docker compose up -d` for the agents.
+- **Server deploy (from v0.2).** `server/deploy.sh` is the only way server config reaches the Ubuntu host: a local compose preflight → a one-time `ssh-copy-id` key setup (after that, key auth only; the password from `server_con.yaml` never appears in argv, logs or output) → rsync `server/docker-compose.yml` + `server/.env` to `~/matrix-agora/server/` → remote `docker compose pull && docker compose up -d` (the pull from v3.2) → verify `/_matrix/client/versions`. From v3.2 the compose carries one service per agent, from v3.3 the `panel` service — one deploy updates the whole stack. Idempotent; `--dry-run` supported. Never hand-edit files on the host.
+- **Agent image (from v3.2).** One Docker image for both agents (`agents/Dockerfile`: python slim + uv), **one container per agent**: compose services `ada` and `bruno` on the server with env from `server/.env`, the per-agent TOML, `TZ` from `TIMEZONE`, `restart: unless-stopped`, and `~/matrix-agora/state` bind-mounted. `docker stop -t 30` sends SIGTERM, which triggers the shutdown session summary. The image holds no secrets. Dev mode (`uv run agents/agent.py …` on the Mac, local `state/`) remains.
+- **CI (from v3.2).** GitHub Actions on every push/PR: ruff, pytest (nio/Gemini mocked — no paid APIs, no secrets in CI), the compose config gate, and the image builds (the agent image; the panel image from v3.3). On a `vA.B.C` tag the images are pushed to GHCR (`ghcr.io/<owner>/matrix-agora-agent`, `…-panel`) using only `GITHUB_TOKEN`.
+- **No cloud-to-LAN CD.** A GitHub runner cannot reach the home network, so CI never deploys. Deploys run from the Mac: `server/deploy.sh` is the one command — the server then pulls the images from GHCR itself.
 
 ## Error handling and resilience
 
@@ -167,15 +248,26 @@ HTTP without TLS on the LAN is a deliberate PoC trade-off: passwords travel in p
 - Typing state is reset in `finally` so a failure never leaves "typing…" stuck.
 - Memory: failed summary → previous kept; failed plan or today refresh → previous file or block kept; corrupt file → start without memory; all writes atomic.
 - Usage accounting and panel polling are best-effort: their failures are logged and never block a conversation or a stop.
+- The panel degrades by card: docker trouble greys the container cards, an unreadable `state/` greys the memory views. A stopped homeserver never crashes the agents — the sync loop retries until it is back.
 
-## Stack and repository layout
+## Observability
+
+- Each agent logs to `state/logs/<name>.log` (rotating, 1 MB × 3) and the console; in a container the same file arrives via the `state/` mount, and `docker logs` shows the console stream.
+- Log lines record events — joined, `ignored` (with the reason), replied, summary / memory / plan / today written, usage-write failed — **never** message, summary, memory or plan texts, tokens, passwords or keys. That is what makes the panel's log view safe to render.
+- `state/<name>.usage.jsonl` is the metrics stream: one line per Gemini call with token counts; `usage_report.py` and the panel aggregate it (§Token accounting).
+- The panel logs its own actions to its container log (`docker logs panel`) — same rules: no tokens, no texts.
+- The panel (any LAN browser, with the token) is the live view: the simulation's health and services, agent state and logs, memory, plans, the today block, the token table, host metrics.
+- Nothing is sent anywhere: no telemetry, no crash reporting; everything observable stays in `state/` and the container logs on the server (on the Mac in dev mode).
+
+## Repository layout
 
 ```
 matrix-agora/
   CLAUDE.md                 # instructions for Claude Code
   LICENSE
   README.md
-  pyproject.toml            # uv; deps: matrix-nio, google-genai, python-dotenv; dev: ruff, pytest
+  pyproject.toml            # uv; deps: matrix-nio, google-genai, python-dotenv,
+                            # fastapi + uvicorn (v3.3); dev: ruff, pytest
   specification/
     VISION.md               # why and for whom
     ARCHITECTURE.md         # this file: components, mechanisms, contracts
@@ -183,7 +275,7 @@ matrix-agora/
     history/                # superseded SPEC.md + SPEC-UA.md, frozen
     implementation/         # issue files and reports (generated by the skills)
   server/                   # v0.1
-    docker-compose.yml
+    docker-compose.yml      # the stack: homeserver + panel (v3.3) + ada + bruno (v3.2)
     deploy.sh               # v0.2: sync server/ to the Ubuntu host and apply it
     .env.example            # REGISTRATION_TOKEN=
   agents/
@@ -193,12 +285,11 @@ matrix-agora/
     canon/                  # v2.1: common.md + <name>.md
     usage_report.py         # v3.1: token report
     Dockerfile              # v3.2: one image for both agents
-  compose.yml               # v3.2: Mac services ada + bruno (state/ bind mount)
-  panel/                    # v3.3: app.py + static/index.html
-  .github/workflows/ci.yml  # v3.2: gates + image build; GHCR push on tags
+  panel/                    # v3.3: the panel — FastAPI app.py + static/ + Dockerfile
+  .github/workflows/ci.yml  # v3.2: gates + image builds; GHCR push on tags
   .env.example              # see §Configuration and secrets
   state/                    # gitignored: each bot's session, memory (v2.1),
-                            # day memories, plans, the today block (v2.2), usage (v3.1), lock and logs (v3.3)
+                            # day memories, plans, the today block (v2.2), usage (v3.1), lock + logs (v3.2)
 ```
 
 ## Testing and CI
@@ -209,12 +300,11 @@ Automated gates need no network: `matrix-nio` and `google-genai` are mocked, the
 |---|---|---|
 | Lint | `uv run ruff check .` | any Python change |
 | Tests | `uv run pytest` (single test: `uv run pytest tests/test_x.py::test_name`) | any Python change |
-| Compose (server) | `REGISTRATION_TOKEN=dummy docker compose -f server/docker-compose.yml config -q` | `server/` changed |
-| Compose (Mac, from v3.2) | `docker compose -f compose.yml config -q` | `compose.yml` or `agents/Dockerfile` changed |
+| Compose | `REGISTRATION_TOKEN=dummy docker compose -f server/docker-compose.yml config -q` | `server/` changed |
 
 Before v0.5 there is no `pyproject.toml`, so the Python gates are `n/a`, not passed.
 
-- **Unit tests** cover the pure logic: the filter and allowlist, mention detection (Ukrainian case forms), `bot_streak` and who-replies, transcript and prompt assembly (section order), the session-end decision, memory file read/write (missing, corrupt, atomic), calendar strings (including DST switches), which days and plan periods need generating, the hourly today-refresh decision, "a past day's memory or plan is never rewritten", `usage_metadata` parsing and aggregation, the panel's supervisor (fake processes), the single-instance lock, secret masking and the `Host`/`Origin` checks.
+- **Unit tests** cover the pure logic: the filter and allowlist, mention detection (Ukrainian case forms), `bot_streak` and who-replies, transcript and prompt assembly (section order), the session-end decision, memory file read/write (missing, corrupt, atomic), calendar strings (including DST switches), which days and plan periods need generating, the hourly today-refresh decision, "a past day's memory or plan is never rewritten", `usage_metadata` parsing and aggregation, the panel's supervisor and registry resolution (a fake docker client; an unknown simulation/agent/service → 404), the single-instance lock, secret masking, and the Bearer-token check (401 without the token).
 - **Contract tests** pin the seams in §Contracts; a contract change updates the test in the same commit.
-- **CI** (`.github/workflows/ci.yml`, from v3.2) runs the same gates plus the image build on every push/PR; a `vA.B.C` tag publishes the image to GHCR. No paid keys ever exist in CI.
+- **CI** (`.github/workflows/ci.yml`, from v3.2) runs the same gates plus the image builds on every push/PR; a `vA.B.C` tag publishes the image to GHCR. No paid keys ever exist in CI.
 - **Manual (owner) checks** are the DoD items that need the live homeserver, Element or a real Gemini key. The read-only `curl` checks may be run by tooling; everything on the Ubuntu host, in Element, or that spends real tokens is performed or confirmed by the owner, and counts as passed only then.

@@ -14,7 +14,7 @@ Read these before planning work; they are the project's contract with itself.
 
 ## Project status
 
-Proof of concept: a private Matrix room where the owner and two LLM agents ("Ada" and "Bruno", Gemini 2.5 Flash) talk together. So far the repo holds only the specification. Longer term, the owner plans to rework this project into an admin panel for running agents like Lili.
+Proof of concept: a private Matrix room where the owner and two LLM agents ("Ada" and "Bruno", Gemini 2.5 Flash) talk together. So far the repo holds only the specification. The panel is the point of the project: it will grow into an admin panel for simulations and agents like Lili; the chat is the first simulation (VISION §The direction).
 
 Latest release: none yet.
 
@@ -23,16 +23,15 @@ Latest release: none yet.
 | `v0` Platform | v0.1 homeserver · v0.2 server deploy · v0.3 client · v0.4 accounts+room · v0.5 echo bot | owner steps + the deploy script; first real code in v0.5 |
 | `v1` Conversation | v1.1 Gemini replies · v1.2 turn-taking | code |
 | `v2` Persona & memory | v2.1 canons + session memory · v2.2 world awareness, plans + the hourly today block | code + canon files |
-| `v3` Operations | v3.1 token accounting · v3.2 agent images + CI/CD · v3.3 web panel | code |
+| `v3` Operations | v3.1 token accounting · v3.2 agent images + CI/CD + server deployment · v3.3 the panel (simulations + agents) | code |
 
 ## Layout and commands
 
-See ARCHITECTURE.md §Stack and repository layout for the full tree. The essentials:
+See ARCHITECTURE.md §Repository layout for the full tree. The essentials:
 
-- Run an agent (one terminal per agent): `uv run agents/agent.py agents/ada.toml`, and the same for `agents/bruno.toml`
-- Agents in Docker on the Mac (from v3.2): `docker compose up -d`; stop with `docker stop -t 30 <name>` so the session summary runs
-- Deploy the repo's server config to the Ubuntu host (from v0.2): `server/deploy.sh` (`--dry-run` first); never hand-edit files on the host
-- Panel (from v3.3): `uv run panel/app.py` → `http://127.0.0.1:8090`
+- Dev mode on the Mac (one terminal per agent): `uv run agents/agent.py agents/ada.toml`, and the same for `agents/bruno.toml`
+- Production (from v3.2): everything runs on the Ubuntu server; deploy the stack with `server/deploy.sh` (`--dry-run` first); never hand-edit files on the host. Each agent is its own container — stop with `docker stop -t 30 <name>` so the session summary runs
+- Panel (from v3.3): `http://192.168.1.197:8090`, Bearer `PANEL_TOKEN`
 - Token report (from v3.1): `uv run agents/usage_report.py --days 7`
 - Server (on the Ubuntu host, from `server/`): `docker compose up -d`, then `docker compose logs -f homeserver`
 - Homeserver smoke test from the Mac: `curl http://192.168.1.197:8008/_matrix/client/versions`
@@ -46,8 +45,7 @@ Automated gates need no network: tests mock `matrix-nio` and `google-genai` and 
 |---|---|---|
 | Lint | `uv run ruff check .` | any Python change |
 | Tests | `uv run pytest` (one test: `uv run pytest tests/test_x.py::test_name`) | any Python change |
-| Compose (server) | `REGISTRATION_TOKEN=dummy docker compose -f server/docker-compose.yml config -q` | `server/` changed |
-| Compose (Mac, from v3.2) | `docker compose -f compose.yml config -q` | `compose.yml` or `agents/Dockerfile` changed |
+| Compose | `REGISTRATION_TOKEN=dummy docker compose -f server/docker-compose.yml config -q` | `server/` changed |
 
 - **Compose gate:** keep `-q`. Without it, the command prints the resolved config.
 - **Before v0.5:** there is no `pyproject.toml`, so the Python gates are `n/a`, not passed. ruff and pytest are dev dependencies, added by the issue that creates `pyproject.toml`.
@@ -88,5 +86,5 @@ The list of contracts lives in **ARCHITECTURE.md §Contracts** (env var names, t
 ## Constraints
 
 - `CONTINUWUITY_SERVER_NAME` cannot change without wiping the database.
-- Registration is open with a token only until the bot accounts exist (v0.3). After that it is turned off (`CONTINUWUITY_ALLOW_REGISTRATION: "false"`).
-- Running without TLS is a deliberate PoC trade-off. Never expose port 8008 through the router; the panel binds `127.0.0.1` only. Any outside access must go through Tailscale later.
+- Registration is open with a token only until the bot accounts exist (v0.4). After that it is turned off (`CONTINUWUITY_ALLOW_REGISTRATION: "false"`).
+- Running without TLS is a deliberate PoC trade-off. Never expose ports 8008 or 8090 through the router; the panel is LAN-only behind the owner token. Any outside access must go through Tailscale later.

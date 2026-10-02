@@ -87,15 +87,14 @@ defects, not restatements of what works.
   - Does a missing `usage_metadata` crash the bot?
   - Are prices hardcoded?
   - Does the report break on a corrupt line, or on its sums?
-- **Web panel (v3.3):**
-  - Does it bind only `127.0.0.1`?
-  - Are the `Host` and `Origin` checks applied on every route, including errors and static files?
-  - Can an agent name from the request reach the filesystem or argv (path traversal, injection)?
-  - Could a stale lock PID make Stop signal an unrelated process? Check the PID really is our agent.
-  - Are secrets masked in the settings view?
-  - Is "Forget" blocked while the agent runs?
-  - Are huge logs tailed without reading the whole file?
-  - Do zombie processes pile up?
+- **The panel (v3.3):**
+  - Is the Bearer token required on every API route (401 without it), and absent from logs and responses?
+  - Do simulation, service and agent names resolve only through the registry and fixed lists — can any
+    request data reach a filesystem path, an argv or the docker API?
+  - Could a stale lock PID make Stop signal an unrelated process?
+  - Are secrets masked in the settings view? Is "Forget" blocked while the agent runs?
+  - Are huge logs tailed without reading the whole file? Do zombie processes pile up?
+  - Does the UI degrade by card when docker or `state/` is unreachable? Are stop/restart/forget confirmed?
 - **Robustness:**
   - Can an exception in a nio callback or the Gemini call kill `sync_forever`?
   - Is typing left on after a failure (no `finally`)?
@@ -113,7 +112,7 @@ defects, not restatements of what works.
   - Is anything secret committed or echoed?
 - **Server config:**
   - Are federation and encryption off?
-  - Is registration closed after v0.3?
+  - Is registration closed after v0.4?
   - Does the registration token live only in `server/.env`?
   - Is the port published as intended (LAN plus ufw)?
 - **Spec drift:** does the code diverge from the ARCHITECTURE.md contracts or the ROADMAP, or add what no phase asks for?
