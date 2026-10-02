@@ -127,3 +127,32 @@ def test_shutdown_summary_is_bounded_by_the_timeout(tmp_path):
     agent.session = [("Ich", "бувай")]
     asyncio.run(agent.shutdown(timeout_s=0.05))  # must return quickly, never hang
     assert load_memory(agent.memory_file) is None
+
+
+def test_failing_summaries_at_the_cap_never_storm(tmp_path):
+    class Failing(FakeLLM):
+        def __init__(self):
+            super().__init__()
+            self.n = 0
+
+        async def generate(self, *a, **k):
+            self.n += 1
+
+    llm = Failing()
+    agent = make(tmp_path, llm=llm)
+    agent.session_max = 3
+    agent.max_bot_turns = 0
+    agent.rng = lambda: 0.99
+    agent.clock = lambda: 1_000_000  # frozen: no 60 s cooldown passes
+
+    async def run():
+        for i in range(40):
+            room = SimpleNamespace(room_id="!room")
+            event = SimpleNamespace(sender="@bruno:agora.lan", body=f"m{i}", server_timestamp=i)
+            await agent.on_message(room, event)
+            for t in list(agent._tasks):
+                await t
+
+    asyncio.run(run())
+    assert llm.n == 1                      # one attempt, then the cooldown holds
+    assert len(agent.session) <= 2 * 3     # and the session stays bounded

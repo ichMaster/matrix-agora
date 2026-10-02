@@ -153,8 +153,14 @@ class Agent:
                 self.timeline = [*self.timeline, (speaker, now_ms)][-max(self.history_n, 1):]
                 self.session.append((speaker, event.body))
                 self.last_activity_ms = self.clock()
-                if len(self.session) >= self.session_max:
-                    self._spawn(self.summarize())  # timeline cap → early summary
+                if len(self.session) > 2 * self.session_max:
+                    self.session = self.session[-2 * self.session_max:]  # bounded even if summaries fail
+                if (
+                    len(self.session) >= self.session_max
+                    and not self._summary_lock.locked()
+                    and (self.last_attempt_ms is None or self.clock() - self.last_attempt_ms >= 60_000)
+                ):
+                    self._spawn(self.summarize())  # timeline cap → early summary (rate-limited)
             verdict = should_handle(room.room_id, event.sender, self.cfg, self.other)
             if not verdict.handle:
                 log.info("ignored: %s (room %s)", verdict.reason, room.room_id)
