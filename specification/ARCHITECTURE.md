@@ -73,7 +73,9 @@ The agents see each other, so without rules they would reply to each other endle
 - **Conversation journal:** every session summary is also appended, with its time, to `state/<name>.days/YYYY-MM-DD.talk.md` — the per-day record that day memories draw on.
 - **Day memories:** once per past day (after local midnight; missed days caught up at startup, at most `MEMORY_DAYS` back) a separate Gemini call writes `state/<name>.days/YYYY-MM-DD.md` (≤ `DAY_MEMORY_MAX_WORDS` words, atomic write): a first-person text about that day — what the agent did and saw in Lviv, and what was discussed if there was a conversation. **A past day is never rewritten.** Inputs: canon, that day's date/weekday/season, the previous days' memories, the day's journal.
 - **Truth and invention (hard rule):** anything that happened in the room comes only from the journal. Invented episodes involve only the agent itself and the city — never words or actions of the owner or the other agent that did not happen.
-- **Failure:** a failed summary keeps the previous one; a failed day memory is retried later; a corrupt memory file means starting without memory, logged. The bot never crashes over memory.
+- **Plans (by day and by period):** a **week plan** (`state/<name>.plans/week-YYYY-MM-DD.md`, keyed by its Monday) generated lazily at the first prompt build of a new week — canon + season + the previous week's plan and memories, unfinished intentions carried over — and a **day plan** (`state/<name>.plans/YYYY-MM-DD.md`) generated at the first prompt build of a new day from the week plan + canon + yesterday's memory. Each ≤ `PLAN_MAX_WORDS` words, atomic write. A past day's or week's plan is **never rewritten** once its period ends; a past day's plan (with its final today block) feeds that day's memory (plan vs reality). Plans involve only the agent and the city — they never commit the owner or the other agent to anything.
+- **The today block (hourly):** `state/<name>.today.md` — two short first-person sections, «Сьогодні вже…» (done so far today) and «Ще сьогодні…» (still ahead), ≤ `TODAY_MAX_WORDS` words. Regenerated automatically whenever the local hour changes: the check is lazy at prompt build and cached per hour, so there is **at most one `today` call per hour** and no background threads. Inputs: the day plan, today's journal so far, the previous block, the current time. Reset at midnight.
+- **Failure:** a failed summary keeps the previous one; a failed day memory is retried later; a failed plan or today refresh keeps the previous file or block (stale by an hour, never missing); a corrupt memory file means starting without memory, logged. The bot never crashes over memory.
 
 ## World awareness
 
@@ -83,13 +85,13 @@ The agents see each other, so without rules they would reply to each other endle
 
 ## Prompt assembly
 
-`system_instruction` = canon (common + personal) → place, calendar and time → «Твої спогади за останні дні» (the last `MEMORY_DAYS` day memories, chronological, each labeled with its day) → «Що ти пам'ятаєш з минулої розмови: <підсумок>» (the last-session summary) → the reply-format rules (speak only as yourself, no name prefix, `PASS` allowed). `contents` = the last `HISTORY_N` messages as `"Name: text"` lines. This order is a contract.
+`system_instruction` = canon (common + personal) → place, calendar and time → «Твої спогади за останні дні» (the last `MEMORY_DAYS` day memories, chronological, each labeled with its day) → «Твої плани» (this week's plan + today's plan) → «Сьогодні» (the today block: done so far, still ahead) → «Що ти пам'ятаєш з минулої розмови: <підсумок>» (the last-session summary) → the reply-format rules (speak only as yourself, no name prefix, `PASS` allowed). `contents` = the last `HISTORY_N` messages as `"Name: text"` lines. This order is a contract.
 
 Earlier phases use the prefix of this order that exists at that point (v1.1: persona + rules; v2.1: canon + summary + rules).
 
 ## Token accounting
 
-- After **every** Gemini call — reply, session summary, day memory — the agent appends one JSON line to `state/<name>.usage.jsonl`: `ts` (in `TIMEZONE`), `agent`, `kind` (`reply` / `summary` / `day_memory`), `model`, `prompt_tokens`, `output_tokens`, `total_tokens`, `ok`. **Never any text.** Missing `usage_metadata` or fields → `null`s; a failed call → `ok: false`; a write error is logged and never blocks the conversation. Each agent writes only its own file.
+- After **every** Gemini call — reply, session summary, day memory, plan, today block — the agent appends one JSON line to `state/<name>.usage.jsonl`: `ts` (in `TIMEZONE`), `agent`, `kind` (`reply` / `summary` / `day_memory` / `plan` / `today`), `model`, `prompt_tokens`, `output_tokens`, `total_tokens`, `ok`. **Never any text.** Missing `usage_metadata` or fields → `null`s; a failed call → `ok: false`; a write error is logged and never blocks the conversation. Each agent writes only its own file.
 - **Report:** `uv run agents/usage_report.py [--days N] [--since YYYY-MM-DD] [--markdown]` — a table by day × agent × kind with calls, tokens and estimated cost. Prices come only from `.env` (`PRICE_INPUT_PER_1M`, `PRICE_OUTPUT_PER_1M`, USD per 1M tokens); unset prices → no cost column. Corrupt lines are skipped with a warning; no files → "no data". The panel reuses the same aggregation code.
 
 ## Web panel
@@ -99,7 +101,7 @@ A separate process in the same uv project: `uv run panel/app.py` → `http://127
 - **Supervision:** per agent — state (running/stopped), uptime, last activity; Start / Stop / Restart. The panel drives the v3.2 containers: Start = `docker compose up -d <name>` (closing the panel never stops agents), Stop = `docker stop -t 30 <name>`, whose SIGTERM runs the session summary before the SIGKILL. It also detects a terminal-started (`uv run`) agent via the lock file and can stop it by verified PID. Agent names come from a fixed list, never from a request path.
 - **Single instance:** at startup an agent takes `flock` on `state/<name>.lock` and writes its PID; a second instance (panel or terminal) refuses to start. The panel detects terminal-started agents through the lock and can stop them by PID (after checking the PID really is our agent).
 - **Logs:** agents always log to `state/logs/<name>.log` (rotating, 1 MB × 3) and the console; the panel tails the last 200 lines, refreshed every 2 s. Logs are safe to show because they never contain tokens, passwords or message texts.
-- **Views:** homeserver health (`/_matrix/client/versions`, every 30 s); each agent's session summary and day memories; canons (read-only); the token table (last 7 days); effective settings (read-only, anything matching `*_KEY` / `*_PASSWORD` / `*_TOKEN` masked). **"Forget the last session"** deletes `state/<name>.memory.md` after confirmation and only while that agent is stopped. The panel never edits `.env` or canons and never runs commands on the Ubuntu server.
+- **Views:** homeserver health (`/_matrix/client/versions`, every 30 s); each agent's session summary, day memories, plans and today block; canons (read-only); the token table (last 7 days); effective settings (read-only, anything matching `*_KEY` / `*_PASSWORD` / `*_TOKEN` masked). **"Forget the last session"** deletes `state/<name>.memory.md` after confirmation and only while that agent is stopped. The panel never edits `.env` or canons and never runs commands on the Ubuntu server.
 - **Security:** binds `127.0.0.1` only; CORS disabled; every request checks `Host` (`127.0.0.1:<port>` / `localhost:<port>` — anti DNS-rebinding); mutating actions are `POST`-only with the panel's own `Origin`.
 
 ## Contracts
@@ -108,7 +110,7 @@ Changing any of these updates this document and the test that pins it, in the sa
 
 - The env var names in `.env.example` and `server/.env.example`.
 - The agent TOML schema (`name`, `user_id`, `canon`, …) and the `agents/canon/` layout.
-- The `state/` files: `<name>.json` (session), `<name>.memory.md`, `<name>.days/YYYY-MM-DD.md` + `.talk.md`, `<name>.usage.jsonl` (its fields), `<name>.lock`, `logs/<name>.log`.
+- The `state/` files: `<name>.json` (session), `<name>.memory.md`, `<name>.days/YYYY-MM-DD.md` + `.talk.md`, `<name>.plans/` (week + day plans), `<name>.today.md`, `<name>.usage.jsonl` (its fields), `<name>.lock`, `logs/<name>.log`.
 - The message filter and allowlist rule.
 - The transcript format (`"Name: text"` per line), the `PASS` sentinel, and the prompt-assembly order.
 - The turn-taking semantics (who replies, `bot_streak`).
@@ -127,6 +129,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `HISTORY_N`, `REPLY_DELAY_S`, `MAX_BOT_TURNS`, `BOT_REPLY_P` | v1.1–v1.2 | context size and turn-taking (30 / 4 / 2 / 0.5) |
 | `SESSION_IDLE_S`, `SESSION_MAX_MESSAGES`, `SUMMARY_MAX_WORDS` | v2.1 | session memory (900 / 200 / 200) |
 | `LOCATION`, `TIMEZONE`, `MEMORY_DAYS`, `DAY_MEMORY_MAX_WORDS` | v2.2 | world awareness (Львів / Europe/Kyiv / 7 / 120) |
+| `PLAN_MAX_WORDS`, `TODAY_MAX_WORDS` | v2.2 | plans and the today block (120 / 100) |
 | `PRICE_INPUT_PER_1M`, `PRICE_OUTPUT_PER_1M` | v3.1 | token prices for the cost column |
 | `PANEL_PORT` | v3.2 | panel port (8090) |
 | `REGISTRATION_TOKEN` | v0.1 | in `server/.env` on the Ubuntu box only |
@@ -141,7 +144,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | Someone from the internet | Port 8008 not forwarded on the router; ufw allows only `192.168.1.0/24`; federation disabled |
 | Someone messages the bots (DM, another room) | The in-code allowlist: only `ROOM_ID` + `{OWNER, other agent}` |
 | Key leak | `.env`, `server/.env`, `state/` gitignored; tokens and texts never logged |
-| Agents burn credits chatting with each other | `MAX_BOT_TURNS`, `BOT_REPLY_P`, `max_output_tokens`; one summary per session; one memory per day; the usage report shows the spend |
+| Agents burn credits chatting with each other | `MAX_BOT_TURNS`, `BOT_REPLY_P`, `max_output_tokens`; one summary per session; one memory per day; one plan per day and per week; the today block at most once per hour; the usage report shows the spend |
 | Conversation leak | Summaries, journals and day memories live only in `state/`; their texts are never logged |
 | Private data in the public repo | Canons are committed — no secrets, no private data about the owner |
 | Someone controls the agents through the panel | `127.0.0.1` only; `Host` and `Origin` checks; secrets masked |
@@ -162,7 +165,7 @@ HTTP without TLS on the LAN is a deliberate PoC trade-off: passwords travel in p
 - A Gemini failure or empty reply on any call → log and stay silent; the bot never crashes or sends an apology message.
 - A dropped homeserver connection → `matrix-nio`'s sync loop retries; an exception in a callback must not kill `sync_forever`.
 - Typing state is reset in `finally` so a failure never leaves "typing…" stuck.
-- Memory: failed summary → previous kept; corrupt file → start without memory; all writes atomic.
+- Memory: failed summary → previous kept; failed plan or today refresh → previous file or block kept; corrupt file → start without memory; all writes atomic.
 - Usage accounting and panel polling are best-effort: their failures are logged and never block a conversation or a stop.
 
 ## Stack and repository layout
@@ -195,7 +198,7 @@ matrix-agora/
   .github/workflows/ci.yml  # v3.2: gates + image build; GHCR push on tags
   .env.example              # see §Configuration and secrets
   state/                    # gitignored: each bot's session, memory (v2.1),
-                            # day memories (v2.2), usage (v3.1), lock and logs (v3.3)
+                            # day memories, plans, the today block (v2.2), usage (v3.1), lock and logs (v3.3)
 ```
 
 ## Testing and CI
@@ -211,7 +214,7 @@ Automated gates need no network: `matrix-nio` and `google-genai` are mocked, the
 
 Before v0.5 there is no `pyproject.toml`, so the Python gates are `n/a`, not passed.
 
-- **Unit tests** cover the pure logic: the filter and allowlist, mention detection (Ukrainian case forms), `bot_streak` and who-replies, transcript and prompt assembly (section order), the session-end decision, memory file read/write (missing, corrupt, atomic), calendar strings (including DST switches), which days need generating, "a past day is never rewritten", `usage_metadata` parsing and aggregation, the panel's supervisor (fake processes), the single-instance lock, secret masking and the `Host`/`Origin` checks.
+- **Unit tests** cover the pure logic: the filter and allowlist, mention detection (Ukrainian case forms), `bot_streak` and who-replies, transcript and prompt assembly (section order), the session-end decision, memory file read/write (missing, corrupt, atomic), calendar strings (including DST switches), which days and plan periods need generating, the hourly today-refresh decision, "a past day's memory or plan is never rewritten", `usage_metadata` parsing and aggregation, the panel's supervisor (fake processes), the single-instance lock, secret masking and the `Host`/`Origin` checks.
 - **Contract tests** pin the seams in §Contracts; a contract change updates the test in the same commit.
 - **CI** (`.github/workflows/ci.yml`, from v3.2) runs the same gates plus the image build on every push/PR; a `vA.B.C` tag publishes the image to GHCR. No paid keys ever exist in CI.
 - **Manual (owner) checks** are the DoD items that need the live homeserver, Element or a real Gemini key. The read-only `curl` checks may be run by tooling; everything on the Ubuntu host, in Element, or that spends real tokens is performed or confirmed by the owner, and counts as passed only then.

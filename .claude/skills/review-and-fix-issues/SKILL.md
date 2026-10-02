@@ -78,6 +78,9 @@ defects, not restatements of what works.
   - Is a past day's memory ever rewritten?
   - Is the catch-up bounded by `MEMORY_DAYS`?
   - Does the memory prompt forbid invented words or actions by the owner or the other agent?
+  - Is a past day's or week's plan ever rewritten after its period ends?
+  - Is the today block refreshed at most once per hour (lazy, cached per hour) and reset at midnight?
+  - Can a plan commit the owner or the other agent to something?
   - Are the prompt sections in the specified order?
 - **Token accounting (v3.1):**
   - Does a usage line ever carry message or prompt text?

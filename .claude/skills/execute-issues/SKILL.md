@@ -73,7 +73,7 @@ Follow `CLAUDE.md` and ARCHITECTURE.md. Route by component:
   - the `HISTORY_N` history buffer;
   - the Gemini call, typing, and sending as `m.text`;
   - turn-taking (v1.2);
-  - canon loading and session memory (v2.1), place / calendar / time and day memories (v2.2), usage accounting
+  - canon loading and session memory (v2.1), place / calendar / time, day memories, plans and the today block (v2.2), usage accounting
     (v3.1). See ARCHITECTURE.md §Canon, §Memory, §World awareness and §Token accounting.
 - **`panel/`** (v3.3): `aiohttp.web` plus one static page; see ARCHITECTURE.md §Web panel. It binds `127.0.0.1`
   only, checks `Host` and `Origin`, takes agent names from a fixed list, and keeps the process supervisor
