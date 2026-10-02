@@ -54,6 +54,18 @@ class Agent:
         save_session(self.cfg.state_file, resp.user_id, resp.device_id, resp.access_token)
         log.info("%s: logged in with the password; token stored", self.cfg.localpart)
 
+    async def join_pending_invites(self) -> None:
+        """Invites that arrived before this start sit in the first sync; the
+        callback never sees them, so they are handled here once."""
+        for room_id, room in list(self.client.invited_rooms.items()):
+            inviter = getattr(room, "inviter", None)
+            if inviter and should_join_invite(room_id, inviter, self.cfg):
+                log.info("joining %s (pending invite from owner)", room_id)
+                await self.client.join(room_id)
+            else:
+                log.info("ignored: pending invite to %s from %s", room_id, inviter)
+                await self.client.room_leave(room_id)
+
     async def on_invite(self, room: MatrixRoom, event: InviteMemberEvent) -> None:
         try:
             if event.state_key != self.cfg.user_id or event.membership != "invite":
@@ -90,6 +102,7 @@ class Agent:
         if isinstance(first, SyncError):
             raise RuntimeError(f"first sync failed: {first.message}")
         self.started = True
+        await self.join_pending_invites()
         self.client.add_event_callback(self.on_message, RoomMessageText)
         self.client.add_event_callback(self.on_invite, InviteMemberEvent)
         log.info("%s: entering sync_forever", self.cfg.localpart)
