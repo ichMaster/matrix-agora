@@ -145,6 +145,7 @@ class Agent:
             if not decision.reply:
                 log.info("silent: %s", decision.reason)
                 return
+            log.info("reply: %s (in %.1fs)", decision.reason, decision.delay_s)
             # scheduled, so the sync loop keeps running; context is read at fire time
             task = asyncio.create_task(self.reply_later(room.room_id, decision.delay_s))
             self._tasks.add(task)
