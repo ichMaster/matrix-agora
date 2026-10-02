@@ -1,3 +1,13 @@
+Version 1.1.0 (2026-10-02)
+---------------------------
+- Gemini replies (AGORA-012): history window (HISTORY_N, everyone included,
+  bounded entries), the "Name: text" transcript, the literal Ukrainian
+  instruction, the injectable LLM seam (gemini-2.5-flash, silent on failure),
+  typing on/off around the call
+- Live-proven (AGORA-013): in-character contextual replies, typing visible,
+  alive with an invalid key
+- Replies stay owner-only until v1.2 (loop protection)
+
 Version 0.5.0 (2026-10-02)
 ---------------------------
 - The first code: uv project, config loader, agents/agent.py with the session
