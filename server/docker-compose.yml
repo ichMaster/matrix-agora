@@ -1,0 +1,20 @@
+services:
+  homeserver:
+    image: forgejo.ellis.link/continuwuation/continuwuity:latest
+    # mirror, if the main registry is unavailable: ghcr.io/continuwuity/continuwuity:latest
+    restart: unless-stopped
+    ports:
+      - "8008:8008"
+    volumes:
+      - db:/var/lib/continuwuity
+    environment:
+      CONTINUWUITY_SERVER_NAME: agora.lan        # CANNOT be changed without wiping the DB
+      CONTINUWUITY_DATABASE_PATH: /var/lib/continuwuity
+      CONTINUWUITY_ADDRESS: 0.0.0.0
+      CONTINUWUITY_PORT: 8008
+      CONTINUWUITY_ALLOW_FEDERATION: "false"     # fully closed off from the Matrix network
+      CONTINUWUITY_ALLOW_ENCRYPTION: "false"     # no E2EE rooms at all — simpler for the bots
+      CONTINUWUITY_ALLOW_REGISTRATION: "true"    # temporarily, until v0.4
+      CONTINUWUITY_REGISTRATION_TOKEN: "${REGISTRATION_TOKEN}"
+volumes:
+  db:
