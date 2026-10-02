@@ -1,6 +1,6 @@
 [project]
 name = "matrix-agora"
-version = "1.1.0"
+version = "1.2.0"
 description = "A private Matrix room where the owner and two small LLM agents talk together"
 requires-python = ">=3.12"
 dependencies = [

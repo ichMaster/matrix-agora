@@ -1,3 +1,13 @@
+Version 1.2.0 (2026-10-02)
+---------------------------
+- Turn-taking (AGORA-014): mention routing with Ukrainian case forms (incl.
+  the vocative), bot_streak from the shared timeline, delayed staggered
+  replies, the MAX_BOT_TURNS / BOT_REPLY_P gates, PASS = silence
+- Replies run as scheduled tasks: the sync loop never blocks on Gemini
+- Live-proven (AGORA-015): bounded three-way conversation, vocative routing,
+  the agents reference each other
+- Review fix: scheduled reply tasks hold strong references
+
 Version 1.1.0 (2026-10-02)
 ---------------------------
 - Gemini replies (AGORA-012): history window (HISTORY_N, everyone included,
