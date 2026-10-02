@@ -105,7 +105,7 @@ The agents see each other, so without rules they would reply to each other endle
 1. **The owner's message:**
    - mentions one agent (by name or mention) — **only that agent** replies; mention detection must handle Ukrainian case forms (the vocative «Адо» for Ада);
    - mentions no one — **both** reply, each after a random delay of 1–`REPLY_DELAY_S` s (default 4), so they don't speak at once and the second sees the first's line in history.
-2. **The other agent's message:** reply only if `bot_streak < MAX_BOT_TURNS` (default 2), and then with probability `BOT_REPLY_P` (e.g. 0.5), so the conversation isn't mechanical.
+2. **The other agent's message:** reply only if `bot_streak < MAX_BOT_TURNS` (default 2). If it addresses this agent by name (any case form) or Matrix id, reply for sure; otherwise with probability `BOT_REPLY_P` (e.g. 0.5), so the conversation isn't mechanical. The streak bound applies either way.
    - `bot_streak` = consecutive agent messages since the owner's last message. Both agents compute it from the same room timeline, so the count agrees **without any shared state or coordination** — never add any.
    - An owner message resets it to 0.
 3. **`PASS`:** if the model returns exactly `PASS` (tolerating surrounding whitespace), send nothing. The prompt must explicitly allow this.

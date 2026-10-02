@@ -51,6 +51,17 @@ def test_agent_reply_gated_by_probability():
     assert decide_reply(OTHER, "думка", 0, CFG, OTHER, "Бруно", rng=rng(0.4), **KW).reply
 
 
+def test_agent_addressing_me_by_name_skips_the_coin_flip():
+    # rng 0.99 would fail the BOT_REPLY_P=0.5 gate — the direct address wins
+    d = decide_reply(OTHER, "Адо, а ти як думаєш?", 0, CFG, OTHER, "Бруно", rng=rng(0.99), **KW)
+    assert d.reply and d.reason == "agent-mentioned-me"
+
+
+def test_agent_addressing_me_is_still_bounded_by_the_streak():
+    d = decide_reply(OTHER, "Адо, а ти?", 2, CFG, OTHER, "Бруно", rng=rng(0.0), **KW)
+    assert not d.reply and d.reason == "streak-limit"
+
+
 def test_unknown_sender_is_silent():
     assert not decide_reply("@mallory:agora.lan", "hi", 0, CFG, OTHER, "Бруно", rng=rng(0.0), **KW).reply
 

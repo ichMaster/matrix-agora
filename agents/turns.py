@@ -72,6 +72,9 @@ def decide_reply(
     if other_agent and sender == other_agent:
         if streak >= max_bot_turns:
             return ReplyDecision(False, reason="streak-limit")
+        if mentions(text, cfg.name, cfg.user_id):
+            # addressed by name: answer for sure — still bounded by the streak above
+            return ReplyDecision(True, 1.0 + rng() * max(reply_delay_s - 1.0, 0.0), "agent-mentioned-me")
         if rng() >= bot_reply_p:
             return ReplyDecision(False, reason="probability")
         return ReplyDecision(True, 1.0 + rng() * max(reply_delay_s - 1.0, 0.0), "agent-reply")

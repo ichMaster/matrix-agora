@@ -173,7 +173,7 @@ The echo becomes a character, and the room becomes a three-way conversation that
 
 **Goal:** one owner message produces a bounded, natural exchange — never an endless bot loop.
 
-The turn-taking rules from ARCHITECTURE §Turn-taking: mentions route to one agent; no mention → both reply after a random 1–`REPLY_DELAY_S` s delay; agent-to-agent replies are gated by `bot_streak < MAX_BOT_TURNS` and probability `BOT_REPLY_P`; `PASS` means silence.
+The turn-taking rules from ARCHITECTURE §Turn-taking: mentions route to one agent; no mention → both reply after a random 1–`REPLY_DELAY_S` s delay; agent-to-agent replies are gated by `bot_streak < MAX_BOT_TURNS` and probability `BOT_REPLY_P` (skipped when the other agent addresses this one by name — v1.2.1); `PASS` means silence.
 
 **Tasks:**
 - Mention detection (names incl. Ukrainian case forms, and Matrix mentions); route the owner's message accordingly.
