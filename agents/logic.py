@@ -42,6 +42,8 @@ def should_reply(sender: str, cfg: AgentConfig) -> bool:
 def append_history(history: list[tuple[str, str]], name: str, text: str, cap: int) -> list[tuple[str, str]]:
     """The rolling context window: the last `cap` (name, text) pairs, own and
     the other agent's messages included. Pure: returns the new list."""
+    if len(text) > ENTRY_MAX_CHARS:
+        text = text[:ENTRY_MAX_CHARS] + "…"
     out = [*history, (name, text)]
     return out[-cap:] if cap > 0 else out
 
@@ -57,6 +59,7 @@ def build_instruction(name: str, persona: str) -> str:
 
 
 ECHO_MAX_CHARS = 4000
+ENTRY_MAX_CHARS = 4000
 
 
 def echo_reply(name: str, text: str) -> str:

@@ -71,3 +71,9 @@ def test_instruction_is_the_literal_ukrainian_contract():
     out = build_instruction("Ада", "Персона.")
     assert out.startswith("Персона.")
     assert out.endswith("Ти — Ада. Відповідай лише від себе, коротко, без префікса з іменем.")
+
+
+def test_history_entries_are_bounded():
+    from agents.logic import ENTRY_MAX_CHARS, append_history
+    h = append_history([], "Ich", "x" * (ENTRY_MAX_CHARS + 999), 30)
+    assert len(h[0][1]) == ENTRY_MAX_CHARS + 1 and h[0][1].endswith("…")
