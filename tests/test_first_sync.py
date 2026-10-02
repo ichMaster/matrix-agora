@@ -48,3 +48,11 @@ def test_handler_exception_never_escapes():
     agent.client.room_send = AsyncMock(side_effect=RuntimeError("boom"))
     room, event = msg()
     asyncio.run(agent.on_message(room, event))  # must not raise — sync_forever survives
+
+
+def test_the_other_agents_message_is_not_echoed():
+    agent = make_agent()
+    agent.started = True
+    room, event = msg(sender="@bruno:agora.lan")
+    asyncio.run(agent.on_message(room, event))
+    agent.client.room_send.assert_not_awaited()

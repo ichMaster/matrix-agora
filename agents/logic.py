@@ -33,6 +33,12 @@ def should_join_invite(room_id: str, inviter: str, cfg: AgentConfig) -> bool:
     return room_id == cfg.room_id and inviter == cfg.owner
 
 
+def should_echo(sender: str, cfg: AgentConfig) -> bool:
+    """v0.5 only: echo the owner alone. Echoing the other agent would make the
+    two bots echo each other forever — turn-taking arrives in v1.2."""
+    return sender == cfg.owner
+
+
 def echo_reply(name: str, text: str) -> str:
     """The literal v0.5 reply format (the bot sends exactly this)."""
     return f"{name} чує: {text}"

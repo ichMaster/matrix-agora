@@ -39,3 +39,9 @@ def test_invite_rule(room, inviter, expect):
 
 def test_echo_format_is_the_literal_contract():
     assert echo_reply("Ада", "привіт") == "Ада чує: привіт"
+
+
+def test_v05_echoes_the_owner_only_no_bot_loop():
+    from agents.logic import should_echo
+    assert should_echo("@ich:agora.lan", CFG) is True
+    assert should_echo(OTHER, CFG) is False  # otherwise ada and bruno echo each other forever

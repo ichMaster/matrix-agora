@@ -23,7 +23,7 @@ from nio import (
 )
 
 from agents.config import AgentConfig, load_config
-from agents.logic import echo_reply, should_handle, should_join_invite
+from agents.logic import echo_reply, should_echo, should_handle, should_join_invite
 from agents.session import load_session, save_session
 
 log = logging.getLogger("agent")
@@ -86,6 +86,9 @@ class Agent:
             verdict = should_handle(room.room_id, event.sender, self.cfg, self.other)
             if not verdict.handle:
                 log.info("ignored: %s (room %s)", verdict.reason, room.room_id)
+                return
+            if not should_echo(event.sender, self.cfg):
+                log.info("ignored: agent-message (no echo in v0.5, loop protection)")
                 return
             await self.client.room_send(
                 room_id=room.room_id,
