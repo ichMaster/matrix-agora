@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Proof of concept: a private Matrix room where the owner and two LLM agents ("Ada" and "Bruno", Gemini 2.5 Flash) talk together. So far the repo holds only the plan. `specification/SPEC.md` is the source of truth. It is an English translation of the Ukrainian original, `specification/SPEC-UA.md`, and the two must stay in sync. It is split into phases 0–8, each with a DoD (definition of done). Build phase by phase and check each phase against its DoD before moving on.
+Proof of concept: a private Matrix room where the owner and two LLM agents ("Ada" and "Bruno", Gemini 2.5 Flash) talk together. So far the repo holds only the plan. `specification/SPEC.md` is the source of truth. It is an English translation of the Ukrainian original, `specification/SPEC-UA.md`, and the two must stay in sync. It is split into phases 0–9, each with a DoD (definition of done). Build phase by phase and check each phase against its DoD before moving on. Longer term, the owner plans to turn this project into an admin panel for running agents like Lili.
 
 Latest release: none yet.
 
@@ -19,8 +19,9 @@ Latest release: none yet.
 | `p6` | §8 | Agent canons and memory across sessions | code + canon files |
 | `p7` | §9 | World awareness: Lviv, calendar and time, day memories | code |
 | `p8` | §10 | Token accounting and report | code |
+| `p9` | §11 | Web panel on the Mac: start/stop agents, logs, administration | code |
 
-The SPEC.md section number is the phase number + 2. §1 is the architecture, §11 security, §12 out of scope.
+The SPEC.md section number is the phase number + 2. §1 is the architecture, §12 security.
 
 ## Planned layout and commands
 
@@ -31,6 +32,7 @@ agents/agent.py         # single codebase for both agents
 agents/ada.toml, agents/bruno.toml   # name, user_id, persona (canon path from p6), …
 agents/canon/          # common.md + <name>.md: who each agent is (p6), committed
 agents/usage_report.py # token report (p8)
+panel/app.py, panel/static/index.html   # local web panel (p9): uv run panel/app.py → http://127.0.0.1:8090
 .env.example            # HOMESERVER, ROOM_ID, OWNER, ADA_PASSWORD, BRUNO_PASSWORD, GEMINI_API_KEY
 state/                  # gitignored: session, memory, day memories, usage log per bot
 specification/implementation/   # issues files, execution reports, code reviews (see Delivery workflow)
@@ -89,7 +91,22 @@ This logic is pure and needs no network. SPEC.md asks for unit tests of the pure
   - Missing `usage_metadata` gives `null`s, never a crash.
   - Prices come only from `.env` (`PRICE_INPUT_PER_1M`, `PRICE_OUTPUT_PER_1M`).
   - Report: `uv run agents/usage_report.py [--days N] [--since YYYY-MM-DD] [--markdown]`.
-- **More tunables:** `SESSION_IDLE_S`, `SESSION_MAX_MESSAGES`, `SUMMARY_MAX_WORDS`, `LOCATION`, `TIMEZONE`, `MEMORY_DAYS`, `DAY_MEMORY_MAX_WORDS`.
+- **More tunables:** `SESSION_IDLE_S`, `SESSION_MAX_MESSAGES`, `SUMMARY_MAX_WORDS`, `LOCATION`, `TIMEZONE`, `MEMORY_DAYS`, `DAY_MEMORY_MAX_WORDS`, `PANEL_PORT`.
+
+## Web panel (phase 9)
+
+- **Stack:** `aiohttp.web`, already a dependency of matrix-nio, plus one static HTML page with vanilla JS. There is no build step and no CDN, and the UI is in Ukrainian.
+- **Network:** the panel binds `127.0.0.1` only.
+  - Every request must pass a `Host` check (`127.0.0.1:<port>` / `localhost:<port>`).
+  - Mutating actions are `POST`-only and need the panel's own `Origin`.
+  - There is no CORS.
+- **Supervision:** the panel starts agents in their own process session, so closing the panel never stops them.
+  - Stop is SIGINT, then SIGKILL after 30 s. The SIGINT is what lets the p6 shutdown summary run.
+  - Agent names come from a fixed list, never from a raw path in the request.
+- **Single instance:** each agent holds a flock on `state/<name>.lock` with its PID, so a second instance (from the panel or a terminal) refuses to start. The panel uses the same lock to see agents started from a terminal.
+- **Logs:** agents always log to `state/logs/<name>.log` (rotating, 1 MB × 3) as well as the console. The panel tails the last 200 lines.
+- **Read-only views:** canons, the settings (anything named `*_KEY` / `*_PASSWORD` / `*_TOKEN` is masked) and the token table (sharing p8's aggregation code). The panel never edits `.env` or canons, and never runs commands on the Ubuntu host.
+- **"Forget the last session":** deletes `state/<name>.memory.md`, and only while that agent is stopped.
 
 ## Contracts
 
@@ -97,7 +114,7 @@ Changing any of these is a contract change: update `specification/SPEC.md`, `spe
 
 - Env var names in `.env.example` and `server/.env.example`
 - The agent TOML schema (`name`, `user_id`, `persona` → `canon` from p6, …) and the `agents/canon/` layout
-- The `state/` files: `<name>.json` (`access_token`, `device_id`), `<name>.memory.md`, `<name>.days/YYYY-MM-DD.md` + `.talk.md`, `<name>.usage.jsonl` (its fields)
+- The `state/` files: `<name>.json` (`access_token`, `device_id`), `<name>.memory.md`, `<name>.days/YYYY-MM-DD.md` + `.talk.md`, `<name>.usage.jsonl` (its fields), `<name>.lock`, `logs/<name>.log`
 - The message filter and allowlist rule
 - The transcript format sent to Gemini (`Name: text` per line), the `PASS` sentinel, and the order of the prompt sections
 - The turn-taking semantics (who replies, `bot_streak`)
@@ -136,4 +153,3 @@ Automated gates need no network. Tests mock `matrix-nio` and `google-genai`, so 
 - `CONTINUWUITY_SERVER_NAME` cannot change without wiping the database.
 - Registration is open with a token only until the bot accounts exist (phase 2). After that it is turned off (`CONTINUWUITY_ALLOW_REGISTRATION: "false"`).
 - Running without TLS is a deliberate PoC trade-off. Never expose port 8008 through the router. Any outside access must go through Tailscale later.
-- Out of scope (SPEC.md §12): E2EE, media, voice/video, long-term memory beyond the last session and recent days, live world data (weather, news), token limits and budgets.

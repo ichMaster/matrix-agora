@@ -84,6 +84,15 @@ defects, not restatements of what works.
   - Does a missing `usage_metadata` crash the bot?
   - Are prices hardcoded?
   - Does the report break on a corrupt line, or on its sums?
+- **Web panel (p9):**
+  - Does it bind only `127.0.0.1`?
+  - Are the `Host` and `Origin` checks applied on every route, including errors and static files?
+  - Can an agent name from the request reach the filesystem or argv (path traversal, injection)?
+  - Could a stale lock PID make Stop signal an unrelated process? Check the PID really is our agent.
+  - Are secrets masked in the settings view?
+  - Is "Forget" blocked while the agent runs?
+  - Are huge logs tailed without reading the whole file?
+  - Do zombie processes pile up?
 - **Robustness:**
   - Can an exception in a nio callback or the Gemini call kill `sync_forever`?
   - Is typing left on after a failure (no `finally`)?
@@ -104,7 +113,7 @@ defects, not restatements of what works.
   - Is registration closed after p2?
   - Does the registration token live only in `server/.env`?
   - Is the port published as intended (LAN plus ufw)?
-- **Spec drift:** does the code diverge from the CLAUDE.md contracts or SPEC.md, or pull in §12 scope?
+- **Spec drift:** does the code diverge from the CLAUDE.md contracts or SPEC.md, or add what no phase asks for?
 
 For each finding, capture:
 
@@ -132,8 +141,8 @@ Decide **FIX NOW vs DEFER** honestly:
 
 - **FIX NOW** means real, small, self-contained, high-value and in scope now: an allowlist hole, a replay on
   restart, a crash that kills sync, a secret in a log.
-- **DEFER →** means larger work, or work a later phase already owns. Give the home: a later phase (`p4`…`p8`),
-  `post-PoC (SPEC.md §12)` or `cleanup (/simplify)`. Do **not** pull it forward.
+- **DEFER →** means larger work, or work a later phase already owns. Give the home: a later phase (`p4`…`p9`),
+  `backlog` (no phase owns it) or `cleanup (/simplify)`. Do **not** pull it forward.
 
 Commit the doc as the plan (`docs: pN code review`) **and push it** if a remote exists. The review is worth
 keeping even if the fix pass is interrupted.

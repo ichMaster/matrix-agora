@@ -25,6 +25,7 @@ The goal of the PoC is to validate the setup itself (server → client → bots 
 - **Server:** [Continuwuity](https://continuwuity.org) — a Matrix homeserver written in Rust: a single container, embedded DB (RocksDB), no Postgres.
 - **Client:** Element Desktop on the Mac. Specifically Desktop, not app.element.io: the web version runs over HTTPS and will not connect to an HTTP server on the LAN (mixed content).
 - **Agents:** two Python processes on the Mac, one and the same code, different configs (name, persona, account). Libraries: `matrix-nio` (Matrix) + `google-genai` (Gemini).
+- **Panel (from phase 9):** a local web panel on the Mac (`127.0.0.1`) for starting the agents and administration.
 - **TLS:** none, since this is a PoC on the home network. External access only later, via Tailscale; **do not open** a port on the router.
 
 The agent names "Ada" and "Bruno" are placeholders; replace them with your own.
@@ -309,7 +310,65 @@ In `.env`: `PRICE_INPUT_PER_1M`, `PRICE_OUTPUT_PER_1M`.
 - The report works when the files are missing, when they are empty, and when one line is corrupt.
 - Unit tests without network: parsing `usage_metadata` (including missing fields), aggregation, cost calculation, skipping corrupt lines.
 
-## 11. Security (summary)
+## 11. Phase 9 — web panel on the Mac
+
+So that you don't have to keep two terminals open or dig through files in `state/`, a local web panel runs on the Mac. It starts and stops the agents and shows logs, memory, tokens and the server status.
+
+### How it works
+
+1. A separate process in the same uv project: `uv run panel/app.py`, then a browser at `http://127.0.0.1:8090` (`PANEL_PORT`).
+2. The server is `aiohttp.web`: aiohttp is already a dependency of `matrix-nio`, so no new framework is needed. The page is a single HTML file with vanilla JS, no build step and no CDN. The interface is in Ukrainian.
+3. The panel listens **only on `127.0.0.1`** — other devices on the network cannot see it.
+4. The agents also work without the panel: starting them from the terminal, as in phase 3, still works.
+
+### Agents
+
+1. For each agent the panel shows its state (running / stopped), PID, uptime and last activity, plus **Start**, **Stop** and **Restart** buttons.
+2. **Start:** the panel runs `uv run agents/agent.py agents/<name>.toml` in a separate process session, so stopping the panel itself does not stop the agents.
+3. **Stop:** SIGINT (the agent has time to make its session summary, phase 6); if the process has not exited after 30 s — SIGKILL.
+4. **Single instance:** at startup the agent takes a lock on `state/<name>.lock` (flock) and writes its PID there. A second instance of the same agent — from the panel or from the terminal — does not start and logs a clear error. Otherwise two Adas would reply twice.
+5. An agent started from the terminal is detected by the panel through its lock file, shown as "running", and can be stopped (SIGINT by PID).
+
+### Logs
+
+1. The agent always writes its log to `state/logs/<name>.log` (rotation: 1 MB × 3 files) and to the console.
+2. The panel shows the last 200 log lines of each agent and refreshes them every 2 s.
+3. As before, logs contain no tokens, passwords or message texts, so they are safe to show.
+
+### Administration
+
+1. **Server:** an indicator of whether the homeserver answers (`/_matrix/client/versions`), refreshed every 30 s.
+2. **Memory (phases 6–7):** for each agent — the last-session summary and the day memories. The **"Forget the last session"** button deletes `state/<name>.memory.md` after confirmation, and only while the agent is stopped (otherwise it would rewrite the file from its own memory). The panel does not change day memories.
+3. **Canons (phase 6):** view `agents/canon/*.md`, read-only — they are edited in an editor and committed.
+4. **Tokens (phase 8):** the same report as `usage_report.py`, as a table for the last 7 days, sharing the aggregation code.
+5. **Settings:** the effective values from `.env` and toml, read-only; anything that looks like a secret (`*_KEY`, `*_PASSWORD`, `*_TOKEN`) is masked.
+
+### Panel security
+
+1. Only `127.0.0.1`, CORS disabled.
+2. Every request checks the `Host` header: only `127.0.0.1:<port>` or `localhost:<port>` — protection against DNS rebinding.
+3. Actions that change something (start, stop, forget) are `POST`-only with the panel's own `Origin`, so a third-party site in the browser cannot press a button on your behalf.
+4. The panel does not run commands on the Ubuntu server.
+
+### Settings
+
+In `.env`: `PANEL_PORT`.
+
+### DoD
+
+- `uv run panel/app.py` → `http://127.0.0.1:8090` shows both agents with their state; from another device on the network the panel is unreachable.
+- Start, Stop and Restart work; after Stop there is a fresh session summary (phase 6).
+- A second instance of an agent does not start, neither from the panel nor from the terminal.
+- An agent started from the terminal is shown in the panel as "running"; closing the panel does not stop the agents.
+- Logs are visible and refresh; they contain no tokens, passwords or message texts.
+- The homeserver container is stopped → the server indicator is red.
+- "Forget the last session" works only for a stopped agent and only after confirmation.
+- The token table matches `uv run agents/usage_report.py --days 7`.
+- Secrets are masked in the settings view.
+- A `POST` with a foreign `Origin` or a request with a foreign `Host` is refused.
+- Unit tests without network: the process supervisor on fake processes (start, stop, timeout → kill), the single-instance lock, secret masking, the `Host` / `Origin` checks, the API handlers via the aiohttp test client.
+
+## 12. Security (summary)
 
 | Threat | Protection |
 | --- | --- |
@@ -320,14 +379,6 @@ In `.env`: `PRICE_INPUT_PER_1M`, `PRICE_OUTPUT_PER_1M`.
 | Agents burn credits chatting with each other | `MAX_BOT_TURNS`, `BOT_REPLY_P`, `max_output_tokens`; one summary call per session; one memory per day; the token report (phase 8) shows the spend |
 | Conversation leak | Summaries, day journals and day memories live only in `state/` (in `.gitignore`); their texts are not logged |
 | Private data in the public repo | Canons are committed — no secrets and no private data about the owner |
+| Someone controls the agents through the panel | The panel is only on `127.0.0.1`; `Host` and `Origin` checks; secrets masked in the settings view |
 
 HTTP without TLS on the LAN is a deliberate PoC trade-off: passwords travel in plaintext over the home network. Before any external access: Tailscale (or a reverse proxy with TLS).
-
-## 12. Out of scope for the PoC
-
-- E2EE, voice/video (Element Call + LiveKit), media (images, voice messages).
-- Long-term memory beyond the last-session summary and the memories of the last `MEMORY_DAYS` days: full conversation logs, a vector DB / RAG.
-- Live world data: weather, news, city events (external APIs). World awareness is only place, calendar and time.
-- Token limits and budgets, billing: phase 8 only counts and reports.
-- Connecting Lili: a separate Matrix daemon on her `inbox`/`outbox` bus (like the current Telegram daemons) — the next step if the PoC succeeds.
-- Tests: for the PoC, manual DoD checks are enough; unit tests are worth writing only for the pure logic that involves no network: "who replies" (filter + `bot_streak`), prompt and memory assembly (phase 6), calendar, time and day memories (phase 7), token accounting (phase 8).

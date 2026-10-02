@@ -12,7 +12,7 @@ deferred findings runs **by default once at the end of the run**; pass `--no-har
 **The loop:**
 
 ```
-PLAN = selectors → phases → de-duplicated → + missing earlier phases → sorted p0..p8
+PLAN = selectors → phases → de-duplicated → + missing earlier phases → sorted p0..p9
        → minus already-released (tag v0.N.0 exists)
 
 for each PHASE pN in PLAN (in order):
@@ -58,7 +58,7 @@ of any mix; whitespace around commas is ignored.
 
 1. **Parse the selector list.** Split on commas and trim. Each element is a phase or a range. Record whether
    `--no-harden` was passed.
-2. **Reject nothing silently.** If an element doesn't resolve to a phase in 0–8 (a typo, `p9`, a reversed
+2. **Reject nothing silently.** If an element doesn't resolve to a phase in 0–9 (a typo, `p10`, a reversed
    range `p5-p3`), name it and ask. Never drop it and ship the rest.
 3. **Expand and fill.** Resolve the elements to a set of phases and de-duplicate. Then add **every earlier
    phase** below the highest one that isn't already in the set. These are requirements, not scope creep:

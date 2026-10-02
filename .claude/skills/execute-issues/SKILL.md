@@ -33,7 +33,7 @@ The label is the phase label exactly as it appears on GitHub (`p3::phase`). A ba
 5. **Read the phase files:** the issues file `specification/implementation/pN-issues.md`, and
    `pN-github-report.md` for the `AGORA-###` → `#number` mapping.
 6. **Read the spec:** [specification/SPEC.md](../../../specification/SPEC.md) §{N+2} (the phase's tasks and
-   DoD), §11 (security) and §12 (out of scope), plus `CLAUDE.md`: invariants, contracts and gates.
+   DoD) and §12 (security), plus `CLAUDE.md`: invariants, contracts and gates.
 7. **Green baseline:** run the automated gates that apply (see `CLAUDE.md` **Acceptance gates**), so a
    later failure can be attributed. Never start on a red suite.
 
@@ -73,6 +73,9 @@ Follow `CLAUDE.md` and SPEC.md. Route by component:
   - turn-taking (p5);
   - canon loading and session memory (p6), place / calendar / time and day memories (p7), usage accounting
     (p8). See CLAUDE.md **Canon, memory, world and tokens**.
+- **`panel/`** (p9): `aiohttp.web` plus one static page; see CLAUDE.md **Web panel**. It binds `127.0.0.1`
+  only, checks `Host` and `Origin`, takes agent names from a fixed list, and keeps the process supervisor
+  testable with fake processes.
 - **Pure decisions:** keep the filter, mention detection, `bot_streak`, who-replies, transcript and prompt
   assembly, the session-end decision, calendar formatting, the missing-days calculation and usage aggregation
   as functions over plain data, with the clock injected. That way tests need no nio objects, and the nio callbacks stay thin
@@ -88,7 +91,7 @@ Follow `CLAUDE.md` and SPEC.md. Route by component:
   - Don't act on the Ubuntu host, in Element, or on accounts and rooms unless the owner asks in this session.
 - **Contract changes** (the CLAUDE.md **Contracts** list) update SPEC.md, SPEC-UA.md, CLAUDE.md and the
   test that pins the contract, in the same commit.
-- **Scope:** stay inside the phase and outside SPEC.md §12. Follow the existing style.
+- **Scope:** stay inside the phase; don't add what no phase asks for. Follow the existing style.
 
 #### 2d. Validate
 
