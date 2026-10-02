@@ -104,3 +104,19 @@ def test_the_other_agents_message_is_not_echoed():
     room, event = msg(sender="@bruno:agora.lan")
     asyncio.run(agent.on_message(room, event))
     agent.client.room_send.assert_not_awaited()
+
+
+def test_scheduled_replies_hold_a_strong_reference():
+    agent = make_agent()
+    agent.started = True
+    agent.rng = lambda: 0.0
+
+    async def run():
+        room, event = msg(body="Адо, привіт")
+        await agent.on_message(room, event)
+        assert len(agent._tasks) == 1  # strong ref held while pending
+        for t in list(agent._tasks):
+            await t
+        assert not agent._tasks  # discarded when done
+
+    asyncio.run(run())

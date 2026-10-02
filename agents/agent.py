@@ -59,6 +59,7 @@ class Agent:
         if self.other:
             self.names[self.other] = "Ада" if "ada" in self.other else "Бруно"
         self.other_name = self.names.get(self.other) if self.other else None
+        self._tasks: set[asyncio.Task] = set()  # strong refs: pending tasks are only weakly referenced
 
     async def login(self) -> None:
         stored = load_session(self.cfg.state_file)
@@ -145,7 +146,9 @@ class Agent:
                 log.info("silent: %s", decision.reason)
                 return
             # scheduled, so the sync loop keeps running; context is read at fire time
-            asyncio.create_task(self.reply_later(room.room_id, decision.delay_s))
+            task = asyncio.create_task(self.reply_later(room.room_id, decision.delay_s))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
         except Exception:
             log.exception("message handler failed (bot keeps running)")
 
