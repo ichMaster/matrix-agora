@@ -1,6 +1,6 @@
 ---
 name: upload-issues
-description: Upload a phase issues file (specification/implementation/pN-issues.md) to GitHub one issue at a time, with pN:: labels and dependency comments, then write and commit pN-github-report.md.
+description: Upload a phase issues file (specification/implementation/vA.B-issues.md) to GitHub one issue at a time, with vA.B:: labels and dependency comments, then write and commit vA.B-github-report.md.
 ---
 
 # Skill: Upload Phase Issues to GitHub
@@ -14,9 +14,9 @@ with dependency links. Then record the `AGORA-###` → GitHub number mapping.
 /upload-issues <phase-issues-file>
 ```
 
-Example: `/upload-issues @specification/implementation/p3-issues.md`
+Example: `/upload-issues @specification/implementation/v0.4-issues.md`
 
-If the file doesn't exist yet, run `/generate-issues pN` first.
+If the file doesn't exist yet, run `/generate-issues vA.B` first.
 
 ## Instructions
 
@@ -24,11 +24,11 @@ If the file doesn't exist yet, run `/generate-issues pN` first.
 
 1. `gh auth status`. If it isn't authenticated, tell the user to run `gh auth login` and stop.
 2. `git remote -v`. If the repo has no GitHub remote, stop. Tell the user to create one (`gh repo create`)
-   or to use the offline flow (`/execute-issues-file pN`). Never create the remote yourself.
+   or to use the offline flow (`/execute-issues-file vA.B`). Never create the remote yourself.
 
 ### Step 1: Read the issues file
 
-Determine the phase `pN` from the filename or heading. The label prefix is `pN::`.
+Determine the phase `vA.B` from the filename or heading. The label prefix is `vA.B::`.
 
 From the **Issues Summary Table**, parse each issue's ID, Title, Size, Area, Phase and Dependencies. Then
 parse each `### AGORA-###` section: Description, What needs to be done, Dependencies, Expected result,
@@ -40,17 +40,17 @@ Show the target repository, the number of issues, and the full list of labels. A
 
 ### Step 3: Create labels (if missing)
 
-Labels have the form `pN::{category}` or `pN::{category}:{value}`. The phase title for the `pN::phase`
-description comes from the phase table in `CLAUDE.md`.
+Labels have the form `vA.B::{category}` or `vA.B::{category}:{value}`. The phase title for the `vA.B::phase`
+description comes from its `### vA.B` heading in `specification/ROADMAP.md`.
 
 ```bash
-gh label create "p3::phase"  --color "0E8A16" --description "Phase 3 — Echo bot" 2>/dev/null || true
-gh label create "p3::size:S" --color "28A745" --description "Small — one function or file" 2>/dev/null || true
-gh label create "p3::size:M" --color "FFC107" --description "Medium — a feature across a few files" 2>/dev/null || true
-gh label create "p3::size:L" --color "DC3545" --description "Large — a new component or a contract change" 2>/dev/null || true
-# one per area used in this phase: agents, server, config, tests, docs, ops
-gh label create "p3::area:agents" --color "1D76DB" 2>/dev/null || true
-gh label create "p3::area:ops"    --color "D93F0B" --description "Owner performs on the host or in Element" 2>/dev/null || true
+gh label create "v0.4::phase"  --color "0E8A16" --description "Phase v0.4 — Echo bot" 2>/dev/null || true
+gh label create "v0.4::size:S" --color "28A745" --description "Small — one function or file" 2>/dev/null || true
+gh label create "v0.4::size:M" --color "FFC107" --description "Medium — a feature across a few files" 2>/dev/null || true
+gh label create "v0.4::size:L" --color "DC3545" --description "Large — a new component or a contract change" 2>/dev/null || true
+# one per area used in this phase: agents, panel, server, config, tests, docs, ops
+gh label create "v0.4::area:agents" --color "1D76DB" 2>/dev/null || true
+gh label create "v0.4::area:ops"    --color "D93F0B" --description "Owner performs on the host or in Element" 2>/dev/null || true
 ```
 
 ### Step 4: Create issues one by one
@@ -82,7 +82,7 @@ After each one, show the result and move straight on; don't wait for confirmatio
    ---
    **ID:** {AGORA-###}
    **Size:** {S/M/L}
-   **Phase:** {pN}
+   **Phase:** {vA.B}
    **Area:** {agents/server/config/tests/docs/ops}
    ```
 
@@ -91,7 +91,7 @@ After each one, show the result and move straight on; don't wait for confirmatio
    ```bash
    gh issue create \
      --title "AGORA-###: {title}" \
-     --label "pN::phase,pN::size:{S/M/L},pN::area:{area}" \
+     --label "vA.B::phase,vA.B::size:{S/M/L},vA.B::area:{area}" \
      --body "$(cat <<'BODY'
    {issue body}
    BODY
@@ -104,10 +104,10 @@ After each one, show the result and move straight on; don't wait for confirmatio
 
 ### Step 5: Write and commit the report
 
-Write `specification/implementation/pN-github-report.md`:
+Write `specification/implementation/vA.B-github-report.md`:
 
 ```markdown
-# Phase pN — GitHub Issues Report
+# Phase vA.B — GitHub Issues Report
 
 **Uploaded:** {date}
 **Repository:** {repo URL}
@@ -117,23 +117,23 @@ Write `specification/implementation/pN-github-report.md`:
 
 | AGORA ID | GitHub # | Title | Phase | Labels | URL |
 |----------|----------|-------|-------|--------|-----|
-| AGORA-001 | #5 | ... | p3 | p3::phase, p3::size:S, p3::area:agents | {url} |
+| AGORA-001 | #5 | ... | v0.4 | v0.4::phase, v0.4::size:S, v0.4::area:agents | {url} |
 
 ## Labels Created
 
-- pN::phase
-- pN::size:S, pN::size:M, pN::size:L
-- pN::area:{list}
+- vA.B::phase
+- vA.B::size:S, vA.B::size:M, vA.B::size:L
+- vA.B::area:{list}
 ```
 
 Commit the issues file (if it isn't committed yet) together with the report as
-`docs: upload pN issues to GitHub`, with the running model's `Co-Authored-By` trailer, and push.
+`docs: upload vA.B issues to GitHub`, with the running model's `Co-Authored-By` trailer, and push.
 `/execute-issues` needs a clean tree and reads this mapping.
 
 ### Step 6: Report to the user
 
 Report the number of issues created and skipped, a link to the repository's issues page, and the report
-path. Suggest `/execute-issues pN::phase`.
+path. Suggest `/execute-issues vA.B::phase`.
 
 ## Error Handling
 

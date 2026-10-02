@@ -1,11 +1,11 @@
 ---
 name: execute-issues-file
-description: Execute one phase's issues straight from its local specification/implementation/pN-issues.md (no GitHub). Implement -> gates -> owner confirmation for manual checks -> commit -> push (if a remote exists) for each issue in dependency order, then write pN-execution-report.md. The offline counterpart of execute-issues.
+description: Execute one phase's issues straight from its local specification/implementation/vA.B-issues.md (no GitHub). Implement -> gates -> owner confirmation for manual checks -> commit -> push (if a remote exists) for each issue in dependency order, then write vA.B-execution-report.md. The offline counterpart of execute-issues.
 ---
 
 # Skill: Execute Issues From File
 
-Execute one phase's issues **straight from its issues file**, `specification/implementation/pN-issues.md`,
+Execute one phase's issues **straight from its issues file**, `specification/implementation/vA.B-issues.md`,
 with **no GitHub involvement**: no issue lookup and no closing. Each issue is implemented, validated,
 committed and pushed in dependency order, and the run ends with an execution report.
 
@@ -15,11 +15,11 @@ from the markdown file instead of `gh issue list`.
 ## Usage
 
 ```
-/execute-issues-file <pN | path-to-issues-file> [--issue AGORA-###] [--dry-run]
+/execute-issues-file <vA.B | path-to-issues-file> [--issue AGORA-###] [--dry-run]
 ```
 
-- `/execute-issues-file p3` → executes `specification/implementation/p3-issues.md`.
-- `/execute-issues-file @specification/implementation/p4-issues.md`.
+- `/execute-issues-file v0.4` → executes `specification/implementation/v0.4-issues.md`.
+- `/execute-issues-file @specification/implementation/v1.1-issues.md`.
 - `--issue AGORA-###`: only that issue. Its file-listed dependencies must already be committed.
 - `--dry-run`: print the execution plan without changing anything.
 
@@ -28,13 +28,15 @@ from the markdown file instead of `gh issue list`.
 ### Step 0: Verify prerequisites and read the file
 
 1. **Branch and tree:** note the current branch and check `git status`.
-   - If the only uncommitted file is this phase's issues file, commit it first (`docs: add pN issues`).
+   - If the only uncommitted file is this phase's issues file, commit it first (`docs: add vA.B issues`).
    - Any other uncommitted change: stop and ask.
 2. **Remote:** check `git remote -v`. Without a remote, the run commits but doesn't push; say so up front.
-3. **Read the issues file:** resolve the target to `specification/implementation/pN-issues.md` and read the
+3. **Read the issues file:** resolve the target to `specification/implementation/vA.B-issues.md` and read the
    summary table, the Dependency Tree and every `### AGORA-###` section. **No `gh` is used.**
-4. **Read the spec:** [specification/SPEC.md](../../../specification/SPEC.md) §{N+2} (tasks and DoD) and
-   §12 (security), plus `CLAUDE.md` (invariants, contracts, acceptance gates).
+4. **Read the spec:** [specification/ROADMAP.md](../../../specification/ROADMAP.md) §vA.B (Goal, Tasks, DoD,
+   Tests), [specification/ARCHITECTURE.md](../../../specification/ARCHITECTURE.md) (contracts) and
+   [specification/VISION.md](../../../specification/VISION.md) (non-goals), plus `CLAUDE.md` (the gates and
+   the rules that are easy to break).
 5. **Green baseline:** run the automated gates that apply, so a later failure can be attributed.
 
 ### Step 1: Build the execution queue from the file
@@ -50,16 +52,15 @@ Show the ordered plan and proceed. With `--dry-run`, stop here.
 
 1. **Announce:** `--- Starting AGORA-###: {title} ---`.
 2. **Read** its section: what needs to be done and the acceptance criteria.
-3. **Implement** per `CLAUDE.md` and SPEC.md, routed by component. The routing is the same as
+3. **Implement** per `CLAUDE.md` and ARCHITECTURE.md, routed by component. The routing is the same as
    `/execute-issues` Step 2c:
    - `agents/agent.py` holds session, invites, first-sync, filter, history, Gemini and turn-taking, with the
      decisions kept as pure functions.
-   - From p6 on, canon, session memory, world and token accounting follow CLAUDE.md **Canon, memory, world
-     and tokens**, with the clock injected. The p9 panel follows CLAUDE.md **Web panel**.
+   - From v2.1 on, canon, session memory, world and token accounting follow ARCHITECTURE.md §Canon, §Memory, §World awareness and §Token accounting, with the clock injected. The v3.2 panel follows ARCHITECTURE.md §Web panel.
    - `server/docker-compose.yml`'s environment is a contract.
    - `ops` issues produce their repo artifacts plus a numbered checklist for the owner. Don't act on the
      host or in Element unless the owner asks.
-   - A **contract change** updates SPEC.md, SPEC-UA.md, CLAUDE.md and its pinning test in the same commit.
+   - A **contract change** updates ARCHITECTURE.md and its pinning test in the same commit.
 4. **Validate:**
    - `uv run ruff check .` clean and `uv run pytest` green, with nio and Gemini mocked.
    - The compose gate when `server/` changed.
@@ -106,7 +107,7 @@ A phase with failed, skipped or `awaiting owner` issues is not releasable.
 
 ### Step 4: Write the execution report
 
-Write `specification/implementation/pN-execution-report.md` with the same structure as `/execute-issues`
+Write `specification/implementation/vA.B-execution-report.md` with the same structure as `/execute-issues`
 Step 4:
 
 - a status summary table;
@@ -114,19 +115,19 @@ Step 4:
 - detailed results;
 - next steps.
 
-There is no GitHub column. Commit it (`docs: pN execution report`, with the trailer) and push if a remote
+There is no GitHub column. Commit it (`docs: vA.B execution report`, with the trailer) and push if a remote
 exists.
 
 ## Important Rules
 
-- **File-driven, no GitHub.** The issue list, details and order come from `pN-issues.md`. Never run
-  `gh issue list`/`create`/`close`, and never write `pN-github-report.md`.
+- **File-driven, no GitHub.** The issue list, details and order come from `vA.B-issues.md`. Never run
+  `gh issue list`/`create`/`close`, and never write `vA.B-github-report.md`.
 - **One issue = one commit**, one issue at a time, in dependency order.
 - **No broken code.** Commit only when lint and tests are green, and compose too when `server/` changed.
 - **Tests ship with the feature**, with nio and Gemini mocked. No test or gate calls the network or a paid
   API.
 - **Manual checks need the owner.** Never report one as passed on your own.
-- **Contracts stay stable**: SPEC.md, SPEC-UA.md, CLAUDE.md and the pinning test change together.
+- **Contracts stay stable**: ARCHITECTURE.md and the pinning test change together.
 - **Secrets stay out.** Never print `.env`, `server/.env`, `server_con.yaml` or anything under
   `state/`; no secrets in argv, logs or commits; no message, summary or memory texts in logs.
 - **Ask on ambiguity.** If an issue's scope is unclear, ask rather than guess.

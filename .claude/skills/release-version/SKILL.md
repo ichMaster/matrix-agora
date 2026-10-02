@@ -1,6 +1,6 @@
 ---
 name: release-version
-description: Bump the project version (phase N -> 0.N.0, post-release fix -> 0.N.P), update VERSION / pyproject.toml / uv.lock / RELEASE.txt / the CLAUDE.md status line, commit, create an annotated tag, and push.
+description: Bump the project version (ROADMAP phase vA.B -> A.B.0, post-release fix -> A.B.C), update VERSION / pyproject.toml / uv.lock / RELEASE.txt / the CLAUDE.md status line, commit, create an annotated tag, and push.
 ---
 
 # Skill: Release Version
@@ -13,25 +13,24 @@ Bump the project version, update every version reference, write release notes, c
 /release-version <version> [changelog line 1; changelog line 2; ...]
 ```
 
-- `/release-version 0.3.0`: release phase 3 and generate the changelog from the commits.
-- `/release-version 0.4.1 Fix replay on restart; typing reset in finally`: a patch with given notes.
+- `/release-version 0.4.0`: release phase v0.4 and generate the changelog from the commits.
+- `/release-version 1.2.1 Fix replay on restart; typing reset in finally`: a patch with given notes.
 
-**Version scheme:** `MAJOR.MINOR.PATCH`, with a `v` prefix on tags.
+**Version scheme (`A.B.C`):** `A` = roadmap version (v0→0 … v3→3), `B` = phase within it, `C` = a
+post-release fix on that phase. ROADMAP phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a later fix on it
+bumps `C` (`A.B.1`, …). Releases are cut per phase. A version beyond the roadmap (e.g. `1.0.0`-style
+semantics) is a decision the owner makes explicitly.
 
-- **Phases:** SPEC.md phase N is released as `0.N.0`, tag `v0.N.0`.
-- **Fixes:** a post-release fix on that phase bumps the patch: `0.N.1`, `0.N.2`, ….
-- **Beyond the PoC:** `1.0.0` is reserved for a decision the owner makes explicitly.
-
-Releases are cut per phase. **Never change the version without explicit user confirmation**; running
-this skill, or an orchestrator that calls it, is that confirmation.
+**Never change the version without explicit user confirmation**; running this skill, or an orchestrator
+that calls it, is that confirmation.
 
 ## Instructions
 
 ### Step 0: Parse arguments
 
-1. The first argument is the target version. Accept `0.3.0` or `v0.3.0` and normalize to `0.3.0`.
+1. The first argument is the target version. Accept `0.4.0` or `v0.4.0` and normalize to `0.4.0`.
 2. The remaining arguments, split on `;`, become the changelog bullets.
-3. Validate that the version matches `MAJOR.MINOR.PATCH` (digits only).
+3. Validate that the version matches `A.B.C` (digits only) and that `vA.B` is a real ROADMAP phase.
 
 ### Step 1: Verify prerequisites
 
@@ -39,10 +38,12 @@ this skill, or an orchestrator that calls it, is that confirmation.
 2. **Clean tree:** check `git status`. If it is dirty, ask whether to include the uncommitted changes.
 3. **Current version:** read it from `VERSION`, else the latest `v*` tag (`git describe --tags --abbrev=0`),
    else treat it as none.
-4. **No downgrade:** refuse if the target is less than or equal to the current version.
-5. **Phase releases** (`0.N.0`): check the phase's execution report has no failed, skipped or
-   `awaiting owner` issues. Its manual DoD checks must be confirmed by the owner. If they aren't, stop and
-   say what is missing; the owner can waive it explicitly, and the waiver goes into the release notes.
+4. **No downgrade:** refuse if the target is less than or equal to the current version (compare as the
+   `A.B.C` tuple; phases release in roadmap order).
+5. **Phase releases** (`A.B.0`): check the phase's execution report
+   (`specification/implementation/vA.B-execution-report.md`) has no failed, skipped or `awaiting owner`
+   issues. Its manual DoD checks must be confirmed by the owner. If they aren't, stop and say what is
+   missing; the owner can waive it explicitly, and the waiver goes into the release notes.
 
 ### Step 2: Generate the changelog (if not provided)
 
@@ -55,12 +56,12 @@ this skill, or an orchestrator that calls it, is that confirmation.
 
 Touch only files that exist, except `VERSION` and `RELEASE.txt`, which are created if missing.
 
-1. **`VERSION`:** the bare version string, e.g. `0.3.0`.
+1. **`VERSION`:** the bare version string, e.g. `0.4.0`.
 2. **`pyproject.toml`:** the `[project]` `version` field. Then run `uv lock` so `uv.lock` records the new
    project version; otherwise the next `uv run` rewrites the lock and dirties the tree.
 3. **`README.md`:** update it only if it already carries a version string. Never add one.
 4. **`CLAUDE.md`:** update the `Latest release:` line under **Project status**, e.g.
-   `Latest release: v0.3.0 (phase 3 — echo bot).`
+   `Latest release: v0.4.0 (phase v0.4 — echo bot).`
 5. **`RELEASE.txt`:** prepend a block at the top (after any header) and keep the older entries unchanged:
 
    ```
@@ -135,6 +136,6 @@ Released v<version>
   DoD confirmed by the owner (or explicitly waived, and noted).
 - **Annotated tags only** (`git tag -a`).
 - **Version metadata only.** This skill touches `VERSION`, `pyproject.toml`, `uv.lock`, `RELEASE.txt`,
-  `README.md` and CLAUDE.md's status line, never agent or server code.
+  `README.md` and CLAUDE.md's status line, never agent, panel or server code.
 - **Confirm the changelog** when it is auto-generated.
 - **Plain-text release notes** in `RELEASE.txt`.

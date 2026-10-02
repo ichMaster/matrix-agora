@@ -1,12 +1,12 @@
 ---
 name: generate-issues
-description: Decompose one SPEC.md phase (p0–p9) into a dependency-ordered issues file at specification/implementation/pN-issues.md, grounded in the real current code. The output feeds /upload-issues (GitHub flow) or /execute-issues-file (offline flow).
+description: Decompose one ROADMAP phase (vA.B) into a dependency-ordered issues file at specification/implementation/vA.B-issues.md, grounded in the real current code. The output feeds /upload-issues (GitHub flow) or /execute-issues-file (offline flow).
 ---
 
 # Skill: Generate Phase Issues
 
-Decompose one SPEC.md **phase** (`p0`–`p9`) into a small, dependency-ordered **issues file** at
-`specification/implementation/pN-issues.md`. The file is the input to `/upload-issues` → `/execute-issues`
+Decompose one ROADMAP **phase** (`vA.B`) into a small, dependency-ordered **issues file** at
+`specification/implementation/vA.B-issues.md`. The file is the input to `/upload-issues` → `/execute-issues`
 (GitHub flow), or straight to `/execute-issues-file` (offline flow).
 
 ## Usage
@@ -15,7 +15,7 @@ Decompose one SPEC.md **phase** (`p0`–`p9`) into a small, dependency-ordered *
 /generate-issues <phase>
 ```
 
-- `/generate-issues 3` or `/generate-issues p3`: SPEC.md phase 3 (echo bot) → `specification/implementation/p3-issues.md`
+- `/generate-issues v0.4` or `/generate-issues 0.4`: ROADMAP phase **v0.4** (echo bot) → `specification/implementation/v0.4-issues.md`
 
 One file per phase. Issue ids (`AGORA-###`) are **globally sequential** across phase files **and across
 regeneration runs**. Never reset them.
@@ -24,15 +24,16 @@ regeneration runs**. Never reset them.
 
 ### Step 0: Read inputs
 
-1. Normalize the argument to `pN`, with N in 0–9. For anything else, name it and ask.
-2. Read the phase's section of [specification/SPEC.md](../../../specification/SPEC.md). The section number is
-   **N + 2**: phase 3 is §5 (see the phase table in `CLAUDE.md`). Take its **Tasks**, **Behavior** and **Project
-   structure** where present, and its **DoD**. `specification/SPEC-UA.md` is the Ukrainian original of the
-   same file; read it only to check a translation.
-3. Read SPEC.md §1 (architecture) and §12 (security). The scope fence is the phase itself: never pull a
-   later phase's work in early, and never add what no phase asks for.
-4. Read `CLAUDE.md`: the agent invariants, the turn-taking rules, the **Contracts** list and the
-   **Acceptance gates**.
+1. Normalize the argument to `vA.B` and check it exists as a `### vA.B` heading in
+   [specification/ROADMAP.md](../../../specification/ROADMAP.md). For anything else, name it and ask.
+2. Read ROADMAP.md §`vA.B`: the phase's **Goal**, description, **Tasks**, **DoD** (including which items are
+   **Manual (owner)**) and **Tests**, plus the version heading (`## vA`) it sits under.
+3. Read [specification/ARCHITECTURE.md](../../../specification/ARCHITECTURE.md) for the mechanisms and
+   **Contracts** the phase touches, and [specification/VISION.md](../../../specification/VISION.md) for the
+   principles and **non-goals**. The scope fence is the phase itself plus the non-goals: never pull a later
+   phase's work in early, and never add what no phase asks for.
+4. Read `CLAUDE.md` for the acceptance gates and the rules that are easy to break.
+   (`specification/history/` is frozen — never read it as a source of truth.)
 5. **Find the next free `AGORA-###` id. Never restart the numbering.** Check both sources and continue
    from the higher:
 
@@ -52,29 +53,29 @@ regeneration runs**. Never reset them.
    The next id is `max(a, b) + 1`, zero-padded to three digits. Start at `AGORA-001` only if both sources
    come back empty. Say in the report which sources were checked: with no remote, or with `gh`
    unauthenticated, (b) alone governs.
-6. If `specification/implementation/pN-issues.md` already exists, ask whether to overwrite or append.
+6. If `specification/implementation/vA.B-issues.md` already exists, ask whether to overwrite or append.
 
 ### Step 0.5: Reconcile with the real implementation
 
-Ground the phase in what was actually built and fixed, not only in what SPEC.md describes. Review fixes and
-hardening in earlier phases may have moved the code away from the spec.
+Ground the phase in what was actually built and fixed, not only in what the specification describes. Review
+fixes and hardening in earlier phases may have moved the code away from the docs.
 
-1. Read the **real current code** this phase builds on: `agents/`, `tests/`, `server/`, `pyproject.toml`,
-   `.env.example` and the agent TOML files. Note the actual module and function names, signatures, config
-   keys and env var names.
-2. Read the earlier phases' `specification/implementation/p*-execution-report.md` and `*code-review*.md`,
+1. Read the **real current code** this phase builds on: `agents/`, `panel/`, `tests/`, `server/`,
+   `pyproject.toml`, `.env.example` and the agent TOML files. Note the actual module and function names,
+   signatures, config keys and env var names.
+2. Read the earlier phases' `specification/implementation/*-execution-report.md` and `*code-review*.md`,
    especially their **"Fixes applied"** and **"Architecture impact"** notes.
-3. Where SPEC.md is stale relative to a landed fix, the **code is ground truth** for this phase's issues.
-   Note the drift, and put the SPEC.md / SPEC-UA.md / CLAUDE.md correction into the issue that touches that
-   contract.
+3. Where ARCHITECTURE.md or ROADMAP.md is stale relative to a landed fix, the **code is ground truth** for
+   this phase's issues. Note the drift, and put the ARCHITECTURE.md correction into the issue that touches
+   that contract.
 4. For owner-run tasks (the Ubuntu host, Element, accounts, the room), check what can be checked read-only,
    e.g. `curl -s http://192.168.1.197:8008/_matrix/client/versions`, and ask the owner about the rest. A
    task that is already done becomes a verification-only issue, not new work.
 
 ### Step 1: Decompose the phase
 
-Turn the phase's tasks into a small set of issues, typically **2–5**. An owner-only phase such as p1 may be
-a single issue. Don't pad. Each issue is a coherent, independently verifiable slice:
+Turn the phase's tasks into a small set of issues, typically **2–5**. An owner-only phase such as v0.2 may
+be a single issue. Don't pad. Each issue is a coherent, independently verifiable slice:
 
 - **Size** by complexity:
   - **S:** one function or file.
@@ -82,37 +83,39 @@ a single issue. Don't pad. Each issue is a coherent, independently verifiable sl
   - **L:** a new component or a contract change.
 - **Area**, one of:
   - `agents`: `agents/`.
+  - `panel`: `panel/`.
   - `server`: `server/`.
   - `config`: `pyproject.toml`, `.env.example`, `.gitignore`.
   - `tests`.
-  - `docs`: SPEC.md, README.md, CLAUDE.md.
+  - `docs`: the `specification/` files, README.md, CLAUDE.md.
   - `ops`: steps the owner performs on the Ubuntu host or in Element.
-- **Order by dependency.** The first issue is usually the gate that everything builds on. In p3 that is the
-  project skeleton plus config loading and the session login; in p5 it is the pure turn-taking module.
+- **Order by dependency.** The first issue is usually the gate that everything builds on. In v0.4 that is
+  the project skeleton plus config loading and the session login; in v1.2 it is the pure turn-taking module.
 - **Tests in every code issue.** Keep decision logic pure so it can be unit-tested with plain data: the
-  message filter, mention detection, `bot_streak`, who replies, building the transcript. `matrix-nio` and
-  `google-genai` are mocked, and no test touches the network.
-- **Manual DoD checks** from SPEC.md go into the acceptance criteria as **Manual (owner):** items. The
+  message filter, mention detection, `bot_streak`, who replies, prompt assembly, the session-end decision,
+  day selection, usage aggregation. `matrix-nio` and `google-genai` are mocked, the clock injected, and no
+  test touches the network.
+- **Manual DoD checks** from ROADMAP.md go into the acceptance criteria as **Manual (owner):** items. The
   executor cannot pass them on its own.
-- **Contract changes:** a change to anything in the CLAUDE.md **Contracts** list carries the SPEC.md,
-  SPEC-UA.md and CLAUDE.md updates and the test that pins it, in the **same** issue.
+- **Contract changes:** a change to anything in ARCHITECTURE.md **§Contracts** carries the ARCHITECTURE.md
+  update and the test that pins it, in the **same** issue.
 - **Owner-run (`ops`) issues:**
-  - List the exact commands from SPEC.md.
+  - List the exact commands from ROADMAP.md.
   - Mark which checks Claude can run read-only from the Mac.
   - Name any repo artifact the issue produces (e.g. `server/.env.example`).
-- **Stay within the phase.** No Gemini in p3, no turn-taking rules in p4 beyond what §6 asks for, nothing
-  that no phase asks for.
+- **Stay within the phase.** No Gemini in v0.4, no turn-taking rules in v1.1 beyond what its section asks
+  for, nothing from VISION.md's non-goals.
 
 ### Step 2: Write the issues file
 
-Write `specification/implementation/pN-issues.md` in English. Use **exactly** this format:
+Write `specification/implementation/vA.B-issues.md` in English. Use **exactly** this format:
 
 ````markdown
-# pN — Issues
+# vA.B — Issues
 
-Issues for phase **pN — {title}**, derived from [SPEC.md](../SPEC.md) §{N+2} and the contracts in
-[CLAUDE.md](../../CLAUDE.md). This file covers one phase; ids continue from the previous phase
-(AGORA-{prev} → **AGORA-{first}…{last}**).
+Issues for phase **vA.B — {title}** (version **vA — {version title}**), derived from the Tasks and DoD in
+[ROADMAP.md](../ROADMAP.md) §vA.B and the contracts in [ARCHITECTURE.md](../ARCHITECTURE.md). This file
+covers one phase; ids continue from the previous phase (AGORA-{prev} → **AGORA-{first}…{last}**).
 
 {1–3 sentences: what the phase delivers, what it builds on, what it leaves for later phases.}
 
@@ -120,8 +123,8 @@ Issues for phase **pN — {title}**, derived from [SPEC.md](../SPEC.md) §{N+2} 
 
 | # | ID | Title | Size | Area | Phase | Dependencies |
 |---|----|-------|------|------|-------|--------------|
-| 1 | AGORA-{first} | {title} | M | agents | pN | -- |
-| 2 | AGORA-{…} | {title} | S | tests | pN | AGORA-{first} |
+| 1 | AGORA-{first} | {title} | M | agents | vA.B | -- |
+| 2 | AGORA-{…} | {title} | S | tests | vA.B | AGORA-{first} |
 
 **Size legend:** S = one function or file · M = a feature across a few files · L = a new component or a contract change
 
@@ -141,7 +144,7 @@ AGORA-{first} ({gate})
 
 ---
 
-## pN — {title}
+## vA.B — {title}
 
 ### AGORA-{id} — {Title}
 
@@ -159,22 +162,22 @@ AGORA-{first} ({gate})
 **Acceptance criteria:**
 - [ ] {functional criterion}
 - [ ] **Tests:** {the unit tests added, with nio/Gemini mocked}
-- [ ] **Contract:** {contract + the test that pins it + the SPEC.md/SPEC-UA.md/CLAUDE.md updates} — *(only if a contract changes)*
+- [ ] **Contract:** {contract + the test that pins it + the ARCHITECTURE.md update} — *(only if a contract changes)*
 - [ ] **Gates:** {which of lint / tests / compose apply}
-- [ ] **Manual (owner):** {DoD check from SPEC.md §{N+2}} — *(only where the DoD needs the live system)*
+- [ ] **Manual (owner):** {DoD check from ROADMAP.md §vA.B} — *(only where the DoD needs the live system)*
 
 ---
 
 {repeat the `### AGORA-{id} …` block per issue}
 
-## pN scope notes
+## vA.B scope notes
 
 **Critical path:** AGORA-{…} → … → AGORA-{…}.
-**Phase DoD (SPEC.md §{N+2}):** {restate the DoD}.
+**Phase DoD (ROADMAP.md §vA.B):** {restate the DoD}.
 **Contracts touched:** {contracts + their tests, or "none"}.
 **Owner steps:** {what the owner must do on the host or in Element, or "none"}.
 **Not in this phase:** {nearby work that belongs to a later phase or to no phase}.
-**Generated later:** `pN-github-report.md` (on upload), `pN-execution-report.md` (on execution).
+**Generated later:** `vA.B-github-report.md` (on upload), `vA.B-execution-report.md` (on execution).
 ````
 
 ### Step 3: Report
@@ -183,8 +186,8 @@ Show the user the file path, the issue count, the `AGORA-###` range, the critica
 sources were checked. Suggest the next step:
 
 ```
-/upload-issues @specification/implementation/pN-issues.md     # GitHub flow
-/execute-issues-file pN                                       # offline flow
+/upload-issues @specification/implementation/vA.B-issues.md   # GitHub flow
+/execute-issues-file vA.B                                     # offline flow
 ```
 
 Do **not** create GitHub issues or commit here. This skill only writes the local file, so the user can
@@ -192,13 +195,13 @@ read and edit it first.
 
 ## Important Rules
 
-- **One file per phase**, at `specification/implementation/pN-issues.md`.
+- **One file per phase**, at `specification/implementation/vA.B-issues.md`.
 - **Ids are globally sequential** (`AGORA-###`) across phase files and regeneration runs. Resolve the next id
   as `max(GitHub, local issues files) + 1`.
 - **Tests in every code issue**, with nio and Gemini mocked. Manual DoD checks are labeled
   **Manual (owner):**.
-- **Contract change = SPEC.md + SPEC-UA.md + CLAUDE.md + the pinning test**, all in the same issue.
-- **Stay within the phase**; don't add what no phase asks for. PoC simplicity beats completeness.
-- **Honor the DoD.** Together, the issues must satisfy the phase DoD in SPEC.md §{N+2}.
+- **Contract change = ARCHITECTURE.md + the pinning test**, all in the same issue.
+- **Stay within the phase** and outside VISION.md's non-goals. PoC simplicity beats completeness.
+- **Honor the DoD.** Together, the issues must satisfy the phase DoD in ROADMAP.md §vA.B.
 - **Ask on ambiguity.** If a task is under-specified, ask before inventing scope.
 - **Don't touch GitHub.** `/upload-issues` does that.

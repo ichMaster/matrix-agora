@@ -1,27 +1,28 @@
 ---
 name: ship-phase
-description: Full GitHub-backed delivery pipeline over SPEC.md phases. Takes one selector or a comma-separated LIST of phases/ranges (e.g. p3, p3-p5, p0,p4). The list names TARGETS - missing earlier phases are added automatically, the set is de-duplicated, sorted into phase order, and already-released phases are skipped. Per phase - generate-issues (with reconcile), upload-issues, execute-issues, review-and-fix-issues, release-version 0.N.0. At the END of the run a HARDEN sweep runs BY DEFAULT (opt out with --no-harden). Gated; stops on failure; pauses for owner-run steps.
+description: Full GitHub-backed delivery pipeline over ROADMAP phases. Takes one selector or a comma-separated LIST of phases/versions/ranges (e.g. v0.4, v1, v0-v2). The list names TARGETS - missing earlier phases are added automatically, the set is de-duplicated, sorted into roadmap order, and already-released phases are skipped. Per phase - generate-issues (with reconcile), upload-issues, execute-issues, review-and-fix-issues, release-version A.B.0. At the END of the run a HARDEN sweep runs BY DEFAULT (opt out with --no-harden). Gated; stops on failure; pauses for owner-run steps.
 ---
 
 # Skill: Ship Phase — the full delivery pipeline
 
-Drive the whole loop over SPEC.md's phases. **Each phase is released before the next one is generated**,
-so the next phase's issues are reconciled against the real, post-fix implementation. The hardening sweep of
-deferred findings runs **by default once at the end of the run**; pass `--no-harden` to skip it.
+Drive the whole loop over the ROADMAP's phases. **Each phase is released before the next one is
+generated**, so the next phase's issues are reconciled against the real, post-fix implementation. The
+hardening sweep of deferred findings runs **by default once at the end of the run**; pass `--no-harden` to
+skip it.
 
 **The loop:**
 
 ```
-PLAN = selectors → phases → de-duplicated → + missing earlier phases → sorted p0..p9
-       → minus already-released (tag v0.N.0 exists)
+PLAN = selectors → phases → de-duplicated → + missing earlier phases → sorted into roadmap order
+       → minus already-released (tag vA.B.0 exists)
 
-for each PHASE pN in PLAN (in order):
-    0. RECONCILE  — ground pN in the real implementation + all prior fixes (inside generate-issues)
-    1. generate-issues pN
-    2. upload-issues @specification/implementation/pN-issues.md
-    3. execute-issues pN::phase     (implement → gates → owner checks → commit → push → close)
-    4. review-and-fix-issues pN     (review → ranked doc → fix-now fixes → same doc)
-    5. release-version 0.N.0        ← RELEASE PER PHASE (tag v0.N.0)
+for each PHASE vA.B in PLAN (in order):
+    0. RECONCILE  — ground vA.B in the real implementation + all prior fixes (inside generate-issues)
+    1. generate-issues vA.B
+    2. upload-issues @specification/implementation/vA.B-issues.md
+    3. execute-issues vA.B::phase   (implement → gates → owner checks → commit → push → close)
+    4. review-and-fix-issues vA.B   (review → ranked doc → fix-now fixes → same doc)
+    5. release-version A.B.0        ← RELEASE PER PHASE (tag vA.B.0)
     → REPORT the phase to chat
 → END OF RUN: HARDEN (harden-findings <plan scope> --release) — BY DEFAULT, skipped with --no-harden
 → overall summary to chat
@@ -40,60 +41,66 @@ hardening, and releases per phase; each sub-skill keeps its own discipline.
 /ship-phase <selector>[,<selector>…] [--no-harden]
 ```
 
-A **selector** is a phase (`p3`, or a bare `3`) or a range (`p3-p5`). Pass one, or a comma-separated list
-of any mix; whitespace around commas is ignored.
+A **selector** is a phase (`v0.4`, or a bare `0.4`), a version (`v1` = all its phases), or a range
+(`v0-v2`, `v0.4-v1.2`). Pass one, or a comma-separated list of any mix; whitespace around commas is
+ignored.
 
-- `/ship-phase p3`: ship phase 3, plus any earlier phases that aren't released yet.
-- `/ship-phase p3-p5`: ship phases 3, 4 and 5 in order, then HARDEN, then an overall summary.
-- `/ship-phase p5,p3 --no-harden`: ships p3 → p4 → p5 (reordered, gap filled), with no HARDEN sweep.
+- `/ship-phase v0.4`: ship phase v0.4, plus any earlier phases that aren't released yet.
+- `/ship-phase v1`: ship v1.1 and v1.2 (and any unreleased earlier phases), then HARDEN, then a summary.
+- `/ship-phase v2,v1 --no-harden`: ships v1.1 → v1.2 → v2.1 → v2.2 (reordered), with no HARDEN sweep.
 
-> **The list is a target, not the whole plan.** The phases are cumulative: the echo bot (p3) needs the
-> homeserver, the accounts and the room (p0–p2). So missing earlier phases are **added automatically**, and
-> anything already released is skipped. On a repo released through `v0.4.0`, `/ship-phase p5` does exactly
-> one phase's work.
+> **The list is a target, not the whole plan.** The roadmap is cumulative: the echo bot (v0.4) needs the
+> homeserver, the client and the room (v0.1–v0.3), and v2 cannot be built without v1. So missing earlier
+> phases are **added automatically**, and anything already released is skipped. On a repo released through
+> `v2.2.0`, `/ship-phase v3.1` does exactly one phase's work.
 
 ## Instructions
 
 ### Step 0: Scope, baseline and the plan
 
-1. **Parse the selector list.** Split on commas and trim. Each element is a phase or a range. Record whether
-   `--no-harden` was passed.
-2. **Reject nothing silently.** If an element doesn't resolve to a phase in 0–9 (a typo, `p10`, a reversed
-   range `p5-p3`), name it and ask. Never drop it and ship the rest.
-3. **Expand and fill.** Resolve the elements to a set of phases and de-duplicate. Then add **every earlier
-   phase** below the highest one that isn't already in the set. These are requirements, not scope creep:
-   report them at confirmation but don't ask permission.
-4. **Sort into phase order.** The set is never a running order: `/ship-phase p5,p3` ships p3 first. If the
-   order differs from what was typed, say so.
-5. **Skip released phases** (tag `v0.N.0` exists). A phase that is partly done (issues file or GitHub
+1. **Parse the selector list.** Split on commas and trim. Each element is a phase (`vA.B`), a version
+   (`vA`), or a range. Record whether `--no-harden` was passed.
+2. **Resolve against the ROADMAP.** The phase universe is the `### vA.B` headings of
+   [specification/ROADMAP.md](../../../specification/ROADMAP.md), grouped under their `## vA` version
+   headings, **in file order**. A version selector expands to all its phases; a range to every phase it
+   spans.
+3. **Reject nothing silently.** If an element doesn't resolve to a real ROADMAP phase or version (a typo,
+   `v9`, a reversed range `v2-v0`), name it and ask. Never drop it and ship the rest.
+4. **Expand, de-duplicate and fill.** Resolve the elements to a set of phases. Then add **every earlier
+   roadmap phase** before the latest one that isn't already in the set. These are requirements, not scope
+   creep: report them at confirmation but don't ask permission.
+5. **Sort into roadmap order.** The set is never a running order: `/ship-phase v2,v1` ships v1 first. If
+   the order differs from what was typed, say so.
+6. **Skip released phases** (tag `vA.B.0` exists). A phase that is partly done (issues file or GitHub
    issues exist, but no tag) resumes from its remaining steps. The sub-skills are idempotent: generate asks
    before overwriting, upload skips existing issues, execute skips closed ones, release refuses a downgrade.
-6. **Preconditions:**
+7. **Preconditions:**
    - `gh` is authenticated and the repo has a GitHub remote. If either is missing, stop and offer
      `gh repo create` (run by the user) or the offline `/ship-solution`.
    - The tree is clean.
-   - The automated gates are green, or `n/a` before p3. Never start on a red suite.
-7. **Flag the owner's work up front.** Phases p0–p2 are mostly steps the owner performs on the Ubuntu host
-   and in Element, and from p0 onwards each phase's DoD has manual checks. Tell the user at confirmation
+   - The automated gates are green, or `n/a` before v0.4. Never start on a red suite.
+8. **Flag the owner's work up front.** Phases v0.1–v0.3 are mostly steps the owner performs on the Ubuntu
+   host and in Element, and every phase's DoD has **Manual (owner)** checks. Tell the user at confirmation
    that the run **will pause** for them.
-8. **Confirm the plan once.** Show:
-   - the ordered phase list;
+9. **Confirm the plan once.** Show:
+   - the ordered phase list, grouped by version;
    - the filled-in phases, any reordering and the skips;
    - whether HARDEN runs;
    - the expected owner pauses.
 
    Then run. Don't re-confirm before each sub-step; pause only for the blockers in the rules below.
 
-**Worked example:** `/ship-phase p5,p3` on a repo where `v0.0.0`–`v0.2.0` are tagged.
+**Worked example:** `/ship-phase v2.1,v1` on a repo where v0 is fully released (`v0.1.0`–`v0.4.0` tagged).
 
 ```
-selectors : p5 · p3
-filled    : + p4                ← needed by p5, not named
-skipped   : p0 p1 p2            ← already released
-ordered   : p3 → p4 → p5        (p5 was listed first; phase order is required)
+selectors : v2.1 · v1
+expanded  : v2.1 | v1.1 v1.2
+filled    : (nothing missing below v2.1 beyond the set)
+skipped   : v0.1–v0.4                ← already released
+ordered   : v1.1 → v1.2 → v2.1      (v2.1 was listed first; roadmap order is required)
 
-PLAN: p3, p4, p5 → HARDEN p3-p5 → summary
-Owner pauses: the DoD checks of each phase (Element, live Gemini from p4)
+PLAN: v1.1, v1.2, v2.1 → HARDEN v1-v2 → summary
+Owner pauses: each phase's Manual (owner) DoD (Element, live Gemini from v1.1)
 ```
 
 ### Step 1: For each phase, the five steps, gated
@@ -103,15 +110,15 @@ sub-skill through the **Skill tool** and follow its instructions fully.
 
 0. **RECONCILE.** This happens inside `generate-issues` (its Step 0.5). It reads the real code, the
    earlier execution reports and the earlier code-review docs ("Fixes applied", "Architecture impact").
-   Where fixes moved the code away from SPEC.md, the code is ground truth.
-1. **`generate-issues pN`** writes `specification/implementation/pN-issues.md`.
-2. **`upload-issues @specification/implementation/pN-issues.md`** creates the GitHub issues, labels and
-   dependency comments, and `pN-github-report.md`, and commits them.
-3. **`execute-issues pN::phase`** implements the issues one per commit, runs the gates, gets the owner's
-   manual checks, pushes, closes the issues, and writes `pN-execution-report.md`.
-4. **`review-and-fix-issues pN`** writes the ranked review doc, fixes only the FIX NOW items (with
+   Where fixes moved the code away from ARCHITECTURE.md, the code is ground truth.
+1. **`generate-issues vA.B`** writes `specification/implementation/vA.B-issues.md`.
+2. **`upload-issues @specification/implementation/vA.B-issues.md`** creates the GitHub issues, labels and
+   dependency comments, and `vA.B-github-report.md`, and commits them.
+3. **`execute-issues vA.B::phase`** implements the issues one per commit, runs the gates, gets the owner's
+   manual checks, pushes, closes the issues, and writes `vA.B-execution-report.md`.
+4. **`review-and-fix-issues vA.B`** writes the ranked review doc, fixes only the FIX NOW items (with
    regression tests) and records them in that same doc.
-5. **`release-version 0.N.0`** bumps the version, tags `v0.N.0` and pushes.
+5. **`release-version A.B.0`** bumps the version, tags `vA.B.0` and pushes.
 
 **Gate the hand-offs:**
 
@@ -122,7 +129,7 @@ sub-skill through the **Skill tool** and follow its instructions fully.
   DoD is confirmed by the owner;
 - start the next phase only after this one is released.
 
-**Every phase boundary ends pushed and clean.** Before phase N+1, check that `git status` is clean and
+**Every phase boundary ends pushed and clean.** Before the next phase, check that `git status` is clean and
 there are no unpushed commits, and `git push` if there are. This skill **stops on failure by design**, so a
 stop must never leave a phase's work on one machine only.
 
@@ -146,7 +153,7 @@ the Skill tool, with the run's phase range.
 
 - **What it does:** fixes every still-unfixed 🔴 HIGH / 🟠 MEDIUM finding from the run's review docs, each
   with a regression test, updates the docs in place, and ships a patch release on the latest phase (e.g.
-  `v0.5.1`).
+  `v1.2.1`).
 - **Held findings:** its escape hatch applies, so a fix that can't land cleanly is held with a reason, not
   forced.
 - **With `--no-harden`:** skip it, and list the outstanding HIGH/MEDIUM findings and their homes in the
@@ -157,7 +164,7 @@ outcome, anything that stopped early and what remains, and what's next.
 
 ## Important Rules
 
-- **Release per phase (`0.N.0`)**, after it is built, reviewed, fix-now-fixed and owner-verified. Never
+- **Release per phase (`A.B.0`)**, after it is built, reviewed, fix-now-fixed and owner-verified. Never
   batch phases into one release; never release mid-phase.
 - **Next phase only after the previous one is released.** This strict order is what makes reconciliation
   meaningful.
@@ -173,5 +180,5 @@ outcome, anything that stopped early and what remains, and what's next.
 - **Delegate, never duplicate.** This skill sequences `generate-issues`, `upload-issues`, `execute-issues`,
   `review-and-fix-issues`, `release-version` and `harden-findings`, and adds gating; it has no logic of its
   own.
-- **The plan is phase-ordered and dependency-complete, always.** De-duplicate, fill the earlier phases,
-  sort, then drop the released ones. Report the fill, the reordering and the skips.
+- **The plan is roadmap-ordered and dependency-complete, always.** De-duplicate, fill the earlier phases,
+  sort into ROADMAP file order, then drop the released ones. Report the fill, the reordering and the skips.

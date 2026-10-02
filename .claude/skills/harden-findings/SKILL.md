@@ -21,13 +21,13 @@ The **invocation of whatever ran this skill** carries the consent:
 /harden-findings [scope] [--release]
 ```
 
-- `scope` is an optional filter: a phase (`p3`), a range (`p3-p5`), or omitted for **all**
+- `scope` is an optional filter: a phase (`vA.B`), a version (`vA`), a range (`v1-v2`), or omitted for **all**
   `specification/implementation/*code-review*.md` reports.
-- `--release` cuts the patch release automatically once the fixes land: the next `0.N.P` on the latest
-  released phase the fixes touch (e.g. `0.5.0` → `0.5.1`, tag `v0.5.1`). Without it, finish by
+- `--release` cuts the patch release automatically once the fixes land: the next `A.B.C` on the latest
+  released phase the fixes touch (e.g. `1.2.0` → `1.2.1`, tag `v1.2.1`). Without it, finish by
   **recommending** `/release-version`. Never bump a version without explicit consent.
 
-Examples: `/harden-findings` · `/harden-findings p4` · `/harden-findings p3-p5 --release`
+Examples: `/harden-findings` · `/harden-findings v1` · `/harden-findings v1-v2 --release`
 
 ## Instructions
 
@@ -49,12 +49,12 @@ Examples: `/harden-findings` · `/harden-findings p4` · `/harden-findings p3-p5
 
 For each finding, in order:
 
-1. **Implement the fix** following `CLAUDE.md` and SPEC.md. One finding, one minimal change.
+1. **Implement the fix** following `CLAUDE.md` and ARCHITECTURE.md. One finding, one minimal change.
 2. **Add a regression test that would have caught the bug.** A race gets a test that drives the
    interleaving; an allowlist hole gets a test with the forbidden sender or room. nio and Gemini are mocked.
 3. **Validate:** lint and tests green, and compose if `server/` changed. Commit only passing code.
 4. **Commit** one focused change, `fix(<area>): … (code review #N)`, with the running model's
-   `Co-Authored-By` trailer. A **contract change** carries the SPEC.md, SPEC-UA.md and CLAUDE.md updates and
+   `Co-Authored-By` trailer. A **contract change** carries the ARCHITECTURE.md updates and
    the pinning test in the same commit.
 5. **Update the source report in place:**
    - Flip the finding's Status to `✅ FIXED — <commit>`.
@@ -95,7 +95,7 @@ Summarize:
 - **Green before, green after.** Start green, commit only passing code, and end with a full green run.
 - **Update the same review docs in place**: Status, "Fixes applied", "Architecture impact". No new
   parallel documents.
-- **Contracts stay recorded.** A contract change updates SPEC.md, SPEC-UA.md, CLAUDE.md and its test in
+- **Contracts stay recorded.** A contract change updates ARCHITECTURE.md and its test in
   the same commit.
 - **Stop on failure.** A red gate on any fix halts the sweep. Report what landed and what remains; never
   paper over it.

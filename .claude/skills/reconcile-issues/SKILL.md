@@ -1,12 +1,12 @@
 ---
 name: reconcile-issues
-description: Review one phase's already-generated specification/implementation/pN-issues.md against the REAL current implementation (and the live setup, read-only) and correct any issue that has drifted - stale file names, changed signatures, evolved contracts, or work already done. Edits the file in place with a visible "Reconciled" mark. Corrects issues only; never implements code or changes the version.
+description: Review one phase's already-generated specification/implementation/vA.B-issues.md against the REAL current implementation (and the live setup, read-only) and correct any issue that has drifted - stale file names, changed signatures, evolved contracts, or work already done. Edits the file in place with a visible "Reconciled" mark. Corrects issues only; never implements code or changes the version.
 ---
 
 # Skill: Reconcile Issues
 
 `/generate-issues` grounds new issues in the real implementation (its Step 0.5). This skill does the same
-for a **pre-generated** issues file. It reads `specification/implementation/pN-issues.md`, compares each
+for a **pre-generated** issues file. It reads `specification/implementation/vA.B-issues.md`, compares each
 issue's assumptions with the **actual current code**, and **corrects the issues that drifted, in the file,
 with a visible change-mark**, so the record shows the original issue was modified.
 
@@ -16,23 +16,24 @@ Run it right before `/execute-issues-file`.
 ## Usage
 
 ```
-/reconcile-issues <pN | path-to-issues-file>
+/reconcile-issues <vA.B | path-to-issues-file>
 ```
 
-- `/reconcile-issues p4` → reconciles `specification/implementation/p4-issues.md`
+- `/reconcile-issues v1.1` → reconciles `specification/implementation/v1.1-issues.md`
 
 ## Instructions
 
 ### Step 0: Read the issues and the real implementation
 
-1. **The issues file:** resolve the target to `specification/implementation/pN-issues.md` and read all of it:
+1. **The issues file:** resolve the target to `specification/implementation/vA.B-issues.md` and read all of it:
    the summary table, the dependency tree and every `### AGORA-###` section.
-2. **The code:** read the **real current code** the issues touch: `agents/`, `tests/`, `server/`,
+2. **The code:** read the **real current code** the issues touch: `agents/`, `panel/`, `tests/`, `server/`,
    `pyproject.toml`, `.env.example` and the agent TOML files. Note the actual module and function names,
    signatures, config keys, env var names and dependencies.
 3. **Earlier records:** read the earlier phases' `specification/implementation/*-execution-report.md` and
    `*code-review*.md`, especially **"Fixes applied"** and **"Architecture impact"**.
-4. **The spec:** read [specification/SPEC.md](../../../specification/SPEC.md) §{N+2} (the DoD) and `CLAUDE.md`.
+4. **The spec:** read [specification/ROADMAP.md](../../../specification/ROADMAP.md) §vA.B (the DoD),
+   [specification/ARCHITECTURE.md](../../../specification/ARCHITECTURE.md) (contracts) and `CLAUDE.md`.
 5. **Owner-run work:** check the live state read-only where possible (e.g.
    `curl -s http://192.168.1.197:8008/_matrix/client/versions`). If an owner step may already be done, ask
    the owner.
@@ -53,7 +54,7 @@ Compare each issue's **assumptions** with reality:
 
 ### Step 2: Correct the issues in place, with a visible mark
 
-For each issue that drifted, edit its section in `pN-issues.md`:
+For each issue that drifted, edit its section in `vA.B-issues.md`:
 
 1. **Fix the details** (Description, What needs to be done, Acceptance criteria) so they match the real
    implementation. Keep the **AGORA id and the intent**; correct only what drifted.
@@ -74,7 +75,7 @@ file's intro and stop:
 
 ### Step 4: Record
 
-Commit the corrected file (`docs: reconcile pN issues against the implementation`, with the running model's
+Commit the corrected file (`docs: reconcile vA.B issues against the implementation`, with the running model's
 `Co-Authored-By` trailer) and push if a remote exists. Report which issues were corrected and why, which
 were marked moot, and which were untouched.
 

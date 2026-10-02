@@ -1,6 +1,6 @@
 ---
 name: execute-issues
-description: Execute one phase's GitHub issues (label pN::phase) sequentially in dependency order - implement, run the acceptance gates, get owner confirmation for manual DoD checks, commit, push, close - then write pN-execution-report.md.
+description: Execute one phase's GitHub issues (label vA.B::phase) sequentially in dependency order - implement, run the acceptance gates, get owner confirmation for manual DoD checks, commit, push, close - then write vA.B-execution-report.md.
 ---
 
 # Skill: Execute GitHub Issues
@@ -14,11 +14,11 @@ Then write an execution report.
 /execute-issues <label|phase> [--issue AGORA-###] [--dry-run]
 ```
 
-The label is the phase label exactly as it appears on GitHub (`p3::phase`). A bare `p3` also works.
+The label is the phase label exactly as it appears on GitHub (`v0.4::phase`). A bare `v0.4` also works.
 
-- `/execute-issues p3::phase`: execute every open issue of phase 3.
-- `/execute-issues p3::phase --issue AGORA-007`: one issue (its dependencies must already be closed).
-- `/execute-issues p3::phase --dry-run`: show the execution plan without changing anything.
+- `/execute-issues v0.4::phase`: execute every open issue of phase v0.4.
+- `/execute-issues v0.4::phase --issue AGORA-007`: one issue (its dependencies must already be closed).
+- `/execute-issues v0.4::phase --dry-run`: show the execution plan without changing anything.
 
 ## Instructions
 
@@ -26,14 +26,16 @@ The label is the phase label exactly as it appears on GitHub (`p3::phase`). A ba
 
 1. **Branch:** note the current branch.
 2. **Clean tree:** run `git status`. If the only uncommitted files are this phase's issues file or GitHub
-   report under `specification/implementation/`, commit them first (`docs: add pN issues`). Any other
+   report under `specification/implementation/`, commit them first (`docs: add vA.B issues`). Any other
    uncommitted change: stop and ask.
 3. **GitHub:** `gh` is authenticated and the repo has a remote.
-4. **Fetch the open issues:** `gh issue list --label "pN::phase" --state open --limit 100`.
-5. **Read the phase files:** the issues file `specification/implementation/pN-issues.md`, and
-   `pN-github-report.md` for the `AGORA-###` → `#number` mapping.
-6. **Read the spec:** [specification/SPEC.md](../../../specification/SPEC.md) §{N+2} (the phase's tasks and
-   DoD) and §12 (security), plus `CLAUDE.md`: invariants, contracts and gates.
+4. **Fetch the open issues:** `gh issue list --label "vA.B::phase" --state open --limit 100`.
+5. **Read the phase files:** the issues file `specification/implementation/vA.B-issues.md`, and
+   `vA.B-github-report.md` for the `AGORA-###` → `#number` mapping.
+6. **Read the spec:** [specification/ROADMAP.md](../../../specification/ROADMAP.md) §vA.B (Goal, Tasks,
+   DoD, Tests), [specification/ARCHITECTURE.md](../../../specification/ARCHITECTURE.md) (mechanisms and
+   contracts) and [specification/VISION.md](../../../specification/VISION.md) (non-goals), plus `CLAUDE.md`:
+   the gates and the rules that are easy to break.
 7. **Green baseline:** run the automated gates that apply (see `CLAUDE.md` **Acceptance gates**), so a
    later failure can be attributed. Never start on a red suite.
 
@@ -59,7 +61,7 @@ Read its detailed section in the issues file: what needs to be done and the acce
 
 #### 2c. Implement
 
-Follow `CLAUDE.md` and SPEC.md. Route by component:
+Follow `CLAUDE.md` and ARCHITECTURE.md. Route by component:
 
 - **`agents/agent.py`:** one codebase for both agents; the TOML picks the account and persona. Its
   pieces are:
@@ -70,26 +72,26 @@ Follow `CLAUDE.md` and SPEC.md. Route by component:
   - the message filter and allowlist;
   - the `HISTORY_N` history buffer;
   - the Gemini call, typing, and sending as `m.text`;
-  - turn-taking (p5);
-  - canon loading and session memory (p6), place / calendar / time and day memories (p7), usage accounting
-    (p8). See CLAUDE.md **Canon, memory, world and tokens**.
-- **`panel/`** (p9): `aiohttp.web` plus one static page; see CLAUDE.md **Web panel**. It binds `127.0.0.1`
+  - turn-taking (v1.2);
+  - canon loading and session memory (v2.1), place / calendar / time and day memories (v2.2), usage accounting
+    (v3.1). See ARCHITECTURE.md §Canon, §Memory, §World awareness and §Token accounting.
+- **`panel/`** (v3.2): `aiohttp.web` plus one static page; see ARCHITECTURE.md §Web panel. It binds `127.0.0.1`
   only, checks `Host` and `Origin`, takes agent names from a fixed list, and keeps the process supervisor
   testable with fake processes.
 - **Pure decisions:** keep the filter, mention detection, `bot_streak`, who-replies, transcript and prompt
   assembly, the session-end decision, calendar formatting, the missing-days calculation and usage aggregation
   as functions over plain data, with the clock injected. That way tests need no nio objects, and the nio callbacks stay thin
   adapters.
-- **Gemini** (`google-genai`, from p4): `client.aio.models.generate_content` with `gemini-2.5-flash`, the
-  persona (canon from p6) as `system_instruction`, `max_output_tokens=400` and `thinking_budget=0`. On failure or empty
+- **Gemini** (`google-genai`, from v1.1): `client.aio.models.generate_content` with `gemini-2.5-flash`, the
+  persona (canon from v2.1) as `system_instruction`, `max_output_tokens=400` and `thinking_budget=0`. On failure or empty
   text: log, send nothing, keep running.
 - **`server/docker-compose.yml`:** its environment is a contract. `CONTINUWUITY_SERVER_NAME` never changes.
-  Registration closes in p2 and stays closed.
+  Registration closes in v0.3 and stays closed.
 - **Owner-run work (`ops` issues):**
   - Write any repo artifact the issue names.
-  - Print the owner's steps as a numbered checklist, using the exact commands from SPEC.md.
+  - Print the owner's steps as a numbered checklist, using the exact commands from ROADMAP.md.
   - Don't act on the Ubuntu host, in Element, or on accounts and rooms unless the owner asks in this session.
-- **Contract changes** (the CLAUDE.md **Contracts** list) update SPEC.md, SPEC-UA.md, CLAUDE.md and the
+- **Contract changes** (ARCHITECTURE.md §Contracts) update ARCHITECTURE.md and the
   test that pins the contract, in the same commit.
 - **Scope:** stay inside the phase; don't add what no phase asks for. Follow the existing style.
 
@@ -106,9 +108,9 @@ Follow `CLAUDE.md` and SPEC.md. Route by component:
      confirm it.
    - **Live Gemini runs** happen only when the owner asks.
    - **Recording:** record each item as `confirmed by owner` or `pending owner`, never as `pass` on your own.
-5. **Acceptance criteria:** walk each criterion against the phase DoD in SPEC.md.
+5. **Acceptance criteria:** walk each criterion against the phase DoD in ROADMAP.md §vA.B.
 
-Gates that don't apply yet (there is no `pyproject.toml` before p3) are recorded as `n/a`. Never commit on
+Gates that don't apply yet (there is no `pyproject.toml` before v0.4) are recorded as `n/a`. Never commit on
 a red gate.
 
 #### 2e. Commit
@@ -185,15 +187,15 @@ say so in the report.
 
 ### Step 4: Write the execution report
 
-Write `specification/implementation/pN-execution-report.md`:
+Write `specification/implementation/vA.B-execution-report.md`:
 
 ```markdown
-# Phase pN — Execution Report
+# Phase vA.B — Execution Report
 
 **Date:** {date}
 **Branch:** {branch}
-**Label:** pN::phase
-**Target release:** v0.N.0
+**Label:** vA.B::phase
+**Target release:** vA.B.0
 **Executed by:** Claude Code
 
 ## Summary
@@ -223,7 +225,7 @@ Write `specification/implementation/pN-execution-report.md`:
 {remaining or awaiting-owner issues, their dependencies, and whether the phase is releasable}
 ```
 
-Commit the report (`docs: pN execution report`, with the trailer) and push.
+Commit the report (`docs: vA.B execution report`, with the trailer) and push.
 
 ## Important Rules
 
@@ -234,11 +236,11 @@ Commit the report (`docs: pN execution report`, with the trailer) and push.
   paid API. Live Gemini runs are opt-in, by the owner.
 - **Manual checks need the owner.** Never report a manual DoD check as passed without the owner's
   confirmation, and never `Closes #N` an issue with pending owner checks.
-- **Contracts stay stable.** A contract change updates SPEC.md, SPEC-UA.md, CLAUDE.md and its pinning test
+- **Contracts stay stable.** A contract change updates ARCHITECTURE.md and its pinning test
   in the same commit.
 - **Security invariants:**
   - The allowlist (`ROOM_ID` + `{OWNER, other agent}`) guards every reply path.
-  - Registration stays closed after p2.
+  - Registration stays closed after v0.3.
   - Port 8008 is never exposed beyond the LAN.
 - **Secrets stay out:**
   - Never print `.env`, `server/.env`, `server_con.yaml` or anything under `state/` (tokens, summaries, day

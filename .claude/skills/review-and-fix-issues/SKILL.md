@@ -25,8 +25,8 @@ flagging it.
 /review-and-fix-issues [target]
 ```
 
-- `/review-and-fix-issues p3`: review what phase 3 delivered (through tag `v0.3.0` if released).
-- `/review-and-fix-issues agents`: scope the review to one component (`agents` / `server` / `tests`).
+- `/review-and-fix-issues v0.4`: review what the phase delivered (through its tag `v0.4.0` if released).
+- `/review-and-fix-issues agents`: scope the review to one component (`agents` / `panel` / `server` / `tests`).
 - `/review-and-fix-issues`: review the **current branch**, i.e. everything built so far.
 
 ## Instructions
@@ -34,7 +34,7 @@ flagging it.
 ### Step 0: Scope and a green baseline
 
 1. **Resolve the target:**
-   - a phase (`pN`) or its tag: the commits whose subjects carry that phase's `AGORA-###` ids, plus
+   - a phase (`vA.B`) / a version (`vA`) or its tag: the commits whose subjects carry that phase's `AGORA-###` ids, plus
      the files they touched;
    - a component;
    - no argument: the whole working tree.
@@ -57,21 +57,21 @@ defects, not restatements of what works.
   - Are events from the first sync processed, so history gets replayed?
   - Is a new device created on every start?
   - Does a missing or corrupt `state/<name>.json` crash the bot instead of falling back to a password login?
-- **Loop protection (p5):**
+- **Loop protection (v1.2):**
   - Is `bot_streak` derived from the shared timeline, so both agents agree, and reset only by `OWNER`?
   - Can a delayed reply race a newer owner message and answer from stale history?
   - Can both agents answer a mention meant for one?
-  - Does mention detection handle Ukrainian case forms? SPEC's own DoD uses the vocative «Адо» for Ада.
+  - Does mention detection handle Ukrainian case forms? The ROADMAP's DoD uses the vocative «Адо» for Ада.
   - Is `PASS` handled with surrounding whitespace or punctuation?
   - Is the randomness (`BOT_REPLY_P`, the delay) injectable for tests?
-- **Canon and memory (p6):**
+- **Canon and memory (v2.1):**
   - Does a missing or empty canon stop the bot at startup?
   - Does any prompt or reply rule say the agent is a model or a bot?
   - Are memory writes atomic?
   - Does shutdown summarization hang past its timeout?
   - Is the session timeline capped by `SESSION_MAX_MESSAGES`?
   - Are summaries ever logged?
-- **World and day memories (p7):**
+- **World and day memories (v2.2):**
   - Is the time computed in `TIMEZONE`, including across DST switches?
   - Are weekday and month names independent of the system locale?
   - Is the clock injectable?
@@ -79,12 +79,12 @@ defects, not restatements of what works.
   - Is the catch-up bounded by `MEMORY_DAYS`?
   - Does the memory prompt forbid invented words or actions by the owner or the other agent?
   - Are the prompt sections in the specified order?
-- **Token accounting (p8):**
+- **Token accounting (v3.1):**
   - Does a usage line ever carry message or prompt text?
   - Does a missing `usage_metadata` crash the bot?
   - Are prices hardcoded?
   - Does the report break on a corrupt line, or on its sums?
-- **Web panel (p9):**
+- **Web panel (v3.2):**
   - Does it bind only `127.0.0.1`?
   - Are the `Host` and `Origin` checks applied on every route, including errors and static files?
   - Can an agent name from the request reach the filesystem or argv (path traversal, injection)?
@@ -110,10 +110,10 @@ defects, not restatements of what works.
   - Is anything secret committed or echoed?
 - **Server config:**
   - Are federation and encryption off?
-  - Is registration closed after p2?
+  - Is registration closed after v0.3?
   - Does the registration token live only in `server/.env`?
   - Is the port published as intended (LAN plus ufw)?
-- **Spec drift:** does the code diverge from the CLAUDE.md contracts or SPEC.md, or add what no phase asks for?
+- **Spec drift:** does the code diverge from the ARCHITECTURE.md contracts or the ROADMAP, or add what no phase asks for?
 
 For each finding, capture:
 
@@ -122,12 +122,12 @@ For each finding, capture:
 - a **severity**: 🔴 HIGH / 🟠 MEDIUM / 🟡 LOW;
 - a **proposed fix**.
 
-Cross-check against SPEC.md. If a gap is already scheduled for a later phase, note that instead of
+Cross-check against ROADMAP.md and ARCHITECTURE.md. If a gap is already scheduled for a later phase, note that instead of
 treating it as new.
 
 ### Step 2: Write the recommendations document (the plan)
 
-Write **one** doc at `specification/implementation/<scope>-code-review.md`, e.g. `p3-code-review.md`,
+Write **one** doc at `specification/implementation/<scope>-code-review.md`, e.g. `v0.4-code-review.md`,
 `agents-code-review.md`, or `branch-code-review.md` for the whole tree. Include:
 
 - a header: date, reviewer, **scope**, method;
@@ -141,23 +141,23 @@ Decide **FIX NOW vs DEFER** honestly:
 
 - **FIX NOW** means real, small, self-contained, high-value and in scope now: an allowlist hole, a replay on
   restart, a crash that kills sync, a secret in a log.
-- **DEFER →** means larger work, or work a later phase already owns. Give the home: a later phase (`p4`…`p9`),
+- **DEFER →** means larger work, or work a later phase already owns. Give the home: a later phase (`v1.1`…`v3.2`),
   `backlog` (no phase owns it) or `cleanup (/simplify)`. Do **not** pull it forward.
 
-Commit the doc as the plan (`docs: pN code review`) **and push it** if a remote exists. The review is worth
+Commit the doc as the plan (`docs: vA.B code review`) **and push it** if a remote exists. The review is worth
 keeping even if the fix pass is interrupted.
 
 ### Step 3: Implement the FIX NOW items, with tests
 
 For each **FIX NOW** finding, in criticality order:
 
-1. Implement the fix following `CLAUDE.md` and SPEC.md. Keep it minimal.
+1. Implement the fix following `CLAUDE.md` and ARCHITECTURE.md. Keep it minimal.
 2. **Add a regression test that would have caught the bug**, with nio and Gemini mocked. For a race,
    drive the interleaving explicitly.
 3. **Validate:** lint and tests green, and compose if `server/` changed. Commit only passing code.
 4. **Commit** one focused change per finding: `fix(<area>): … (code review #N)`, with the running model's
    `Co-Authored-By` trailer. **Then push.** Never leave a landed fix unpushed.
-5. **A contract change** updates SPEC.md, SPEC-UA.md, CLAUDE.md and the pinning test in the **same** commit.
+5. **A contract change** updates ARCHITECTURE.md and the pinning test in the **same** commit.
 
 If a fix turns out bigger than "fix now" (it touches a contract broadly or needs a design decision),
 **stop and re-classify it as DEFER** in the doc, with the reason, and move on. Don't half-land it.
@@ -170,12 +170,12 @@ Edit the doc **in place**:
 - **"Fixes applied" section:** for each fix, give the change, the regression test and the verification
   (final gate status).
 - **"Architecture impact" note:** add one for any fix that **changed a documented contract or
-  design-relevant behavior**, and make sure SPEC.md, SPEC-UA.md and CLAUDE.md reflect it. The next
+  design-relevant behavior**, and make sure ARCHITECTURE.md reflects it. The next
   `/generate-issues` or `/reconcile-issues` reads these notes.
 - **"Suggested next actions":** update them. Fixes on an already-released phase suggest a patch release
-  (`/release-version 0.N.1`); deferred items are carried into their phase.
+  (`/release-version A.B.1`); deferred items are carried into their phase.
 
-Commit the update (`docs: pN code review — fixes applied`) **and push**.
+Commit the update (`docs: vA.B code review — fixes applied`) **and push**.
 
 ### Step 5: Report
 
@@ -185,7 +185,7 @@ Summarize:
 - which were **fixed** (with commits) and which **deferred** (with homes);
 - the final gate status.
 
-If fixes landed on an already-released phase, suggest `/release-version 0.N.<next>`, but do **not** run
+If fixes landed on an already-released phase, suggest `/release-version A.B.<next>`, but do **not** run
 it. Offer a deeper pass with `/code-review high` for confirmation.
 
 ## Important Rules
@@ -195,7 +195,7 @@ it. Offer a deeper pass with `/code-review high` for confirmation.
 - **Every fix ships a regression test**, with nio and Gemini mocked. No test calls the network or a paid
   API.
 - **Green before, green after.** Commit only code that passes the gates.
-- **Record architecture deltas.** A contract change updates SPEC.md, SPEC-UA.md, CLAUDE.md and its test in
+- **Record architecture deltas.** A contract change updates ARCHITECTURE.md and its test in
   the same commit, and gets an "Architecture impact" note.
 - **Never release.** No version bump, no tag.
 - **Never leave work unpushed** (when a remote exists). This skill can stop mid-way, so "the next step will
