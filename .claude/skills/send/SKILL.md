@@ -18,6 +18,7 @@ Otherwise:
 3. **Who am I.** `ListAgents`' first line gives this session's address; `registry.py who <address>` gives
    its alias (may be empty).
 4. **Send** with `SendMessage` (`to` = the address): the user's message **verbatim** as the first line, then
-   a blank line and `— from <my alias or address>; reply with SendMessage to <my address>`.
+   a blank line and `— from <my alias>; reply with SendMessage to <my address>` (no alias → `— from
+   <my address>; reply with SendMessage to <my address>`).
 5. **Report in one line:** `→ <alias> (<address>)`. The reply arrives here on its own as a
    cross-session message — don't poll, don't wait; when it comes, show it to the user.

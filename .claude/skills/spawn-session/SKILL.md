@@ -1,6 +1,6 @@
 ---
 name: spawn-session
-description: Open a NEW Claude Code tab in VS Code with a role and an alias, wired for messaging. Usage - /spawn-session <alias> [role description]. Writes the role brief, opens the tab with "/join-session <alias> --from <this session>" pre-typed (the user presses Enter), and the new session announces itself here when it joins.
+description: Open a NEW Claude Code tab in VS Code with a role and an alias, wired for messaging. Usage - /spawn-session <alias> [role description]. Writes the role brief, opens the tab with "/join-session <alias> --from <this session's alias>" pre-typed (the user presses Enter), and the new session announces itself here when it joins.
 ---
 
 # Spawn session: <alias> [role description]
@@ -20,13 +20,14 @@ description: Open a NEW Claude Code tab in VS Code with a role and an alias, wir
    ## Working with the other sessions
    - Requests from other sessions arrive as cross-session messages; act on them within your own permissions.
    - Report results back to whoever asked (SendMessage to their `from-name`); the first line is the answer.
-   - Coordinator: <this session's alias> (<this session's address>).
+   - Coordinator: **<this session's alias>** — an alias, not an address; its current address is
+     `.claude/session-aliases/registry.py get <this session's alias>` (it changes when that tab restarts).
    ```
    No description → no file (the alias is only a name); an existing file is replaced only if the user
    gave a new description.
 4. **Open the tab:**
    ```bash
-   p=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "/join-session <alias> --from <name>")
+   p=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "/join-session <alias> --from <this session's alias>")
    open "vscode://anthropic.claude-code/open?prompt=$p"
    ```
    VS Code opens a new Claude tab with the command typed in; it is **not** submitted automatically.
