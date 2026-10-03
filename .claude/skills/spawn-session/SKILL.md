@@ -1,6 +1,6 @@
 ---
 name: spawn-session
-description: Start a NEW Claude Code session with a role and an alias, wired for messaging. By default it runs in the BACKGROUND (a detached tmux session, survives closing VS Code tabs); --tab opens it as a VS Code tab instead (it joins by itself, no Enter needed). Usage - /spawn-session <alias> [--tab] [role description]. Writes the role brief; the new session runs /join-session and announces itself here.
+description: Start a NEW Claude Code session with a role and an alias, wired for messaging. By default it runs in the BACKGROUND (a detached tmux session, survives closing VS Code tabs); --tab opens it as a VS Code tab instead (it joins by itself, no Enter needed). Usage - /spawn-session <alias> [--tab] [role description]. Writes the role brief; the new session runs /join and announces itself here.
 ---
 
 # Spawn session: <alias> [--tab] [role description]
@@ -33,7 +33,7 @@ description: Start a NEW Claude Code session with a role and an alias, wired for
    [ -x "$bin" ] || bin=$(command -v claude)          # must be ≥ 2.1.224 for cross-session messages
    mode=$(ps -o command= -p $PPID | grep -oE -- '--permission-mode [a-zA-Z]+' | awk '{print $2}')
    tmux new-session -d -s cc-<alias> -x 200 -y 50 -c "$PWD" \
-     "$bin --permission-mode ${mode:-default} -n <alias> '/join-session <alias> --from <me>'"
+     "$bin --permission-mode ${mode:-default} -n <alias> '/join <alias> --from <me>'"
    ```
    The permission mode mirrors this session's: a session in a different mode holds incoming messages for
    approval. Wait ~8 s, then `tmux capture-pane -p -t cc-<alias>`: if it shows a **trust-this-folder** or a
@@ -45,10 +45,10 @@ description: Start a NEW Claude Code session with a role and an alias, wired for
    2. `open "vscode://anthropic.claude-code/open"` — a new, empty Claude tab (the link can pre-type a
       prompt but never submit it, so don't pre-type).
    3. `sleep 6`, then `ListAgents` again. Exactly one new row of this project → `SendMessage` to it:
-      `Run /join-session <alias> --from <me> — you were just opened by /spawn-session.` An idle session
+      `Run /join <alias> --from <me> — you were just opened by /spawn-session.` An idle session
       wakes on a message, so it joins without the user pressing anything.
    4. No new row, or several (tabs opened at the same moment) → don't guess: tell the user to type
-      `/join-session <alias> --from <me>` in the new tab.
+      `/join <alias> --from <me>` in the new tab.
 5. **Tell the user in two lines:** background → it is starting in tmux `cc-<alias>` (chat with it:
    `tmux attach -t cc-<alias>`, detach `Ctrl+B` `D`; stop: `/sessions stop <alias>`); tab → the new tab
    joins by itself (fallback: step 4). Either way `/send <alias> …` reaches it once the `<alias> joined as …`

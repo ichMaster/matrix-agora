@@ -1,9 +1,9 @@
 ---
-name: join-session
-description: Register THIS Claude Code session under an alias so other sessions can message it with /send, and adopt the alias's role brief if one exists. Usage - /join-session <alias> [--from <alias or address>]. Run it in a new tab opened by /spawn-session (pre-typed) or in any existing tab to name it (e.g. /join-session agent_a).
+name: join
+description: Register THIS Claude Code session under an alias so other sessions can message it with /send, and adopt the alias's role brief if one exists. Usage - /join <alias> [--from <alias or address>]. Run it in a new tab opened by /spawn-session (pre-typed) or in any existing tab to name it (e.g. /join agent_a).
 ---
 
-# Join session: <alias> [--from <alias or address>]
+# Join: <alias> [--from <alias or address>]
 
 1. **Your own name.** Call `ListAgents` (load it with `ToolSearch select:ListAgents` if it is deferred). Its
    first line reads `This session is <name> [<ref>]`; if that line is missing, use `?` as the name.

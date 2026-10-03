@@ -1,6 +1,6 @@
 ---
 name: send
-description: Send a message to another Claude Code session by its alias (from /join-session or /spawn-session), a unique alias prefix, or its raw address. Usage - /send <alias> <message>; /send with no arguments lists the aliases and which are live.
+description: Send a message to another Claude Code session by its alias (from /join or /spawn-session), a unique alias prefix, or its raw address. Usage - /send <alias> <message>; /send with no arguments lists the aliases and which are live.
 ---
 
 # Send: <alias> <message>
@@ -16,7 +16,7 @@ Otherwise:
    name. Not an alias but a name ListAgents shows → use it as is. Neither → say so, list the aliases, stop.
 2. **Live?** A `uds:` address is live (the registry checked its socket). A plain name must be in
    `ListAgents`; if not, say the alias is stale (that session was closed or restarted) and suggest
-   `/join-session <alias>` there. Don't send.
+   `/join <alias>` there. Don't send.
 3. **Who am I.** `echo uds:$CLAUDE_CODE_MESSAGING_SOCKET` is this session's address;
    `registry.py who <that>` gives its alias (may be empty).
 4. **Send** with `SendMessage` (`to` = the address): the user's message **verbatim** as the first line, then
