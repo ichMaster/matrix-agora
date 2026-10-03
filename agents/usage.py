@@ -31,6 +31,23 @@ def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: b
     }
 
 
+COUNT_FIELDS = ("prompt_tokens", "output_tokens", "total_tokens")
+
+
+def _valid(rec: Any) -> bool:
+    """The line's shape (code review #1): anything else is corrupt, never a crash later."""
+    if not isinstance(rec, dict) or not isinstance(rec.get("ts"), str):
+        return False
+    try:
+        date.fromisoformat(rec["ts"][:10])
+    except ValueError:
+        return False
+    counts_ok = all(rec.get(f) is None or (isinstance(rec[f], int) and not isinstance(rec[f], bool))
+                    for f in COUNT_FIELDS)
+    return (counts_ok and isinstance(rec.get("ok"), bool)
+            and isinstance(rec.get("agent"), str) and isinstance(rec.get("kind"), str))
+
+
 def parse_lines(lines: list[str]) -> tuple[list[dict], int]:
     """(records, corrupt_count) — a corrupt line is skipped, never fatal."""
     out, bad = [], 0
@@ -39,9 +56,11 @@ def parse_lines(lines: list[str]) -> tuple[list[dict], int]:
             continue
         try:
             rec = json.loads(line)
-            date.fromisoformat(str(rec["ts"])[:10])
+        except ValueError:
+            rec = None
+        if _valid(rec):
             out.append(rec)
-        except (ValueError, KeyError, TypeError):
+        else:
             bad += 1
     return out, bad
 

@@ -24,6 +24,20 @@ def test_corrupt_lines_are_skipped_and_counted():
     assert len(recs) == 3 and bad == 1
 
 
+@pytest.mark.parametrize("line", [
+    '{"ts": "2026-10-03T10:00:00", "agent": "ada", "kind": "reply", "prompt_tokens": "12", "ok": true}',
+    '{"ts": "2026-10-03T10:00:00", "agent": "ada", "kind": "reply", "prompt_tokens": true, "ok": true}',
+    '{"ts": "2026-10-03T10:00:00", "agent": "ada", "kind": "reply", "ok": "yes"}',
+    '{"ts": 20261003, "agent": "ada", "kind": "reply", "ok": true}',
+    '{"ts": "2026-10-03T10:00:00", "agent": ["ada"], "kind": "reply", "ok": true}',
+    '["2026-10-03"]', '"text"', "null", "5",
+])
+def test_well_formed_json_with_a_bad_shape_is_corrupt_not_a_crash(line):
+    recs, bad = parse_lines([LINES[0], line])
+    assert (len(recs), bad) == (1, 1)
+    assert render(aggregate(recs), 0.30, 2.50) != "no data"  # code review #1
+
+
 def test_aggregate_sums_and_window():
     recs, _ = parse_lines(LINES)
     rows = aggregate(recs)
