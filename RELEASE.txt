@@ -1,3 +1,10 @@
+Version 2.2.1 (2026-10-03)
+---------------------------
+- Plans never telegraph which intentions will fail (no hedging; unhedge
+  guard)
+- Day memories in the past tense, without a leading date
+- Honest save log lines
+
 Version 2.2.0 (2026-10-03)
 ---------------------------
 - A life story from birth to death for each agent: the past and the current
