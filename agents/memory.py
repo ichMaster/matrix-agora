@@ -31,7 +31,7 @@ def save_memory(path: Path, text: str) -> None:
     tmp.write_text(text.strip() + "\n", encoding="utf-8")
     os.chmod(tmp, 0o600)
     os.replace(tmp, path)
-    log.info("session summary saved to %s (%d words)", path, len(text.split()))
+    log.info("saved %s (%d words)", path, len(text.split()))
 
 
 def session_ended(last_activity_ms: int | None, now_ms: int, idle_ms: int) -> bool:

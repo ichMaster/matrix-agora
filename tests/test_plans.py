@@ -126,3 +126,25 @@ def test_summary_journal_gets_the_session_only_part(tmp_path):
     journals = list((tmp_path / "ada.days").glob("*.talk.md"))
     assert len(journals) == 1
     assert re.fullmatch(r"\[\d\d:\d\d\] лише сьогоднішнє\n", journals[0].read_text(encoding="utf-8"))
+
+
+def test_telegraphed_failure_is_removed_from_plan_items():
+    from agents.plans import unhedge
+    assert unhedge("поїхати до Дрогобича, показати Максимові акорди, але, мабуть, лінь переможе") == \
+        "поїхати до Дрогобича, показати Максимові акорди"
+    assert unhedge("перефарбувати полицю — навряд чи встигну") == "перефарбувати полицю"
+    assert unhedge("спекти хліб для батьків") == "спекти хліб для батьків"
+
+
+def test_plan_request_forbids_hedging():
+    from agents.plans import plan_request
+    _, contents = plan_request("day", "Ада", "К.", "субота", "Розділ.", None, [], None, None, [None] * 5, 120)
+    assert "без застережень" in contents and "навряд чи" in contents
+
+
+def test_day_memory_request_asks_for_past_tense_without_a_date():
+    from datetime import date
+
+    from agents.chronicle import day_memory_request
+    _, contents = day_memory_request("Ада", "К.", date(2026, 10, 2), "Розділ.", [], None, None, None, 120)
+    assert "у минулому часі" in contents and "не починаючи з дати" in contents

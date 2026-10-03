@@ -53,6 +53,24 @@ def parse_items(text: str) -> list[str]:
     return items
 
 
+_LEAD = r"[,;:—–-]?\s*(?:(?:але|та|хоча)\s*,?\s*)?"
+HEDGE_RES = (
+    re.compile(_LEAD + r"(?:мабуть|напевно|можливо)\s*,?[^.!?]*?"
+               r"(?:переможе|не встигну|не вийде|не вдасться|не складеться|забуду|відкладу)[^.!?]*",
+               re.IGNORECASE),
+    re.compile(_LEAD + r"навряд\s+чи\b[^.!?]*", re.IGNORECASE),
+)
+
+
+def unhedge(item: str) -> str:
+    """Drops a trailing hedge that gives away a plan's failure (code review #1)."""
+    cleaned = item
+    for rx in HEDGE_RES:
+        cleaned = rx.sub("", cleaned)
+    cleaned = cleaned.strip(" ,;—–-")
+    return cleaned or item
+
+
 def render_plan(items: list[str], mutations: list[str | None], max_words: int) -> str:
     """'- item' lines with hidden mutation tags, trimmed to the word budget."""
     lines, words = [], 0
@@ -62,7 +80,7 @@ def render_plan(items: list[str], mutations: list[str | None], max_words: int) -
             break
         words += n
         kind = mutations[i] if i < len(mutations) else None
-        lines.append(f"- {item}" + (f" <!-- mutation: {kind} -->" if kind else ""))
+        lines.append(f"- {unhedge(item)}" + (f" <!-- mutation: {kind} -->" if kind else ""))
     return "\n".join(lines)
 
 
@@ -103,6 +121,8 @@ def plan_request(
     if bent:
         task += " Відхилення від твого звичного життя: " + "; ".join(bent) + \
             ". У тексті ці пункти мають звучати як звичайні щирі наміри."
+    task += (" Кожен пункт — щирий намір без застережень: не пиши «мабуть», «навряд чи», «якщо не "
+             "лінь» і нічим не натякай, що щось може не вдатися.")
     parts.append(task)
     return f"{canon}\n\nТи — {name}.", "\n\n".join(parts)
 
