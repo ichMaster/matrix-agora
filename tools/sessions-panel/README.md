@@ -8,6 +8,9 @@ A sidebar panel for the Claude Code sessions of the open workspace — the UI fo
 - **➕ New session:** alias → role (optional) → background (keeps running when tabs close) or a VS Code tab.
 - **Per session:** message, open (tab) / attach in a terminal (background), logs, stop (background), edit role,
   set alias (for a session without one), remove alias.
+- **Message** is delivered straight into the session's chat (no Enter there): a short-lived headless Claude
+  (Haiku, only `SendMessage` + `ToolSearch`, prompt via stdin) makes one `SendMessage` call to the session's
+  socket; replies go to the `main` session. An extension cannot type into an open chat itself.
 - Background sessions start with `claude --bg` in the same permission mode as your Claude tabs
   (`claudeCode.initialPermissionMode`), so messages between them need no approval.
 

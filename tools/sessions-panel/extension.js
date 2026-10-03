@@ -230,22 +230,63 @@ async function newSession(provider, state) {
   setTimeout(() => provider.reload(), 4000);
 }
 
+// Messages go through a short-lived headless Claude (Haiku, only the messaging tools) that makes one
+// SendMessage call — the extension itself cannot type into an open chat ("Session is already open. Your
+// prompt was not applied"). Replies are routed to the coordinator, whose socket is in the footer.
+function addressOf(row) {
+  if (row.entry && row.entry.socket && fs.existsSync(row.entry.socket.replace(/^uds:/, ''))) return row.entry.socket;
+  if (row.session) {
+    const sock = `/tmp/cc-socks/${row.session.pid}.sock`;
+    return fs.existsSync(sock) ? `uds:${sock}` : row.session.name;
+  }
+  return undefined;
+}
+
+function relay(to, text) {
+  const prompt = [
+    'You are a message relay. Make exactly one SendMessage call (load it first with ToolSearch, query',
+    '"select:SendMessage", if it is not loaded) with these two arguments, each the exact JSON string value',
+    'given, decoded, with every line kept:',
+    `to = ${JSON.stringify(to)}`,
+    `message = ${JSON.stringify(text)}`,
+    'Then output only SENT, or FAILED: <reason>.',
+  ].join('\n');
+  const args = ['-p', '--model', 'haiku', '--permission-mode', permissionMode(), '--tools', 'SendMessage,ToolSearch',
+    '--strict-mcp-config', '--no-session-persistence'];
+  return new Promise((resolve) => {
+    const child = cp.spawn(claudeBin(), args, { cwd: root(), stdio: ['pipe', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { out += d; });
+    const timer = setTimeout(() => child.kill(), 90000);
+    child.on('close', () => { clearTimeout(timer); resolve({ ok: /\bSENT\b/.test(out) && !/FAILED/.test(out), out: out.trim() }); });
+    child.on('error', (e) => { clearTimeout(timer); resolve({ ok: false, out: String(e) }); });
+    child.stdin.end(prompt); // the prompt via stdin: never in argv
+  });
+}
+
 async function message(provider, item) {
   const row = item.row;
-  const text = await vscode.window.showInputBox({ title: `Message to ${label(row)}`, prompt: 'Opens a chat with the text typed in — press Enter there to send' });
+  const to = addressOf(row);
+  if (!to) {
+    vscode.window.showWarningMessage(`"${label(row)}" is not running.`);
+    return;
+  }
+  const text = await vscode.window.showInputBox({ title: `Message to ${label(row)}`, prompt: 'Delivered straight into its chat — no Enter needed there' });
   if (!text) return;
-  if (row.type === 'tab') {
-    // straight into that session's own chat
-    await vscode.commands.executeCommand('claude-vscode.primaryEditor.open', row.session.sessionId, text);
-    return;
-  }
-  // a background session: through the coordinator, which /sends it and gets the reply
   const coordinator = provider.coordinator();
-  if (!coordinator || !row.alias) {
-    vscode.window.showWarningMessage(`No live "${COORDINATOR}" session to send through — attach to ${label(row)} and type there.`);
-    return;
+  const replyTo = coordinator ? addressOf(coordinator) : undefined;
+  const footer = replyTo && replyTo !== to
+    ? `\n\n— from the user via the Claude Sessions panel; reply with SendMessage to ${replyTo} (${COORDINATOR})`
+    : '\n\n— from the user via the Claude Sessions panel';
+  const r = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: `Sending to ${label(row)}…` },
+    () => relay(to, text + footer));
+  if (r.ok) {
+    vscode.window.showInformationMessage(`Delivered to ${label(row)}.${replyTo && replyTo !== to ? ` Replies arrive in "${COORDINATOR}".` : ''}`);
+  } else {
+    vscode.window.showErrorMessage(`Not delivered to ${label(row)}: ${r.out.split('\n').pop() || 'no answer from the relay'}`);
   }
-  await vscode.commands.executeCommand('claude-vscode.primaryEditor.open', coordinator.session.sessionId, `/send ${row.alias} ${text}`);
 }
 
 function bgId(row) {
