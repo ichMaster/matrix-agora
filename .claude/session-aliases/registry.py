@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Session alias registry: alias -> Claude Code session address (the name ListAgents shows).
 
-usage: registry.py set <alias> <address> [--cwd DIR] | get <alias> | who <address> | list | rm <alias>
+usage: registry.py set <alias> <address> [--cwd DIR] [--type tab|bg|terminal] | get <alias> | who <address>
+       | list | rm <alias>
+The type is detected from the calling session's environment unless --type is given: bg = a background
+session in tmux (cc-<alias>), tab = a VS Code tab, terminal = a plain terminal session.
 Data: registry.json next to this file (gitignored: addresses are per machine); roles/<alias>.md hold
 optional role briefs. Run from the project root: .claude/session-aliases/registry.py …
 """
@@ -9,6 +12,7 @@ import datetime
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -32,6 +36,20 @@ def save(data: dict) -> None:
     os.replace(tmp, REG)
 
 
+def detect_type() -> tuple[str, str | None]:
+    """(type, tmux session) of the session running this script — it inherits that session's environment."""
+    if os.environ.get("TMUX"):
+        try:
+            name = subprocess.run(["tmux", "display-message", "-p", "#S"], capture_output=True, text=True,
+                                  timeout=5).stdout.strip() or None
+        except (OSError, subprocess.SubprocessError):
+            name = None
+        return "bg", name
+    if os.environ.get("CLAUDE_CODE_ENTRYPOINT") == "claude-vscode":
+        return "tab", None
+    return "terminal", None
+
+
 def main(argv: list[str]) -> int:
     if not argv:
         print(__doc__)
@@ -46,10 +64,15 @@ def main(argv: list[str]) -> int:
         for other in [a for a, e in data.items() if e["address"] == address and a != alias]:
             del data[other]  # one alias per session: the newest wins
         role = HOME / "roles" / f"{alias}.md"
-        data[alias] = {"address": address, "cwd": cwd, "role": str(role) if role.exists() else None,
+        kind, tmux = detect_type()
+        if "--type" in args:
+            kind, tmux = args[args.index("--type") + 1], (f"cc-{alias}" if args[args.index("--type") + 1] == "bg"
+                                                          else None)
+        data[alias] = {"address": address, "type": kind, "tmux": tmux, "cwd": cwd,
+                       "role": str(role) if role.exists() else None,
                        "joined": datetime.datetime.now().astimezone().isoformat(timespec="seconds")}
         save(data)
-        print(f"{alias} -> {address}")
+        print(f"{alias} -> {address} ({kind}{', tmux ' + tmux if tmux else ''})")
     elif cmd == "get" and len(args) == 1:
         key = args[0].lower()
         hits = [key] if key in data else [a for a in data if a.startswith(key)]  # a unique prefix works too
@@ -65,7 +88,8 @@ def main(argv: list[str]) -> int:
         save(data)
     elif cmd == "list":
         for alias, e in sorted(data.items()):
-            print(f"{alias}\t{e['address']}\t{'role' if e.get('role') else '-'}\t{e['cwd']}\t{e['joined']}")
+            print(f"{alias}\t{e.get('type', '?')}\t{e['address']}\t{e.get('tmux') or '-'}\t"
+                  f"{'role' if e.get('role') else '-'}\t{e['cwd']}\t{e['joined']}")
     else:
         print(__doc__)
         return 2

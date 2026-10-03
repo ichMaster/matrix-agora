@@ -83,7 +83,7 @@ The list of contracts lives in **ARCHITECTURE.md §Contracts** (env var names, t
 - **Releases:** phase `vA.B` ships as `A.B.0` (tag `vA.B.0`); post-release fixes bump the last digit (`A.B.1`, …).
 - **GitHub flow:** `/ship-phase <selector>` (a phase `vA.B`, a version `vA`, or a range) runs `/generate-issues` → `/upload-issues` → `/execute-issues` → `/review-and-fix-issues` → `/release-version` for each phase, then `/harden-findings` at the end of the run.
 - **Offline flow:** `/ship-solution` runs `/reconcile-issues` → `/execute-issues-file` → `/review-and-fix-issues` → `/release-version` over issues files that already exist.
-- **Sessions:** `/spawn-session <alias> [role]` opens a new VS Code Claude tab with a role, `/join-session <alias>` names the current tab, `/send <alias> <message>` messages another tab. `/sessions` lists them (live or stale; `prune` drops stale ones). Aliases live in `.claude/session-aliases/` (`registry.json` is gitignored, `roles/` holds the role briefs).
+- **Sessions:** `/spawn-session <alias> [--tab] [role]` starts a new Claude session with a role — in the background (tmux `cc-<alias>`, survives closing tabs; `tmux attach -t cc-<alias>` to chat) or, with `--tab`, as a VS Code tab; `/join-session <alias>` names the current tab, `/send <alias> <message>` messages another tab. `/sessions` lists them with their type (bg / tab) and status; `prune` drops stale ones, `stop <alias>` ends a background one. Aliases live in `.claude/session-aliases/` (`registry.json` is gitignored, `roles/` holds the role briefs).
 - **Who releases:** versions are bumped and tagged only by `/release-version`, `/ship-phase`, `/ship-solution` or `/harden-findings --release`.
 
 ## Constraints
