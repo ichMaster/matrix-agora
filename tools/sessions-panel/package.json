@@ -2,7 +2,7 @@
   "name": "agora-sessions",
   "displayName": "Claude Sessions",
   "description": "A VS Code panel for the Claude Code sessions of this workspace: aliases, roles, busy/idle; start, open, message, attach, stop.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "matrix-agora",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/ichMaster/matrix-agora" },

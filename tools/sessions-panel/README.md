@@ -22,4 +22,5 @@ npx --yes @vscode/vsce package --no-dependencies -o agora-sessions.vsix
 code --install-extension agora-sessions.vsix --force
 ```
 
-then **Developer: Reload Window**.
+then **Developer: Reload Window**. Bump `version` in `package.json` on every rebuild — VS Code keeps running
+the old code when a reinstall has the same version.
