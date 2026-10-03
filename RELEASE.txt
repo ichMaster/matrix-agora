@@ -1,3 +1,11 @@
+Version 3.1.1 (2026-10-03)
+---------------------------
+- Daily token report with statistics: reports/usage/YYYY-MM-DD.md and
+  latest.md -- yesterday by agent and kind (change vs the day before, share of
+  tokens, averages per call, failures), the last 7 days, the month so far with
+  a projected cost, today so far (AGORA-027)
+- scripts/install-usage-daily.sh: a launchd job writes it every day at 07:00
+
 Version 3.1.0 (2026-10-03)
 ---------------------------
 - Token accounting: one text-free JSON line per Gemini call in
