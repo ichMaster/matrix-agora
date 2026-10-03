@@ -1,6 +1,6 @@
 ---
 name: spawn-session
-description: Start a NEW Claude Code session with a role and an alias, wired for messaging. By default it runs in the BACKGROUND (a detached tmux session, survives closing VS Code tabs); --tab opens it as a VS Code tab instead. Usage - /spawn-session <alias> [--tab] [role description]. Writes the role brief; the new session runs /join-session and announces itself here.
+description: Start a NEW Claude Code session with a role and an alias, wired for messaging. By default it runs in the BACKGROUND (a detached tmux session, survives closing VS Code tabs); --tab opens it as a VS Code tab instead (it joins by itself, no Enter needed). Usage - /spawn-session <alias> [--tab] [role description]. Writes the role brief; the new session runs /join-session and announces itself here.
 ---
 
 # Spawn session: <alias> [--tab] [role description]
@@ -8,9 +8,9 @@ description: Start a NEW Claude Code session with a role and an alias, wired for
 1. **Validate** the alias: lowercase `a-z 0-9 _ -`, max 40 chars, starting with a letter or digit. Check
    `.claude/session-aliases/registry.py list`: if the alias is taken by a **live** session (in
    `ListAgents`), or `tmux has-session -t cc-<alias>` succeeds, ask before replacing it.
-2. **This session's address and alias.** `ListAgents` (load via ToolSearch if deferred), first line
-   `This session is <name>`. If `registry.py who <name>` is empty, register this session as `main`
-   (or `main-2`, … if `main` is live elsewhere): `registry.py set main <name>`. Call the result `<me>`.
+2. **This session's alias.** `registry.py who uds:$CLAUDE_CODE_MESSAGING_SOCKET`. Empty → register this
+   session as `main` (or `main-2`, … if `main` is live elsewhere): `registry.py set main <name> --self`
+   (`<name>` from `ListAgents`' first line `This session is <name>`, or `?`). Call the alias `<me>`.
 3. **Role brief** (only if a description was given): write `.claude/session-aliases/roles/<alias>.md`:
    ```markdown
    # Role: <alias>
@@ -40,12 +40,16 @@ description: Start a NEW Claude Code session with a role and an alias, wired for
    **bypass-permissions** prompt, do NOT answer it — it is the user's consent. Tell the user once:
    `tmux attach -t cc-<alias>`, answer it, then detach with `Ctrl+B` `D` (both are remembered afterwards).
 
-   **`--tab`** — a VS Code tab with the command pre-typed (the user presses Enter):
-   ```bash
-   p=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "/join-session <alias> --from <me>")
-   open "vscode://anthropic.claude-code/open?prompt=$p"
-   ```
+   **`--tab`** — a VS Code tab that joins by itself:
+   1. `ListAgents` → note the names (the "before" set).
+   2. `open "vscode://anthropic.claude-code/open"` — a new, empty Claude tab (the link can pre-type a
+      prompt but never submit it, so don't pre-type).
+   3. `sleep 6`, then `ListAgents` again. Exactly one new row of this project → `SendMessage` to it:
+      `Run /join-session <alias> --from <me> — you were just opened by /spawn-session.` An idle session
+      wakes on a message, so it joins without the user pressing anything.
+   4. No new row, or several (tabs opened at the same moment) → don't guess: tell the user to type
+      `/join-session <alias> --from <me>` in the new tab.
 5. **Tell the user in two lines:** background → it is starting in tmux `cc-<alias>` (chat with it:
-   `tmux attach -t cc-<alias>`, detach `Ctrl+B` `D`; stop: `/sessions stop <alias>`); tab → press Enter in
-   the new tab. Either way `/send <alias> …` reaches it once the `<alias> joined as …` message arrives here —
-   confirm that in one line when it does.
+   `tmux attach -t cc-<alias>`, detach `Ctrl+B` `D`; stop: `/sessions stop <alias>`); tab → the new tab
+   joins by itself (fallback: step 4). Either way `/send <alias> …` reaches it once the `<alias> joined as …`
+   message arrives here — confirm that in one line when it does.

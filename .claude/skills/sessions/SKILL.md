@@ -5,11 +5,11 @@ description: List the session aliases (alias → type bg/tab/terminal, Claude Co
 
 # Sessions [prune | rm <alias> | stop <alias>]
 
-1. Run `.claude/session-aliases/registry.py list` (tab-separated: alias, type, address, tmux, role, cwd,
-   joined) and `ListAgents` (load via ToolSearch if deferred; its first line `This session is <name>` is
-   this tab).
+1. Run `.claude/session-aliases/registry.py list` (tab-separated: alias, type, name, live/stale/unknown by
+   socket, tmux, role, socket, joined) and `ListAgents` (load via ToolSearch if deferred). This tab is the
+   alias whose socket is `uds:$CLAUDE_CODE_MESSAGING_SOCKET`.
 2. **`rm <alias>`:** `registry.py rm <alias>`, then show the list.
-   **`prune`:** `registry.py rm` every alias whose address is not this session and not in `ListAgents`,
+   **`prune`:** `registry.py rm` every alias that is `stale` (or `unknown` and its name not in `ListAgents`),
    then show the list. (A role brief in `roles/` is kept — `/join-session <alias>` reattaches it.)
    **`stop <alias>`:** only for type `bg`: `tmux kill-session -t <its tmux>` (the user asked, no extra
    confirmation), then `registry.py rm <alias>`, then show the list. A `tab` → say to close the tab instead.
