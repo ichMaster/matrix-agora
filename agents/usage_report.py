@@ -30,9 +30,17 @@ def _price(name: str) -> float | None:
         return None
 
 
+def _days(raw: str) -> int:
+    """At least 1 — 0 or less would put the window in the future (code review #3)."""
+    n = int(raw)
+    if n < 1:
+        raise argparse.ArgumentTypeError("must be 1 or more")
+    return n
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Gemini token usage by day, agent and kind.")
-    ap.add_argument("--days", type=int, default=7, help="last N days (default 7)")
+    ap.add_argument("--days", type=_days, default=7, help="last N days (default 7)")
     ap.add_argument("--since", type=date.fromisoformat, help="from this date (overrides --days)")
     ap.add_argument("--markdown", action="store_true", help="print a markdown table")
     ap.add_argument("--state-dir", default="state", help=argparse.SUPPRESS)

@@ -75,3 +75,10 @@ def test_report_command_end_to_end(tmp_path, capsys, monkeypatch):
     usage_report.main(["--state-dir", str(tmp_path), "--since", "2026-10-01", "--markdown"])
     out, err = capsys.readouterr()
     assert "skipped 1 corrupt" in err and "| 2026-10-02 | ada | reply | 2 |" in out and "cost $" in out
+
+
+@pytest.mark.parametrize("days", ["0", "-3", "x"])
+def test_days_below_one_is_rejected_not_silent(tmp_path, days, capsys):
+    with pytest.raises(SystemExit) as exc:
+        usage_report.main(["--state-dir", str(tmp_path), "--days", days])
+    assert exc.value.code == 2 and "--days" in capsys.readouterr().err  # code review #3
