@@ -168,6 +168,7 @@ Earlier phases use the prefix of this order that exists at that point (v1.1: per
 
 - After **every** Gemini call — reply, session summary, day memory, week/month/year digest, plan, today block — the agent appends one JSON line to `state/<name>.usage.jsonl`: `ts` (in `TIMEZONE`), `agent`, `kind` (`reply` / `summary` / `day_memory` / `digest` / `plan` / `today`), `model`, `prompt_tokens`, `output_tokens`, `total_tokens`, `ok`. **Never any text.** Missing `usage_metadata` or fields → `null`s; a failed call → `ok: false`; a write error is logged and never blocks the conversation. Each agent writes only its own file.
 - **Report:** `uv run agents/usage_report.py [--days N] [--since YYYY-MM-DD] [--markdown]` — a table by day × agent × kind with calls, tokens and estimated cost. Prices come only from `.env` (`PRICE_INPUT_PER_1M`, `PRICE_OUTPUT_PER_1M`, USD per 1M tokens); unset prices → no cost column. Corrupt lines are skipped with a warning; no files → "no data". The panel reuses the same aggregation code.
+- **Daily report (v3.1.1):** `usage_report.py --write [DIR]` writes `DIR/YYYY-MM-DD.md` and `DIR/latest.md` (default `reports/usage/`, gitignored, atomic writes): yesterday by agent with the change from the day before, by kind (share of tokens, average input/output per call, failures) and by agent × kind; the last 7 complete days by day with the daily average and the busiest day; the month of yesterday so far with a projected month cost; today so far. Cost figures appear only when the prices are set. On the Mac a launchd job (`scripts/install-usage-daily.sh`, label `lan.agora.usage-report`) runs `scripts/usage-daily.sh` every day at 07:00 and at login; from v3.2 the job runs on the server next to `state/`.
 
 ## The panel: simulations and agents
 
@@ -317,9 +318,14 @@ matrix-agora/
     Dockerfile              # v3.2: one image for both agents
   panel/                    # v3.3: the panel — FastAPI app.py + static/ + Dockerfile
   .github/workflows/ci.yml  # v3.2: gates + image builds; GHCR push on tags
+  scripts/
+    run-agent.sh            # dev mode: one agent in the foreground
+    usage-daily.sh          # v3.1.1: the daily token report
+    install-usage-daily.sh  # v3.1.1: the macOS launchd job for it (--uninstall)
   .env.example              # see §Configuration and secrets
   state/                    # gitignored: each bot's session, memory (v2.1),
                             # day memories, plans, the today block (v2.2), usage (v3.1), lock + logs (v3.2)
+  reports/usage/            # gitignored: daily token reports (v3.1.1)
 ```
 
 ## Testing and CI

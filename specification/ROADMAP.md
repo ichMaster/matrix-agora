@@ -265,6 +265,7 @@ One usage line per Gemini call, and a report command (ARCHITECTURE §Token accou
 **Tasks:**
 - Append the usage line (`ts`, `agent`, `kind`, `model`, `prompt_tokens`, `output_tokens`, `total_tokens`, `ok`) to `state/<name>.usage.jsonl` after every call; `null`s for missing metadata; `ok: false` for failed calls; write errors never block the conversation; no texts ever.
 - `agents/usage_report.py` with `--days N`, `--since YYYY-MM-DD`, `--markdown`: the day × agent × kind table with calls, tokens and estimated cost; totals per agent and overall; prices from `.env` only (`PRICE_INPUT_PER_1M`, `PRICE_OUTPUT_PER_1M`), no cost column when unset; corrupt lines skipped with a warning; "no data" when files are missing.
+- (v3.1.1) The daily report: `usage_report.py --write` → `reports/usage/YYYY-MM-DD.md` + `latest.md` with statistics (yesterday by agent and kind with the change from the day before, the last 7 days, the month so far with a projection, today so far); scheduled daily at 07:00 on the Mac by a launchd job (`scripts/install-usage-daily.sh`).
 
 **DoD:**
 - (Manual, owner) After a conversation, each agent's `usage.jsonl` holds one line per Gemini call, with tokens and no texts.
@@ -285,6 +286,7 @@ One image for both agents; **one compose service per agent** (`ada`, `bruno`) jo
 - Stop semantics: `docker stop -t 30` → SIGTERM → the v2.1 shutdown summary → SIGKILL after the grace period.
 - The single-instance `flock` on `state/<name>.lock` (PID inside) and file logging to `state/logs/<name>.log` (rotating, 1 MB × 3) land here: a second instance refuses to start, and the v3.3 panel has logs to tail.
 - `server/deploy.sh`: add `docker compose pull` before `up -d`.
+- The daily token report (v3.1.1) moves to the server with `state/`: a daily job there writes `~/matrix-agora/reports/usage/`; the Mac's launchd job is uninstalled (`scripts/install-usage-daily.sh --uninstall`).
 - `.github/workflows/ci.yml`: ruff, pytest (nio/Gemini mocked; no paid APIs, no secrets in CI), the compose gate, the image build on every push/PR; on a `vA.B.C` tag — push to GHCR using only `GITHUB_TOKEN`.
 
 **DoD:**

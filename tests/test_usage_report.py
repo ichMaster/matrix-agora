@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from agents import usage_report
-from agents.usage import aggregate, cost, parse_lines, render, usage_line
+from agents.usage import aggregate, cost, daily_report, parse_lines, render, usage_line
 
 META = SimpleNamespace(prompt_token_count=1200, candidates_token_count=80, total_token_count=1280)
 
@@ -82,3 +82,76 @@ def test_days_below_one_is_rejected_not_silent(tmp_path, days, capsys):
     with pytest.raises(SystemExit) as exc:
         usage_report.main(["--state-dir", str(tmp_path), "--days", days])
     assert exc.value.code == 2 and "--days" in capsys.readouterr().err  # code review #3
+
+
+# --- the daily report (v3.1.1) ---
+KYIV = __import__("zoneinfo").ZoneInfo("Europe/Kyiv")
+
+
+def rec(ts, agent="ada", kind="reply", p=1000, o=100, ok=True):
+    return {"ts": ts, "agent": agent, "kind": kind, "model": "m", "prompt_tokens": p, "output_tokens": o,
+            "total_tokens": None if p is None else p + o, "ok": ok}
+
+
+DAILY = [
+    rec("2026-10-01T10:00:00+03:00", p=500, o=50),                          # the day before yesterday
+    rec("2026-10-02T09:00:00+03:00"),
+    rec("2026-10-02T09:05:00+03:00", agent="bruno"),
+    rec("2026-10-02T23:59:00+03:00", kind="summary", p=3000, o=300),
+    rec("2026-10-02T12:00:00+03:00", kind="plan", p=None, o=None, ok=False),
+    rec("2026-09-20T12:00:00+03:00", p=7000, o=700),                        # outside the 7 days
+    rec("2026-10-03T08:00:00+03:00", agent="bruno"),                        # today
+]
+
+
+def test_daily_report_sections_and_statistics():
+    from datetime import datetime
+    md = daily_report(DAILY, datetime(2026, 10, 3, 7, 0, tzinfo=KYIV), 0.30, 2.50)
+    assert md.startswith("# Token usage — 2026-10-03")
+    assert "Prices: $0.30 input / $2.50 output" in md
+    y = md.split("## Yesterday — 2026-10-02")[1].split("## Last 7 days")[0]
+    assert "| ada | 3 | 1 | 4,000 | 400 | 4,400 |" in y and "| bruno | 1 | 0 | 1,000 | 100 | 1,100 |" in y
+    assert "| **all** | 4 | 1 | 5,000 | 500 | 5,500 |" in y
+    assert "vs 2026-10-01: calls +300%, tokens +900%, cost +900%" in y
+    kinds = y.split("### By kind")[1].split("### By agent")[0]
+    assert kinds.index("| summary |") < kinds.index("| reply |") < kinds.index("| plan |")  # by share of tokens
+    assert "| summary | 1 | 60% | 3,000 | 300 | 0 |" in kinds and "| reply | 2 | 40% | 1,000 | 100 | 0 |" in kinds
+    week = md.split("## Last 7 days — 2026-09-26 … 2026-10-02")[1].split("## Month")[0]
+    assert week.count("| 2026-") == 7 and "| 2026-09-26 | 0 |" in week          # empty days are listed
+    assert "| **total** | 5 | 1 | 5,500 | 550 | 6,050 |" in week and "Busiest day: 2026-10-02" in week
+    month = md.split("## Month so far — 2026-10 (days 1–2 of 31)")[1].split("## Today")[0]
+    assert "5 calls · 1 failed · 6,050 tokens" in month
+    assert f"projected month ${(5500 * 0.30 + 550 * 2.50) / 1e6 / 2 * 31:.2f}" in month
+    today = md.split("## Today so far — until 07:00")[1]
+    assert "| bruno | 1 | 0 | 1,000 | 100 | 1,100 |" in today and "Calls by kind: reply 1." in today
+
+
+def test_daily_report_without_prices_or_data():
+    from datetime import datetime
+    md = daily_report([], datetime(2026, 10, 3, 7, 0, tzinfo=KYIV))
+    assert "No prices set" in md and "cost" not in md and "$" not in md.replace("`", "")
+    assert "No Gemini calls." in md and "No Gemini calls yet." in md
+
+
+def test_on_the_first_the_month_is_the_whole_previous_month():
+    from datetime import datetime
+    one = rec("2026-10-31T12:00:00+02:00", p=1_000_000, o=100_000)            # $0.30 + $0.25
+    md = daily_report([one], datetime(2026, 11, 1, 7, 0, tzinfo=KYIV), 0.30, 2.50)
+    assert "## Month so far — 2026-10 (days 1–31 of 31)" in md
+    assert "$0.5500 · projected month $0.55" in md
+
+
+def test_write_daily_end_to_end(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(usage_report, "load_dotenv", lambda: None)
+    monkeypatch.delenv("PRICE_INPUT_PER_1M", raising=False)
+    monkeypatch.delenv("PRICE_OUTPUT_PER_1M", raising=False)
+    state, out = tmp_path / "state", tmp_path / "reports"
+    state.mkdir()
+    (state / "ada.usage.jsonl").write_text("\n".join(json.dumps(r) for r in DAILY), encoding="utf-8")
+    assert usage_report.main(["--state-dir", str(state), "--write", str(out)]) == 0
+    dated = capsys.readouterr().out.strip()
+    assert dated.endswith(".md") and (out / "latest.md").read_text() == (out / dated.rsplit("/", 1)[1]).read_text()
+    assert "# Token usage — " in (out / "latest.md").read_text() and not list(out.glob("*.tmp"))
+    (out / "latest.md").write_text("old", encoding="utf-8")
+    usage_report.main(["--state-dir", str(state), "--write", str(out)])
+    assert (out / "latest.md").read_text() != "old"                          # rewritten every run

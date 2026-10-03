@@ -9,3 +9,4 @@ __pycache__/
 .DS_Store
 server_con.yaml
 .ship-solution-progress.md
+reports/
