@@ -7,6 +7,7 @@ The nio callbacks stay thin adapters; every decision lives in agents/logic.py.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import random
@@ -67,6 +68,7 @@ from agents.plans import (
 )
 from agents.session import load_session, save_session
 from agents.turns import bot_streak, decide_reply, is_pass, streak_frees_at
+from agents.usage import usage_line
 from agents.world import (
     MONTHS_NOM,
     day_label,
@@ -89,7 +91,7 @@ class Agent:
         self.other = OTHER.get(cfg.localpart)
         self.client = AsyncClient(cfg.homeserver, cfg.user_id)
         self.started = False  # flips True after the first sync; nothing earlier is handled
-        self.llm = llm or GeminiClient()
+        self.llm = llm or GeminiClient(sink=self.record_usage)
         self.history: list[tuple[str, str]] = []
         self.history_n = int(os.environ.get("HISTORY_N", "30"))
         self.max_bot_turns = int(os.environ.get("MAX_BOT_TURNS", "2"))
@@ -383,7 +385,8 @@ class Agent:
                     coarser, strip_tags(prev) if prev else None, yesterday,
                     mutations, self.plan_max_words,
                 )
-                text = await self.llm.generate(contents, system, max_output_tokens=self.plan_max_words * 3)
+                text = await self.llm.generate(contents, system, max_output_tokens=self.plan_max_words * 3,
+                                               kind="plan")
                 if text is None:
                     log.error("plan %s failed — will retry later", horizon)
                     return
@@ -408,6 +411,22 @@ class Agent:
         return "Твої плани:\n" + "\n\n".join(parts) if parts else None
 
     # --- v2.2: the chronicle -----------------------------------------------------
+    @property
+    def usage_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.usage.jsonl"
+
+    def record_usage(self, kind: str, model: str, usage, ok: bool) -> None:
+        """One JSON line per Gemini call (v3.1) — no texts; a write error never blocks."""
+        try:
+            line = usage_line(local_now(self.clock(), self.tz).isoformat(timespec="seconds"),
+                              self.cfg.localpart, kind, model, usage, ok)
+            self.usage_file.parent.mkdir(parents=True, exist_ok=True)
+            with self.usage_file.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(line, ensure_ascii=False) + "\n")
+            os.chmod(self.usage_file, 0o600)
+        except Exception:
+            log.exception("usage line not written (the conversation continues)")
+
     @property
     def today_file(self) -> Path:
         return self.memory_file.parent / f"{self.cfg.localpart}.today.md"
@@ -479,7 +498,8 @@ class Agent:
         )
         text = None
         for _attempt in range(2):  # one regeneration when it copies the story
-            text = await self.llm.generate(contents, system, max_output_tokens=self.max_words["day"] * 3)
+            text = await self.llm.generate(contents, system, max_output_tokens=self.max_words["day"] * 3,
+                                           kind="day_memory")
             if text is None:
                 log.error("day memory %s failed — will retry later", d)
                 return False
@@ -512,7 +532,8 @@ class Agent:
             return True
         system, contents = digest_request(kind, self.cfg.name, self.cfg.canon, label, texts, plan,
                                           self.max_words[kind])
-        text = await self.llm.generate(contents, system, max_output_tokens=self.max_words[kind] * 3)
+        text = await self.llm.generate(contents, system, max_output_tokens=self.max_words[kind] * 3,
+                                       kind="digest")
         if text is None:
             log.error("%s digest %s failed — will retry later", kind, key)
             return False
@@ -578,7 +599,8 @@ class Agent:
             self._read(self._dir("days") / f"{now.date().isoformat()}.talk.md"),
             previous, self.max_words["today"],
         )
-        text = await self.llm.generate(contents, system, max_output_tokens=self.max_words["today"] * 3)
+        text = await self.llm.generate(contents, system, max_output_tokens=self.max_words["today"] * 3,
+                                       kind="today")
         if text is None:
             log.error("today block failed — keeping the previous one")
             return
@@ -608,7 +630,7 @@ class Agent:
                 await self.ensure_today(local_now(self.clock(), self.tz))
             except Exception:
                 log.exception("today block refresh failed (reply continues)")
-            text = await self.llm.generate(build_transcript(self.history), self.build_prompt())
+            text = await self.llm.generate(build_transcript(self.history), self.build_prompt(), kind="reply")
             if text is None:
                 return  # already logged; stay silent
             others = [n for n in {*self.names.values()} if n != self.cfg.name]
@@ -642,7 +664,8 @@ class Agent:
             system, contents = build_summary_request(
                 self.cfg.name, self.cfg.canon, self.summary, snapshot, self.summary_max_words,
             )
-            text = await self.llm.generate(contents, system, max_output_tokens=self.summary_max_words * 3)
+            text = await self.llm.generate(contents, system, max_output_tokens=self.summary_max_words * 3,
+                                           kind="summary")
             if text is None:
                 log.error("session summary failed — keeping the previous one")
                 return False

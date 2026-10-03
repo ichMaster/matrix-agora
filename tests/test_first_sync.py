@@ -18,7 +18,7 @@ class FakeLLM:
         self.text = text
         self.calls = []
 
-    async def generate(self, transcript, system_instruction, max_output_tokens=400):
+    async def generate(self, transcript, system_instruction, max_output_tokens=400, kind="reply"):
         self.calls.append((transcript, system_instruction))
         return self.text
 
@@ -68,7 +68,7 @@ def test_after_first_sync_the_owner_gets_a_reply():
 
 def test_failed_llm_means_silence_and_typing_reset():
     class FailingLLM(FakeLLM):
-        async def generate(self, transcript, system_instruction):
+        async def generate(self, transcript, system_instruction, **kw):
             return None
 
     agent = make_agent(llm=FailingLLM())

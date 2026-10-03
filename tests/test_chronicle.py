@@ -82,7 +82,7 @@ class SeqLLM(FakeLLM):
         super().__init__()
         self.texts = list(texts)
 
-    async def generate(self, transcript, system_instruction, max_output_tokens=400):
+    async def generate(self, transcript, system_instruction, max_output_tokens=400, kind="reply"):
         self.calls.append((transcript, system_instruction))
         return self.texts.pop(0) if self.texts else "- пункт"
 
