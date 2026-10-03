@@ -24,7 +24,7 @@ def test_loads_both_agents(toml, localpart, password):
     assert cfg.owner == "@ich:agora.lan"
     assert cfg.name and cfg.canon
     assert cfg.canon.startswith("# Агора")  # common first, then personal
-    assert str(cfg.state_file) == f"state/{localpart}.json"
+    assert cfg.state_file.name == f"{localpart}.json"  # the real path is state/<name>.json (isolated here)
 
 
 def test_missing_env_var_is_a_clear_error():
@@ -55,3 +55,13 @@ def test_missing_or_empty_canon_refuses_to_start(tmp_path):
     empty.write_text("   \n")
     with pytest.raises(ConfigError, match="empty"):
         load_canon(common, empty)
+
+
+def test_real_state_paths_are_under_state(monkeypatch):
+    # bypass the isolation fixture: the contract paths themselves
+    from pathlib import Path
+
+    monkeypatch.undo()
+    cfg = load_config("agents/ada.toml", env=ENV)
+    assert cfg.state_file == Path("state/ada.json")
+    assert cfg.memory_file == Path("state/ada.memory.md")

@@ -15,7 +15,7 @@ import signal
 import sys
 import time
 import urllib.parse
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -29,6 +29,18 @@ from nio import (
     SyncError,
 )
 
+from agents.chronicle import (
+    day_memory_request,
+    days_due,
+    digest_request,
+    layer_label,
+    months_due,
+    select_layers,
+    shares_span,
+    today_request,
+    weeks_due,
+    years_due,
+)
 from agents.config import AgentConfig, load_config
 from agents.life import current_chapter, life_section, next_chapter
 from agents.llm import GeminiClient
@@ -104,6 +116,20 @@ class Agent:
         self.plan_max_words = int(os.environ.get("PLAN_MAX_WORDS", "120"))
         self.plan_mutation_rate = float(os.environ.get("PLAN_MUTATION_RATE", "0.3"))
         self._gen_lock = asyncio.Lock()
+        env = os.environ.get
+        self.memory_days = int(env("MEMORY_DAYS", "7"))
+        self.memory_weeks = int(env("MEMORY_WEEKS", "4"))
+        self.memory_months = int(env("MEMORY_MONTHS", "6"))
+        self.max_words = {
+            "day": int(env("DAY_MEMORY_MAX_WORDS", "120")),
+            "week": int(env("WEEK_MEMORY_MAX_WORDS", "150")),
+            "month": int(env("MONTH_MEMORY_MAX_WORDS", "200")),
+            "year": int(env("YEAR_MEMORY_MAX_WORDS", "300")),
+            "today": int(env("TODAY_MAX_WORDS", "100")),
+        }
+        self._gen_retry_ms = 0
+        self._last_world_check_ms = 0
+        self._last_world_day = None
         self._reply_pending = False  # one pending reply per agent; it reads the latest context anyway
         self._last_sent = ""
         self._tasks: set[asyncio.Task] = set()  # strong refs: pending tasks are only weakly referenced
@@ -359,12 +385,188 @@ class Agent:
                 parts.append(f"{names[horizon]}:\n{strip_tags(text)}")
         return "Твої плани:\n" + "\n\n".join(parts) if parts else None
 
-    # v2.2 — filled in by AGORA-021
+    # --- v2.2: the chronicle -----------------------------------------------------
+    @property
+    def today_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.today.md"
+
+    def first_run(self, today):
+        """The agent's first day — memories are never generated before it."""
+        path = self.memory_file.parent / f"{self.cfg.localpart}.first_run.txt"
+        text = self._read(path)
+        if text:
+            return date.fromisoformat(text)
+        session = self.memory_file.parent / f"{self.cfg.localpart}.json"
+        born = today
+        if session.exists():
+            born = min(today, local_now(int(session.stat().st_mtime * 1000), self.tz).date())
+        save_memory(path, born.isoformat())
+        return born
+
+    def _dates_in(self, kind: str) -> set:
+        d = self._dir(kind)
+        out = set()
+        if d.exists():
+            for p in d.glob("*.md"):
+                if p.name.endswith(".talk.md"):
+                    continue
+                stem = p.stem
+                try:
+                    if kind in ("days", "weeks"):
+                        out.add(date.fromisoformat(stem))
+                    elif kind == "months":
+                        y, m = stem.split("-")
+                        out.add((int(y), int(m)))
+                    else:
+                        out.add(int(stem))
+                except ValueError:
+                    continue
+        return out
+
+    def _memory_path(self, kind: str, key) -> Path:
+        if kind == "day":
+            return self._dir("days") / f"{key.isoformat()}.md"
+        if kind == "week":
+            return self._dir("weeks") / f"{key.isoformat()}.md"
+        if kind == "month":
+            return self._dir("months") / f"{key[0]}-{key[1]:02d}.md"
+        return self._dir("years") / f"{key}.md"
+
+    def _chapter_body(self, d) -> str:
+        life = self.cfg.life
+        cur = current_chapter(life, d) if life else None
+        return cur.body if cur else ""
+
+    async def ensure_day_memory(self, d) -> bool:
+        path = self._memory_path("day", d)
+        if path.exists():
+            return True  # never rewritten
+        today = local_now(self.clock(), self.tz).date()
+        prev_days = sorted(x for x in self._dates_in("days") if x < d)[-3:]
+        previous = [(layer_label("day", x, today), self._read(self._memory_path("day", x)) or "")
+                    for x in prev_days]
+        block = self._read(self.today_file)
+        block_text = None
+        if block and block.startswith(f"<!-- {d.isoformat()}T"):
+            block_text = block.split("-->", 1)[1].strip()
+        chapter = self._chapter_body(d)
+        system, contents = day_memory_request(
+            self.cfg.name, self.cfg.canon, d, chapter, previous,
+            self._read(self._dir("days") / f"{d.isoformat()}.talk.md"),
+            self._read(self.plan_paths(d)["day"]), block_text, self.max_words["day"],
+        )
+        text = None
+        for _attempt in range(2):  # one regeneration when it copies the story
+            text = await self.llm.generate(contents, system, max_output_tokens=self.max_words["day"] * 3)
+            if text is None:
+                log.error("day memory %s failed — will retry later", d)
+                return False
+            if not shares_span(text, chapter + "\n" + self.cfg.canon):
+                break
+            log.info("day memory %s copied the story — regenerating", d)
+        save_memory(path, cap_words(text, self.max_words["day"]))
+        return True
+
+    async def ensure_digest(self, kind: str, key) -> bool:
+        path = self._memory_path(kind, key)
+        if path.exists():
+            return True  # never rewritten
+        today = local_now(self.clock(), self.tz).date()
+        if kind == "week":
+            members = [key + timedelta(days=i) for i in range(7)]
+            sources = [("day", d) for d in members if d in self._dates_in("days")]
+            plan = self._read(self._dir("plans") / f"week-{key.isoformat()}.md")
+            label = layer_label("week", key, today)
+        elif kind == "month":
+            sources = [("day", d) for d in sorted(self._dates_in("days")) if (d.year, d.month) == key]
+            plan = self._read(self._dir("plans") / f"month-{key[0]}-{key[1]:02d}.md")
+            label = layer_label("month", key, today)
+        else:
+            sources = [("month", k) for k in sorted(self._dates_in("months")) if k[0] == key]
+            plan = self._read(self._dir("plans") / f"year-{key}.md")
+            label = layer_label("year", key, today)
+        texts = [(layer_label(k, x, today), self._read(self._memory_path(k, x)) or "") for k, x in sources]
+        if not texts:
+            return True
+        system, contents = digest_request(kind, self.cfg.name, self.cfg.canon, label, texts, plan,
+                                          self.max_words[kind])
+        text = await self.llm.generate(contents, system, max_output_tokens=self.max_words[kind] * 3)
+        if text is None:
+            log.error("%s digest %s failed — will retry later", kind, key)
+            return False
+        save_memory(path, cap_words(text, self.max_words[kind]))
+        return True
+
+    async def world_tick(self, force: bool = False) -> None:
+        """Day-boundary work: catch up day memories, digests, then today's plans.
+        Cheap when nothing is due; a failure backs off for 10 minutes."""
+        now_ms = self.clock()
+        today = local_now(now_ms, self.tz).date()
+        if now_ms < self._gen_retry_ms:
+            return
+        if not force and self._last_world_day == today and now_ms - self._last_world_check_ms < 600_000:
+            return
+        if self._gen_lock.locked():
+            return
+        async with self._gen_lock:
+            self._last_world_check_ms, self._last_world_day = now_ms, today
+            first = self.first_run(today)
+            ok = True
+            for d in days_due(today, first, self._dates_in("days"), self.memory_days):
+                ok = ok and await self.ensure_day_memory(d)
+            day_files = self._dates_in("days")
+            for m in weeks_due(today, first, self._dates_in("weeks"), day_files):
+                ok = ok and await self.ensure_digest("week", m)
+            for ym in months_due(today, first, self._dates_in("months"), day_files):
+                ok = ok and await self.ensure_digest("month", ym)
+            for y in years_due(today, first, self._dates_in("years"), self._dates_in("months")):
+                ok = ok and await self.ensure_digest("year", y)
+            if ok:
+                await self.ensure_plans(today)
+                ok = all(p.exists() for p in self.plan_paths(today).values())
+            if not ok:
+                self._gen_retry_ms = now_ms + 600_000
+
     def memories_section(self, now) -> str | None:
-        return None
+        today = now.date()
+        layers = select_layers(
+            today, self.memory_days, self.memory_weeks, self.memory_months,
+            self._dates_in("days"), self._dates_in("weeks"), self._dates_in("months"), self._dates_in("years"),
+        )
+        parts = []
+        for kind, key in layers:
+            text = self._read(self._memory_path(kind, key))
+            if text:
+                parts.append(f"{layer_label(kind, key, today)}: {text}")
+        return "Твої спогади:\n\n" + "\n\n".join(parts) if parts else None
+
+    async def ensure_today(self, now) -> None:
+        """The today block: regenerated when the hour changes; reset at midnight."""
+        path = self.today_file
+        tag = f"<!-- {now.date().isoformat()}T{now.hour:02d} -->"
+        current = self._read(path)
+        if current and current.startswith(tag):
+            return
+        previous = None
+        if current and current.startswith(f"<!-- {now.date().isoformat()}T"):
+            previous = current.split("-->", 1)[1].strip()
+        system, contents = today_request(
+            self.cfg.name, self.cfg.canon, now, self._chapter_body(now.date()),
+            self._read(self.plan_paths(now.date())["day"]),
+            self._read(self._dir("days") / f"{now.date().isoformat()}.talk.md"),
+            previous, self.max_words["today"],
+        )
+        text = await self.llm.generate(contents, system, max_output_tokens=self.max_words["today"] * 3)
+        if text is None:
+            log.error("today block failed — keeping the previous one")
+            return
+        save_memory(path, f"{tag}\n{cap_words(text, self.max_words['today'])}")
 
     def today_section(self, now) -> str | None:
-        return None
+        text = self._read(self.today_file)
+        if not text or not text.startswith(f"<!-- {now.date().isoformat()}T"):
+            return None  # reset at midnight
+        return "Сьогодні:\n" + text.split("-->", 1)[1].strip()
 
     async def reply_later(self, room_id: str, delay_s: float) -> None:
         try:
@@ -380,6 +582,10 @@ class Agent:
         """Typing on → Gemini → m.text; silence on failure or PASS; typing reset in finally."""
         try:
             await self.client.room_typing(room_id, True)
+            try:
+                await self.ensure_today(local_now(self.clock(), self.tz))
+            except Exception:
+                log.exception("today block refresh failed (reply continues)")
             text = await self.llm.generate(build_transcript(self.history), self.build_prompt())
             if text is None:
                 return  # already logged; stay silent
@@ -433,6 +639,10 @@ class Agent:
         interval = max(1.0, min(30.0, self.idle_ms / 4000))
         while True:
             await asyncio.sleep(interval)
+            try:
+                await self.world_tick()
+            except Exception:
+                log.exception("world tick failed (bot keeps running)")
             now = self.clock()
             if (
                 self.session
@@ -460,6 +670,7 @@ class Agent:
             raise RuntimeError(f"first sync failed: {first.message}")
         self.started = True
         await self.join_pending_invites()
+        self._spawn(self.world_tick(force=True))  # startup kick: catch up memories and today's plans
         self.client.add_event_callback(self.on_message, RoomMessageText)
         self.client.add_event_callback(self.on_invite, InviteMemberEvent)
         log.info("%s: entering sync_forever", self.cfg.localpart)
