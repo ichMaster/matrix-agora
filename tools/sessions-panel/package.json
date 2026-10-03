@@ -26,7 +26,7 @@
       { "command": "agoraSessions.refresh", "title": "Refresh", "icon": "$(refresh)", "category": "Claude Sessions" },
       { "command": "agoraSessions.new", "title": "New Session…", "icon": "$(add)", "category": "Claude Sessions" },
       { "command": "agoraSessions.open", "title": "Open", "icon": "$(go-to-file)" },
-      { "command": "agoraSessions.message", "title": "Message…", "icon": "$(comment)" },
+      { "command": "agoraSessions.message", "title": "Send as This Session…", "icon": "$(comment)" },
       { "command": "agoraSessions.attach", "title": "Attach in Terminal", "icon": "$(terminal)" },
       { "command": "agoraSessions.logs", "title": "Show Logs", "icon": "$(output)" },
       { "command": "agoraSessions.stop", "title": "Stop", "icon": "$(debug-stop)" },

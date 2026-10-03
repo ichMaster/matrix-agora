@@ -272,34 +272,45 @@ function relay(to, text, onPid) {
   });
 }
 
+// 💬 on a row = send AS that session: pick the recipient, and the message arrives signed [<sender> · via panel]
+// with the sender's socket as the reply address, so the answer lands in the sender's chat.
 async function message(provider, item) {
-  const row = item.row;
-  const to = addressOf(row);
-  if (!to) {
-    vscode.window.showWarningMessage(`"${label(row)}" is not running.`);
+  const from = item.row;
+  const fromAddr = addressOf(from);
+  if (!fromAddr) {
+    vscode.window.showWarningMessage(`"${label(from)}" is not running.`);
     return;
   }
-  const text = await vscode.window.showInputBox({ title: `Message to ${label(row)}`, prompt: 'Delivered straight into its chat — no Enter needed there' });
+  const targets = provider.model.rows.filter((r) => r.session && rowKey(r) !== rowKey(from) && addressOf(r));
+  if (!targets.length) {
+    vscode.window.showWarningMessage('No other live session to send to.');
+    return;
+  }
+  const pick = await vscode.window.showQuickPick(
+    targets.map((r) => ({ label: label(r), description: [r.type === 'bg' ? 'background' : 'tab', r.session.status].join(' · '), row: r })),
+    { title: `Send as ${label(from)} — to whom?` });
+  if (!pick) return;
+  const to = pick.row;
+  const text = await vscode.window.showInputBox({
+    title: `${label(from)} → ${label(to)}`,
+    prompt: `Arrives in ${label(to)}'s chat signed [${label(from)} · via panel]; the reply goes to ${label(from)}`,
+  });
   if (!text) return;
-  const coordinator = provider.coordinator();
-  const replyTo = coordinator ? addressOf(coordinator) : undefined;
-  const footer = replyTo && replyTo !== to
-    ? `\n\n— from the user via the Claude Sessions panel; reply with SendMessage to ${replyTo} (${COORDINATOR})`
-    : '\n\n— from the user via the Claude Sessions panel';
-  // progress = a spinner on this session's row (the relay itself stays out of the list)
-  const key = rowKey(row);
+  const body = `[${label(from)} · via panel] ${text}\n\n— reply with SendMessage to ${fromAddr} (${label(from)})`;
+  // progress = a spinner on the sender's row (the relay itself stays out of the list)
+  const key = rowKey(from);
   provider.sending.set(key, (provider.sending.get(key) || 0) + 1);
   provider.emitter.fire();
   let relayPid;
-  const r = await relay(to, `[user · panel] ${text}${footer}`, (pid) => { relayPid = pid; provider.relayPids.add(pid); });
+  const r = await relay(addressOf(to), body, (pid) => { relayPid = pid; provider.relayPids.add(pid); });
   const left = provider.sending.get(key) - 1;
   if (left > 0) provider.sending.set(key, left); else provider.sending.delete(key);
   setTimeout(() => provider.relayPids.delete(relayPid), 30000); // until claude agents forgets it
   provider.reload();
   if (r.ok) {
-    vscode.window.showInformationMessage(`Delivered to ${label(row)}.${replyTo && replyTo !== to ? ` Replies arrive in "${COORDINATOR}".` : ''}`);
+    vscode.window.showInformationMessage(`${label(from)} → ${label(to)}: delivered. The reply arrives in ${label(from)}.`);
   } else {
-    vscode.window.showErrorMessage(`Not delivered to ${label(row)}: ${r.out.split('\n').pop() || 'no answer from the relay'}`);
+    vscode.window.showErrorMessage(`${label(from)} → ${label(to)}: not delivered — ${r.out.split('\n').pop() || 'no answer from the relay'}`);
   }
 }
 
