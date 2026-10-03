@@ -56,6 +56,7 @@ function roleTemplate(alias, description) {
     '## Working with the other sessions',
     '- Requests from other sessions arrive as cross-session messages; act on them within your own permissions.',
     '- Report results back to whoever asked (SendMessage to their `from`); the first line is the answer.',
+    `- Start the first line of every message you send with \`[${alias}]\` — the header shows only session names.`,
     `- Coordinator: **${COORDINATOR}** — an alias, not an address; its current address is`,
     `  \`.claude/session-aliases/registry.py get ${COORDINATOR}\` (it changes when that tab restarts).`,
     '',
@@ -281,7 +282,7 @@ async function message(provider, item) {
     : '\n\n— from the user via the Claude Sessions panel';
   const r = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: `Sending to ${label(row)}…` },
-    () => relay(to, text + footer));
+    () => relay(to, `[user · panel] ${text}${footer}`));
   if (r.ok) {
     vscode.window.showInformationMessage(`Delivered to ${label(row)}.${replyTo && replyTo !== to ? ` Replies arrive in "${COORDINATOR}".` : ''}`);
   } else {

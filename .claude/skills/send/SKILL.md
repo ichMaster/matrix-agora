@@ -19,7 +19,9 @@ Otherwise:
    `/join <alias>` there. Don't send.
 3. **Who am I.** `echo uds:$CLAUDE_CODE_MESSAGING_SOCKET` is this session's address;
    `registry.py who <that>` gives its alias (may be empty).
-4. **Send** with `SendMessage` (`to` = the address): the user's message **verbatim** as the first line, then
+4. **Send** with `SendMessage` (`to` = the address): `[<my alias>] ` + the user's message **verbatim** as the
+   first line (no alias → no prefix; the header shows only session names, so the prefix is how the recipient
+   sees who wrote), then
    a blank line and `— from <my alias>; reply with SendMessage to <my socket>` (no alias → `— from
    <my socket>; …`).
 5. **Report in one line:** `→ <alias> (<address>)`. The reply arrives here on its own as a

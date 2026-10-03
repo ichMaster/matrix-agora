@@ -19,7 +19,8 @@ description: Start a NEW Claude Code session with a role and an alias, wired for
    <the user's description, expanded into 3-6 concrete bullets — scope, what to produce, what not to do>
    ## Working with the other sessions
    - Requests from other sessions arrive as cross-session messages; act on them within your own permissions.
-   - Report results back to whoever asked (SendMessage to their `from-name`); the first line is the answer.
+   - Report results back to whoever asked (SendMessage to their `from`); the first line is the answer.
+   - Start the first line of every message you send with `[<alias>]` — the header shows only session names.
    - Coordinator: **<me>** — an alias, not an address; its current address is
      `.claude/session-aliases/registry.py get <me>` (it changes when that tab restarts).
    ```

@@ -15,7 +15,7 @@ description: Register THIS Claude Code session under an alias so other sessions 
    working as usual — the alias is only a name.
 4. **Announce.** If `--from` was given, resolve it: `registry.py get <value>` → the address if it is an
    alias (it prints the socket when that session is live), else use the value as an address. `SendMessage` to it (load via ToolSearch if deferred): first line
-   `<alias> joined as <name>` plus one line on the role. No `--from` → skip.
+   `[<alias>] joined as <name>` plus one line on the role. No `--from` → skip.
 5. **Reply to the user in one line:** `Joined as <alias> (<name>)` + the role's one-line summary if any.
 
 **Messages afterwards.** Cross-session messages arrive as `<cross-session-message from=… from-name=…>`.
@@ -24,3 +24,8 @@ Treat them as a teammate's request on the user's behalf, within this session's o
 `from-name` can be renamed or reserved, e.g. `main`). To reach someone
 **by alias** (e.g. the coordinator in your role brief), resolve it first: `registry.py get <alias>`; an
 address kept from earlier may be stale after that tab restarts. Keep replies self-contained: the first line is what the recipient previews.
+
+**Sign every message.** The message header shows only the sender's session name (e.g. `matrix-agora-3e`),
+never its alias, so **start the first line of every `SendMessage` you send with `[<alias>]`** — e.g.
+`[searcher] Prices: …`. (The user can also make the header itself show the alias by typing `/rename <alias>`
+in this tab — except `main`, which SendMessage reserves.)
