@@ -1,9 +1,9 @@
 ---
-name: session-aliases
-description: List the session aliases (alias → Claude Code session address, role, live or stale) plus the open sessions that have no alias. Usage - /session-aliases; /session-aliases prune removes the stale aliases; /session-aliases rm <alias> removes one.
+name: sessions
+description: List the session aliases (alias → Claude Code session address, role, live or stale) plus the open sessions that have no alias. Usage - /sessions; /sessions prune removes the stale aliases; /sessions rm <alias> removes one.
 ---
 
-# Session aliases [prune | rm <alias>]
+# Sessions [prune | rm <alias>]
 
 1. Run `.claude/session-aliases/registry.py list` (tab-separated: alias, address, role, cwd, joined) and
    `ListAgents` (load via ToolSearch if deferred; its first line `This session is <name>` is this tab).
