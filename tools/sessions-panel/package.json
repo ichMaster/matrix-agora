@@ -1,0 +1,68 @@
+{
+  "name": "agora-sessions",
+  "displayName": "Claude Sessions",
+  "description": "A VS Code panel for the Claude Code sessions of this workspace: aliases, roles, busy/idle; start, open, message, attach, stop.",
+  "version": "0.1.0",
+  "publisher": "matrix-agora",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/ichMaster/matrix-agora" },
+  "engines": { "vscode": "^1.90.0" },
+  "main": "./extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [{ "id": "agoraSessions", "title": "Claude Sessions", "icon": "media/sessions.svg" }]
+    },
+    "views": {
+      "agoraSessions": [{ "id": "agoraSessions.list", "name": "Sessions" }]
+    },
+    "viewsWelcome": [
+      {
+        "view": "agoraSessions.list",
+        "contents": "No Claude Code sessions in this workspace yet.\n[Start a session](command:agoraSessions.new)"
+      }
+    ],
+    "commands": [
+      { "command": "agoraSessions.refresh", "title": "Refresh", "icon": "$(refresh)", "category": "Claude Sessions" },
+      { "command": "agoraSessions.new", "title": "New Session…", "icon": "$(add)", "category": "Claude Sessions" },
+      { "command": "agoraSessions.open", "title": "Open", "icon": "$(go-to-file)" },
+      { "command": "agoraSessions.message", "title": "Message…", "icon": "$(comment)" },
+      { "command": "agoraSessions.attach", "title": "Attach in Terminal", "icon": "$(terminal)" },
+      { "command": "agoraSessions.logs", "title": "Show Logs", "icon": "$(output)" },
+      { "command": "agoraSessions.stop", "title": "Stop", "icon": "$(debug-stop)" },
+      { "command": "agoraSessions.editRole", "title": "Edit Role", "icon": "$(edit)" },
+      { "command": "agoraSessions.setAlias", "title": "Set Alias…", "icon": "$(tag)" },
+      { "command": "agoraSessions.removeAlias", "title": "Remove Alias", "icon": "$(trash)" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "agoraSessions.new", "when": "view == agoraSessions.list", "group": "navigation@1" },
+        { "command": "agoraSessions.refresh", "when": "view == agoraSessions.list", "group": "navigation@2" }
+      ],
+      "view/item/context": [
+        { "command": "agoraSessions.message", "when": "view == agoraSessions.list && viewItem =~ /\\.live\\./", "group": "inline@1" },
+        { "command": "agoraSessions.open", "when": "view == agoraSessions.list && viewItem =~ /\\.live\\.tab/", "group": "inline@2" },
+        { "command": "agoraSessions.attach", "when": "view == agoraSessions.list && viewItem =~ /\\.live\\.bg/", "group": "inline@2" },
+        { "command": "agoraSessions.stop", "when": "view == agoraSessions.list && viewItem =~ /\\.live\\.bg/", "group": "inline@3" },
+        { "command": "agoraSessions.message", "when": "view == agoraSessions.list && viewItem =~ /\\.live\\./", "group": "1_act@1" },
+        { "command": "agoraSessions.open", "when": "view == agoraSessions.list && viewItem =~ /\\.live\\.tab/", "group": "1_act@2" },
+        { "command": "agoraSessions.attach", "when": "view == agoraSessions.list && viewItem =~ /\\.live\\.bg/", "group": "1_act@2" },
+        { "command": "agoraSessions.logs", "when": "view == agoraSessions.list && viewItem =~ /\\.live\\.bg/", "group": "1_act@3" },
+        { "command": "agoraSessions.stop", "when": "view == agoraSessions.list && viewItem =~ /\\.live\\.bg/", "group": "1_act@4" },
+        { "command": "agoraSessions.editRole", "when": "view == agoraSessions.list && viewItem =~ /\\.alias/", "group": "2_alias@1" },
+        { "command": "agoraSessions.setAlias", "when": "view == agoraSessions.list && viewItem =~ /\\.live\\..*\\.noalias/", "group": "2_alias@2" },
+        { "command": "agoraSessions.removeAlias", "when": "view == agoraSessions.list && viewItem =~ /\\.alias/", "group": "2_alias@3" }
+      ],
+      "commandPalette": [
+        { "command": "agoraSessions.open", "when": "false" },
+        { "command": "agoraSessions.message", "when": "false" },
+        { "command": "agoraSessions.attach", "when": "false" },
+        { "command": "agoraSessions.logs", "when": "false" },
+        { "command": "agoraSessions.stop", "when": "false" },
+        { "command": "agoraSessions.editRole", "when": "false" },
+        { "command": "agoraSessions.setAlias", "when": "false" },
+        { "command": "agoraSessions.removeAlias", "when": "false" }
+      ]
+    }
+  }
+}

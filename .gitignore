@@ -11,3 +11,4 @@ server_con.yaml
 .ship-solution-progress.md
 reports/
 .claude/session-aliases/registry.json
+tools/sessions-panel/*.vsix
