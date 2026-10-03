@@ -124,3 +124,12 @@ def test_near_duplicates_are_detected():
     assert same_message("Саме так. Йому потрібен провідник.", "саме так! Йому потрібен \"провідник\"")
     assert not same_message("так", "ні")
     assert not same_message("", "")
+
+
+def test_full_prompt_order_contract():
+    from agents.logic import build_instruction
+    out = build_instruction("Ада", "КАНОН", "ПІДСУМОК", life="ЖИТТЯ", world="СВІТ",
+                            memories="СПОГАДИ", plans="ПЛАНИ", today="СЬОГОДНІ")
+    order = ["КАНОН", "ЖИТТЯ", "СВІТ", "СПОГАДИ", "ПЛАНИ", "СЬОГОДНІ", "ПІДСУМОК", "Ти — Ада."]
+    idx = [out.index(x) for x in order]
+    assert idx == sorted(idx)

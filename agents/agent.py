@@ -29,6 +29,7 @@ from nio import (
 )
 
 from agents.config import AgentConfig, load_config
+from agents.life import life_section
 from agents.llm import GeminiClient
 from agents.logic import (
     append_history,
@@ -42,6 +43,7 @@ from agents.logic import (
 from agents.memory import build_summary_request, cap_words, load_memory, save_memory, session_ended
 from agents.session import load_session, save_session
 from agents.turns import bot_streak, decide_reply, is_pass, streak_frees_at
+from agents.world import last_talk_line, local_now, now_line
 
 log = logging.getLogger("agent")
 
@@ -77,6 +79,9 @@ class Agent:
         self.last_activity_ms: int | None = None
         self.last_attempt_ms: int | None = None
         self._summary_lock = asyncio.Lock()
+        self.location = os.environ.get("LOCATION", "Львів, Україна")
+        self.tz = os.environ.get("TIMEZONE", "Europe/Kyiv")
+        self.summary_ms: int | None = None  # when the last-session summary was written
         self._reply_pending = False  # one pending reply per agent; it reads the latest context anyway
         self._last_sent = ""
         self._tasks: set[asyncio.Task] = set()  # strong refs: pending tasks are only weakly referenced
@@ -226,6 +231,30 @@ class Agent:
         except Exception:
             log.exception("resume failed (bot keeps running)")
 
+    def build_prompt(self) -> str:
+        """The full system instruction for a reply, in contract order."""
+        now = local_now(self.clock(), self.tz)
+        world = now_line(now, self.location)
+        if self.summary_ms is not None:
+            world += " " + last_talk_line(local_now(self.summary_ms, self.tz), now)
+        life = life_section(self.cfg.life, now.date()) if self.cfg.life else None
+        return build_instruction(
+            self.cfg.name, self.cfg.canon, self.summary,
+            life=life, world=world,
+            memories=self.memories_section(now), plans=self.plans_section(now),
+            today=self.today_section(now),
+        )
+
+    # v2.2 sections — filled in by the memory/plan machinery (AGORA-020/021)
+    def memories_section(self, now) -> str | None:
+        return None
+
+    def plans_section(self, now) -> str | None:
+        return None
+
+    def today_section(self, now) -> str | None:
+        return None
+
     async def reply_later(self, room_id: str, delay_s: float) -> None:
         try:
             if delay_s > 0:
@@ -240,10 +269,7 @@ class Agent:
         """Typing on → Gemini → m.text; silence on failure or PASS; typing reset in finally."""
         try:
             await self.client.room_typing(room_id, True)
-            text = await self.llm.generate(
-                build_transcript(self.history),
-                build_instruction(self.cfg.name, self.cfg.canon, self.summary),
-            )
+            text = await self.llm.generate(build_transcript(self.history), self.build_prompt())
             if text is None:
                 return  # already logged; stay silent
             others = [n for n in {*self.names.values()} if n != self.cfg.name]
@@ -284,6 +310,7 @@ class Agent:
             text = cap_words(re.sub(r"^\s*Нотатка\s*:\s*", "", text), self.summary_max_words)
             save_memory(self.memory_file, text)
             self.summary = text
+            self.summary_ms = self.clock()
             self.session = self.session[len(snapshot):]  # keep what arrived meanwhile
             return True
 
@@ -311,6 +338,7 @@ class Agent:
     async def run(self) -> None:
         self.summary = load_memory(self.memory_file)
         if self.summary:
+            self.summary_ms = int(self.memory_file.stat().st_mtime * 1000)
             log.info("%s: last-session memory loaded", self.cfg.localpart)
         await self.login()
         # First sync: only to obtain next_batch; its events are never handled.

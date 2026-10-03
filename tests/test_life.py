@@ -1,0 +1,52 @@
+from datetime import date
+from pathlib import Path
+
+import pytest
+
+from agents.life import LifeError, current_chapter, life_section, next_chapter, parse_life
+
+ADA = parse_life(Path("agents/canon/ada.life.md").read_text(encoding="utf-8"))
+BRUNO = parse_life(Path("agents/canon/bruno.life.md").read_text(encoding="utf-8"))
+TODAY = date(2026, 10, 3)
+
+
+def test_headers_parse():
+    assert ADA.birth == date(1994, 2, 7) and ADA.birth_time == "05:40" and ADA.birth_place == "Львів"
+    assert BRUNO.birth == date(1990, 12, 4) and BRUNO.birth_time == "23:15"
+    assert ADA.death.year == 2079 and BRUNO.death.year == 2072
+
+
+def test_current_and_next_chapter():
+    assert current_chapter(ADA, TODAY).start == 2024
+    assert next_chapter(ADA, TODAY).start == 2028
+    assert current_chapter(BRUNO, TODAY).start == 2024
+
+
+def test_year_boundaries_move_the_story():
+    assert current_chapter(ADA, date(2027, 12, 31)).start == 2024
+    assert current_chapter(ADA, date(2028, 1, 1)).start == 2028
+
+
+@pytest.mark.parametrize("story", [ADA, BRUNO])
+def test_visibility_never_the_future_never_death(story):
+    section = life_section(story, TODAY)
+    assert "Смерть" not in section and str(story.death.year) not in section
+    for ch in story.chapters:
+        if ch.start > TODAY.year:
+            assert ch.opening not in section, ch.title
+            assert ch.title not in section
+    assert "Твоє життя досі" in section
+    assert current_chapter(story, TODAY).body in section
+
+
+def test_future_people_never_leak():
+    assert "Маркіян" not in life_section(ADA, TODAY)      # Ada's future partner
+    assert "Данило" not in life_section(BRUNO, TODAY)     # Bruno's future son
+
+
+def test_malformed_stories_are_rejected():
+    with pytest.raises(LifeError):
+        parse_life("## 2000–2001 · x\ntext")  # no header
+    bad = "Народження: 1990-01-01, X\nСмерть: 2050-01-01\n## 1990–2000 · a\nx\n\n## 1999–2005 · b\ny"
+    with pytest.raises(LifeError, match="overlap"):
+        parse_life(bad)

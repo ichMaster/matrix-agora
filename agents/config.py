@@ -13,6 +13,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from agents.life import LifeError, LifeStory, parse_life
+
 
 class ConfigError(RuntimeError):
     """A missing or malformed configuration value."""
@@ -30,6 +32,7 @@ class AgentConfig:
     room_id: str
     owner: str
     password: str
+    life: LifeStory | None = None  # the life story (v2.2); optional only for tests
 
     @property
     def localpart(self) -> str:
@@ -72,10 +75,17 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None) -> Age
         data = tomllib.loads(toml_path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
         raise ConfigError(f"agent config not found: {toml_path}") from exc
-    for key in ("name", "user_id", "canon"):
+    for key in ("name", "user_id", "canon", "life"):
         if not str(data.get(key, "")).strip():
             raise ConfigError(f"{toml_path}: missing '{key}'")
     canon = load_canon(COMMON_CANON, Path(str(data["canon"])))
+    life_path = Path(str(data["life"]))
+    try:
+        life = parse_life(life_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ConfigError(f"life story not found: {life_path}") from exc
+    except LifeError as exc:
+        raise ConfigError(f"{life_path}: {exc}") from exc
 
     if env is None:
         load_dotenv()
@@ -91,4 +101,5 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None) -> Age
         room_id=_require(env, "ROOM_ID"),
         owner=_require(env, "OWNER"),
         password=_require(env, f"{localpart.upper()}_PASSWORD"),
+        life=life,
     )

@@ -77,10 +77,23 @@ def same_message(a: str, b: str) -> bool:
     return bool(a) and norm(a) == norm(b)
 
 
-def build_instruction(name: str, canon: str, summary: str | None = None) -> str:
-    """The system instruction, in contract order: canon → last-session memory → rules.
-    Nothing here may say the agent is a model or a bot."""
+def build_instruction(
+    name: str,
+    canon: str,
+    summary: str | None = None,
+    *,
+    life: str | None = None,
+    world: str | None = None,
+    memories: str | None = None,
+    plans: str | None = None,
+    today: str | None = None,
+) -> str:
+    """The system instruction, in contract order (ARCHITECTURE §Prompt assembly):
+    canon → life so far → place and time → memories → plans → today →
+    last-session memory → rules. Empty sections are skipped. Nothing here may
+    say the agent is a model or a bot."""
     parts = [canon]
+    parts += [s for s in (life, world, memories, plans, today) if s]
     if summary:
         parts.append(f"Що ти пам'ятаєш з минулої розмови: {summary}")
     parts.append(
