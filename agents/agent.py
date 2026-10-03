@@ -15,6 +15,7 @@ import signal
 import sys
 import time
 import urllib.parse
+from datetime import timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -29,7 +30,7 @@ from nio import (
 )
 
 from agents.config import AgentConfig, load_config
-from agents.life import life_section
+from agents.life import current_chapter, life_section, next_chapter
 from agents.llm import GeminiClient
 from agents.logic import (
     append_history,
@@ -41,9 +42,27 @@ from agents.logic import (
     should_join_invite,
 )
 from agents.memory import build_summary_request, cap_words, load_memory, save_memory, session_ended
+from agents.plans import (
+    HORIZONS,
+    parse_items,
+    plan_request,
+    render_plan,
+    roll_mutations,
+    split_summary,
+    strip_tags,
+)
 from agents.session import load_session, save_session
 from agents.turns import bot_streak, decide_reply, is_pass, streak_frees_at
-from agents.world import last_talk_line, local_now, now_line
+from agents.world import (
+    MONTHS_NOM,
+    day_label,
+    last_talk_line,
+    local_now,
+    month_label,
+    now_line,
+    week_label,
+    year_label,
+)
 
 log = logging.getLogger("agent")
 
@@ -82,6 +101,9 @@ class Agent:
         self.location = os.environ.get("LOCATION", "Львів, Україна")
         self.tz = os.environ.get("TIMEZONE", "Europe/Kyiv")
         self.summary_ms: int | None = None  # when the last-session summary was written
+        self.plan_max_words = int(os.environ.get("PLAN_MAX_WORDS", "120"))
+        self.plan_mutation_rate = float(os.environ.get("PLAN_MUTATION_RATE", "0.3"))
+        self._gen_lock = asyncio.Lock()
         self._reply_pending = False  # one pending reply per agent; it reads the latest context anyway
         self._last_sent = ""
         self._tasks: set[asyncio.Task] = set()  # strong refs: pending tasks are only weakly referenced
@@ -245,11 +267,100 @@ class Agent:
             today=self.today_section(now),
         )
 
-    # v2.2 sections — filled in by the memory/plan machinery (AGORA-020/021)
-    def memories_section(self, now) -> str | None:
-        return None
+    # --- v2.2: files under state/ -------------------------------------------------
+    def _dir(self, kind: str) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.{kind}"
+
+    def append_journal(self, text: str) -> None:
+        """The day's conversation journal: session-only notes with their time."""
+        now = local_now(self.clock(), self.tz)
+        path = self._dir("days") / f"{now.date().isoformat()}.talk.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(f"[{now:%H:%M}] {text.strip()}\n")
+        os.chmod(path, 0o600)
+
+    def _read(self, path: Path) -> str | None:
+        try:
+            return path.read_text(encoding="utf-8").strip() or None
+        except (FileNotFoundError, UnicodeDecodeError, OSError):
+            return None
+
+    def plan_paths(self, today) -> dict[str, Path]:
+        monday = today - timedelta(days=today.weekday())
+        d = self._dir("plans")
+        return {
+            "year": d / f"year-{today.year}.md",
+            "month": d / f"month-{today.year}-{today.month:02d}.md",
+            "week": d / f"week-{monday.isoformat()}.md",
+            "day": d / f"{today.isoformat()}.md",
+        }
+
+    def _previous_plan_path(self, horizon: str, today) -> Path:
+        if horizon == "day":
+            prev = today - timedelta(days=1)
+        elif horizon == "week":
+            prev = today - timedelta(days=7)
+        elif horizon == "month":
+            prev = today.replace(day=1) - timedelta(days=1)
+        else:
+            prev = today.replace(year=today.year - 1)
+        return self.plan_paths(prev)[horizon]
+
+    async def ensure_plans(self, today) -> None:
+        """Generate the missing plans for today, coarse to fine; never rewrite one."""
+        life = self.cfg.life
+        cur = current_chapter(life, today) if life else None
+        nxt = next_chapter(life, today) if life else None
+        paths = self.plan_paths(today)
+        monday = today - timedelta(days=today.weekday())
+        labels = {
+            "year": year_label(today.year),
+            "month": month_label(today.year, today.month),
+            "week": week_label(monday),
+            "day": day_label(today, today + timedelta(days=3)),  # plain weekday + date
+        }
+        coarser: list[tuple[str, str]] = []
+        for horizon in ("year", "month", "week", "day"):
+            path = paths[horizon]
+            existing = self._read(path)
+            if existing is None:
+                n_items = HORIZONS[horizon][0]
+                mutations = roll_mutations(n_items, self.plan_mutation_rate, self.rng)
+                prev = self._read(self._previous_plan_path(horizon, today))
+                yesterday = self._read(self._dir("days") / f"{(today - timedelta(days=1)).isoformat()}.md")
+                system, contents = plan_request(
+                    horizon, self.cfg.name, self.cfg.canon, labels[horizon],
+                    cur.body if cur else "", nxt.opening if nxt else None,
+                    coarser, strip_tags(prev) if prev else None, yesterday,
+                    mutations, self.plan_max_words,
+                )
+                text = await self.llm.generate(contents, system, max_output_tokens=self.plan_max_words * 3)
+                if text is None:
+                    log.error("plan %s failed — will retry later", horizon)
+                    return
+                items = parse_items(text)
+                if not items:
+                    log.error("plan %s came back empty — will retry later", horizon)
+                    return
+                existing = render_plan(items, mutations, self.plan_max_words)
+                save_memory(path, existing)
+                log.info("plan %s written (%d items, %d mutated)", horizon, len(items), sum(map(bool, mutations)))
+            coarser.append((HORIZONS[horizon][1], strip_tags(existing)))
 
     def plans_section(self, now) -> str | None:
+        today = now.date()
+        names = {"year": f"На {today.year} рік", "month": f"На {MONTHS_NOM[today.month - 1]}",
+                 "week": "На цей тиждень", "day": "На сьогодні"}
+        parts = []
+        for horizon, path in self.plan_paths(today).items():
+            text = self._read(path)
+            if text:
+                parts.append(f"{names[horizon]}:\n{strip_tags(text)}")
+        return "Твої плани:\n" + "\n\n".join(parts) if parts else None
+
+    # v2.2 — filled in by AGORA-021
+    def memories_section(self, now) -> str | None:
         return None
 
     def today_section(self, now) -> str | None:
@@ -307,10 +418,12 @@ class Agent:
             if text is None:
                 log.error("session summary failed — keeping the previous one")
                 return False
-            text = cap_words(re.sub(r"^\s*Нотатка\s*:\s*", "", text), self.summary_max_words)
-            save_memory(self.memory_file, text)
-            self.summary = text
+            note, session_part = split_summary(text)
+            note = cap_words(re.sub(r"^\s*Нотатка\s*:\s*", "", note), self.summary_max_words)
+            save_memory(self.memory_file, note)
+            self.summary = note
             self.summary_ms = self.clock()
+            self.append_journal(session_part or note)
             self.session = self.session[len(snapshot):]  # keep what arrived meanwhile
             return True
 
