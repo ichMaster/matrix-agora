@@ -1,9 +1,9 @@
 ---
-name: spawn-session
-description: Start a NEW Claude Code session with a role and an alias, wired for messaging. By default it runs in the BACKGROUND (a detached tmux session, survives closing VS Code tabs); --tab opens it as a VS Code tab instead (it joins by itself, no Enter needed). Usage - /spawn-session <alias> [--tab] [role description]. Writes the role brief; the new session runs /join and announces itself here.
+name: spawn
+description: Start a NEW Claude Code session with a role and an alias, wired for messaging. By default it runs in the BACKGROUND (a detached tmux session, survives closing VS Code tabs); --tab opens it as a VS Code tab instead (it joins by itself, no Enter needed). Usage - /spawn <alias> [--tab] [role description]. Writes the role brief; the new session runs /join and announces itself here.
 ---
 
-# Spawn session: <alias> [--tab] [role description]
+# Spawn: <alias> [--tab] [role description]
 
 1. **Validate** the alias: lowercase `a-z 0-9 _ -`, max 40 chars, starting with a letter or digit. Check
    `.claude/session-aliases/registry.py list`: if the alias is taken by a **live** session (in
@@ -45,7 +45,7 @@ description: Start a NEW Claude Code session with a role and an alias, wired for
    2. `open "vscode://anthropic.claude-code/open"` — a new, empty Claude tab (the link can pre-type a
       prompt but never submit it, so don't pre-type).
    3. `sleep 6`, then `ListAgents` again. Exactly one new row of this project → `SendMessage` to it:
-      `Run /join <alias> --from <me> — you were just opened by /spawn-session.` An idle session
+      `Run /join <alias> --from <me> — you were just opened by /spawn.` An idle session
       wakes on a message, so it joins without the user pressing anything.
    4. No new row, or several (tabs opened at the same moment) → don't guess: tell the user to type
       `/join <alias> --from <me>` in the new tab.

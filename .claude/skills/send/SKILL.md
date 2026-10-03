@@ -1,6 +1,6 @@
 ---
 name: send
-description: Send a message to another Claude Code session by its alias (from /join or /spawn-session), a unique alias prefix, or its raw address. Usage - /send <alias> <message>; /send with no arguments lists the aliases and which are live.
+description: Send a message to another Claude Code session by its alias (from /join or /spawn), a unique alias prefix, or its raw address. Usage - /send <alias> <message>; /send with no arguments lists the aliases and which are live.
 ---
 
 # Send: <alias> <message>

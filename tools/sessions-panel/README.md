@@ -1,7 +1,7 @@
 # Claude Sessions (VS Code panel)
 
 A sidebar panel for the Claude Code sessions of the open workspace — the UI for the session skills
-(`/spawn-session`, `/join`, `/send`, `/sessions`).
+(`/spawn`, `/join`, `/send`, `/sessions`).
 
 - **List:** every session of this workspace — alias, background or tab, busy / idle / stale, role; refreshes
   every 5 s. Live data: `claude agents --json`; aliases and roles: `.claude/session-aliases/`.

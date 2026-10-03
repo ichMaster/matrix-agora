@@ -2,7 +2,7 @@
 //
 // Live sessions come from `claude agents --json` (the Claude Code binary bundled with the
 // anthropic.claude-code extension); aliases and roles from .claude/session-aliases/ (the same registry the
-// /spawn-session, /join, /send and /sessions skills use). A registry socket
+// /spawn, /join, /send and /sessions skills use). A registry socket
 // uds:/tmp/cc-socks/<pid>.sock ties an alias to a live session by pid.
 'use strict';
 

@@ -1,6 +1,6 @@
 ---
 name: join
-description: Register THIS Claude Code session under an alias so other sessions can message it with /send, and adopt the alias's role brief if one exists. Usage - /join <alias> [--from <alias or address>]. Run it in a new tab opened by /spawn-session (pre-typed) or in any existing tab to name it (e.g. /join agent_a).
+description: Register THIS Claude Code session under an alias so other sessions can message it with /send, and adopt the alias's role brief if one exists. Usage - /join <alias> [--from <alias or address>]. Run it in a new tab opened by /spawn (pre-typed) or in any existing tab to name it (e.g. /join agent_a).
 ---
 
 # Join: <alias> [--from <alias or address>]
