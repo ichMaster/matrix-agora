@@ -1,3 +1,15 @@
+Version 2.2.0 (2026-10-03)
+---------------------------
+- A life story from birth to death for each agent: the past and the current
+  chapter in the prompt, never the future or the death date (AGORA-019)
+- Place, calendar and time in Ukrainian; «востаннє ви говорили…» (AGORA-019)
+- Plans on four horizons (year, month, week, day) with hidden mutations; the
+  next chapter as silent direction (AGORA-020)
+- The day journal; day memories that follow the life with new details; week,
+  month and year digests; nothing lived is deleted; nested memory layers in
+  the prompt; the hourly today block (AGORA-021)
+- The context window survives a restart (AGORA-022)
+
 Version 2.1.0 (2026-10-03)
 ---------------------------
 - Canons (AGORA-016): agents/canon/common.md + ada.md + bruno.md describe
