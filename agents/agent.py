@@ -25,6 +25,8 @@ from nio import (
     InviteMemberEvent,
     LoginResponse,
     MatrixRoom,
+    MessageDirection,
+    RoomMessagesError,
     RoomMessageText,
     SyncError,
 )
@@ -168,6 +170,26 @@ class Agent:
         else:
             log.error("join %s failed: HTTP %s", room_id, resp.status)
         return ok
+
+    def seed_context(self, events_newest_first: list) -> int:
+        """Restart backfill: room messages become context (history + streak
+        timeline), chronologically — never replied to, never re-summarized."""
+        texts = [e for e in reversed(events_newest_first) if isinstance(e, RoomMessageText)]
+        for e in texts[-self.history_n:]:
+            speaker = self.names.get(e.sender, e.sender)
+            self.history = append_history(self.history, speaker, e.body, self.history_n)
+            self.timeline = [*self.timeline, (speaker, int(e.server_timestamp))][-max(self.history_n, 1):]
+        return len(texts[-self.history_n:])
+
+    async def backfill(self, from_token: str) -> None:
+        resp = await self.client.room_messages(
+            self.cfg.room_id, start=from_token, direction=MessageDirection.back, limit=self.history_n,
+        )
+        if isinstance(resp, RoomMessagesError):
+            log.error("context backfill failed: %s", resp.message)
+            return
+        n = self.seed_context(list(resp.chunk))
+        log.info("%s: context seeded with %d room messages", self.cfg.localpart, n)
 
     async def join_pending_invites(self) -> None:
         """Invites that arrived before this start sit in the first sync; the
@@ -668,6 +690,10 @@ class Agent:
         first = await self.client.sync(timeout=10000, full_state=True)
         if isinstance(first, SyncError):
             raise RuntimeError(f"first sync failed: {first.message}")
+        try:
+            await self.backfill(first.next_batch)  # the context survives a restart
+        except Exception:
+            log.exception("context backfill failed (starting without it)")
         self.started = True
         await self.join_pending_invites()
         self._spawn(self.world_tick(force=True))  # startup kick: catch up memories and today's plans
