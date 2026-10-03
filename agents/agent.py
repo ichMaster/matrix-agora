@@ -13,6 +13,7 @@ import os
 import random
 import re
 import signal
+import stat
 import sys
 import time
 import urllib.parse
@@ -421,9 +422,14 @@ class Agent:
             line = usage_line(local_now(self.clock(), self.tz).isoformat(timespec="seconds"),
                               self.cfg.localpart, kind, model, usage, ok)
             self.usage_file.parent.mkdir(parents=True, exist_ok=True)
-            with self.usage_file.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(line, ensure_ascii=False) + "\n")
-            os.chmod(self.usage_file, 0o600)
+            # private from birth (code review #2): created 0600, a looser old file tightened
+            fd = os.open(self.usage_file, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+            try:
+                if stat.S_IMODE(os.fstat(fd).st_mode) != 0o600:
+                    os.fchmod(fd, 0o600)
+                os.write(fd, (json.dumps(line, ensure_ascii=False) + "\n").encode("utf-8"))
+            finally:
+                os.close(fd)
         except Exception:
             log.exception("usage line not written (the conversation continues)")
 

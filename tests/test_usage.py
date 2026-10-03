@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import stat
 from datetime import date, datetime
 from types import SimpleNamespace
@@ -91,6 +92,28 @@ def test_record_usage_writes_a_private_jsonl_line(tmp_path):
     rec = json.loads(raw)
     assert rec["kind"] == "summary" and rec["agent"] == "ada" and rec["ts"].startswith("2026-10-03T09:00")
     assert stat.S_IMODE(agent.usage_file.stat().st_mode) == 0o600
+
+
+def test_usage_file_is_private_from_birth(tmp_path, monkeypatch):
+    agent = make(tmp_path, KindLLM())
+    old = os.umask(0o022)
+    monkeypatch.setattr(os, "chmod", lambda *a, **k: None)  # no after-the-fact chmod (code review #2)
+    try:
+        agent.record_usage("reply", "m", META, True)
+    finally:
+        os.umask(old)
+    assert stat.S_IMODE(agent.usage_file.stat().st_mode) == 0o600
+
+
+def test_a_loose_existing_usage_file_is_tightened(tmp_path):
+    agent = make(tmp_path, KindLLM())
+    agent.usage_file.write_text("", encoding="utf-8")
+    agent.usage_file.chmod(0o644)
+    agent.record_usage("reply", "m", META, True)
+    agent.record_usage("plan", "m", None, False)
+    assert stat.S_IMODE(agent.usage_file.stat().st_mode) == 0o600
+    kinds = [json.loads(line)["kind"] for line in agent.usage_file.read_text(encoding="utf-8").splitlines()]
+    assert kinds == ["reply", "plan"]
 
 
 def test_every_call_site_names_its_kind(tmp_path):
