@@ -51,11 +51,13 @@ def main(argv: list[str]) -> int:
         save(data)
         print(f"{alias} -> {address}")
     elif cmd == "get" and len(args) == 1:
-        entry = data.get(args[0].lower())
-        if not entry:
-            print(f"no alias {args[0]!r}", file=sys.stderr)
+        key = args[0].lower()
+        hits = [key] if key in data else [a for a in data if a.startswith(key)]  # a unique prefix works too
+        if len(hits) != 1:
+            print(f"no alias {args[0]!r}" + (f" (ambiguous: {', '.join(sorted(hits))})" if hits else ""),
+                  file=sys.stderr)
             return 1
-        print(entry["address"])
+        print(data[hits[0]]["address"])
     elif cmd == "who" and len(args) == 1:
         print(next((a for a, e in data.items() if e["address"] == args[0]), ""))
     elif cmd == "rm" and len(args) == 1:

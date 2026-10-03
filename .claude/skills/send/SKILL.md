@@ -11,7 +11,8 @@ whether it has a role. Stop.
 
 Otherwise:
 
-1. **Resolve.** `.claude/session-aliases/registry.py get <alias>` → the address. Not an alias but a name
+1. **Resolve.** `.claude/session-aliases/registry.py get <alias>` → the address (a unique prefix of an
+   alias also resolves, e.g. `sea` → `searcher`). Not an alias but a name
    ListAgents shows → use it as is. Neither → say so, list the aliases, stop.
 2. **Live?** Check the address is in `ListAgents`. If not, say the alias is stale (that tab was closed or
    restarted) and suggest `/join-session <alias>` in that tab. Don't send.
