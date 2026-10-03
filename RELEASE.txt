@@ -1,3 +1,16 @@
+Version 3.1.0 (2026-10-03)
+---------------------------
+- Token accounting: one text-free JSON line per Gemini call in
+  state/<name>.usage.jsonl (reply, summary, plan, day_memory, digest, today),
+  private (0600), never blocking the conversation (AGORA-024)
+- Token report: uv run agents/usage_report.py [--days N] [--since DATE]
+  [--markdown] -- calls and tokens by day x agent x kind, totals, cost from
+  PRICE_INPUT_PER_1M / PRICE_OUTPUT_PER_1M in .env (AGORA-025)
+- Verified live: line counts match the Gemini calls, report sums match the
+  files (AGORA-026)
+- Review fixes: malformed lines are skipped, not a crash; the usage file is
+  0600 from birth; --days below 1 is rejected
+
 Version 2.2.1 (2026-10-03)
 ---------------------------
 - Plans never telegraph which intentions will fail (no hedging; unhedge
