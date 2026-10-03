@@ -104,7 +104,7 @@ function terminal(name, command) {
 const quote = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
 
 // --- the model ------------------------------------------------------------------------------
-async function buildModel(bgIds) {
+async function buildModel(bgIds, hiddenPids) {
   const registry = readRegistry();
   const live = await liveSessions();
   const cwd = root();
@@ -117,7 +117,8 @@ async function buildModel(bgIds) {
     rows.push({ alias, entry, session, type: typeOf(entry, session), bgId: bgIds[alias] });
   }
   for (const s of live || []) {
-    if (s.cwd === cwd && !used.has(s.sessionId)) rows.push({ session: s, type: typeOf(undefined, s) });
+    // the panel's own message relays are short-lived sessions too — never list them
+    if (s.cwd === cwd && !used.has(s.sessionId) && !hiddenPids.has(s.pid)) rows.push({ session: s, type: typeOf(undefined, s) });
   }
   rows.sort((a, b) => rank(a) - rank(b) || label(a).localeCompare(label(b)));
   return { rows, liveOk: live !== null };
@@ -130,19 +131,21 @@ function typeOf(entry, session) {
 }
 
 const label = (row) => row.alias || (row.session && row.session.name) || '?';
+const rowKey = (row) => row.alias || (row.session && row.session.sessionId);
 const rank = (row) => (row.alias === COORDINATOR ? 0 : row.alias ? (row.session ? 1 : 2) : 3);
 
 class SessionItem extends vscode.TreeItem {
-  constructor(row) {
+  constructor(row, sending) {
     super(label(row), vscode.TreeItemCollapsibleState.None);
     this.row = row;
     const status = row.session ? row.session.status || 'live' : 'stale';
     const role = row.entry && row.entry.role;
-    this.description = [row.type === 'bg' ? 'background' : 'tab', status, role ? 'role' : null,
+    this.description = [sending ? 'sending…' : null, row.type === 'bg' ? 'background' : 'tab', status, role ? 'role' : null,
       row.alias === COORDINATOR ? 'coordinator' : null, row.alias ? null : 'no alias'].filter(Boolean).join(' · ');
     const icon = !row.session ? 'circle-slash' : status === 'busy' ? 'sync~spin' : row.alias === COORDINATOR ? 'star-full' : 'circle-filled';
     const color = !row.session ? 'disabledForeground' : status === 'busy' ? 'charts.yellow' : 'charts.green';
-    this.iconPath = new vscode.ThemeIcon(icon, new vscode.ThemeColor(color));
+    this.iconPath = sending ? new vscode.ThemeIcon('loading~spin', new vscode.ThemeColor('charts.blue'))
+      : new vscode.ThemeIcon(icon, new vscode.ThemeColor(color));
     const md = new vscode.MarkdownString();
     md.appendMarkdown(`**${label(row)}**${row.alias && row.session && row.session.name !== row.alias ? ` (session "${row.session.name}")` : ''}\n\n`);
     md.appendMarkdown(`- type: ${row.type === 'bg' ? 'background' : 'VS Code tab'}\n- status: ${status}\n`);
@@ -162,9 +165,11 @@ class SessionsProvider {
     this.onDidChangeTreeData = this.emitter.event;
     this.model = { rows: [], liveOk: true };
     this.view = undefined;
+    this.sending = new Map(); // row key -> messages in flight to that session
+    this.relayPids = new Set(); // pids of our own relay processes, hidden from the list
   }
   async reload() {
-    this.model = await buildModel(this.state.get('bgIds', {}));
+    this.model = await buildModel(this.state.get('bgIds', {}), this.relayPids);
     if (this.view) this.view.message = this.model.liveOk ? undefined : 'Live status unavailable (claude agents failed) — showing aliases only.';
     this.emitter.fire();
   }
@@ -172,7 +177,7 @@ class SessionsProvider {
     return item;
   }
   getChildren() {
-    return this.model.rows.map((row) => new SessionItem(row));
+    return this.model.rows.map((row) => new SessionItem(row, this.sending.has(rowKey(row))));
   }
   coordinator() {
     return this.model.rows.find((r) => r.alias === COORDINATOR && r.session);
@@ -243,7 +248,7 @@ function addressOf(row) {
   return undefined;
 }
 
-function relay(to, text) {
+function relay(to, text, onPid) {
   const prompt = [
     'You are a message relay. Make exactly one SendMessage call (load it first with ToolSearch, query',
     '"select:SendMessage", if it is not loaded) with these two arguments, each the exact JSON string value',
@@ -256,6 +261,7 @@ function relay(to, text) {
     '--strict-mcp-config', '--no-session-persistence'];
   return new Promise((resolve) => {
     const child = cp.spawn(claudeBin(), args, { cwd: root(), stdio: ['pipe', 'pipe', 'pipe'] });
+    if (onPid && child.pid) onPid(child.pid);
     let out = '';
     child.stdout.on('data', (d) => { out += d; });
     child.stderr.on('data', (d) => { out += d; });
@@ -280,9 +286,16 @@ async function message(provider, item) {
   const footer = replyTo && replyTo !== to
     ? `\n\n— from the user via the Claude Sessions panel; reply with SendMessage to ${replyTo} (${COORDINATOR})`
     : '\n\n— from the user via the Claude Sessions panel';
-  const r = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: `Sending to ${label(row)}…` },
-    () => relay(to, `[user · panel] ${text}${footer}`));
+  // progress = a spinner on this session's row (the relay itself stays out of the list)
+  const key = rowKey(row);
+  provider.sending.set(key, (provider.sending.get(key) || 0) + 1);
+  provider.emitter.fire();
+  let relayPid;
+  const r = await relay(to, `[user · panel] ${text}${footer}`, (pid) => { relayPid = pid; provider.relayPids.add(pid); });
+  const left = provider.sending.get(key) - 1;
+  if (left > 0) provider.sending.set(key, left); else provider.sending.delete(key);
+  setTimeout(() => provider.relayPids.delete(relayPid), 30000); // until claude agents forgets it
+  provider.reload();
   if (r.ok) {
     vscode.window.showInformationMessage(`Delivered to ${label(row)}.${replyTo && replyTo !== to ? ` Replies arrive in "${COORDINATOR}".` : ''}`);
   } else {
