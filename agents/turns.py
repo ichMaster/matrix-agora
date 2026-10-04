@@ -19,6 +19,7 @@ NAME_FORMS = {
 }
 
 PASS_RE = re.compile(r"^\W*PASS\W*$")
+TRAILING_PASS_RE = re.compile(r"\s*\bPASS\W*$")
 
 
 @dataclass(frozen=True)
@@ -111,3 +112,14 @@ def decide_reply(
 def is_pass(reply: str) -> bool:
     """Exactly PASS (whitespace/punctuation-tolerant) means: send nothing."""
     return bool(PASS_RE.match(reply.strip()))
+
+
+def strip_pass(reply: str) -> str | None:
+    """The reply without the PASS sentinel, or None when nothing of its own is left.
+
+    The model sometimes writes its text and then PASS — on its own line or at the very end — and the literal word
+    reached the room (2026-10-04 chat). A standalone PASS line and a trailing PASS are dropped; the rest is sent.
+    """
+    kept = [line for line in reply.strip().splitlines() if not PASS_RE.match(line.strip())]
+    text = TRAILING_PASS_RE.sub("", "\n".join(kept).rstrip()).strip()
+    return text if re.search(r"\w", text) else None

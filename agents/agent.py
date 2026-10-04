@@ -69,7 +69,7 @@ from agents.plans import (
 )
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.session import load_session, save_session
-from agents.turns import bot_streak, decide_reply, is_pass, streak_frees_at
+from agents.turns import bot_streak, decide_reply, streak_frees_at, strip_pass
 from agents.usage import usage_line
 from agents.world import (
     MONTHS_NOM,
@@ -645,7 +645,8 @@ class Agent:
             if text is None:
                 log.info("silent: the reply spoke only for others")
                 return
-            if is_pass(text):
+            text = strip_pass(text)  # PASS alone → silence; text + PASS → the text only
+            if text is None:
                 log.info("silent: model passed")
                 return
             if same_message(text, self._last_sent):

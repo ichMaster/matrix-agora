@@ -109,7 +109,7 @@ The agents see each other, so without rules they would reply to each other endle
    - `bot_streak` = consecutive agent messages since the owner's last message **within the last `BOT_WINDOW_S`** (default 600 s), counted by server timestamps. Both agents compute it from the same room timeline, so the count agrees **without any shared state or coordination** — never add any.
    - An owner message resets it to 0.
    - The limit is a **rate, not a lock**: when an agent's reply is blocked by the streak, it pauses until the window frees (the oldest counted turn ages out) and then resumes — only if nothing newer arrived meanwhile. So the agents talk in bursts of at most `MAX_BOT_TURNS` per window until `PASS` or the probability gate ends the exchange; the owner never has to restart it.
-3. **`PASS`:** if the model returns exactly `PASS` (tolerating surrounding whitespace), send nothing. The prompt must explicitly allow this.
+3. **`PASS`:** if the model returns exactly `PASS` (tolerating surrounding whitespace), send nothing. The prompt must explicitly allow this. A `PASS` on its own line or at the very end of a longer reply is dropped and the rest is sent; nothing of its own left → nothing is sent — the sentinel never reaches the room (pinned by `tests/test_turns.py` and `tests/test_first_sync.py`).
 
 ## Canon
 

@@ -1,6 +1,6 @@
 import pytest
 
-from agents.turns import bot_streak, decide_reply, is_pass, mentions
+from agents.turns import bot_streak, decide_reply, is_pass, mentions, strip_pass
 from tests.test_logic import CFG, OTHER
 
 KW = {"max_bot_turns": 2, "bot_reply_p": 0.5, "reply_delay_s": 4.0}
@@ -82,6 +82,20 @@ def test_streak_counts_and_resets_on_owner():
 ])
 def test_pass_detection(text, expect):
     assert is_pass(text) is expect
+
+
+# the 2026-10-04 chat: text + PASS reached the room four times
+@pytest.mark.parametrize("reply,sent", [
+    ("PASS", None), ("  PASS. ", None), ("\nPASS!\n", None), ("…\nPASS", None),
+    ("Гаразд, я пас. Це якась безглузда гра.\n\nPASS", "Гаразд, я пас. Це якась безглузда гра."),
+    ("Ну гаразд, раз ти так, то я теж.\nPASS", "Ну гаразд, раз ти так, то я теж."),
+    ("Типу, ти хочеш, щоб ми тебе розгадали? PASS", "Типу, ти хочеш, щоб ми тебе розгадали?"),
+    ("Перший рядок.\nPASS\nДругий рядок.", "Перший рядок.\nДругий рядок."),
+    ("PASS, але додам", "PASS, але додам"), ("я пас", "я пас"), ("pass", "pass"),
+    ("Слово PASSWORD лишається", "Слово PASSWORD лишається"),
+])
+def test_strip_pass_never_lets_the_sentinel_reach_the_room(reply, sent):
+    assert strip_pass(reply) == sent
 
 
 # --- the streak is a rate over BOT_WINDOW_S, not a lock until the owner speaks ---

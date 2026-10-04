@@ -1,3 +1,5 @@
+import pytest
+
 """The first-sync rule: nothing received before `started` is ever answered."""
 
 import asyncio
@@ -230,3 +232,21 @@ def test_script_continuation_never_reaches_the_room():
 
     asyncio.run(run())
     assert agent.client.room_send.await_args.kwargs["content"]["body"] == "Привіт!"
+
+
+# the 2026-10-04 chat: "text + PASS" sent the literal sentinel to the room
+@pytest.mark.parametrize("reply,sent", [
+    ("Гаразд, я пас. Це якась безглузда гра.\n\nPASS", "Гаразд, я пас. Це якась безглузда гра."),
+    ("PASS", None),
+])
+def test_the_pass_sentinel_never_reaches_the_room(reply, sent):
+    agent = make_agent(llm=FakeLLM(reply))
+    agent.started = True
+    agent.rng = lambda: 0.0
+    room, event = msg(body="Адо, привіт")
+    asyncio.run(run_with_tasks(agent, room, event))
+    if sent is None:
+        agent.client.room_send.assert_not_awaited()
+    else:
+        assert agent.client.room_send.await_args.kwargs["content"]["body"] == sent
+    assert agent.client.room_typing.await_args_list[-1].args == ("!room", False)
