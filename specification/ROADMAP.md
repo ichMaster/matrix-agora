@@ -340,4 +340,4 @@ Builds on the reviewed v3.3 panel. The docker socket now performs actions, so ev
 - (Manual, owner) Homeserver stop from the panel → red health, the agents keep retrying; start → everything recovers on its own.
 - "Forget" works only for a stopped agent, after confirmation; unknown simulation/agent/service names are refused.
 
-**Tests:** unit — the supervisor's actions against a fake docker client (start, stop, timeout → kill; container creation on first start; refusal when the lock is held elsewhere), forget gating, confirmation gating, every mutating route `POST`-only and token-gated; the routes via FastAPI's `TestClient`. No real docker and no network in tests.
+**Tests:** unit — the supervisor's actions against a fake docker client (start, stop, timeout → kill; container creation on first start), forget gating, confirmation gating, every mutating route `POST`-only and token-gated; the routes via FastAPI's `TestClient`. No real docker and no network in tests.
