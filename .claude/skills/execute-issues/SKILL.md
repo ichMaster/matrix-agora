@@ -75,7 +75,7 @@ Follow `CLAUDE.md` and ARCHITECTURE.md. Route by component:
   - turn-taking (v1.2);
   - canon loading and session memory (v2.1), place / calendar / time, day memories, plans and the today block (v2.2), usage accounting
     (v3.1). See ARCHITECTURE.md §Canon, §Memory, §World awareness and §Token accounting.
-- **`panel/`** (v3.3): a FastAPI JSON API + one static page; see ARCHITECTURE.md §The panel. Bearer
+- **`panel/`** (v3.3 viewing, v3.4 control): a FastAPI JSON API + one static page; see ARCHITECTURE.md §The panel. Bearer
   `PANEL_TOKEN` on every route; simulation, service and agent names resolve only through the registry and
   fixed lists (no request data in paths, argv or the docker API); the supervisor is testable with fakes
   (docker client, processes, canned `/proc`); each agent is its own container and the panel launches them.

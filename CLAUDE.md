@@ -23,7 +23,7 @@ Latest release: v3.2.0 (phase v3.2 — agent images, CI/CD and server deployment
 | `v0` Platform | v0.1 homeserver · v0.2 server deploy · v0.3 client · v0.4 accounts+room · v0.5 echo bot | owner steps + the deploy script; first real code in v0.5 |
 | `v1` Conversation | v1.1 Gemini replies · v1.2 turn-taking | code |
 | `v2` Persona & memory | v2.1 canons + session memory · v2.2 a life story, world awareness, plans (with mutations) + day memories + the hourly today block | code + canon files |
-| `v3` Operations | v3.1 token accounting · v3.2 agent images + CI/CD + server deployment · v3.3 the panel (simulations + agents) | code |
+| `v3` Operations | v3.1 token accounting · v3.2 agent images + CI/CD + server deployment · v3.3 the panel: viewing (read-only) · v3.4 the panel: control | code |
 
 ## Layout and commands
 
@@ -31,7 +31,7 @@ See ARCHITECTURE.md §Repository layout for the full tree. The essentials:
 
 - Dev mode on the Mac (one terminal per agent): `scripts/run-agent.sh ada` / `scripts/run-agent.sh bruno`; Ctrl+C stops. Since v3.2 the live agents run on the server — stop the server's container first (`docker compose stop ada` on the host), since the lock is per host; the Mac `state/` is an older copy
 - Production (from v3.2): everything runs on the Ubuntu server; deploy the stack with `server/deploy.sh` (`--dry-run` first; it syncs `server/docker-compose.yml` + the local, gitignored `server/.env`, pulls, `up -d`); never hand-edit files on the host. Each agent is its own container (`ada`, `bruno`, image `ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG}`) — stop with `docker compose stop -t 30 <name>` so the session summary runs; logs in `~/matrix-agora/state/logs/<name>.log`
-- Panel (from v3.3): `http://192.168.1.197:8090`, Bearer `PANEL_TOKEN`
+- Panel (from v3.3, actions from v3.4): `http://192.168.1.197:8090`, Bearer `PANEL_TOKEN`
 - Token report (from v3.1): `uv run agents/usage_report.py --days 7`
 - Daily token report: since v3.2 the compose service `usage-report` writes `~/matrix-agora/reports/usage/latest.md` on the server every day at 07:00 (v3.1.1's Mac launchd job, `scripts/install-usage-daily.sh`, is uninstalled); by hand on the Mac: `scripts/usage-daily.sh`
 - Server (on the Ubuntu host, from `server/`): `docker compose up -d`, then `docker compose logs -f homeserver`

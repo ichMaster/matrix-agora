@@ -87,7 +87,7 @@ defects, not restatements of what works.
   - Does a missing `usage_metadata` crash the bot?
   - Are prices hardcoded?
   - Does the report break on a corrupt line, or on its sums?
-- **The panel (v3.3):**
+- **The panel (v3.3–v3.4):**
   - Is the Bearer token required on every API route (401 without it), and absent from logs and responses?
   - Do simulation, service and agent names resolve only through the registry and fixed lists — can any
     request data reach a filesystem path, an argv or the docker API?
@@ -143,7 +143,7 @@ Decide **FIX NOW vs DEFER** honestly:
 
 - **FIX NOW** means real, small, self-contained, high-value and in scope now: an allowlist hole, a replay on
   restart, a crash that kills sync, a secret in a log.
-- **DEFER →** means larger work, or work a later phase already owns. Give the home: a later phase (`v1.1`…`v3.3`),
+- **DEFER →** means larger work, or work a later phase already owns. Give the home: a later phase (`v1.1`…`v3.4`),
   `backlog` (no phase owns it) or `cleanup (/simplify)`. Do **not** pull it forward.
 
 Commit the doc as the plan (`docs: vA.B code review`) **and push it** if a remote exists. The review is worth

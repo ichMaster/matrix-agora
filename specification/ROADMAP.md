@@ -1,6 +1,6 @@
 # Roadmap — matrix-agora
 
-Four self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Four self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
 **Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v3→3), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
@@ -299,29 +299,45 @@ One image for both agents; **one compose service per agent** (`ada`, `bruno`) jo
 
 **Tests:** CI runs the existing gates unchanged; the image build and the compose gate are the new checks — the pipeline itself is configuration. Unit — the single-instance lock.
 
-### v3.3 — The panel: simulations and agents
+### v3.3 — The panel: viewing (read-only)
 
-**Goal:** one page, served from the server, runs everything — the chat simulation and the agents connected to it — and the model is ready for more simulations later.
+**Goal:** one page, served from the server, shows everything — the chat simulation, the agents connected to it, their memory and spend, and the host — built on a simulation registry that is ready for more simulations later. Nothing on the page changes anything yet.
 
-The panel is the point of the whole project (VISION §The direction): a FastAPI backend plus one static vanilla-JS page (Ukrainian), the `panel` service in `server/docker-compose.yml` (port 8090, `/var/run/docker.sock` and the `state/` directory mounted), deployed by `server/deploy.sh`, Bearer `PANEL_TOKEN` on every API call. Internally everything is written against a **simulation registry** — maintenance, monitoring and deployment code never mentions "the chat"; the PoC registry holds exactly one entry (`agora`, kind `matrix-chat`) and this roadmap adds no second one. Depends on: v3.2 and v0.2.
+The panel is the point of the whole project (VISION §The direction): a FastAPI backend plus one static vanilla-JS page (Ukrainian), the `panel` service in `server/docker-compose.yml` (port 8090, `/var/run/docker.sock`, the `state/` directory and a read-only host mount), deployed by `server/deploy.sh`, Bearer `PANEL_TOKEN` on every API call. Internally everything is written against a **simulation registry** — monitoring code never mentions "the chat"; the PoC registry holds exactly one entry (`agora`, kind `matrix-chat`) and this roadmap adds no second one. In this phase the docker socket is used only for reads (container state, log tails); the actions come in v3.4. Depends on: v3.2 and v0.2.
 
 **Tasks:**
 - `fastapi` + `uvicorn` join the project dependencies; `panel/app.py` + `panel/static/index.html` + `panel/Dockerfile`; the `panel` service in the server compose; ufw allows `:8090` from `192.168.1.0/24` only.
 - The model and registry: `Simulation{id, kind, title, services, health, endpoints}` and `Agent{name, container, canon, simulation}`; `agents/<name>.toml` gains `simulation = "agora"`, from which the agent's `HOMESERVER`/`ROOM_ID` resolve.
-- API (JSON, `Authorization: Bearer` on every route): `GET /health` (+ host basics), `GET /simulations`, `GET /simulations/{id}` (health probe + per-service container state), `POST /simulations/{id}/start|stop|restart`, `GET /simulations/{id}/logs?service=…&tail=200`; `GET /agents`, `POST /agents/{name}/start|stop|restart`, `GET /agents/{name}/logs|memory`, `POST /agents/{name}/forget`, `GET /usage?days=7`.
-- **The panel launches the agent containers**: start = `docker compose up -d <name>` (creates the container when it does not exist yet); stop = `docker stop -t 30` so the session summary runs; names resolve only through the registry and the fixed agent list (unknown → 404; no request data in paths, argv or the docker API).
-- UI cards: the simulation (health, services, logs, start/stop/restart), the agents (state, logs, memory/plans/today, forget, the token table), the host (uptime, disk, memory from `/proc` and a read-only host mount).
-- Confirmations for every stop/restart and forget; mutating actions are `POST` + token.
+- Read-only API (JSON, `Authorization: Bearer` on every route): `GET /health` (+ host basics), `GET /simulations`, `GET /simulations/{id}` (health probe + per-service container state), `GET /simulations/{id}/logs?service=…&tail=200`; `GET /agents`, `GET /agents/{name}` (state, uptime, last activity, where it runs — container or a terminal instance via the lock), `GET /agents/{name}/logs|memory`, `GET /usage?days=7`. Names resolve only through the registry and the fixed agent list (unknown → 404; no request data in paths, argv or the docker API).
+- UI cards, view-only: the simulation (health, services, log tails), the agents (state, where it runs, logs, session summary, day memories, plans, the today block, the 7-day token table), the host (uptime, disk, memory from `/proc` and the read-only host mount). Settings shown read-only with secrets masked.
+- Degrade by card: docker trouble greys the container cards, an unreadable `state/` greys the memory views.
 - CI builds and publishes the panel image (`…-panel`) alongside the agent image.
-- Degrade by card: docker trouble greys the container cards, an unreadable `state/` greys the memory views; a stopped homeserver never crashes the agents (nio retries).
 
 **DoD:**
 - (Manual, owner) `http://192.168.1.197:8090` with the token: the chat simulation and both agents show live state; without the token every API call is 401 and the page shows nothing.
-- (Manual, owner) Agent start/stop/restart from the panel work — including the first launch of a container that does not exist yet; after a stop the session summary exists.
-- (Manual, owner) Homeserver stop from the panel → red health, the agents keep retrying; start → everything recovers on its own.
 - (Manual, owner) Homeserver and agent log tails are readable; memory/plans/today visible; the token table matches `usage_report.py --days 7`; host metrics shown.
-- "Forget" works only for a stopped agent, after confirmation; unknown simulation/agent/service names are refused.
+- Unknown simulation/agent/service names are refused (404); no route mutates anything.
 - (Manual, owner) The panel is unreachable from outside the LAN; `server/deploy.sh` deploys it together with the rest of the stack.
 - The registry holds the single `agora` entry, and the panel resolves everything through it.
 
-**Tests:** unit — the Bearer-token gate (401), registry resolution (unknown simulation/agent/service → 404), the supervisor against a fake docker client (start, stop, timeout → kill; container creation on first start), forget gating, confirmation gating, host-metrics parsing from canned `/proc` files; the routes via FastAPI's `TestClient`. No real docker and no network in tests.
+**Tests:** unit — the Bearer-token gate (401), registry resolution (unknown simulation/agent/service → 404), the read side of the supervisor against a fake docker client (state, log tail), secret masking, host-metrics parsing from canned `/proc` files, the memory views with a missing or unreadable `state/`; the routes via FastAPI's `TestClient`. No real docker and no network in tests.
+
+### v3.4 — The panel: control
+
+**Goal:** the panel runs everything it shows — the agents and the simulation's services start, stop and restart from the page, safely.
+
+Builds on the reviewed v3.3 panel. The docker socket now performs actions, so every action is a `POST` + token, confirmed in the UI, and resolved only through the registry. Depends on: v3.3.
+
+**Tasks:**
+- API: `POST /simulations/{id}/start|stop|restart` (per service of the registry entry), `POST /agents/{name}/start|stop|restart`, `POST /agents/{name}/forget`.
+- **The panel launches the agent containers**: start = `docker compose up -d <name>` (creates the container when it does not exist yet); stop = `docker stop -t 30` so the session summary runs; restart = stop + start. An agent running in a terminal (seen via the lock) is never started a second time.
+- "Forget the last session" deletes `state/<name>.memory.md` — stopped agents only, after confirmation.
+- UI: action buttons on the simulation and agent cards, a confirmation for every stop/restart and forget, progress and result per action.
+- A stopped homeserver never crashes the agents (nio retries); the panel shows red health and recovers on its own after a start.
+
+**DoD:**
+- (Manual, owner) Agent start/stop/restart from the panel work — including the first launch of a container that does not exist yet; after a stop the session summary exists.
+- (Manual, owner) Homeserver stop from the panel → red health, the agents keep retrying; start → everything recovers on its own.
+- "Forget" works only for a stopped agent, after confirmation; unknown simulation/agent/service names are refused; an agent already running in a terminal is not started again.
+
+**Tests:** unit — the supervisor's actions against a fake docker client (start, stop, timeout → kill; container creation on first start; refusal when the lock is held elsewhere), forget gating, confirmation gating, every mutating route `POST`-only and token-gated; the routes via FastAPI's `TestClient`. No real docker and no network in tests.
