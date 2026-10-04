@@ -15,6 +15,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from panel.docker_read import DockerReader
 from panel.health import Prober
@@ -23,6 +24,16 @@ from panel.memory import local_today, memory_view, usage_view
 from panel.registry import Registry
 
 MIN_TOKEN_LEN = 24
+STATIC_DIR = Path(__file__).parent / "static"
+# The page makes no outside requests — and the browser is told to refuse any (v3.3 adoption notes).
+SECURITY_HEADERS = {
+    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+                               "img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; "
+                               "base-uri 'none'; form-action 'self'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+}
 TAIL_MAX = 500
 USAGE_DAYS_MAX = 31
 
@@ -79,9 +90,15 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
         if request.url.path.startswith("/api"):
             given = request.headers.get("authorization", "").encode()
             if not hmac.compare_digest(given, expected):
-                return JSONResponse({"detail": "unauthorized"}, status_code=401,
-                                    headers={"WWW-Authenticate": "Bearer"})
-        return await call_next(request)
+                response = JSONResponse({"detail": "unauthorized"}, status_code=401,
+                                        headers={"WWW-Authenticate": "Bearer"})
+                response.headers.update(SECURITY_HEADERS)
+                return response
+        response = await call_next(request)
+        response.headers.update(SECURITY_HEADERS)
+        if request.url.path.startswith("/api"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     @app.get("/api/simulations")
     def simulations() -> list[dict]:
@@ -157,4 +174,6 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
         lines = dock.logs(found.container, clamp_tail(tail))
         return {"available": lines is not None, "lines": lines or []}
 
+    # the page: served without the token (it holds no data); everything it shows comes from /api/*
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app
