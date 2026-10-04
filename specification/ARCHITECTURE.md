@@ -183,7 +183,7 @@ The panel is the point of the whole project (VISION §The direction). One FastAP
 - **Auth:** the UI asks for the owner token once and sends `Authorization: Bearer` on every call — without it every route is 401 and the page shows nothing. One owner, no accounts.
 - **Confirmations:** every stop/restart and forget is confirmed in the UI; mutating actions are `POST` + token.
 - **Degrade by card:** docker trouble greys the container cards, an unreadable `state/` greys the memory views; a stopped homeserver never crashes the agents (nio retries until it is back).
-- **Views stay safe:** settings are read-only with anything matching `*_KEY` / `*_PASSWORD` / `*_TOKEN` masked; log views are safe because logs never contain tokens or texts; the panel never edits `.env` or canons.
+- **Views stay safe:** there is no settings view — the panel never shows or edits `.env` or canons; log views are safe because logs never contain tokens or texts.
 - **Single instance:** an agent takes `flock` on `state/<name>.lock` (PID inside) at startup, so a second instance on the same host refuses to start. The panel manages containers only and does not detect agents started outside it.
 - **Only what is recorded:** the cards show container state (docker), the `state/` files and the logs; nothing is added to the agents just to feed the panel.
 
@@ -261,7 +261,7 @@ From v3.2 the production values live in `server/.env` on the Ubuntu box (synced 
 | Agents burn credits chatting with each other | at most `MAX_BOT_TURNS` agent turns per `BOT_WINDOW_S`, `BOT_REPLY_P`, `PASS`, `max_output_tokens`; one summary per session; one memory per day; one plan per day and per week; the today block at most once per hour; the usage report shows the spend |
 | Conversation leak | Summaries, journals and day memories live only in `state/`; their texts are never logged |
 | Private data in the public repo | Canons are committed — no secrets, no private data about the owner |
-| Someone on the LAN opens the panel | Bearer `PANEL_TOKEN` required on every API call; ufw limits :8090 to the LAN; secrets masked in views |
+| Someone on the LAN opens the panel | Bearer `PANEL_TOKEN` required on every API call; ufw limits :8090 to the LAN; no view shows a secret (no settings view, logs carry no tokens) |
 | A compromised panel container | it holds the host's docker socket (root-equivalent) — an accepted PoC trade-off: token-gated, LAN-only, never internet-exposed |
 | The deploy password leaks | Key auth after a one-time `ssh-copy-id`; `server_con.yaml` gitignored; the password never in argv, logs or output |
 | Secrets in CI or in the image | CI uses mocks and `GITHUB_TOKEN` only; `.env` and `state/` stay on the host, never in the image |
@@ -346,7 +346,7 @@ Automated gates need no network: `matrix-nio` and `google-genai` are mocked, the
 
 Before v0.5 there is no `pyproject.toml`, so the Python gates are `n/a`, not passed.
 
-- **Unit tests** cover the pure logic: the filter and allowlist, mention detection (Ukrainian case forms), `bot_streak` and who-replies, transcript and prompt assembly (section order), the session-end decision, memory file read/write (missing, corrupt, atomic), calendar strings (including DST switches), which days, plan periods and digest periods need generating, the layered memory selection (no overlap, oldest first), the hourly today-refresh decision, "a past day's memory or plan is never rewritten", `usage_metadata` parsing and aggregation, the panel's supervisor and registry resolution (a fake docker client; an unknown simulation/agent/service → 404), the single-instance lock, secret masking, and the Bearer-token check (401 without the token).
+- **Unit tests** cover the pure logic: the filter and allowlist, mention detection (Ukrainian case forms), `bot_streak` and who-replies, transcript and prompt assembly (section order), the session-end decision, memory file read/write (missing, corrupt, atomic), calendar strings (including DST switches), which days, plan periods and digest periods need generating, the layered memory selection (no overlap, oldest first), the hourly today-refresh decision, "a past day's memory or plan is never rewritten", `usage_metadata` parsing and aggregation, the panel's supervisor and registry resolution (a fake docker client; an unknown simulation/agent/service → 404), the single-instance lock, and the Bearer-token check (401 without the token).
 - **Contract tests** pin the seams in §Contracts; a contract change updates the test in the same commit.
 - **CI** (`.github/workflows/ci.yml`, from v3.2) runs the same gates plus the image builds on every push/PR; a `vA.B.C` tag publishes `:vA.B.C` + `:latest`, a `main` push `:edge` (pinned by `tests/test_ci.py`). No paid keys ever exist in CI.
 - **Manual (owner) checks** are the DoD items that need the live homeserver, Element or a real Gemini key. The read-only `curl` checks may be run by tooling; everything on the Ubuntu host, in Element, or that spends real tokens is performed or confirmed by the owner, and counts as passed only then.
