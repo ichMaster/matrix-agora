@@ -45,7 +45,7 @@ def detect_type() -> tuple[str, str | None]:
     """(type, tmux session) of the session running this script — it inherits that session's environment."""
     if os.environ.get("TMUX"):
         try:
-            name = subprocess.run(["tmux", "display-message", "-p", "#S"], capture_output=True, text=True,
+            name = subprocess.run(["tmux", "display-message", "-p", "#S"], capture_output=True, text=True, check=False,
                                   timeout=5).stdout.strip() or None
         except (OSError, subprocess.SubprocessError):
             name = None
