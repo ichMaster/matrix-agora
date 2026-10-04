@@ -233,3 +233,19 @@ def test_actions_are_logged_by_the_panel(caplog):
     with caplog.at_level(logging.INFO, logger="panel.actions"):
         sup.act("ada", "stop")
     assert any(r.name == "panel.actions" and "action stop ada" in r.getMessage() for r in caplog.records)
+
+
+
+def test_a_failed_compose_up_logs_why(tmp_path, monkeypatch, caplog):
+    import logging
+    import subprocess
+    f = tmp_path / "docker-compose.yml"
+    f.write_text("services: {}\n")
+
+    def fail(argv, **kw):
+        raise subprocess.CalledProcessError(1, argv, stderr=b"pulling...\nno such service: brunoo\n")
+    monkeypatch.setattr("panel.actions.subprocess.run", fail)
+    with caplog.at_level(logging.WARNING, logger="panel.actions"), pytest.raises(ActionError) as e:
+        ComposeRunner("server", str(f)).up("bruno")
+    assert e.value.status == 502
+    assert any("no such service: brunoo" in r.getMessage() for r in caplog.records)  # code review #2

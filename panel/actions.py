@@ -41,7 +41,13 @@ class ComposeRunner:
             subprocess.run(argv, check=True, capture_output=True, timeout=COMPOSE_TIMEOUT_S)
         except subprocess.TimeoutExpired as exc:
             raise ActionError(504, f"compose up {service} timed out") from exc
-        except (subprocess.CalledProcessError, OSError) as exc:
+        except subprocess.CalledProcessError as exc:
+            # why it failed — compose's last stderr line names files and services, not values (code review #2)
+            reason = (exc.stderr or b"").decode("utf-8", "replace").strip().splitlines()[-1:] or ["no output"]
+            log.warning("compose up %s failed: %s", service, reason[0][:200])
+            raise ActionError(502, f"compose up {service} failed") from exc
+        except OSError as exc:
+            log.warning("compose up %s could not run: %s", service, type(exc).__name__)
             raise ActionError(502, f"compose up {service} failed") from exc
 
 
