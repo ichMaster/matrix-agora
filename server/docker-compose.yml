@@ -75,8 +75,8 @@ services:
     restart: unless-stopped
     init: true
     depends_on: [homeserver]
-    ports:
-      - "8090:8090"
+    ports:                                       # the LAN address only: docker bypasses ufw (code review #1)
+      - "${PANEL_BIND:-127.0.0.1}:8090:8090"     # unset → loopback: fails closed
     environment:                                 # only what it needs — never the agents' keys or passwords
       PANEL_TOKEN: ${PANEL_TOKEN:-}              # unset or short → the panel refuses to start
       PRICE_INPUT_PER_1M: ${PRICE_INPUT_PER_1M:-}
