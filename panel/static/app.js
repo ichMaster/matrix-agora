@@ -3,7 +3,7 @@
 // (specification/design/README.md): English UI, the agents' own texts as-is, only what is recorded.
 "use strict";
 
-const POLL_MS = 10000, LOG_POLL_MS = 3000, MEMORY_POLL_MS = 30000;
+const POLL_MS = 10000;  // one tick for everything — the dashboard, an open log, an open agent's memory (owner)
 const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today"];
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
               ["today", "Today"], ["tokens", "Tokens"]];
@@ -12,6 +12,7 @@ const S = {
   token: store(sessionStorage, "agora-token"),
   data: null, fetchedAt: 0, loading: false, gateError: false,
   drawer: null,            // {kind: "agent"|"service", id, tab}
+  drawerFresh: false,      // true only for the render that opens it: the slide-in plays once
   log: {lines: [], available: true, follow: true, seen: 0},
   usageFilter: "all", expandedDays: {}, toast: null,
 };
@@ -74,9 +75,16 @@ async function refresh(manual = false) {
   if (!S.token) return render();
   if (manual) spinRefresh();
   try {
-    S.data = await loadDashboard();
+    const data = await loadDashboard();
+    const same = S.data && JSON.stringify(data) === JSON.stringify(S.data);
+    const openMem = S.drawer?.kind === "agent" ? S.data?.mem[S.drawer.id] : undefined;
+    S.data = data;
+    if (openMem !== undefined) S.data.mem[S.drawer.id] = openMem;  // the drawer's copy is refreshed below
     S.fetchedAt = Date.now();
     S.loading = false;
+    const [logMoved, memMoved] = S.drawer ? await Promise.all([
+      S.log.follow ? loadLog(false) : false, S.drawer.kind === "agent" ? refreshMemory(false) : false]) : [false, false];
+    if (same && !logMoved && !memMoved && !manual) return;  // nothing new: the "updated N s ago" ticker says so
   } catch (err) {
     if (err instanceof Unauthorized) return signOut(true);
     if (S.data) showToast("err", `Refresh failed: ${err.message}`);
@@ -118,6 +126,8 @@ function render() {
     S.data ? dashboardHtml() : skeletonHtml()}</div></main></div>${drawerHtml()}${toastHtml()}`;
   keep.forEach(([sel, top]) => { const el = $(sel); if (el) el.scrollTop = top; });
   if (S.drawer) afterDrawerRender();
+  S.drawerFresh = false;
+  if (S.toast) S.toast.fresh = false;
 }
 
 function gateHtml() {
@@ -346,7 +356,8 @@ function drawerHtml() {
       <div class="drawer-sub mono">${esc(c.image || "")} · container ${esc(dr.id)}</div></div>${pill(cls, label)}`;
     body = logHtml(`last 200 lines · docker logs ${dr.id}`);
   }
-  return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-modal="true">
+  const settled = S.drawerFresh ? "" : "settled";  // re-renders by polling never replay the entrance
+  return `<div class="scrim ${settled}" data-act="close"></div><aside class="drawer ${settled}" role="dialog" aria-modal="true">
     <div class="drawer-head">${head}<button class="btn btn-ghost btn-icon" style="width:34px;height:34px;color:var(--muted)" data-act="close" aria-label="Close">${icon("x", 18)}</button></div>
     ${tabs}${body}</aside>`;
 }
@@ -436,41 +447,54 @@ function afterDrawerRender() {
   S.log.seen = S.log.lines.length;
 }
 
-async function loadLog() {
+async function loadLog(redraw = true) {
   const dr = S.drawer;
   if (!dr || (dr.kind === "agent" && dr.tab !== "log")) return;
   const path = dr.kind === "agent" ? `/api/agents/${encodeURIComponent(dr.id)}/logs?tail=200`
     : `/api/simulations/${encodeURIComponent(dr.sim)}/logs?service=${encodeURIComponent(dr.id)}&tail=200`;
+  let changed = false;
   try {
     const res = await api(path);
+    changed = res.available !== S.log.available || JSON.stringify(res.lines) !== JSON.stringify(S.log.lines);
     S.log.available = res.available; S.log.lines = res.lines;
   } catch (err) { if (err instanceof Unauthorized) return signOut(true); }
-  if (S.drawer === dr) render();
+  if (redraw && S.drawer === dr && changed) render();  // redraw only when the log moved
+  return changed;
 }
 
-async function refreshMemory() {
+async function refreshMemory(redraw = true) {
   const dr = S.drawer;
   if (!dr || dr.kind !== "agent") return;
-  try { S.data.mem[dr.id] = await api(`/api/agents/${encodeURIComponent(dr.id)}/memory`); } catch (err) {
+  let changed = false;
+  try {
+    const mem = await api(`/api/agents/${encodeURIComponent(dr.id)}/memory`);
+    changed = JSON.stringify(mem) !== JSON.stringify(S.data.mem[dr.id]);
+    S.data.mem[dr.id] = mem;
+  } catch (err) {
     if (err instanceof Unauthorized) return signOut(true);
   }
-  if (S.drawer === dr) render();
+  if (redraw && S.drawer === dr && changed) render();
+  return changed;
 }
 
-function openDrawer(dr) {
+async function openDrawer(dr) {
+  // fetch first, then one render: the slide-in plays once, uninterrupted by the data arriving
   S.drawer = dr; S.log = {lines: [], available: true, follow: true, seen: 0};
-  render(); loadLog(); refreshMemory();
+  await Promise.all([loadLog(false), refreshMemory(false)]);
+  if (S.drawer !== dr) return;
+  S.drawerFresh = true;
+  render();
 }
 
 // ── toast, theme, events, timers ─────────────────────────────────────────────
 function toastHtml() {
   if (!S.toast) return "";
-  return `<div class="toast" role="status">${icon(S.toast.kind === "ok" ? "check-circle" : "warning-circle", 18, S.toast.kind)}<span>${esc(S.toast.text)}</span>
+  return `<div class="toast ${S.toast.fresh === false ? "settled" : ""}" role="status">${icon(S.toast.kind === "ok" ? "check-circle" : "warning-circle", 18, S.toast.kind)}<span>${esc(S.toast.text)}</span>
     <button class="btn btn-ghost btn-icon" data-act="toast-close" aria-label="Dismiss">${icon("x", 14)}</button></div>`;
 }
 let toastTimer;
 function showToast(kind, text) {
-  S.toast = {kind, text}; render();
+  S.toast = {kind, text, fresh: true}; render();
   clearTimeout(toastTimer); toastTimer = setTimeout(() => { S.toast = null; render(); }, 4500);
 }
 function spinRefresh() { $('[data-act="refresh"] .ico')?.classList.add("spin"); }
@@ -501,8 +525,6 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && S.drawer
 
 setInterval(() => { const el = $("#refreshed"); if (el && S.data) el.textContent = `updated ${ago((Date.now() - S.fetchedAt) / 1000)}`; }, 1000);
 setInterval(() => { if (S.token && !document.hidden) refresh(); }, POLL_MS);
-setInterval(() => { if (S.drawer && S.log.follow && !document.hidden) loadLog(); }, LOG_POLL_MS);
-setInterval(() => { if (S.drawer?.kind === "agent" && !document.hidden) refreshMemory(); }, MEMORY_POLL_MS);
 
 applyTheme(store(localStorage, "agora-theme") || "dark");
 S.loading = Boolean(S.token);

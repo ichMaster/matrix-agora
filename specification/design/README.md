@@ -24,5 +24,9 @@ The panel's UI (phases v3.3 viewing · v3.4 control).
 4. **No "running in terminal".** The terminal state, its notice and lock-based detection are removed: the panel
    manages containers only. Dev mode on the Mac keeps its rule — stop the server's agent first.
 
+5. **One refresh for everything, every 10 s** — the dashboard, an open log and an open agent's memory load together
+   (the handoff's 2–4 s log / 30 s drawer polling is dropped); the page redraws only when something changed, and
+   the drawer's slide-in plays once when it opens.
+
 Everything else is kept as designed: both themes (dark default), the 760 px breakpoint, the status vocabulary,
 the confirmations (v3.4), the formatting rules, the owner-only "deviation" badge on plans.
