@@ -217,3 +217,19 @@ def test_the_forget_route(state):
     assert c.post("/api/agents/carol/forget", headers=AUTH).status_code == 404
     assert c.post("/api/agents/ada/forget", headers=AUTH).json() == {"ok": True, "forgotten": True}
     assert not (state / "ada.memory.md").exists() and (state / "bruno.memory.md").exists()
+
+
+
+# --- v3.4 review #1: the action events reach the panel's log ---
+def test_actions_are_logged_by_the_panel(caplog):
+    import logging
+
+    from panel.app import panel_logging
+    log = panel_logging()
+    assert log.level == logging.INFO and any(getattr(h, "_panel", False) for h in log.handlers)
+    panel_logging()
+    assert sum(getattr(h, "_panel", False) for h in log.handlers) == 1  # idempotent
+    sup, _, _ = make(Container("ada"))
+    with caplog.at_level(logging.INFO, logger="panel.actions"):
+        sup.act("ada", "stop")
+    assert any(r.name == "panel.actions" and "action stop ada" in r.getMessage() for r in caplog.records)

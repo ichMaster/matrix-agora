@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hmac
+import logging
 import os
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -26,6 +27,23 @@ from panel.memory import local_today, memory_view, usage_view
 from panel.registry import Registry
 
 MIN_TOKEN_LEN = 24
+LOG_FORMAT = "%(asctime)s %(name)s %(levelname)s %(message)s"
+
+
+def panel_logging() -> logging.Logger:
+    """The panel's own events (actions, probe failures) to the console at INFO — `docker logs panel`.
+
+    Uvicorn configures only its own loggers, so without this every action event is dropped (v3.4 review #1).
+    A handler on the `panel` logger, not the root: no side effects on uvicorn or tests.
+    """
+    log = logging.getLogger("panel")
+    if not any(getattr(h, "_panel", False) for h in log.handlers):
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter(LOG_FORMAT))
+        handler._panel = True
+        log.addHandler(handler)
+    log.setLevel(logging.INFO)
+    return log
 STATIC_DIR = Path(__file__).parent / "static"
 # The page makes no outside requests — and the browser is told to refuse any (v3.3 adoption notes).
 SECURITY_HEADERS = {
@@ -62,6 +80,7 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
     if len(token) < MIN_TOKEN_LEN:
         raise RuntimeError(f"PANEL_TOKEN must be set (at least {MIN_TOKEN_LEN} characters) — refusing to start")
     expected = f"Bearer {token}".encode()
+    panel_logging()
     reg = registry or Registry()
     dock = docker_reader or DockerReader(project=os.environ.get("COMPOSE_PROJECT", "server"))
     probe = prober or Prober(reg)
