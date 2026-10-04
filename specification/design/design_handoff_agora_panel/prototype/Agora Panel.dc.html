@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="_ds/nocturne-f0321a84-d3e2-4056-979b-79b1016e5a42/styles.css">
+<script src="_ds/nocturne-f0321a84-d3e2-4056-979b-79b1016e5a42/_ds_bundle.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<style>
+html,body{margin:0;height:100%}
+a{color:var(--accent-ink)}a:hover{color:var(--color-accent)}
+[data-theme]{--muted:color-mix(in srgb,var(--color-text) 64%,transparent);--faint:color-mix(in srgb,var(--color-text) 40%,transparent);--line:color-mix(in srgb,var(--color-text) 9%,transparent);--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--inset:var(--color-bg);--accent-tint:color-mix(in srgb,var(--color-accent) 15%,transparent);--accent-ink:var(--color-accent-300);--scrim:color-mix(in srgb,var(--color-neutral-900) 62%,transparent);--st-ok:oklch(0.78 0.14 155);--st-ok-fg:oklch(0.86 0.1 155);--st-work:var(--color-accent-400);--st-work-fg:var(--color-accent-300);--st-warn:oklch(0.82 0.13 78);--st-warn-fg:oklch(0.88 0.1 82);--st-err:oklch(0.7 0.16 25);--st-err-fg:oklch(0.82 0.1 25);--st-stop:var(--color-neutral-500);--st-stop-fg:var(--color-neutral-300);--st-ok-bg:color-mix(in oklab,var(--st-ok) 15%,transparent);--st-work-bg:color-mix(in oklab,var(--st-work) 17%,transparent);--st-warn-bg:color-mix(in oklab,var(--st-warn) 15%,transparent);--st-err-bg:color-mix(in oklab,var(--st-err) 17%,transparent);color-scheme:dark}
+[data-theme="light"]{--color-bg:#e4e7f5;--color-surface:#f3f5fe;--color-text:#232532;--color-accent:#5d5294;--color-divider:color-mix(in srgb,#232532 16%,transparent);--shadow-sm:0 0 0 1px #cfd3e5;--shadow-md:0 0 0 1px #b2b6ca,0 6px 18px rgba(22,24,38,0.10);--shadow-lg:0 0 0 1px #b2b6ca,0 16px 40px rgba(22,24,38,0.18);--accent-ink:var(--color-accent-700);--scrim:color-mix(in srgb,var(--color-neutral-700) 38%,transparent);--st-ok:oklch(0.6 0.13 155);--st-ok-fg:oklch(0.42 0.1 155);--st-work:var(--color-accent-600);--st-work-fg:var(--color-accent-700);--st-warn:oklch(0.72 0.14 70);--st-warn-fg:oklch(0.46 0.1 62);--st-err:oklch(0.58 0.18 25);--st-err-fg:oklch(0.47 0.16 25);--st-stop:var(--color-neutral-600);--st-stop-fg:var(--color-neutral-700);color-scheme:light}
+@keyframes agoraPulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--st-work) 70%,transparent)}100%{box-shadow:0 0 0 6px transparent}}
+@keyframes agoraSpin{to{transform:rotate(360deg)}}
+@keyframes agoraShimmer{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes agoraIn{from{transform:translateX(28px);opacity:0}to{transform:none;opacity:1}}
+@keyframes agoraUp{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+@keyframes agoraFade{from{opacity:0}to{opacity:1}}
+</style>
+</helmet>
+<div ref="{{ rootRef }}" data-theme="{{ theme }}" data-screen-label="{{ screenLabel }}" style="position:relative;height:{{ rootH }};overflow:hidden;display:flex;flex-direction:column;background:radial-gradient(1100px 520px at -5% -12%, color-mix(in srgb,var(--color-accent) 8%,transparent), transparent 65%), var(--color-bg);color:var(--color-text);font-family:var(--font-body);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased">
+
+<sc-if value="{{ screenGate }}" hint-placeholder-val="{{ false }}">
+  <div style="flex:1;min-height:0;overflow:auto;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse 85% 50% at 50% 112%, color-mix(in srgb,var(--color-accent) 22%,transparent), transparent 70%), radial-gradient(ellipse 50% 26% at 50% 104%, color-mix(in srgb,var(--st-warn) 10%,transparent), transparent 75%)">
+    <form onSubmit="{{ gate.submit }}" style="width:min(380px,100%);background:var(--color-surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);padding:28px;display:flex;flex-direction:column;gap:20px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:15px;font-weight:500;color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--color-accent)">A</div>
+        <span style="font-size:14px;color:var(--muted)">Agora · panel</span>
+      </div>
+      <h1 style="font-size:26px;margin:0">Sign in</h1>
+      <div class="field">
+        <label for="agora-token">Owner token</label>
+        <input id="agora-token" class="input" type="password" autocomplete="current-password" value="{{ gate.value }}" onChange="{{ gate.onInput }}" aria-invalid="{{ gate.error }}" style="height:40px;font-family:var(--mono);letter-spacing:0.12em;border-color:{{ gate.border }}">
+        <sc-if value="{{ gate.error }}" hint-placeholder-val="{{ false }}">
+          <div role="alert" style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:var(--st-err-fg)"><i class="ph ph-warning-circle" style="font-size:16px"></i>Invalid token</div>
+        </sc-if>
+      </div>
+      <button type="submit" class="btn btn-primary" style="height:40px;width:100%">Sign in</button>
+      <div style="display:flex;gap:8px;align-items:center;padding-top:16px;font-size:12px;color:var(--muted);background:linear-gradient(to right,transparent,var(--color-divider) 48px,var(--color-divider) calc(100% - 48px),transparent) no-repeat top / 100% 1px"><i class="ph ph-house-line" style="font-size:15px"></i>The panel is available only on the home network</div>
+    </form>
+  </div>
+</sc-if>
+
+<sc-if value="{{ screenDash }}" hint-placeholder-val="{{ true }}">
+  <header style="flex:none;display:flex;flex-direction:column;gap:8px;padding:10px {{ pad }};background:linear-gradient(to right,transparent,var(--color-divider) 48px,var(--color-divider) calc(100% - 48px),transparent) no-repeat bottom / 100% 1px">
+    <div style="display:flex;align-items:center;gap:10px;min-height:34px">
+      <div style="display:flex;align-items:center;gap:10px;margin-right:auto;min-width:0">
+        <div style="width:28px;height:28px;flex:none;border-radius:8px;display:grid;place-items:center;font-size:14px;font-weight:500;color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--color-accent)">A</div>
+        <span style="font-size:15px;font-weight:500;white-space:nowrap">Agora · panel</span>
+        <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
+          <span style="display:inline-flex;align-items:center;gap:6px;height:22px;margin-left:8px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;line-height:1;white-space:nowrap;color:{{ topPill.fg }};background:{{ topPill.bg }};border:{{ topPill.border }}"><span style="width:7px;height:7px;border-radius:50%;flex:none;box-sizing:border-box;background:{{ topPill.dot }};border:{{ topPill.dotBorder }}"></span>{{ topPill.label }}</span>
+        </sc-if>
+      </div>
+      <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
+        <span style="font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap">{{ refreshLabel }}</span>
+      </sc-if>
+      <button class="btn btn-ghost btn-icon" title="Refresh now" aria-label="Refresh now" onClick="{{ refresh }}" style="width:32px;height:32px;color:var(--muted)"><i class="ph ph-arrow-clockwise" style="font-size:17px;animation:{{ spinAnim }}"></i></button>
+      <button class="btn btn-ghost btn-icon" title="{{ themeTitle }}" aria-label="{{ themeTitle }}" onClick="{{ toggleTheme }}" style="width:32px;height:32px;color:var(--muted)"><i class="{{ themeIcon }}" style="font-size:17px"></i></button>
+      <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
+        <button class="btn btn-secondary" onClick="{{ logout }}" style="height:32px;font-size:13px;padding:0 12px">Sign out</button>
+      </sc-if>
+      <sc-if value="{{ narrow }}" hint-placeholder-val="{{ false }}">
+        <button class="btn btn-ghost btn-icon" title="Sign out" aria-label="Sign out" onClick="{{ logout }}" style="width:32px;height:32px;color:var(--muted)"><i class="ph ph-sign-out" style="font-size:17px"></i></button>
+      </sc-if>
+    </div>
+    <sc-if value="{{ narrow }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;line-height:1;white-space:nowrap;color:{{ topPill.fg }};background:{{ topPill.bg }};border:{{ topPill.border }}"><span style="width:7px;height:7px;border-radius:50%;flex:none;box-sizing:border-box;background:{{ topPill.dot }};border:{{ topPill.dotBorder }}"></span>{{ topPill.label }}</span>
+        <span style="font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums">{{ refreshLabel }}</span>
+      </div>
+    </sc-if>
+  </header>
+
+  <div style="flex:1;min-height:0;display:flex">
+    <sc-if value="{{ wide }}" hint-placeholder-val="{{ true }}">
+      <nav aria-label="Simulations" style="flex:none;width:228px;padding:18px 12px;display:flex;flex-direction:column;gap:22px;overflow:auto;background:linear-gradient(to bottom,transparent,var(--color-divider) 48px,var(--color-divider) calc(100% - 48px),transparent) no-repeat right / 1px 100%">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <div style="padding:0 10px 6px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Simulations</div>
+          <button onClick="{{ goTop }}" aria-current="page" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:0;background:var(--accent-tint);color:var(--color-text);font:inherit;text-align:left;cursor:pointer">
+            <i class="ph ph-squares-four" style="font-size:16px;color:var(--accent-ink)"></i>
+            <span style="flex:1;font-size:14px;font-weight:500">Agora</span>
+            <span style="width:7px;height:7px;border-radius:50%;box-sizing:border-box;background:{{ sim.pill.dot }};border:{{ sim.pill.dotBorder }}"></span>
+          </button>
+          <sc-for list="{{ agents }}" as="a" hint-placeholder-count="2">
+            <button onClick="{{ a.onDetails }}" style="display:flex;align-items:center;gap:10px;padding:6px 10px 6px 36px;border-radius:8px;border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;text-align:left;cursor:pointer" style-hover="background:var(--line);color:var(--color-text)">
+              <span style="flex:1">{{ a.name }}</span>
+              <span style="width:7px;height:7px;border-radius:50%;box-sizing:border-box;background:{{ a.pill.dot }};border:{{ a.pill.dotBorder }};animation:{{ a.pill.anim }}"></span>
+            </button>
+          </sc-for>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <div style="padding:0 10px 6px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">System</div>
+          <button onClick="{{ goHost }}" style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;border:0;background:transparent;color:var(--color-text);font:inherit;font-size:13px;text-align:left;cursor:pointer" style-hover="background:var(--line)"><i class="ph ph-hard-drives" style="font-size:16px;color:var(--muted)"></i>Server</button>
+          <button onClick="{{ goUsage }}" style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;border:0;background:transparent;color:var(--color-text);font:inherit;font-size:13px;text-align:left;cursor:pointer" style-hover="background:var(--line)"><i class="ph ph-coins" style="font-size:16px;color:var(--muted)"></i>Tokens</button>
+        </div>
+        <div style="margin-top:auto;padding:0 10px;font-size:11px;color:var(--muted);font-family:var(--mono)">{{ phaseLabel }}</div>
+      </nav>
+    </sc-if>
+
+    <main ref="{{ mainRef }}" style="flex:1;min-width:0;overflow:auto;padding:18px {{ pad }} 28px">
+      <div style="max-width:1360px;display:flex;flex-direction:column;gap:18px">
+
+        <sc-if value="{{ loading }}" hint-placeholder-val="{{ false }}">
+          <section style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Simulations</div>
+            <div style="background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:16px;display:flex;flex-direction:column;gap:14px">
+              <div style="display:flex;gap:10px;align-items:center"><div style="width:90px;height:18px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="width:200px;height:12px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="margin-left:auto;width:90px;height:22px;border-radius:6px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div></div>
+              <div style="height:40px;border-radius:8px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div>
+            </div>
+          </section>
+          <section style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Agents</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:14px">
+              <sc-for list="{{ skeletonAgents }}" as="k" hint-placeholder-count="2">
+                <div style="background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:16px;display:flex;flex-direction:column;gap:16px;min-height:210px">
+                  <div style="display:flex;gap:12px;align-items:center"><div style="width:40px;height:40px;border-radius:10px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="display:flex;flex-direction:column;gap:6px"><div style="width:80px;height:14px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="width:150px;height:10px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div></div></div>
+                  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px"><div style="height:30px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="height:30px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="height:30px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="height:30px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div></div>
+                  <div style="width:70%;height:12px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+          <div style="display:flex;flex-wrap:wrap;gap:14px">
+            <div style="flex:1 1 300px;min-height:280px;background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:16px;display:flex;flex-direction:column;gap:16px"><div style="width:70px;height:14px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="height:10px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="height:10px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="width:60%;height:10px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div></div>
+            <div style="flex:999 1 560px;min-width:0;min-height:280px;background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:16px;display:flex;flex-direction:column;gap:12px"><div style="width:140px;height:14px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="height:52px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="height:12px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="height:12px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div><div style="height:12px;border-radius:4px;background:var(--line);animation:agoraShimmer 1.4s ease-in-out infinite"></div></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ loaded }}" hint-placeholder-val="{{ true }}">
+          <section style="display:flex;flex-direction:column;gap:8px">
+            <h2 style="margin:0;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500;line-height:1.5">Simulations</h2>
+            <article style="background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:16px;display:flex;flex-direction:column;gap:14px">
+              <div style="display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-right:auto;min-width:0">
+                  <h3 style="font-size:18px;margin:0">Agora</h3>
+                  <span style="font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:6px;color:var(--accent-ink);background:var(--accent-tint)">matrix-chat</span>
+                  <span style="font-size:13px;color:var(--muted)">private Matrix room · <span style="font-family:var(--mono);font-size:12px">agora.lan</span></span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                  <span style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;line-height:1;white-space:nowrap;color:{{ sim.pill.fg }};background:{{ sim.pill.bg }};border:{{ sim.pill.border }}"><span style="width:7px;height:7px;border-radius:50%;flex:none;box-sizing:border-box;background:{{ sim.pill.dot }};border:{{ sim.pill.dotBorder }}"></span>{{ sim.pill.label }}</span>
+                  <span style="font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums">{{ sim.latency }} · {{ sim.checked }}</span>
+                </div>
+              </div>
+              <sc-if value="{{ sim.hsDown }}" hint-placeholder-val="{{ false }}">
+                <div role="status" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;font-size:13px;color:var(--st-err-fg);background:var(--st-err-bg)"><i class="ph ph-plugs" style="font-size:16px"></i>Matrix server unreachable — agents are waiting</div>
+              </sc-if>
+              <div style="display:flex;gap:14px 28px;flex-wrap:wrap;align-items:flex-start">
+                <div style="flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:6px">
+                  <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Services</div>
+                  <sc-if value="{{ sim.dockerDown }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;font-size:13px;color:var(--muted);border:1px dashed var(--st-stop)"><i class="ph ph-cube" style="font-size:16px"></i>Docker unreachable — container state unknown</div>
+                  </sc-if>
+                  <sc-for list="{{ services }}" as="s" hint-placeholder-count="1">
+                    <div style="display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;padding:6px 6px 6px 12px;border-radius:8px;background:var(--inset)">
+                      <span style="font-family:var(--mono);font-size:13px;min-width:92px">{{ s.name }}</span>
+                      <span style="font-family:var(--mono);font-size:12px;color:var(--muted);min-width:96px">{{ s.image }}</span>
+                      <span style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;line-height:1;white-space:nowrap;color:{{ s.pill.fg }};background:{{ s.pill.bg }};border:{{ s.pill.border }}"><span style="width:7px;height:7px;border-radius:50%;flex:none;box-sizing:border-box;background:{{ s.pill.dot }};border:{{ s.pill.dotBorder }};animation:{{ s.pill.anim }}"></span>{{ s.pill.label }}</span>
+                      <span style="font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums">uptime {{ s.uptime }}</span>
+                      <span style="margin-left:auto;display:flex;gap:4px;align-items:center">
+                        <button class="btn btn-ghost" onClick="{{ s.onLog }}" style="height:28px;font-size:13px;padding:0 8px"><i class="ph ph-scroll" style="font-size:15px"></i>Log</button>
+                        <sc-if value="{{ ctl }}" hint-placeholder-val="{{ true }}">
+                          <button class="btn btn-secondary btn-icon" title="Start" aria-label="Start homeserver" disabled="{{ s.startDisabled }}" onClick="{{ s.onStart }}" style="width:28px;height:28px"><i class="ph ph-play" style="font-size:14px"></i></button>
+                          <button class="btn btn-secondary btn-icon" title="Stop" aria-label="Stop homeserver" disabled="{{ s.stopDisabled }}" onClick="{{ s.onStop }}" style="width:28px;height:28px"><i class="ph ph-stop" style="font-size:14px"></i></button>
+                          <button class="btn btn-secondary btn-icon" title="Restart" aria-label="Restart homeserver" disabled="{{ s.restartDisabled }}" onClick="{{ s.onRestart }}" style="width:28px;height:28px"><i class="ph ph-arrow-clockwise" style="font-size:14px"></i></button>
+                        </sc-if>
+                      </span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="flex:1 1 220px;display:flex;flex-direction:column;gap:6px">
+                  <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Agents</div>
+                  <button onClick="{{ goAgents }}" style="display:flex;align-items:center;gap:12px;min-height:40px;padding:0;border:0;background:transparent;color:var(--color-text);font:inherit;font-size:13px;text-align:left;cursor:pointer">
+                    <span style="display:flex;gap:4px">
+                      <sc-for list="{{ agents }}" as="m" hint-placeholder-count="2">
+                        <span style="width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-size:12px;font-weight:500;color:var(--accent-ink);background:var(--accent-tint)">{{ m.mono }}</span>
+                      </sc-for>
+                    </span>
+                    <span>{{ sim.agentsLine }}</span>
+                  </button>
+                </div>
+              </div>
+            </article>
+          </section>
+
+          <section ref="{{ agentsRef }}" style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:baseline;gap:8px">
+              <h2 style="margin:0;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500;line-height:1.5">Agents</h2>
+              <span style="font-size:12px;color:var(--muted)">in Agora</span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:14px">
+              <sc-for list="{{ agents }}" as="a" hint-placeholder-count="2">
+                <article style="background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0">
+                  <div style="display:flex;align-items:flex-start;gap:12px">
+                    <div style="width:40px;height:40px;flex:none;border-radius:10px;display:grid;place-items:center;font-size:18px;font-weight:500;color:var(--accent-ink);background:var(--accent-tint);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--color-accent) 35%,transparent)">{{ a.mono }}</div>
+                    <div style="flex:1;min-width:0">
+                      <h3 style="font-size:17px;margin:0">{{ a.name }}</h3>
+                      <div style="font-size:13px;color:var(--muted)">{{ a.role }}</div>
+                    </div>
+                    <span style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;line-height:1;white-space:nowrap;color:{{ a.pill.fg }};background:{{ a.pill.bg }};border:{{ a.pill.border }}"><span style="width:7px;height:7px;border-radius:50%;flex:none;box-sizing:border-box;background:{{ a.pill.dot }};border:{{ a.pill.dotBorder }};animation:{{ a.pill.anim }}"></span>{{ a.pill.label }}</span>
+                  </div>
+                  <sc-if value="{{ a.notice }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;font-size:13px;line-height:1.35;color:{{ a.nt.fg }};background:{{ a.nt.bg }};border:{{ a.nt.border }}"><i class="{{ a.nt.icon }}" style="font-size:16px;flex:none"></i><span>{{ a.nt.text }}</span></div>
+                  </sc-if>
+                  <dl style="display:grid;grid-template-columns:repeat(auto-fit,minmax(124px,1fr));gap:10px 16px;margin:0;opacity:{{ a.fieldsOpacity }}">
+                    <div><dt style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Runs on</dt><dd style="margin:2px 0 0;font-size:13px">{{ a.whereText }} <code style="font-family:var(--mono);font-size:12px;padding:1px 5px;border-radius:4px;background:var(--line)">{{ a.whereCode }}</code></dd></div>
+                    <div><dt style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Uptime</dt><dd style="margin:2px 0 0;font-size:13px;font-variant-numeric:tabular-nums">{{ a.uptime }}</dd></div>
+                    <div><dt style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Last activity</dt><dd style="margin:2px 0 0;font-size:13px">{{ a.activity }}</dd></div>
+                    <div><dt style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Session</dt><dd style="margin:2px 0 0;font-size:13px">{{ a.session }}</dd></div>
+                  </dl>
+                  <div style="display:flex;flex-direction:column;gap:3px">
+                    <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Today</div>
+                    <sc-if value="{{ a.todayOk }}" hint-placeholder-val="{{ true }}">
+                      <div lang="uk" style="font-size:14px;line-height:1.45;text-wrap:pretty">{{ a.today }}</div>
+                    </sc-if>
+                    <sc-if value="{{ a.todayNo }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)"><i class="ph ph-database" style="font-size:15px"></i>Memory unavailable</div>
+                    </sc-if>
+                  </div>
+                  <div style="margin-top:auto;padding-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:linear-gradient(to right,transparent,var(--color-divider) 48px,var(--color-divider) calc(100% - 48px),transparent) no-repeat top / 100% 1px">
+                    <div style="margin-right:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums">7 days · {{ a.tokens }}</div>
+                    <sc-if value="{{ ctl }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;gap:6px;flex-wrap:wrap">
+                        <button class="btn btn-secondary" title="{{ a.startTitle }}" disabled="{{ a.startDisabled }}" onClick="{{ a.onStart }}" style="height:30px;font-size:13px;padding:0 10px"><i class="ph ph-play" style="font-size:14px"></i>Start</button>
+                        <button class="btn btn-secondary" disabled="{{ a.stopDisabled }}" onClick="{{ a.onStop }}" style="height:30px;font-size:13px;padding:0 10px"><i class="ph ph-stop" style="font-size:14px"></i>Stop</button>
+                        <button class="btn btn-secondary" disabled="{{ a.restartDisabled }}" onClick="{{ a.onRestart }}" style="height:30px;font-size:13px;padding:0 10px"><i class="ph ph-arrow-clockwise" style="font-size:14px"></i>Restart</button>
+                      </div>
+                    </sc-if>
+                    <button class="btn btn-primary" onClick="{{ a.onDetails }}" style="height:30px;font-size:13px;padding:0 10px">Details<i class="ph ph-arrow-right" style="font-size:14px"></i></button>
+                  </div>
+                </article>
+              </sc-for>
+            </div>
+          </section>
+
+          <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:stretch">
+            <section ref="{{ hostRef }}" style="flex:1 1 300px;min-width:0;background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:16px;display:flex;flex-direction:column;gap:14px">
+              <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+                <h3 style="font-size:15px;margin:0">Server</h3>
+                <span style="margin-left:auto;font-size:12px;color:var(--muted);font-family:var(--mono)">Ubuntu · 192.168.1.197</span>
+              </div>
+              <div style="display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px 12px;align-items:baseline">
+                <span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Uptime</span>
+                <span style="font-size:14px;font-variant-numeric:tabular-nums">39 h</span>
+                <span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Disk</span>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <span style="font-size:14px;font-variant-numeric:tabular-nums">32 GB free of 98 GB</span>
+                  <div role="meter" aria-label="Disk used" aria-valuenow="67" aria-valuemin="0" aria-valuemax="100" style="height:5px;border-radius:3px;background:var(--line);overflow:hidden"><div style="width:67%;height:100%;border-radius:3px;background:var(--color-accent)"></div></div>
+                </div>
+                <span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Memory</span>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <span style="font-size:14px;font-variant-numeric:tabular-nums">2.1 / 7.7 GB</span>
+                  <div role="meter" aria-label="Memory used" aria-valuenow="27" aria-valuemin="0" aria-valuemax="100" style="height:5px;border-radius:3px;background:var(--line);overflow:hidden"><div style="width:27%;height:100%;border-radius:3px;background:var(--color-accent)"></div></div>
+                </div>
+                <span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Load</span>
+                <span style="font-size:14px;font-variant-numeric:tabular-nums">0.12 · 0.20 · 0.18 <span style="font-size:12px;color:var(--muted)">1 · 5 · 15 min</span></span>
+                <span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Containers</span>
+                <div>
+                  <sc-if value="{{ host.dockerOk }}" hint-placeholder-val="{{ true }}"><span style="font-size:14px;font-variant-numeric:tabular-nums">{{ host.containers }}</span></sc-if>
+                  <sc-if value="{{ host.dockerNo }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;line-height:1;white-space:nowrap;color:var(--muted);border:1px dashed var(--st-stop)"><span style="width:7px;height:7px;border-radius:50%;box-sizing:border-box;border:1.5px dashed var(--st-stop)"></span>unknown</span></sc-if>
+                </div>
+              </div>
+            </section>
+
+            <section ref="{{ usageRef }}" style="flex:999 1 560px;min-width:0;background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:16px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap">
+                <h3 style="font-size:15px;margin:0">Tokens, last 7 days</h3>
+                <span style="font-size:12px;color:var(--muted)">Sep 28 – Oct 4</span>
+                <div class="seg" role="group" aria-label="Filter by agent" style="margin-left:auto">
+                  <sc-for list="{{ usage.segs }}" as="g" hint-placeholder-count="3">
+                    <button class="seg-opt" aria-pressed="{{ g.active }}" onClick="{{ g.onClick }}" style="border-top:0;border-right:0;border-bottom:0;background:transparent;font:inherit;font-size:12px;padding:5px 10px;cursor:pointer;color:{{ g.color }};box-shadow:{{ g.ring }}">{{ g.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <sc-if value="{{ usage.ok }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;gap:16px 28px;flex-wrap:wrap;align-items:flex-end">
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <span style="font-size:24px;font-weight:500;letter-spacing:-0.015em;font-variant-numeric:tabular-nums;line-height:1.1">{{ usage.totalTok }}</span>
+                    <span style="font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums">{{ usage.totalLine }}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:4px;margin-left:auto">
+                    <div style="display:flex;align-items:flex-end;gap:6px;height:44px" aria-label="Tokens per day">
+                      <sc-for list="{{ usage.bars }}" as="b" hint-placeholder-count="7">
+                        <div title="{{ b.title }}" style="width:26px;display:flex;flex-direction:column;justify-content:flex-end;gap:1px;height:100%">
+                          <div style="height:{{ b.hB }};border-radius:2px 2px 0 0;background:color-mix(in srgb,var(--color-accent) 42%,transparent)"></div>
+                          <div style="height:{{ b.hA }};border-radius:0 0 2px 2px;background:var(--color-accent)"></div>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="display:flex;gap:6px">
+                      <sc-for list="{{ usage.bars }}" as="b" hint-placeholder-count="7">
+                        <span style="width:26px;text-align:center;font-size:10px;color:{{ b.labelColor }}">{{ b.label }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted)">
+                    <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:2px;background:var(--color-accent)"></span>Ada</span>
+                    <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:2px;background:color-mix(in srgb,var(--color-accent) 42%,transparent)"></span>Bruno</span>
+                  </div>
+                </div>
+                <div style="flex:1 1 0;min-height:190px;overflow:auto;margin:0 -6px">
+                  <table class="table" style="font-size:13px;font-variant-numeric:tabular-nums;min-width:600px">
+                    <thead>
+                      <tr>
+                        <th style="position:sticky;top:0;z-index:1;background:var(--color-surface)">day</th>
+                        <th style="position:sticky;top:0;z-index:1;background:var(--color-surface)">agent</th>
+                        <th style="position:sticky;top:0;z-index:1;background:var(--color-surface)">kind</th>
+                        <th style="position:sticky;top:0;z-index:1;background:var(--color-surface);text-align:right">calls</th>
+                        <th style="position:sticky;top:0;z-index:1;background:var(--color-surface);text-align:right">input</th>
+                        <th style="position:sticky;top:0;z-index:1;background:var(--color-surface);text-align:right">output</th>
+                        <sc-if value="{{ showCost }}" hint-placeholder-val="{{ true }}"><th style="position:sticky;top:0;z-index:1;background:var(--color-surface);text-align:right">cost $</th></sc-if>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <sc-for list="{{ usage.rows }}" as="r" hint-placeholder-count="8">
+                        <tr>
+                          <td style="white-space:nowrap;color:var(--muted)">{{ r.day }}</td>
+                          <td>{{ r.agent }}</td>
+                          <td style="font-family:var(--mono);font-size:12px">{{ r.kind }}</td>
+                          <td style="text-align:right">{{ r.calls }}</td>
+                          <td style="text-align:right">{{ r.inn }}</td>
+                          <td style="text-align:right">{{ r.out }}</td>
+                          <sc-if value="{{ showCost }}" hint-placeholder-val="{{ true }}"><td style="text-align:right">{{ r.cost }}</td></sc-if>
+                        </tr>
+                      </sc-for>
+                    </tbody>
+                    <tfoot>
+                      <sc-for list="{{ usage.totals }}" as="t" hint-placeholder-count="3">
+                        <tr>
+                          <td colspan="3" style="font-weight:{{ t.weight }};position:{{ t.pos }};bottom:0;background:var(--color-surface);box-shadow:{{ t.rule }}">{{ t.label }}</td>
+                          <td style="text-align:right;font-weight:{{ t.weight }};position:{{ t.pos }};bottom:0;background:var(--color-surface);box-shadow:{{ t.rule }}">{{ t.calls }}</td>
+                          <td style="text-align:right;font-weight:{{ t.weight }};position:{{ t.pos }};bottom:0;background:var(--color-surface);box-shadow:{{ t.rule }}">{{ t.inn }}</td>
+                          <td style="text-align:right;font-weight:{{ t.weight }};position:{{ t.pos }};bottom:0;background:var(--color-surface);box-shadow:{{ t.rule }}">{{ t.out }}</td>
+                          <sc-if value="{{ showCost }}" hint-placeholder-val="{{ true }}"><td style="text-align:right;font-weight:{{ t.weight }};position:{{ t.pos }};bottom:0;background:var(--color-surface);box-shadow:{{ t.rule }}">{{ t.cost }}</td></sc-if>
+                        </tr>
+                      </sc-for>
+                    </tfoot>
+                  </table>
+                </div>
+                <sc-if value="{{ noCost }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:12px;color:var(--muted)">Prices are not configured — cost is not calculated.</div>
+                </sc-if>
+              </sc-if>
+              <sc-if value="{{ usage.empty }}" hint-placeholder-val="{{ false }}">
+                <div style="flex:1;min-height:220px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px;padding:20px;border-radius:8px;background:radial-gradient(ellipse 70% 90% at 0% 100%, color-mix(in srgb,var(--color-accent) 10%,transparent), transparent 70%)">
+                  <i class="ph ph-coins" style="font-size:24px;color:var(--muted)"></i>
+                  <div style="font-size:16px;font-weight:500">No data yet</div>
+                  <div style="font-size:13px;color:var(--muted);max-width:44ch;text-wrap:pretty">The square is still quiet. The table fills in after the first model call.</div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ usage.unavailable }}" hint-placeholder-val="{{ false }}">
+                <div style="flex:1;min-height:220px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px;padding:20px;border-radius:8px;border:1px dashed var(--color-divider);color:var(--muted)">
+                  <i class="ph ph-database" style="font-size:22px"></i>
+                  <div style="font-size:15px;color:var(--color-text)">Memory unavailable</div>
+                  <div style="font-size:13px">state/ cannot be read — token usage appears once it is back.</div>
+                </div>
+              </sc-if>
+            </section>
+          </div>
+        </sc-if>
+      </div>
+    </main>
+  </div>
+
+  <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeDrawer }}" style="position:absolute;inset:0;z-index:20;background:var(--scrim);animation:agoraFade .2s ease-out"></div>
+    <aside role="dialog" aria-modal="true" aria-label="{{ dr.title }}" style="position:absolute;top:0;right:0;bottom:0;z-index:21;width:{{ drawerW }};display:flex;flex-direction:column;background:var(--color-surface);box-shadow:var(--shadow-lg);animation:agoraIn .22s ease-out">
+      <div style="flex:none;display:flex;align-items:center;gap:12px;padding:16px 16px 14px 20px">
+        <sc-if value="{{ dr.isAgent }}" hint-placeholder-val="{{ true }}">
+          <div style="width:40px;height:40px;flex:none;border-radius:10px;display:grid;place-items:center;font-size:18px;font-weight:500;color:var(--accent-ink);background:var(--accent-tint);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--color-accent) 35%,transparent)">{{ dr.mono }}</div>
+        </sc-if>
+        <sc-if value="{{ dr.isSvc }}" hint-placeholder-val="{{ false }}">
+          <div style="width:40px;height:40px;flex:none;border-radius:10px;display:grid;place-items:center;color:var(--muted);background:var(--line)"><i class="ph ph-scroll" style="font-size:20px"></i></div>
+        </sc-if>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:18px;font-weight:500;line-height:1.2">{{ dr.title }}</div>
+          <div style="font-size:13px;color:var(--muted)">{{ dr.sub }}</div>
+        </div>
+        <span style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;line-height:1;white-space:nowrap;color:{{ dr.pill.fg }};background:{{ dr.pill.bg }};border:{{ dr.pill.border }}"><span style="width:7px;height:7px;border-radius:50%;flex:none;box-sizing:border-box;background:{{ dr.pill.dot }};border:{{ dr.pill.dotBorder }};animation:{{ dr.pill.anim }}"></span>{{ dr.pill.label }}</span>
+        <button class="btn btn-ghost btn-icon" aria-label="Close" onClick="{{ closeDrawer }}" style="width:34px;height:34px;color:var(--muted)"><i class="ph ph-x" style="font-size:18px"></i></button>
+      </div>
+
+      <sc-if value="{{ dr.isAgent }}" hint-placeholder-val="{{ true }}">
+        <div role="tablist" style="flex:none;display:flex;gap:2px;padding:0 12px;overflow-x:auto;background:linear-gradient(to right,transparent,var(--color-divider) 48px,var(--color-divider) calc(100% - 48px),transparent) no-repeat bottom / 100% 1px">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="6">
+            <button role="tab" aria-selected="{{ t.active }}" onClick="{{ t.onClick }}" style="flex:none;display:inline-flex;align-items:center;gap:6px;padding:10px 10px 11px;border:0;border-radius:6px 6px 0 0;background:transparent;font:inherit;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;color:{{ t.color }};box-shadow:{{ t.underline }}" style-hover="background:var(--line)">{{ t.label }}<sc-if value="{{ t.dim }}" hint-placeholder-val="{{ false }}"><i class="ph ph-database" style="font-size:13px"></i></sc-if></button>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ dr.showLog }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding:14px 20px 20px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums">{{ dr.logMeta }}</span>
+            <button class="btn btn-secondary" aria-pressed="{{ follow }}" onClick="{{ toggleFollow }}" style="margin-left:auto;height:28px;font-size:12px;padding:0 10px;color:{{ followColor }};border-color:{{ followBorder }}"><i class="ph ph-arrow-line-down" style="font-size:14px"></i>Follow</button>
+          </div>
+          <sc-if value="{{ dr.logOk }}" hint-placeholder-val="{{ true }}">
+            <div ref="{{ logRef }}" onScroll="{{ onLogScroll }}" role="log" aria-live="polite" style="flex:1;min-height:0;overflow:auto;background:var(--inset);border-radius:8px;padding:12px 14px;font-family:var(--mono);font-size:12.5px;line-height:1.7;font-variant-numeric:tabular-nums">
+              <sc-for list="{{ dr.lines }}" as="l" hint-placeholder-count="8">
+                <div style="display:flex;gap:10px;white-space:pre-wrap;word-break:break-word;animation:{{ l.anim }}">
+                  <span style="flex:none;color:var(--muted)">{{ l.t }}</span>
+                  <span style="flex:none;color:var(--muted);min-width:{{ dr.srcW }}">{{ l.src }}</span>
+                  <span style="flex:none;color:{{ l.lvlColor }};min-width:56px">{{ l.lvl }}</span>
+                  <span style="min-width:0">{{ l.msg }}</span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ followLive }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:8px;margin-top:4px;color:var(--muted)"><span style="width:6px;height:6px;border-radius:50%;background:var(--st-work);animation:agoraPulse 1.6s ease-out infinite"></span>following new lines</div>
+              </sc-if>
+            </div>
+          </sc-if>
+          <sc-if value="{{ dr.logNo }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:6px;padding:20px;border-radius:8px;border:1px dashed var(--color-divider);color:var(--muted)">
+              <i class="{{ dr.logNoIcon }}" style="font-size:22px"></i>
+              <div style="font-size:15px;color:var(--color-text)">{{ dr.logNoText }}</div>
+              <div style="font-size:13px">{{ dr.logNoSub }}</div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ dr.showBody }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-height:0;overflow:auto;padding:20px 20px 28px">
+          <sc-if value="{{ dr.memNo }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:20px;border-radius:8px;border:1px dashed var(--color-divider);color:var(--muted)">
+              <i class="ph ph-database" style="font-size:22px"></i>
+              <div style="font-size:15px;color:var(--color-text)">Memory unavailable</div>
+              <div style="font-size:13px;max-width:52ch">state/ cannot be read — memories, plans and tokens appear as soon as it is back.</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ dr.tSession }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:14px;max-width:64ch">
+              <sc-if value="{{ ss.has }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)"><i class="ph ph-clock" style="font-size:14px"></i>written {{ ss.when }} · {{ ss.words }}</div>
+                <p lang="uk" style="margin:0;font-size:16px;line-height:1.7;text-wrap:pretty">{{ ss.text }}</p>
+              </sc-if>
+              <sc-if value="{{ ss.none }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:14px;color:var(--muted)">No summary — the next one is written when a session ends.</div>
+              </sc-if>
+              <sc-if value="{{ ctl }}" hint-placeholder-val="{{ true }}">
+                <div style="margin-top:8px;padding-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:linear-gradient(to right,transparent,var(--color-divider) 48px,var(--color-divider) calc(100% - 48px),transparent) no-repeat top / 100% 1px">
+                  <button class="btn btn-secondary" disabled="{{ ss.forgetDisabled }}" onClick="{{ ss.onForget }}" style="height:32px;font-size:13px"><i class="ph ph-eraser" style="font-size:15px"></i>Forget last session</button>
+                  <span style="font-size:12px;color:var(--muted)">{{ ss.forgetNote }}</span>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ dr.tMemory }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:22px">
+              <div style="display:flex;flex-direction:column">
+                <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500;padding-bottom:4px">Digests</div>
+                <sc-for list="{{ mem.digests }}" as="g" hint-placeholder-count="3">
+                  <div style="display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;padding:9px 0;background:linear-gradient(to right,transparent,var(--line) 48px,var(--line) calc(100% - 48px),transparent) no-repeat bottom / 100% 1px">
+                    <div><div style="font-size:13px;font-weight:500">{{ g.layer }}</div><div style="font-size:12px;color:var(--muted)">{{ g.period }}</div></div>
+                    <div lang="uk" style="font-size:13px;line-height:1.55;color:{{ g.color }};text-wrap:pretty">{{ g.text }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:2px">
+                <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500;padding-bottom:4px">Days</div>
+                <sc-for list="{{ mem.days }}" as="m" hint-placeholder-count="5">
+                  <div style="border-radius:8px;background:{{ m.bg }}">
+                    <button aria-expanded="{{ m.open }}" onClick="{{ m.toggle }}" style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border:0;border-radius:8px;background:transparent;font:inherit;color:inherit;text-align:left;cursor:pointer" style-hover="background:var(--line)">
+                      <i class="{{ m.caret }}" style="font-size:13px;color:var(--muted)"></i>
+                      <span style="font-size:14px;font-weight:500">{{ m.date }}</span>
+                      <span style="font-size:13px;color:var(--muted)">{{ m.wd }}</span>
+                      <span style="margin-left:auto;font-size:12px;color:var(--muted)">{{ m.words }}</span>
+                    </button>
+                    <sc-if value="{{ m.open }}" hint-placeholder-val="{{ false }}">
+                      <p lang="uk" style="margin:0;padding:0 14px 14px 35px;font-size:15px;line-height:1.7;text-wrap:pretty">{{ m.text }}</p>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ dr.tPlans }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:12px">
+                <sc-for list="{{ plans }}" as="h" hint-placeholder-count="4">
+                  <div style="background:var(--inset);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+                    <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:15px;font-weight:500">{{ h.name }}</span><span style="font-size:12px;color:var(--muted)">{{ h.period }}</span></div>
+                    <ul lang="uk" style="margin:0;padding:0 0 0 18px;display:flex;flex-direction:column;gap:6px;font-size:14px;line-height:1.5">
+                      <sc-for list="{{ h.items }}" as="it" hint-placeholder-count="3">
+                        <li style="text-wrap:pretty">{{ it.t }}<sc-if value="{{ it.dev }}" hint-placeholder-val="{{ false }}"><span lang="en" title="This plan departs from the character's life story. Only you see this." style="display:inline-block;margin-left:8px;padding:0 6px;border-radius:5px;font-size:11px;line-height:18px;vertical-align:1px;color:var(--muted);border:1px solid var(--color-divider)">deviation</span></sc-if></li>
+                      </sc-for>
+                    </ul>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)"><i class="ph ph-eye-slash" style="font-size:14px"></i>“deviation” marks a plan that departs from the character’s life story. Only you see it — never the characters.</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ dr.tToday }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:12px;max-width:62ch">
+              <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)"><i class="ph ph-clock" style="font-size:14px"></i>updated at 14:00 · refreshed hourly</div>
+              <p lang="uk" style="margin:0;font-size:17px;line-height:1.7;text-wrap:pretty">{{ td.text }}</p>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ dr.tTokens }}" hint-placeholder-val="{{ false }}">
+            <sc-if value="{{ at.ok }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:16px">
+                <div style="display:flex;gap:16px 28px;flex-wrap:wrap;align-items:flex-end">
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <span style="font-size:24px;font-weight:500;letter-spacing:-0.015em;font-variant-numeric:tabular-nums;line-height:1.1">{{ at.totalTok }}</span>
+                    <span style="font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums">{{ at.totalLine }}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:4px;margin-left:auto">
+                    <div style="display:flex;align-items:flex-end;gap:6px;height:44px">
+                      <sc-for list="{{ at.bars }}" as="b" hint-placeholder-count="7">
+                        <div title="{{ b.title }}" style="width:26px;height:{{ b.h }};border-radius:2px;background:var(--color-accent)"></div>
+                      </sc-for>
+                    </div>
+                    <div style="display:flex;gap:6px">
+                      <sc-for list="{{ at.bars }}" as="b" hint-placeholder-count="7">
+                        <span style="width:26px;text-align:center;font-size:10px;color:{{ b.labelColor }}">{{ b.label }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </div>
+                <div style="overflow-x:auto;margin:0 -6px">
+                  <table class="table" style="font-size:13px;font-variant-numeric:tabular-nums;min-width:440px">
+                    <thead><tr><th>kind</th><th style="text-align:right">calls</th><th style="text-align:right">input</th><th style="text-align:right">output</th><sc-if value="{{ showCost }}" hint-placeholder-val="{{ true }}"><th style="text-align:right">cost $</th></sc-if></tr></thead>
+                    <tbody>
+                      <sc-for list="{{ at.rows }}" as="r" hint-placeholder-count="6">
+                        <tr><td style="font-family:var(--mono);font-size:12px">{{ r.kind }}</td><td style="text-align:right">{{ r.calls }}</td><td style="text-align:right">{{ r.inn }}</td><td style="text-align:right">{{ r.out }}</td><sc-if value="{{ showCost }}" hint-placeholder-val="{{ true }}"><td style="text-align:right">{{ r.cost }}</td></sc-if></tr>
+                      </sc-for>
+                    </tbody>
+                    <tfoot><tr><td style="font-weight:500;box-shadow:inset 0 1px 0 var(--color-divider)">total</td><td style="text-align:right;font-weight:500;box-shadow:inset 0 1px 0 var(--color-divider)">{{ at.tot.calls }}</td><td style="text-align:right;font-weight:500;box-shadow:inset 0 1px 0 var(--color-divider)">{{ at.tot.inn }}</td><td style="text-align:right;font-weight:500;box-shadow:inset 0 1px 0 var(--color-divider)">{{ at.tot.out }}</td><sc-if value="{{ showCost }}" hint-placeholder-val="{{ true }}"><td style="text-align:right;font-weight:500;box-shadow:inset 0 1px 0 var(--color-divider)">{{ at.tot.cost }}</td></sc-if></tr></tfoot>
+                  </table>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ at.empty }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:20px;border-radius:8px;background:var(--inset)">
+                <i class="ph ph-coins" style="font-size:22px;color:var(--muted)"></i>
+                <div style="font-size:15px;font-weight:500">No data yet</div>
+              </div>
+            </sc-if>
+          </sc-if>
+        </div>
+      </sc-if>
+    </aside>
+  </sc-if>
+
+  <sc-if value="{{ dialogOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;inset:0;z-index:40;display:grid;place-items:center;padding:16px;background:var(--scrim);animation:agoraFade .15s ease-out">
+      <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="agora-dlg-title" style="animation:agoraUp .18s ease-out">
+        <div id="agora-dlg-title" class="dialog-title">{{ dlg.title }}</div>
+        <div class="dialog-body">{{ dlg.body }}</div>
+        <div class="dialog-actions">
+          <button class="btn btn-secondary" onClick="{{ dlg.cancel }}">Cancel</button>
+          <button class="btn btn-primary" onClick="{{ dlg.confirm }}" style="color:{{ dlg.fg }};border-color:{{ dlg.border }}"><i class="{{ dlg.icon }}" style="font-size:15px"></i>{{ dlg.confirmLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ toastOpen }}" hint-placeholder-val="{{ false }}">
+    <div role="status" aria-live="polite" style="position:absolute;z-index:50;right:{{ toastR }};left:{{ toastL }};bottom:{{ toastB }};display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;border-radius:10px;font-size:14px;background:var(--color-surface);box-shadow:var(--shadow-md);animation:agoraUp .2s ease-out">
+      <i class="{{ tst.icon }}" style="font-size:18px;color:{{ tst.color }}"></i>
+      <span style="flex:1">{{ tst.text }}</span>
+      <button class="btn btn-ghost btn-icon" aria-label="Dismiss" onClick="{{ closeToast }}" style="width:28px;height:28px;color:var(--muted)"><i class="ph ph-x" style="font-size:14px"></i></button>
+    </div>
+  </sc-if>
+</sc-if>
+
+<sc-if value="{{ screenComp }}" hint-placeholder-val="{{ false }}">
+  <div style="flex:1;min-height:0;overflow:auto;padding:32px">
+    <div style="max-width:1200px;display:flex;flex-direction:column;gap:28px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:13px;color:var(--muted)">Agora · panel</span>
+        <h1 style="font-size:32px;margin:0">Component sheet</h1>
+        <p style="margin:0;font-size:14px;color:var(--muted);max-width:68ch">Plain CSS on the Nocturne tokens. Light theme overrides the same variables on <code style="font-family:var(--mono);font-size:12px">[data-theme="light"]</code>. Icons are Phosphor regular.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(520px,100%),1fr));gap:16px">
+
+        <section style="background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:18px;display:flex;flex-direction:column;gap:12px">
+          <h3 style="font-size:15px;margin:0">Color</h3>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px">
+            <sc-for list="{{ palette }}" as="c" hint-placeholder-count="12">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="width:32px;height:32px;flex:none;border-radius:8px;background:var({{ c.v }});box-shadow:inset 0 0 0 1px var(--line)"></span>
+                <span style="display:flex;flex-direction:column;min-width:0"><span style="font-size:13px">{{ c.n }}</span><span style="font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.v }}</span></span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+
+        <section style="background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:18px;display:flex;flex-direction:column;gap:10px">
+          <h3 style="font-size:15px;margin:0">Type · Inter + system mono</h3>
+          <div style="display:grid;grid-template-columns:110px 1fr;gap:8px 14px;align-items:baseline">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">26 / 500</span><span style="font-size:26px;font-weight:500;line-height:1.15">Sign in</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">18 / 500</span><span style="font-size:18px;font-weight:500">Agora · drawer title</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">15–17 / 500</span><span style="font-size:15px;font-weight:500">Card title</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">16 / 400 · 1.7</span><span lang="uk" style="font-size:16px;line-height:1.7">Читальний текст: спогади й підсумки.</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">13–14 / 400</span><span style="font-size:13px">Field value, table cell, body</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">12 / 500</span><span style="font-size:12px;font-weight:500">Status pill, meta</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">11 / 500 caps</span><span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);font-weight:500">Field label</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">12.5 mono</span><span style="font-family:var(--mono);font-size:12.5px">13:41:17 agent INFO reply</span>
+          </div>
+        </section>
+
+        <section style="background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:18px;display:flex;flex-direction:column;gap:12px">
+          <h3 style="font-size:15px;margin:0">Status pills</h3>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <sc-for list="{{ allPills }}" as="p" hint-placeholder-count="9">
+              <span style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;line-height:1;white-space:nowrap;color:{{ p.fg }};background:{{ p.bg }};border:{{ p.border }}"><span style="width:7px;height:7px;border-radius:50%;flex:none;box-sizing:border-box;background:{{ p.dot }};border:{{ p.dotBorder }};animation:{{ p.anim }}"></span>{{ p.label }}</span>
+            </sc-for>
+          </div>
+          <div style="font-size:12px;color:var(--muted)">Always a dot and a word. Working pulses; unknown is dashed; not-created is outline only.</div>
+        </section>
+
+        <section style="background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:18px;display:flex;flex-direction:column;gap:12px">
+          <h3 style="font-size:15px;margin:0">Buttons</h3>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <button class="btn btn-primary" style="height:30px;font-size:13px;padding:0 10px">Details<i class="ph ph-arrow-right" style="font-size:14px"></i></button>
+            <button class="btn btn-secondary" style="height:30px;font-size:13px;padding:0 10px"><i class="ph ph-play" style="font-size:14px"></i>Start</button>
+            <button class="btn btn-secondary" style="height:30px;font-size:13px;padding:0 10px"><i class="ph ph-stop" style="font-size:14px"></i>Stop</button>
+            <button class="btn btn-secondary" disabled="{{ true }}" style="height:30px;font-size:13px;padding:0 10px"><i class="ph ph-circle-notch" style="font-size:14px;animation:agoraSpin 1s linear infinite"></i>Restarting…</button>
+            <button class="btn btn-ghost" style="height:28px;font-size:13px;padding:0 8px"><i class="ph ph-scroll" style="font-size:15px"></i>Log</button>
+            <button class="btn btn-secondary btn-icon" aria-label="Restart" style="width:28px;height:28px"><i class="ph ph-arrow-clockwise" style="font-size:14px"></i></button>
+            <button class="btn btn-ghost btn-icon" aria-label="Theme" style="width:32px;height:32px;color:var(--muted)"><i class="ph ph-sun" style="font-size:17px"></i></button>
+          </div>
+          <div style="font-size:12px;color:var(--muted)">Primary is an accent outline — never a fill. Disabled drops to 45%.</div>
+        </section>
+
+        <section style="background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:18px;display:flex;flex-direction:column;gap:12px">
+          <h3 style="font-size:15px;margin:0">Card header · notice</h3>
+          <div style="display:flex;align-items:flex-start;gap:12px;padding:14px;border-radius:8px;background:var(--inset)">
+            <div style="width:40px;height:40px;flex:none;border-radius:10px;display:grid;place-items:center;font-size:18px;font-weight:500;color:var(--accent-ink);background:var(--accent-tint);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--color-accent) 35%,transparent)">A</div>
+            <div style="flex:1;min-width:0"><div style="font-size:17px;font-weight:500;line-height:1.2">Ada</div><div style="font-size:13px;color:var(--muted)">editor, 32, Lviv</div></div>
+            <span style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;line-height:1;color:var(--st-ok-fg);background:var(--st-ok-bg)"><span style="width:7px;height:7px;border-radius:50%;background:var(--st-ok)"></span>running</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;font-size:13px;color:var(--st-err-fg);background:var(--st-err-bg)"><i class="ph ph-plugs" style="font-size:16px"></i>Matrix server unreachable — agents are waiting</div>
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;font-size:13px;color:var(--muted);border:1px dashed var(--st-stop)"><i class="ph ph-cube" style="font-size:16px"></i>Docker unreachable — container state unknown</div>
+        </section>
+
+        <section style="background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:18px;display:flex;flex-direction:column;gap:12px">
+          <h3 style="font-size:15px;margin:0">Table rows · tabs</h3>
+          <table class="table" style="font-size:13px;font-variant-numeric:tabular-nums">
+            <thead><tr><th>day</th><th>agent</th><th>kind</th><th style="text-align:right">calls</th><th style="text-align:right">input</th><th style="text-align:right">cost $</th></tr></thead>
+            <tbody>
+              <tr><td style="color:var(--muted)">2026-10-03</td><td>ada</td><td style="font-family:var(--mono);font-size:12px">reply</td><td style="text-align:right">41</td><td style="text-align:right">270,115</td><td style="text-align:right">0.0863</td></tr>
+              <tr><td></td><td>bruno</td><td style="font-family:var(--mono);font-size:12px">plan</td><td style="text-align:right">4</td><td style="text-align:right">9,240</td><td style="text-align:right">0.0052</td></tr>
+            </tbody>
+          </table>
+          <div role="tablist" style="display:flex;gap:2px;background:linear-gradient(to right,transparent,var(--color-divider) 48px,var(--color-divider) calc(100% - 48px),transparent) no-repeat bottom / 100% 1px">
+            <span style="padding:10px 10px 11px;font-size:13px;font-weight:500;box-shadow:inset 0 -2px 0 var(--color-accent)">Log</span>
+            <span style="padding:10px 10px 11px;font-size:13px;font-weight:500;color:var(--muted)">Last session</span>
+            <span style="padding:10px 10px 11px;font-size:13px;font-weight:500;color:var(--muted)">Memories</span>
+            <span style="padding:10px 10px 11px;font-size:13px;font-weight:500;color:var(--faint);display:inline-flex;align-items:center;gap:6px">Plans<i class="ph ph-database" style="font-size:13px"></i></span>
+          </div>
+        </section>
+
+        <section style="background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:18px;display:flex;flex-direction:column;gap:12px">
+          <h3 style="font-size:15px;margin:0">Toasts</h3>
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;border-radius:10px;font-size:14px;background:var(--color-surface);box-shadow:var(--shadow-md)"><i class="ph ph-check-circle" style="font-size:18px;color:var(--st-ok)"></i><span style="flex:1">Ada stopped</span><i class="ph ph-x" style="font-size:14px;color:var(--muted);padding:7px"></i></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;border-radius:10px;font-size:14px;background:var(--color-surface);box-shadow:var(--shadow-md)"><i class="ph ph-warning-circle" style="font-size:18px;color:var(--st-err)"></i><span style="flex:1">Failed: Docker unreachable</span><i class="ph ph-x" style="font-size:14px;color:var(--muted);padding:7px"></i></div>
+        </section>
+
+        <section style="background:var(--color-surface);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);padding:18px;display:flex;flex-direction:column;gap:12px">
+          <h3 style="font-size:15px;margin:0">Dialog</h3>
+          <div style="padding:20px;border-radius:8px;background:var(--scrim);display:grid;place-items:center">
+            <div class="dialog">
+              <div class="dialog-title">Stop Ada?</div>
+              <div class="dialog-body">She will write a session summary — up to 30 seconds.</div>
+              <div class="dialog-actions"><button class="btn btn-secondary">Cancel</button><button class="btn btn-primary"><i class="ph ph-stop" style="font-size:15px"></i>Stop</button></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark'|'light'&quot;,&quot;section&quot;:&quot;View&quot;},&quot;phase&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;view&quot;,&quot;control&quot;],&quot;default&quot;:&quot;control&quot;,&quot;tsType&quot;:&quot;'view'|'control'&quot;,&quot;section&quot;:&quot;View&quot;},&quot;screen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dashboard&quot;,&quot;gate&quot;,&quot;gate-error&quot;,&quot;components&quot;],&quot;default&quot;:&quot;dashboard&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;View&quot;},&quot;scenario&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;healthy&quot;,&quot;homeserver-down&quot;,&quot;docker-down&quot;,&quot;state-unreadable&quot;,&quot;agents-mixed&quot;,&quot;terminal&quot;,&quot;loading&quot;,&quot;empty&quot;],&quot;default&quot;:&quot;healthy&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;State&quot;},&quot;showCost&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;State&quot;},&quot;initialDrawer&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;none&quot;,&quot;ada&quot;,&quot;bruno&quot;,&quot;homeserver&quot;],&quot;default&quot;:&quot;none&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Open on load&quot;},&quot;initialTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;log&quot;,&quot;session&quot;,&quot;memory&quot;,&quot;plans&quot;,&quot;today&quot;,&quot;tokens&quot;],&quot;default&quot;:&quot;log&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Open on load&quot;},&quot;initialOverlay&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;none&quot;,&quot;confirm-stop&quot;,&quot;confirm-restart&quot;,&quot;confirm-forget&quot;,&quot;busy&quot;,&quot;busy-toast&quot;,&quot;toast-ok&quot;,&quot;toast-error&quot;],&quot;default&quot;:&quot;none&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Open on load&quot;},&quot;frameHeight&quot;:{&quot;editor&quot;:null,&quot;default&quot;:&quot;100vh&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  static D = (() => {
+    const nf = new Intl.NumberFormat('en-US');
+    const N = v => nf.format(v);
+    const C4 = v => v.toFixed(4);
+    const USD = v => '$' + v.toFixed(2);
+    const MLN = v => v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? Math.round(v / 1e3) + 'k' : N(v);
+    const pad = n => String(n).padStart(2, '0');
+    const DAYS = ['2026-09-28','2026-09-29','2026-09-30','2026-10-01','2026-10-02','2026-10-03','2026-10-04'];
+    const WD = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const DN = [28,29,30,1,2,3,4];
+    const KINDS = ['reply','summary','plan','day_memory','digest','today'];
+    const J = (v, s) => Math.round(v * (1 + 0.06 * Math.sin(s * 12.9898)));
+    const REP = { ada: [14,9,22,18,26,41,17], bruno: [12,8,19,16,24,37,15] };
+    const SUM = { ada: [1,1,2,2,2,3,1], bruno: [1,1,2,1,2,2,1] };
+    const U = [];
+    for (let i = 6; i >= 0; i--) {
+      ['ada','bruno'].forEach((a, ai) => {
+        const sd = i * 7 + ai * 31;
+        const push = (kind, calls, inn, out) => U.push({ day: DAYS[i], di: i, agent: a, kind, calls, inn, out, cost: inn * 0.3 / 1e6 + out * 2.5 / 1e6 });
+        const r = REP[a][i], sm = SUM[a][i];
+        if (i === 5 && a === 'ada') { push('reply', 41, 270115, 2104); push('summary', 3, 21870, 610); }
+        else if (i === 5) { push('reply', 37, 248402, 2377); push('summary', 2, J(14580, sd + 1), J(406, sd + 2)); }
+        else { push('reply', r, J(r * 6590, sd + 3), J(r * 51, sd + 4)); push('summary', sm, J(sm * 7290, sd + 5), J(sm * 203, sd + 6)); }
+        if (i === 5 && a === 'bruno') push('plan', 4, 9240, 980);
+        else { const pc = 1 + (i === 0 ? 1 : 0) + (i === 3 ? 1 : 0); push('plan', pc, J(pc * 2310, sd + 7), J(pc * 245, sd + 8)); }
+        push('day_memory', 1, J(5200, sd + 9), J(310, sd + 10));
+        if (i === 0 || i === 3) push('digest', 1, J(9800, sd + 11), J(520, sd + 12));
+        const tc = i === 6 ? 7 : 14; push('today', tc, J(tc * 1950, sd + 13), J(tc * 128, sd + 14));
+      });
+    }
+    const PS = {
+      ok: { fg: 'var(--st-ok-fg)', bg: 'var(--st-ok-bg)', dot: 'var(--st-ok)', border: '1px solid transparent', dotBorder: '0', anim: 'none' },
+      work: { fg: 'var(--st-work-fg)', bg: 'var(--st-work-bg)', dot: 'var(--st-work)', border: '1px solid transparent', dotBorder: '0', anim: 'agoraPulse 1.6s ease-out infinite' },
+      warn: { fg: 'var(--st-warn-fg)', bg: 'var(--st-warn-bg)', dot: 'var(--st-warn)', border: '1px solid transparent', dotBorder: '0', anim: 'none' },
+      err: { fg: 'var(--st-err-fg)', bg: 'var(--st-err-bg)', dot: 'var(--st-err)', border: '1px solid transparent', dotBorder: '0', anim: 'none' },
+      stop: { fg: 'var(--st-stop-fg)', bg: 'var(--line)', dot: 'var(--st-stop)', border: '1px solid transparent', dotBorder: '0', anim: 'none' },
+      unknown: { fg: 'var(--muted)', bg: 'transparent', dot: 'transparent', border: '1px dashed var(--st-stop)', dotBorder: '1.5px dashed var(--st-stop)', anim: 'none' },
+      none: { fg: 'var(--muted)', bg: 'transparent', dot: 'transparent', border: '1px solid var(--color-divider)', dotBorder: '1.5px solid var(--st-stop)', anim: 'none' }
+    };
+    const pill = (t, label) => Object.assign({}, PS[t], { label });
+    const NT = {
+      unknown: { fg: 'var(--muted)', bg: 'transparent', border: '1px dashed var(--st-stop)' },
+      stop: { fg: 'var(--muted)', bg: 'var(--line)', border: '1px solid transparent' }
+    };
+    const AG = {
+      ada: {
+        name: 'Ada', mono: 'A', role: 'editor, 32, Lviv', she: 'She', fem: true,
+        f: { run: ['2 h 14 min','replied 3 min ago','active session: 6 messages'], stop: ['—','last reply at 13:41','session ended at 13:52'], none: ['—','—','—'], term: ['47 min','replied 5 min ago','active session: 3 messages'] },
+        todayLine: 'Неділя: книжка, кава й прогулянка старим містом',
+        today: 'Неділя, 14:00. Повільний день: книжка, кава, трохи роботи над текстом. Увечері — прогулянка старим містом.',
+        session: { text: 'Говорили з Ich про те, які книжки брати в дорогу, і про перший осінній дощ. Бруно розповідав про нову гітарну педаль, Ада радила йому почитати щось легке на вихідні.', when: 'today at 13:26' },
+        digests: [
+          { layer: 'Year', period: '2026', text: 'not composed yet — written on January 1', empty: true },
+          { layer: 'Month', period: 'September', text: 'Вересень пройшов у редактурі: довгий переклад, два дедлайни поспіль і вечори з книжкою. Наприкінці місяця повернулися ранкові прогулянки.' },
+          { layer: 'Week', period: 'Sep 21–27', text: 'Тиждень дедлайнів: два розділи перекладу, вечеря в подруги, злива в четвер і нове горнятко з ринку.' }
+        ],
+        days: [
+          { d: '2026-10-03', date: 'October 3', wd: 'Saturday', text: 'Зранку редагувала довгий переклад і нарешті приборкала речення на пів сторінки. Після обіду — кава в маленькій кав’ярні біля Ратуші, ввечері прогулянка під ліхтарями.' },
+          { d: '2026-10-02', date: 'October 2', wd: 'Friday', text: 'День без поспіху: зранку пошта й правки від авторки, обід удома. Увечері подзвонила мамі й домовилися про неділю.' },
+          { d: '2026-10-01', date: 'October 1', wd: 'Thursday', text: 'Жовтень почався з туману. До обіду редагувала, потім пішла на ринок по яблука й айстри.' },
+          { d: '2026-09-30', date: 'September 30', wd: 'Wednesday', text: 'Довга розмова з видавництвом про обкладинку. Увечері нарешті дочитала роман, який відкладала з літа.' },
+          { d: '2026-09-29', date: 'September 29', wd: 'Tuesday', text: 'Дощовий вівторок. Працювала в кав’ярні біля дому, бо вдома на дві години вимкнули світло.' }
+        ],
+        plans: [
+          { name: 'Year', period: '2026', items: [{ t: 'дописати й видати великий переклад' }, { t: 'більше подорожувати Карпатами' }, { t: 'навчитися пекти хліб' }] },
+          { name: 'Month', period: 'October', items: [{ t: 'здати першу половину перекладу' }, { t: 'сходити в оперу з мамою' }, { t: 'записатися на курси гончарства', dev: true }] },
+          { name: 'Week', period: 'Sep 28 – Oct 4', items: [{ t: 'два розділи перекладу' }, { t: 'вечеря з подругою в суботу' }, { t: 'купити теплий светр' }] },
+          { name: 'Day', period: 'Sun, Oct 4', items: [{ t: 'здати редактуру перекладу до п’ятниці' }, { t: 'купити лампу для читання' }, { t: 'домовитися з подругою про суботу' }] }
+        ]
+      },
+      bruno: {
+        name: 'Bruno', mono: 'B', role: 'sound engineer, 35, Lviv', she: 'He', fem: false,
+        f: { run: ['2 h 14 min','replied 11 min ago','session ended at 13:26'], stop: ['—','last reply at 13:44','session ended at 13:52'], none: ['—','—','—'], term: ['47 min','replied 5 min ago','active session: 3 messages'] },
+        todayLine: 'Неділя: педалборд, репетиція й тихий вечір',
+        today: 'Неділя, 14:00. Зранку довго спав, потім розбирав педалборд. Після обіду — репетиція з гуртом, увечері тиша й чай.',
+        session: { text: 'Ich питав, як записати голос удома без студії. Ада сміялася з нової педалі, а Бруно пообіцяв на вихідних зіграти щось тихе.', when: 'today at 13:26' },
+        digests: [
+          { layer: 'Year', period: '2026', text: 'not composed yet — written on January 1', empty: true },
+          { layer: 'Month', period: 'September', text: 'Вересень — місяць зведень: театральна вистава, два концерти в клубі й нескінченні кабелі.' },
+          { layer: 'Week', period: 'Sep 21–27', text: 'Репетиції тричі на тиждень, нова педаль у кошику й одна безсонна ніч над зведенням.' }
+        ],
+        days: [
+          { d: '2026-10-03', date: 'October 3', wd: 'Saturday', text: 'Зранку перепаював кабель, удень — репетиція з гуртом. Увечері нарешті приїхала педаль, грав до півночі.' },
+          { d: '2026-10-02', date: 'October 2', wd: 'Friday', text: 'Студійний день: зведення для театру, три години над одним барабанним треком.' },
+          { d: '2026-10-01', date: 'October 1', wd: 'Thursday', text: 'Концерт у клубі на Підвальній. Звук вийшов чистим, хоча монітори знову підвели.' },
+          { d: '2026-09-30', date: 'September 30', wd: 'Wednesday', text: 'Тихий день удома: прибрав студію, переписав список обладнання, увечері дивився старий фільм.' }
+        ],
+        plans: [
+          { name: 'Year', period: '2026', items: [{ t: 'записати альбом з гуртом' }, { t: 'відремонтувати старий підсилювач' }] },
+          { name: 'Month', period: 'October', items: [{ t: 'зведення для театру до 20 жовтня' }, { t: 'два концерти в клубі' }] },
+          { name: 'Week', period: 'Sep 28 – Oct 4', items: [{ t: 'репетиції у вівторок і четвер' }, { t: 'налаштувати нову педаль' }, { t: 'переїхати до Києва', dev: true }] },
+          { name: 'Day', period: 'Sun, Oct 4', items: [{ t: 'перевірити кабелі перед репетицією' }, { t: 'подзвонити режисерці з театру' }] }
+        ]
+      }
+    };
+    const L = (t, src, lvl, msg) => ({ t, src, lvl, msg });
+    const LOGS = {
+      ada: [L('13:26:02','agent','INFO','ada: session restored (device ABCDEF1234)'), L('13:26:02','agent','INFO','ada: context seeded with 30 room messages'), L('13:26:03','agent','INFO','ada: entering sync_forever'), L('13:41:17','agent','INFO','reply: owner-mentioned-me (in 2.4s)'), L('13:41:22','agent','INFO','ignored: own-message'), L('13:44:09','agent','INFO','reply: addressed-by-name (in 3.1s)'), L('13:44:15','agent','INFO','ignored: bot-streak 2/3'), L('13:52:40','agent','INFO','paused: streak-limit; resume check in 593s'), L('14:00:05','agent.memory','INFO','saved state/ada.today.md (96 words)'), L('14:02:33','agent','INFO','resumed: owner-message')],
+      bruno: [L('13:26:04','agent','INFO','bruno: session restored (device KLMNOP5678)'), L('13:26:04','agent','INFO','bruno: context seeded with 30 room messages'), L('13:26:05','agent','INFO','bruno: entering sync_forever'), L('13:26:31','agent.memory','INFO','saved state/bruno.memory.md (session summary)'), L('13:41:19','agent','INFO','ignored: not-addressed'), L('13:41:30','agent','INFO','reply: bot-mentioned-me (in 2.9s)'), L('13:44:12','agent','INFO','ignored: bot-streak 3/3'), L('13:52:41','agent','INFO','paused: streak-limit; resume check in 600s'), L('14:00:06','agent.memory','INFO','saved state/bruno.today.md (88 words)')],
+      homeserver: [L('13:25:58','server','INFO','starting, version 26.9.1'), L('13:25:58','database','INFO','opened at /var/lib/continuwuity'), L('13:25:59','router','INFO','listening on 0.0.0.0:8008'), L('13:26:02','client','INFO','GET /sync @ada:agora.lan 200 (initial, 184 ms)'), L('13:26:04','client','INFO','GET /sync @bruno:agora.lan 200 (initial, 176 ms)'), L('13:41:15','client','INFO','PUT /send m.room.message @ich:agora.lan 200'), L('13:41:17','client','INFO','PUT /send m.room.message @ada:agora.lan 200'), L('13:52:40','client','INFO','PUT /typing @bruno:agora.lan 200'), L('14:00:00','database','INFO','compaction finished (12 ms)')]
+    };
+    const POOL = {
+      agent: [['agent','INFO','ignored: own-message'], ['agent','INFO','reply: owner-mentioned-me (in 2.1s)'], ['agent.usage','INFO','usage recorded: reply'], ['agent','INFO','ignored: not-addressed'], ['agent','INFO','reply: addressed-by-name (in 3.0s)']],
+      reconn: [['agent','WARNING','sync failed: homeserver unreachable; retry in 10s']],
+      homeserver: [['client','INFO','GET /sync @ada:agora.lan 200 (long-poll 30 s)'], ['client','INFO','GET /sync @bruno:agora.lan 200 (long-poll 30 s)'], ['client','INFO','PUT /send m.room.message @ich:agora.lan 200'], ['client','INFO','PUT /typing @ada:agora.lan 200']]
+    };
+    const TABS = [['log','Log'],['session','Last session'],['memory','Memories'],['plans','Plans'],['today','Today'],['tokens','Tokens']];
+    const PALETTE = [
+      { n: 'Ground', v: '--color-bg' }, { n: 'Surface', v: '--color-surface' }, { n: 'Text', v: '--color-text' }, { n: 'Muted text', v: '--muted' },
+      { n: 'Divider', v: '--color-divider' }, { n: 'Accent', v: '--color-accent' }, { n: 'Accent ink', v: '--accent-ink' }, { n: 'Accent tint', v: '--accent-tint' },
+      { n: 'Running', v: '--st-ok' }, { n: 'Working', v: '--st-work' }, { n: 'Reconnecting', v: '--st-warn' }, { n: 'Down', v: '--st-err' }, { n: 'Stopped', v: '--st-stop' }
+    ];
+    return { N, C4, USD, MLN, pad, DAYS, WD, DN, KINDS, U, PS, pill, NT, AG, LOGS, POOL, TABS, PALETTE };
+  })();
+
+  constructor(props) {
+    super(props);
+    this.state = this.initial(props || {});
+    this.rootRef = React.createRef(); this.mainRef = React.createRef(); this.logRef = React.createRef();
+    this.hostRef = React.createRef(); this.usageRef = React.createRef(); this.agentsRef = React.createRef();
+    this.timers = [];
+  }
+
+  initial(p) {
+    const sc = p.scenario || 'healthy', scr = p.screen || 'dashboard', ov = p.initialOverlay || 'none';
+    const ag = { ada: 'run', bruno: 'run' };
+    if (sc === 'agents-mixed') { ag.ada = 'stop'; ag.bruno = 'none'; }
+    if (sc === 'terminal') ag.bruno = 'term';
+    const st = {
+      authed: scr !== 'gate' && scr !== 'gate-error', gateError: scr === 'gate-error', token: scr === 'gate-error' ? 'agora' : '',
+      theme: p.theme || 'dark', since: 12, clock: 0, w: (this.state && this.state.w) || 1440,
+      hs: sc === 'homeserver-down' ? 'down' : 'ok', docker: sc !== 'docker-down', stateOk: sc !== 'state-unreadable',
+      loading: sc === 'loading', empty: sc === 'empty', ag, busy: {}, fresh: {},
+      drawer: p.initialDrawer && p.initialDrawer !== 'none' ? p.initialDrawer : null, tab: p.initialTab || 'log', follow: true,
+      extra: { ada: [], bruno: [], homeserver: [] }, dialog: null, toast: null, uf: 'all',
+      open: { 'ada:2026-10-03': true, 'bruno:2026-10-03': true }, forgotten: {}
+    };
+    if (ov === 'confirm-stop') st.dialog = { act: 'stop', id: 'ada' };
+    if (ov === 'confirm-restart') st.dialog = { act: 'restart', id: 'bruno' };
+    if (ov === 'confirm-forget') { ag.ada = 'stop'; st.drawer = 'ada'; st.tab = 'session'; st.dialog = { act: 'forget', id: 'ada' }; }
+    if (ov === 'busy' || ov === 'busy-toast') st.busy = { ada: 'stopping… writing summary' };
+    if (ov === 'busy-toast') st.toast = { kind: 'ok', text: 'Bruno started' };
+    if (ov === 'toast-ok') st.toast = { kind: 'ok', text: 'Ada stopped' };
+    if (ov === 'toast-error') st.toast = { kind: 'err', text: 'Failed: Docker unreachable' };
+    return st;
+  }
+
+  componentDidMount() {
+    this.iv = setInterval(() => this.tick(), 1000);
+    const el = this.rootRef.current;
+    if (el && window.ResizeObserver) {
+      this.ro = new ResizeObserver(es => { const w = Math.round(es[0].contentRect.width); if (w && Math.abs(w - this.state.w) > 2) this.setState({ w }); });
+      this.ro.observe(el);
+    }
+    this.scrollLog();
+  }
+  componentWillUnmount() { clearInterval(this.iv); if (this.ro) this.ro.disconnect(); this.timers.forEach(clearTimeout); }
+  componentDidUpdate(pp) {
+    const keys = ['scenario', 'screen', 'theme', 'initialDrawer', 'initialTab', 'initialOverlay'];
+    if (keys.some(k => pp[k] !== this.props[k])) { this.setState(this.initial(this.props)); return; }
+    this.scrollLog();
+  }
+  scrollLog() { const el = this.logRef.current; if (el && this.state.follow) el.scrollTop = el.scrollHeight; }
+
+  liveLog(s, id) {
+    if (!s.docker || s.loading) return false;
+    if (id === 'homeserver') return s.hs === 'ok' && !s.busy.homeserver;
+    const a = s.ag[id]; return (a === 'run' || a === 'term') && !s.busy[id];
+  }
+  tick() {
+    this.setState(s => {
+      const o = { since: s.since >= 15 ? 0 : s.since + 1, clock: s.clock + 1 };
+      const id = s.drawer;
+      if (id && s.follow && (id === 'homeserver' || s.tab === 'log') && s.clock % 4 === 3 && this.liveLog(s, id)) {
+        o.extra = Object.assign({}, s.extra, { [id]: s.extra[id].concat([s.clock]) });
+      }
+      return o;
+    });
+  }
+
+  act(kind, id) {
+    if (kind === 'forget') return this.setState({ dialog: { act: kind, id } });
+    if (!this.state.docker) return this.toast('err', 'Failed: Docker unreachable');
+    if (kind === 'stop' || kind === 'restart') return this.setState({ dialog: { act: kind, id } });
+    this.run(kind, id);
+  }
+  run(kind, id) {
+    const D = Component.D, svc = id === 'homeserver', name = svc ? 'homeserver' : D.AG[id].name;
+    if (kind === 'forget') {
+      this.setState(s => ({ dialog: null, forgotten: Object.assign({}, s.forgotten, { [id]: true }) }));
+      this.toast('ok', name + '’s last session forgotten'); return;
+    }
+    const lbl = { start: svc ? 'starting…' : (this.state.ag[id] === 'none' ? 'creating container…' : 'starting…'), stop: svc ? 'stopping…' : 'stopping… writing summary', restart: svc ? 'restarting…' : 'restarting… writing summary' }[kind];
+    this.setState(s => ({ dialog: null, busy: Object.assign({}, s.busy, { [id]: lbl }) }));
+    const t = setTimeout(() => {
+      this.setState(s => {
+        const busy = Object.assign({}, s.busy); delete busy[id];
+        const fresh = Object.assign({}, s.fresh, { [id]: kind !== 'stop' });
+        if (svc) return { busy, fresh, hs: kind === 'stop' ? 'stopped' : 'ok' };
+        return { busy, fresh, ag: Object.assign({}, s.ag, { [id]: kind === 'stop' ? 'stop' : 'run' }) };
+      });
+      this.toast('ok', name + ' ' + { start: 'started', stop: 'stopped', restart: 'restarted' }[kind]);
+    }, kind === 'start' ? 1800 : 3000);
+    this.timers.push(t);
+  }
+  toast(kind, text) {
+    clearTimeout(this.tt);
+    this.setState({ toast: { kind, text } });
+    this.tt = setTimeout(() => this.setState({ toast: null }), 4500);
+    this.timers.push(this.tt);
+  }
+  openDrawer(id) { this.setState({ drawer: id, tab: id === 'homeserver' ? 'log' : this.state.tab, follow: true }); }
+  scrollTo(ref) {
+    const m = this.mainRef.current, t = ref && ref.current;
+    if (!m) return;
+    const top = t ? t.getBoundingClientRect().top - m.getBoundingClientRect().top + m.scrollTop - 16 : 0;
+    m.scrollTo({ top, behavior: 'smooth' });
+  }
+
+  totals(rows) {
+    return rows.reduce((a, r) => ({ calls: a.calls + r.calls, inn: a.inn + r.inn, out: a.out + r.out, cost: a.cost + r.cost }), { calls: 0, inn: 0, out: 0, cost: 0 });
+  }
+
+  agentView(id, ctl, showCost) {
+    const D = Component.D, s = this.state, A = D.AG[id], st = s.ag[id], busy = s.busy[id];
+    let vs = st;
+    if (busy) vs = 'busy';
+    else if (!s.docker && st !== 'term') vs = 'unknown';
+    else if ((st === 'run' || st === 'term') && s.hs !== 'ok') vs = 'reconn';
+    else if (st === 'run' && id === 'ada' && !s.fresh.ada && s.clock % 30 >= 4 && s.clock % 30 < 8) vs = 'work';
+    const PT = { run: ['ok','running'], work: ['work','working… replying'], reconn: ['warn','reconnecting'], stop: ['stop','stopped'], none: ['none','container not created'], term: ['ok','running in terminal'], unknown: ['unknown','unknown'], busy: ['work', busy] };
+    const pill = D.pill(PT[vs][0], PT[vs][1]);
+    let f = A.f[st] || A.f.run;
+    if (st === 'run' && s.fresh[id]) f = ['less than a minute', 'no replies yet', 'new session'];
+    if (vs === 'reconn') f = [f[0], 'reconnect attempt 4 s ago', f[2]];
+    if (vs === 'work') f = [f[0], 'replying now', 'active session: 7 messages'];
+    if (vs === 'unknown') f = ['—', '—', f[2]];
+    const where = st === 'term' ? ['Mac · terminal', 'PID 48211'] : ['server · container', id];
+    const tot = this.totals(D.U.filter(r => r.agent === id));
+    const tokens = s.empty ? 'No data yet' : !s.stateOk ? 'Memory unavailable' : D.N(tot.calls) + ' calls · ' + D.MLN(tot.inn + tot.out) + ' tokens' + (showCost ? ' · ' + D.USD(tot.cost) : '');
+    let nt = null;
+    if (vs === 'unknown') nt = Object.assign({ icon: 'ph ph-cube', text: 'Docker unreachable — state unknown' }, D.NT.unknown);
+    else if (st === 'term' && ctl) nt = Object.assign({ icon: 'ph ph-terminal-window', text: 'Controlled from a terminal on the Mac — the panel won’t start a second instance' }, D.NT.stop);
+    const lock = !!busy || !s.docker || st === 'term';
+    return {
+      id, _vs: vs, name: A.name, mono: A.mono, role: A.role, pill, whereText: where[0], whereCode: where[1],
+      uptime: f[0], activity: f[1], session: f[2], todayOk: s.stateOk, todayNo: !s.stateOk, today: A.todayLine, tokens,
+      notice: !!nt, nt: nt || {}, fieldsOpacity: vs === 'unknown' ? 0.5 : 1,
+      startDisabled: lock || !(st === 'stop' || st === 'none'), stopDisabled: lock || st !== 'run', restartDisabled: lock || st !== 'run',
+      startTitle: st === 'none' ? 'Creates the container and starts it' : 'Start',
+      onStart: () => this.act('start', id), onStop: () => this.act('stop', id), onRestart: () => this.act('restart', id), onDetails: () => this.openDrawer(id)
+    };
+  }
+
+  renderVals() {
+    const D = Component.D, s = this.state, p = this.props;
+    const ctl = (p.phase || 'control') === 'control';
+    const showCost = p.showCost !== false;
+    const narrow = s.w < 760;
+    const screen = p.screen || 'dashboard';
+    const agents = ['ada', 'bruno'].map(id => this.agentView(id, ctl, showCost));
+    const amap = { ada: agents[0], bruno: agents[1] };
+
+    const hb = s.busy.homeserver;
+    let svcPill;
+    if (hb) svcPill = D.pill('work', hb);
+    else if (!s.docker) svcPill = D.pill('unknown', 'unknown');
+    else if (s.hs === 'ok') svcPill = D.pill('ok', 'running');
+    else if (s.hs === 'stopped') svcPill = D.pill('stop', 'stopped');
+    else svcPill = D.pill('err', 'crashed');
+    const svcLock = !!hb || !s.docker;
+    const services = [{
+      name: 'homeserver', image: 'continuwuity', pill: svcPill,
+      uptime: s.hs === 'ok' ? (s.fresh.homeserver ? 'less than a minute' : '39 h') : '—',
+      onLog: () => this.openDrawer('homeserver'),
+      startDisabled: svcLock || s.hs === 'ok', stopDisabled: svcLock || s.hs !== 'ok', restartDisabled: svcLock || s.hs !== 'ok',
+      onStart: () => this.act('start', 'homeserver'), onStop: () => this.act('stop', 'homeserver'), onRestart: () => this.act('restart', 'homeserver')
+    }];
+    const vss = agents.map(a => a._vs);
+    let line;
+    if (vss.every(v => v === 'unknown')) line = 'state unknown';
+    else if (s.hs !== 'ok' && vss.some(v => v === 'reconn')) line = 'waiting for the server';
+    else if (vss.every(v => v === 'run' || v === 'work')) line = 'both running';
+    else {
+      const lab = { run: 'running', work: 'running', term: 'running', stop: 'stopped', none: 'not created', busy: 'changing state', reconn: 'reconnecting', unknown: 'unknown' };
+      const c = {}; vss.forEach(v => { c[lab[v]] = (c[lab[v]] || 0) + 1; });
+      line = Object.keys(c).map(k => c[k] + ' ' + k).join(' · ');
+    }
+    const sim = {
+      pill: s.hs === 'ok' ? D.pill('ok', 'Healthy') : D.pill('err', 'Unreachable'),
+      latency: s.hs === 'ok' ? '42 ms' : 'no response', checked: 'checked ' + ((s.since + 6) % 30) + ' s ago',
+      hsDown: s.hs !== 'ok' && !s.loading, dockerDown: !s.docker, agentsLine: '2 agents · ' + line
+    };
+    let topPill = D.pill('ok', 'All systems running');
+    if (s.hs !== 'ok') topPill = D.pill('err', 'Matrix unreachable');
+    else if (!s.docker) topPill = D.pill('unknown', 'Docker unreachable');
+    else if (!s.stateOk) topPill = D.pill('warn', 'Memory unavailable');
+    const cnt = 1 + (s.hs === 'ok' ? 1 : 0) + ['ada', 'bruno'].filter(id => s.ag[id] === 'run').length;
+    const host = { dockerOk: s.docker, dockerNo: !s.docker, containers: cnt + ' running' };
+
+    const fr = D.U.filter(r => s.uf === 'all' || r.agent === s.uf);
+    let prev = null;
+    const rows = fr.map(r => { const first = r.day !== prev; prev = r.day; return { day: first ? r.day : '', agent: r.agent, kind: r.kind, calls: D.N(r.calls), inn: D.N(r.inn), out: D.N(r.out), cost: D.C4(r.cost) }; });
+    const fmtT = (label, t, strong, sticky) => ({ label, calls: D.N(t.calls), inn: D.N(t.inn), out: D.N(t.out), cost: D.C4(t.cost), weight: strong ? 500 : 400, pos: sticky ? 'sticky' : 'static', rule: strong ? 'inset 0 1px 0 var(--color-divider)' : 'none' });
+    const tA = this.totals(D.U.filter(r => r.agent === 'ada')), tB = this.totals(D.U.filter(r => r.agent === 'bruno')), tAll = this.totals(D.U);
+    const totals = [fmtT('total · ada', tA, false, false), fmtT('total · bruno', tB, false, false), fmtT('total', tAll, true, true)];
+    totals[0].rule = 'inset 0 1px 0 var(--color-divider)';
+    const perDay = D.DAYS.map((d, i) => { const a = this.totals(D.U.filter(r => r.di === i && r.agent === 'ada')), b = this.totals(D.U.filter(r => r.di === i && r.agent === 'bruno')); return { a: a.inn + a.out, b: b.inn + b.out }; });
+    const mx = Math.max.apply(null, perDay.map(x => x.a + x.b));
+    const bars = perDay.map((x, i) => {
+      const a = s.uf === 'bruno' ? 0 : x.a, b = s.uf === 'ada' ? 0 : x.b;
+      return { hA: Math.round(a / mx * 44) + 'px', hB: Math.round(b / mx * 44) + 'px', label: D.WD[i].slice(0, 2) + ' ' + D.DN[i], labelColor: i === 6 ? 'var(--color-text)' : 'var(--muted)', title: D.DAYS[i] + ': ' + D.MLN(a + b) + ' tokens' };
+    });
+    const fT = this.totals(fr);
+    const usage = {
+      ok: !s.empty && s.stateOk, empty: s.empty && s.stateOk, unavailable: !s.stateOk,
+      rows, totals, bars, totalTok: D.MLN(fT.inn + fT.out) + ' tokens',
+      totalLine: D.N(fT.calls) + ' calls · ' + D.N(fT.inn) + ' in · ' + D.N(fT.out) + ' out' + (showCost ? ' · ' + D.USD(fT.cost) : ''),
+      segs: [['all', 'All'], ['ada', 'Ada'], ['bruno', 'Bruno']].map(([v, l]) => ({ label: l, active: s.uf === v, onClick: () => this.setState({ uf: v }), color: s.uf === v ? 'var(--accent-ink)' : 'var(--color-text)', ring: s.uf === v ? 'inset 0 0 0 1px var(--color-accent)' : 'none' }))
+    };
+
+    const did = s.drawer, isSvc = did === 'homeserver', isAgent = !!did && !isSvc;
+    const A = isAgent ? D.AG[did] : null;
+    const memTab = k => k !== 'log';
+    const tabs = D.TABS.map(([k, l]) => ({ label: l, active: s.tab === k, dim: memTab(k) && !s.stateOk, onClick: () => this.setState({ tab: k, follow: true }), color: s.tab === k ? 'var(--color-text)' : (memTab(k) && !s.stateOk ? 'var(--faint)' : 'var(--muted)'), underline: s.tab === k ? 'inset 0 -2px 0 var(--color-accent)' : 'none' }));
+    let lines = [], logOk = true, logNoText = '', logNoSub = '', logNoIcon = 'ph ph-cube';
+    if (did) {
+      const base = D.LOGS[did].slice();
+      if (isAgent) {
+        const st = s.ag[did];
+        if (st === 'stop') base.push({ t: '13:52:44', src: 'agent', lvl: 'INFO', msg: 'stop: SIGTERM received' }, { t: '13:52:51', src: 'agent.memory', lvl: 'INFO', msg: 'saved state/' + did + '.memory.md (session summary)' }, { t: '13:52:51', src: 'agent', lvl: 'INFO', msg: 'stopped' });
+        if ((st === 'run' || st === 'term') && s.hs !== 'ok') base.push({ t: '14:03:12', src: 'agent', lvl: 'WARNING', msg: 'sync failed: homeserver unreachable; retry in 5s' }, { t: '14:03:17', src: 'agent', lvl: 'WARNING', msg: 'sync failed: homeserver unreachable; retry in 10s' });
+        if (st === 'none') { logOk = false; logNoIcon = 'ph ph-package'; logNoText = 'Container not created — no log yet'; logNoSub = 'Start the agent to create its container.'; }
+      } else if (s.hs === 'down') base.push({ t: '14:03:09', src: 'database', lvl: 'ERROR', msg: 'I/O error on write; shutting down' }, { t: '14:03:09', src: 'server', lvl: 'INFO', msg: 'stopped' });
+      else if (s.hs === 'stopped') base.push({ t: '14:03:09', src: 'server', lvl: 'INFO', msg: 'received SIGTERM, shutting down' }, { t: '14:03:10', src: 'server', lvl: 'INFO', msg: 'stopped' });
+      if (!s.docker && !(isAgent && s.ag[did] === 'term')) { logOk = false; logNoIcon = 'ph ph-cube'; logNoText = 'Docker unreachable'; logNoSub = 'The container log cannot be read until Docker is back.'; }
+      const pool = isSvc ? D.POOL.homeserver : (s.hs !== 'ok' ? D.POOL.reconn : D.POOL.agent);
+      const ex = s.extra[did] || [];
+      ex.forEach((c, k) => {
+        const sec = 14 * 3600 + 4 * 60 + 2 + k * 13 + (c % 5);
+        const pl = pool[(c + k) % pool.length];
+        base.push({ t: D.pad(Math.floor(sec / 3600)) + ':' + D.pad(Math.floor(sec / 60) % 60) + ':' + D.pad(sec % 60), src: pl[0], lvl: pl[1], msg: pl[2], fresh: k === ex.length - 1 });
+      });
+      lines = base.map(l => ({ t: l.t, src: l.src, lvl: l.lvl, msg: l.msg, anim: l.fresh ? 'agoraFade .5s ease-out' : 'none', lvlColor: l.lvl === 'WARNING' ? 'var(--st-warn-fg)' : l.lvl === 'ERROR' ? 'var(--st-err-fg)' : 'var(--muted)' }));
+    }
+    const dr = {
+      isAgent, isSvc, title: isSvc ? 'Log · homeserver' : (A ? A.name : ''), sub: isSvc ? 'continuwuity · container homeserver' : (A ? A.role : ''),
+      mono: A ? A.mono : '', pill: isSvc ? svcPill : (isAgent ? amap[did].pill : D.pill('ok', '')),
+      showLog: isSvc || (isAgent && s.tab === 'log'), showBody: isAgent && s.tab !== 'log', memNo: !s.stateOk,
+      tSession: s.stateOk && s.tab === 'session', tMemory: s.stateOk && s.tab === 'memory', tPlans: s.stateOk && s.tab === 'plans', tToday: s.stateOk && s.tab === 'today', tTokens: s.stateOk && s.tab === 'tokens',
+      logOk, logNo: !logOk, logNoText, logNoSub, logNoIcon, lines, srcW: isSvc ? '64px' : '92px',
+      logMeta: 'last 200 lines · ' + (isSvc ? 'docker logs homeserver' : (isAgent && s.ag[did] === 'term' ? 'state/logs/' + did + '.log' : 'docker logs ' + did))
+    };
+    const wc = t => t.split(/\s+/).filter(Boolean).length;
+    const ss = A ? (() => {
+      const has = !s.forgotten[did], w = wc(A.session.text), stopped = s.ag[did] === 'stop';
+      return { has, none: !has, text: A.session.text, when: A.session.when, words: w + ' words', forgetDisabled: !stopped || !has, forgetNote: !has ? 'No summary to forget' : stopped ? 'The summary is deleted; day memories stay' : 'Stopped agents only', onForget: () => this.act('forget', did) };
+    })() : {};
+    const mem = A ? {
+      digests: A.digests.map(g => ({ layer: g.layer, period: g.period, text: g.text, color: g.empty ? 'var(--muted)' : 'var(--color-text)' })),
+      days: A.days.map(m => { const key = did + ':' + m.d, open = !!s.open[key]; return { date: m.date, wd: m.wd, text: m.text, words: wc(m.text) + ' words', open, caret: open ? 'ph ph-caret-down' : 'ph ph-caret-right', bg: open ? 'var(--inset)' : 'transparent', toggle: () => this.setState(st => ({ open: Object.assign({}, st.open, { [key]: !st.open[key] }) })) }; })
+    } : { digests: [], days: [] };
+    const plans = A ? A.plans.map(h => ({ name: h.name, period: h.period, items: h.items.map(it => ({ t: it.t, dev: !!it.dev })) })) : [];
+    const td = A ? { text: A.today } : {};
+    let at = { ok: false, empty: false, rows: [], bars: [], tot: {} };
+    if (A) {
+      const ar = D.U.filter(r => r.agent === did);
+      const byK = D.KINDS.map(k => { const t = this.totals(ar.filter(r => r.kind === k)); return { kind: k, calls: D.N(t.calls), inn: D.N(t.inn), out: D.N(t.out), cost: D.C4(t.cost) }; });
+      const t = this.totals(ar);
+      const pd = D.DAYS.map((d, i) => { const x = this.totals(ar.filter(r => r.di === i)); return x.inn + x.out; });
+      const m2 = Math.max.apply(null, pd);
+      at = {
+        ok: !s.empty, empty: s.empty, rows: byK, tot: { calls: D.N(t.calls), inn: D.N(t.inn), out: D.N(t.out), cost: D.C4(t.cost) },
+        totalTok: D.MLN(t.inn + t.out) + ' tokens', totalLine: D.N(t.calls) + ' calls in 7 days' + (showCost ? ' · ' + D.USD(t.cost) : ''),
+        bars: pd.map((v, i) => ({ h: Math.max(2, Math.round(v / m2 * 44)) + 'px', label: D.WD[i].slice(0, 2) + ' ' + D.DN[i], labelColor: i === 6 ? 'var(--color-text)' : 'var(--muted)', title: D.DAYS[i] + ': ' + D.MLN(v) + ' tokens' }))
+      };
+    }
+
+    let dlg = {};
+    if (s.dialog) {
+      const { act, id } = s.dialog, svc = id === 'homeserver', AA = D.AG[id];
+      const nm = svc ? 'homeserver' : AA.name;
+      const T = {
+        stop: [svc ? 'Stop homeserver?' : 'Stop ' + nm + '?', svc ? 'Agents will keep reconnecting until it is back.' : AA.she + ' will write a session summary — up to 30 seconds.', 'Stop', 'ph ph-stop'],
+        restart: [svc ? 'Restart homeserver?' : 'Restart ' + nm + '?', svc ? 'Agents will reconnect briefly.' : 'The current session will end with a summary.', 'Restart', 'ph ph-arrow-clockwise'],
+        forget: ['Forget ' + nm + '’s last session?', 'The summary will be deleted; day memories stay. Stopped agents only.', 'Forget', 'ph ph-eraser']
+      }[act];
+      dlg = { title: T[0], body: T[1], confirmLabel: T[2], icon: T[3], fg: act === 'forget' ? 'var(--st-err-fg)' : 'var(--color-accent)', border: act === 'forget' ? 'var(--st-err)' : 'var(--color-accent)', cancel: () => this.setState({ dialog: null }), confirm: () => this.run(act, id) };
+    }
+    const tst = s.toast ? { text: s.toast.text, icon: s.toast.kind === 'err' ? 'ph ph-warning-circle' : 'ph ph-check-circle', color: s.toast.kind === 'err' ? 'var(--st-err)' : 'var(--st-ok)' } : {};
+
+    const P = D.pill;
+    const allPills = [P('ok','running'), P('work','working… replying'), P('work','writing summary'), P('warn','reconnecting'), P('stop','stopped'), P('err','unreachable'), P('unknown','unknown'), P('none','container not created'), P('ok','running in terminal')];
+
+    return {
+      rootRef: this.rootRef, mainRef: this.mainRef, logRef: this.logRef, hostRef: this.hostRef, usageRef: this.usageRef, agentsRef: this.agentsRef,
+      theme: s.theme, rootH: p.frameHeight || '100vh',
+      screenLabel: !s.authed ? 'Sign in' : screen === 'components' ? 'Components' : 'Dashboard',
+      screenGate: !s.authed, screenDash: s.authed && screen !== 'components', screenComp: s.authed && screen === 'components',
+      gate: {
+        value: s.token, error: s.gateError, border: s.gateError ? 'var(--st-err)' : 'var(--color-divider)',
+        onInput: e => this.setState({ token: e.target.value, gateError: false }),
+        submit: e => { e.preventDefault(); if (s.token.trim().length < 6) this.setState({ gateError: true }); else this.setState({ authed: true, gateError: false, token: '' }); }
+      },
+      narrow, wide: !narrow, pad: narrow ? '14px' : '24px', ctl, showCost, noCost: !showCost,
+      phaseLabel: ctl ? 'v3.4 · control' : 'v3.3 · view only',
+      topPill, refreshLabel: s.loading ? 'loading…' : s.since === 0 ? 'updated just now' : 'updated ' + s.since + ' s ago',
+      spinAnim: s.since === 0 || s.loading ? 'agoraSpin .8s linear ' + (s.loading ? 'infinite' : '1') : 'none',
+      refresh: () => this.setState({ since: 0 }),
+      themeIcon: s.theme === 'dark' ? 'ph ph-sun' : 'ph ph-moon', themeTitle: s.theme === 'dark' ? 'Light theme' : 'Dark theme',
+      toggleTheme: () => this.setState({ theme: s.theme === 'dark' ? 'light' : 'dark' }),
+      logout: () => this.setState({ authed: false, drawer: null, dialog: null, toast: null }),
+      goTop: () => this.scrollTo(null), goHost: () => this.scrollTo(this.hostRef), goUsage: () => this.scrollTo(this.usageRef), goAgents: () => this.scrollTo(this.agentsRef),
+      loading: s.loading, loaded: !s.loading, skeletonAgents: [1, 2],
+      sim, services, agents, host, usage,
+      drawerOpen: !!did, drawerW: narrow ? '100%' : 'min(680px, 94%)', closeDrawer: () => this.setState({ drawer: null }),
+      dr, tabs, ss, mem, plans, td, at,
+      follow: s.follow, followLive: s.follow && !!did && this.liveLog(s, did),
+      followColor: s.follow ? 'var(--accent-ink)' : 'var(--color-text)', followBorder: s.follow ? 'var(--color-accent)' : 'var(--color-divider)',
+      toggleFollow: () => this.setState(st => ({ follow: !st.follow })),
+      onLogScroll: e => { const el = e.currentTarget; if (el.scrollHeight - el.scrollTop - el.clientHeight > 12 && this.state.follow) this.setState({ follow: false }); },
+      dialogOpen: !!s.dialog, dlg, toastOpen: !!s.toast, tst, closeToast: () => this.setState({ toast: null }),
+      toastR: narrow ? '12px' : '20px', toastL: narrow ? '12px' : 'auto', toastB: narrow ? '12px' : '20px',
+      palette: D.PALETTE, allPills
+    };
+  }
+}
+</script>
+</body>
+</html>

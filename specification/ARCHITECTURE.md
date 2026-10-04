@@ -172,7 +172,7 @@ Earlier phases use the prefix of this order that exists at that point (v1.1: per
 
 ## The panel: simulations and agents
 
-The panel is the point of the whole project (VISION §The direction). One FastAPI app — a JSON API plus one static vanilla-JS page (Ukrainian) — running as the `panel` service beside the homeserver: port `8090`, ufw-limited to the LAN, Bearer `PANEL_TOKEN` on every API call. The agents and the terminal workflow keep working with the panel down.
+The panel is the point of the whole project (VISION §The direction). One FastAPI app — a JSON API plus one static vanilla-JS page, **English UI** (the agents' own texts shown as-is, in Ukrainian), built to the Claude Design handoff in `specification/design/design_handoff_agora_panel/` (Nocturne tokens, dark default + light, `agora-panel.css` as the starter stylesheet; no outside requests — Inter self-hosted, icons inline) — running as the `panel` service beside the homeserver: port `8090`, ufw-limited to the LAN, Bearer `PANEL_TOKEN` on every API call. The agents and the terminal workflow keep working with the panel down.
 
 - **The model.** A **simulation** is an environment agents join, managed as one unit: a registry entry `Simulation{id, kind, title, services, health, endpoints}` names its compose services, health probe and log sources. An **agent** is a managed participant: `Agent{name, container, canon, simulation}`; `agents/<name>.toml` carries `simulation = "agora"`, and the agent's connection settings (`HOMESERVER`, `ROOM_ID`) resolve from that entry. The registry holds exactly one entry — `agora`, kind `matrix-chat` — and this roadmap adds no second one; but every panel mechanism (deploy state, health, start/stop, logs, maintenance) is written against a registry entry, never against "the chat", so a new simulation kind is a registry entry plus its compose services, not a panel rewrite.
 - **Viewing first, control second.** v3.3 ships the read-only panel (every card, the docker socket used only for container state and log tails); v3.4 adds the actions below — start/stop/restart, forget, confirmations.
@@ -184,7 +184,7 @@ The panel is the point of the whole project (VISION §The direction). One FastAP
 - **Confirmations:** every stop/restart and forget is confirmed in the UI; mutating actions are `POST` + token.
 - **Degrade by card:** docker trouble greys the container cards, an unreadable `state/` greys the memory views; a stopped homeserver never crashes the agents (nio retries until it is back).
 - **Views stay safe:** settings are read-only with anything matching `*_KEY` / `*_PASSWORD` / `*_TOKEN` masked; log views are safe because logs never contain tokens or texts; the panel never edits `.env` or canons.
-- **Single instance:** an agent takes `flock` on `state/<name>.lock` (PID inside) at startup, so a second instance refuses to start; the panel shows a terminal-started agent via the lock.
+- **Single instance:** an agent takes `flock` on `state/<name>.lock` (PID inside) at startup, so a second instance refuses to start; the panel shows an instance started outside it on the server host via the lock. A dev-mode instance on the Mac is invisible to it (the lock is per host).
 
 ## Contracts
 

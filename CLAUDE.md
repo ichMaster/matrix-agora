@@ -10,6 +10,8 @@ Read these before planning work; they are the project's contract with itself.
 - **[specification/ARCHITECTURE.md](specification/ARCHITECTURE.md)** — components, the message flow and allowlist, turn-taking, canon, memory, world awareness, token accounting, the panel, the **contracts**, configuration, security, and the acceptance gates.
 - **[specification/ROADMAP.md](specification/ROADMAP.md)** — four versions (v0 Platform, v1 Conversation, v2 Persona & memory, v3 Operations), each phase `vA.B` with Goal, Tasks, DoD and Tests. Build phases strictly in order and check each against its DoD before moving on.
 
+- **[specification/design/](specification/design/README.md)** — the panel's UI: the brief and the Claude Design handoff (screens, tokens, copy, status logic) that v3.3–v3.4 build to; English UI.
+
 **`specification/history/` (SPEC.md, SPEC-UA.md) is frozen.** Those are the superseded originals, kept for history only: never update them, never treat them as a source of truth, and never require changes to stay in sync with them.
 
 ## Project status
