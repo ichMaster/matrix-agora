@@ -249,3 +249,14 @@ def test_a_failed_compose_up_logs_why(tmp_path, monkeypatch, caplog):
         ComposeRunner("server", str(f)).up("bruno")
     assert e.value.status == 502
     assert any("no such service: brunoo" in r.getMessage() for r in caplog.records)  # code review #2
+
+
+
+def test_start_refuses_a_running_container_instead_of_recreating_it():
+    # a start on a running agent made the panel's compose recreate it live (v3.4 review #4)
+    sup, _, compose = make(Container("ada", "running"), Container("bruno", "restarting"))
+    for svc in ("ada", "bruno"):
+        with pytest.raises(ActionError) as e:
+            sup.act(svc, "start")
+        assert e.value.status == 409
+    assert compose.calls == []

@@ -89,6 +89,9 @@ class Supervisor:
             if not self.reader.available():
                 raise ActionError(503, "docker unreachable")
             if action == "start":
+                if self.reader.container(service).state in ("running", "restarting"):
+                    # compose would recreate a running container whose config hash differs (v3.4 review #4)
+                    raise ActionError(409, f"{service} is already running")
                 self.compose.up(service)   # creates the container when it does not exist yet
             else:
                 container = self._container(service)
