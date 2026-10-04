@@ -1,14 +1,8 @@
 /* Agora panel — starter stylesheet for the vanilla HTML/CSS/JS implementation (panel/static/panel.css).
    Extracted 1:1 from the prototype's inline styles. Theme = data-theme="dark|light" on <html>.
-   Font: Inter (the one webfont) + system monospace. Icons: Phosphor regular as inline SVG on currentColor.
-   Adopted for matrix-agora (2026-10-04): the LAN-only panel makes no outside requests — Inter is self-hosted
-   from panel/static/fonts/ (OFL, files added with the v3.3 page) instead of the Google Fonts @import, and
-   icons are inlined (no CDN). Until the font files exist, system-ui takes over. */
-
-@font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap;
-             src: url("fonts/Inter-Regular.woff2") format("woff2"); }
-@font-face { font-family: "Inter"; font-style: normal; font-weight: 500; font-display: swap;
-             src: url("fonts/Inter-Medium.woff2") format("woff2"); }
+   Adopted for matrix-agora (2026-10-04): system fonts only — the LAN-only panel loads no webfont and makes no
+   outside requests (the design's Inter is replaced by the platform UI font: SF Pro on macOS/iOS, Segoe UI on
+   Windows, Ubuntu/Cantarell/Roboto on Linux and Android). Icons: Phosphor regular as inline SVG on currentColor. */
 
 /* ── Base tokens (Nocturne) ─────────────────────────────────────────────── */
 :root {
@@ -25,7 +19,8 @@
   --color-accent-400: #b5abfc; --color-accent-500: #968ae0; --color-accent-600: #796cbf;
   --color-accent-700: #5d5294; --color-accent-800: #423a6a; --color-accent-900: #2b2741;
 
-  --font-body: "Inter", system-ui, sans-serif;
+  --font-body: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, Cantarell,
+               "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --radius-sm: 4px; --radius-md: 8px; --radius-lg: 14px;
 
