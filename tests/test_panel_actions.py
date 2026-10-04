@@ -167,3 +167,53 @@ def test_actions_need_the_token_post_and_the_same_origin(client):
 def test_docker_down_is_503_not_a_crash(client):
     c, _ = client(Container("ada"), up=False)
     assert c.post("/api/agents/ada/stop", headers=AUTH).status_code == 503
+
+
+# --- forget (AGORA-040) ---
+@pytest.fixture
+def state(tmp_path):
+    s = tmp_path / "state"
+    for rel in ("ada.memory.md", "ada.days/2026-10-03.md", "ada.plans/2026-10-04.md", "ada.today.md", "bruno.memory.md"):
+        (s / rel).parent.mkdir(parents=True, exist_ok=True)
+        (s / rel).write_text("x\n")
+    return s
+
+
+def files(s):
+    return sorted(str(p.relative_to(s)) for p in s.rglob("*") if p.is_file())
+
+
+@pytest.mark.parametrize("status,allowed", [("exited", True), ("running", False), ("restarting", False)])
+def test_forget_only_for_a_stopped_agent(state, status, allowed):
+    sup, _, _ = make(Container("ada", status), state_dir=state)
+    before = files(state)
+    if allowed:
+        assert sup.forget("ada") == {"ok": True, "forgotten": True}
+        assert files(state) == [f for f in before if f != "ada.memory.md"]  # only the summary, nothing else
+    else:
+        with pytest.raises(ActionError) as e:
+            sup.forget("ada")
+        assert e.value.status == 409 and files(state) == before
+
+
+def test_forget_with_no_container_or_no_summary_and_docker_down(state):
+    sup, _, _ = make(state_dir=state)          # bruno has no container: allowed
+    assert sup.forget("bruno")["forgotten"] is True
+    assert sup.forget("bruno") == {"ok": True, "forgotten": False}  # nothing left to forget — not an error
+    down, _, _ = make(Container("ada", "exited"), up=False, state_dir=state)
+    with pytest.raises(ActionError) as e:
+        down.forget("ada")                     # state unknown → refuse
+    assert e.value.status == 409 and (state / "ada.memory.md").exists()
+
+
+def test_the_forget_route(state):
+    sup, _, _ = make(Container("ada", "exited"), Container("bruno"), state_dir=state)
+    reg = Registry()
+    c = TestClient(create_app(token=TOKEN, registry=reg, docker_reader=sup.reader, prober=Prober(reg), supervisor=sup,
+                              state_dir=state, background=False))
+    assert c.post("/api/agents/ada/forget").status_code == 401
+    assert c.post("/api/agents/ada/forget", headers={**AUTH, "Origin": "http://evil.example"}).status_code == 403
+    assert c.post("/api/agents/bruno/forget", headers=AUTH).status_code == 409   # bruno is running
+    assert c.post("/api/agents/carol/forget", headers=AUTH).status_code == 404
+    assert c.post("/api/agents/ada/forget", headers=AUTH).json() == {"ok": True, "forgotten": True}
+    assert not (state / "ada.memory.md").exists() and (state / "bruno.memory.md").exists()
