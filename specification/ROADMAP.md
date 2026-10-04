@@ -8,11 +8,34 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 ---
 
+## Status
+
+**All phases are complete** — the roadmap is delivered through `v3.4.0` (2026-10-04). Further work
+(the deferred backlog items in the code-review docs, new simulations) needs new phases.
+
+| Phase | Title | Status | Release |
+|---|---|---|---|
+| v0.1 | Homeserver (Ubuntu, 192.168.1.197) | ✅ completed | `v0.1.0` (2026-10-02) |
+| v0.2 | Server deploy from the repo | ✅ completed | `v0.2.0` (2026-10-02) |
+| v0.3 | Client (Element Desktop on the Mac) | ✅ completed | `v0.3.0` (2026-10-02) |
+| v0.4 | Bot accounts and the room | ✅ completed | `v0.4.0` (2026-10-02) |
+| v0.5 | Echo bot (Matrix without the LLM) | ✅ completed | `v0.5.0` (2026-10-02) |
+| v1.1 | Gemini replies | ✅ completed | `v1.1.0` (2026-10-02) |
+| v1.2 | Three-way conversation and loop protection | ✅ completed | `v1.2.0` (2026-10-02) + `v1.2.1`, `v1.2.2` |
+| v2.1 | Canons and session memory | ✅ completed | `v2.1.0` (2026-10-03) |
+| v2.2 | World awareness and a life story | ✅ completed | `v2.2.0` (2026-10-03) + `v2.2.1` |
+| v3.1 | Token accounting and report | ✅ completed | `v3.1.0` (2026-10-03) + `v3.1.1` |
+| v3.2 | Agent images, CI/CD and server deployment | ✅ completed | `v3.2.0` (2026-10-04) |
+| v3.3 | The panel: viewing (read-only) | ✅ completed | `v3.3.0` (2026-10-04) |
+| v3.4 | The panel: control | ✅ completed | `v3.4.0` (2026-10-04) |
+
 ## v0 — Platform: homeserver, server deploy, client, accounts, echo bot
 
 The working skeleton with no LLM: the Continuwuity homeserver in Docker on the Ubuntu box, a scripted deploy of the repo's server config to that box, Element Desktop as the owner's client, the bot accounts and the private room, and an echo bot that proves the whole Matrix side — login and session reuse, invites, the first-sync rule, the message filter and allowlist. v0.1, v0.3 and v0.4 are mostly steps the owner performs on the host and in Element; v0.2 is the first script, v0.5 the first real code. Depends on: nothing — this is the foundation.
 
 ### v0.1 — Homeserver (Ubuntu, 192.168.1.197)
+
+**Status:** ✅ completed — released `v0.1.0` on 2026-10-02.
 
 **Goal:** a Matrix homeserver on the home network that survives a reboot and is invisible from outside.
 
@@ -59,6 +82,8 @@ Continuwuity in one Docker container: embedded RocksDB, federation and encryptio
 
 ### v0.2 — Server deploy from the repo
 
+**Status:** ✅ completed — released `v0.2.0` on 2026-10-02.
+
 **Goal:** any configuration under `server/` reaches the Ubuntu host with one command — never by hand-editing files on the host.
 
 The repo is the source of truth for the server. A deploy script reads the gitignored `server_con.yaml` (SSH host, user, password), syncs `server/` to `~/matrix-agora/server/` on the host and applies it with `docker compose up -d`. From now on every server-config change (e.g. closing registration in v0.4) goes through this script.
@@ -82,6 +107,8 @@ The repo is the source of truth for the server. A deploy script reads the gitign
 
 ### v0.3 — Client (Element Desktop on the Mac)
 
+**Status:** ✅ completed — released `v0.3.0` on 2026-10-02.
+
 **Goal:** the owner is logged in to the homeserver as its admin.
 
 **Tasks:**
@@ -94,6 +121,8 @@ The repo is the source of truth for the server. A deploy script reads the gitign
 **Tests:** none (owner steps only).
 
 ### v0.4 — Bot accounts and the room
+
+**Status:** ✅ completed — released `v0.4.0` on 2026-10-02.
 
 **Goal:** the agents' accounts exist, the room is ready, and the server is closed.
 
@@ -110,6 +139,8 @@ The repo is the source of truth for the server. A deploy script reads the gitign
 **Tests:** the compose gate again (registration flag changed). The rest is the manual DoD.
 
 ### v0.5 — Echo bot (Matrix without the LLM)
+
+**Status:** ✅ completed — released `v0.5.0` on 2026-10-02.
 
 **Goal:** the whole Matrix side proven separately from any LLM.
 
@@ -135,6 +166,8 @@ The first code: the uv project, one `agents/agent.py` for both agents, TOML conf
 The echo becomes a character, and the room becomes a three-way conversation that does not loop. Depends on: v0.
 
 ### v1.1 — Gemini replies
+
+**Status:** ✅ completed — released `v1.1.0` on 2026-10-02.
 
 **Goal:** each agent replies in its own character, with context.
 
@@ -171,6 +204,8 @@ The echo becomes a character, and the room becomes a three-way conversation that
 
 ### v1.2 — Three-way conversation and loop protection
 
+**Status:** ✅ completed — released `v1.2.0` on 2026-10-02 · patches `v1.2.1`, `v1.2.2`.
+
 **Goal:** one owner message produces a bounded, natural exchange — never an endless bot loop.
 
 The turn-taking rules from ARCHITECTURE §Turn-taking: mentions route to one agent; no mention → both reply after a random 1–`REPLY_DELAY_S` s delay; agent-to-agent replies are gated by `bot_streak < MAX_BOT_TURNS` and probability `BOT_REPLY_P` (skipped when the other agent addresses this one by name — v1.2.1); since v1.2.2 the streak counts only turns within `BOT_WINDOW_S`, and a blocked reply resumes once the window frees; `PASS` means silence.
@@ -196,6 +231,8 @@ The agents become people with a stable identity, memory of past conversations, a
 
 ### v2.1 — Canons and session memory
 
+**Status:** ✅ completed — released `v2.1.0` on 2026-10-03.
+
 **Goal:** each agent knows who it is and remembers the last conversation across restarts.
 
 Canons (ARCHITECTURE §Canon) replace the TOML persona; the agents believe they are human. Session memory (ARCHITECTURE §Memory): a rolling first-person summary of the last session, written at session end and injected into the prompt after a restart.
@@ -220,6 +257,8 @@ Canons (ARCHITECTURE §Canon) replace the TOML persona; the agents believe they 
 **Tests:** unit — prompt assembly (canon + summary + rules, in order), the session-ended decision (idle and shutdown, injected clock), memory file read/write (missing, corrupt, atomic), the timeline cap. Gemini mocked.
 
 ### v2.2 — World awareness and a life story
+
+**Status:** ✅ completed — released `v2.2.0` on 2026-10-03 · patches `v2.2.1`.
 
 **Goal:** the agents live a life: they know where and when they are, remember their past and their recent days, carry plans for the days ahead, and know what today has already held and what is still ahead — all grounded in a written life story from birth to death.
 
@@ -258,6 +297,8 @@ Running the system becomes one operations surface: every model call is counted; 
 
 ### v3.1 — Token accounting and report
 
+**Status:** ✅ completed — released `v3.1.0` on 2026-10-03 · patches `v3.1.1`.
+
 **Goal:** the owner can always see what the conversations cost.
 
 One usage line per Gemini call, and a report command (ARCHITECTURE §Token accounting).
@@ -275,6 +316,8 @@ One usage line per Gemini call, and a report command (ARCHITECTURE §Token accou
 **Tests:** unit — `usage_metadata` parsing (incl. missing fields), aggregation, cost calculation, corrupt-line skipping.
 
 ### v3.2 — Agent images, CI/CD and server deployment
+
+**Status:** ✅ completed — released `v3.2.0` on 2026-10-04.
 
 **Goal:** each agent runs on the Ubuntu server as its own Docker container, built from one image by CI.
 
@@ -301,6 +344,8 @@ One image for both agents; **one compose service per agent** (`ada`, `bruno`) jo
 
 ### v3.3 — The panel: viewing (read-only)
 
+**Status:** ✅ completed — released `v3.3.0` on 2026-10-04.
+
 **Goal:** one page, served from the server, shows everything — the chat simulation, the agents connected to it, their memory and spend, and the host — built on a simulation registry that is ready for more simulations later. Nothing on the page changes anything yet.
 
 The panel is the point of the whole project (VISION §The direction): a FastAPI backend plus one static vanilla-JS page — **English UI** (the agents' own texts — summaries, memories, plans, the today block — shown as-is, in Ukrainian), built to the Claude Design handoff in [`specification/design/design_handoff_agora_panel/`](design/design_handoff_agora_panel/README.md) — the `panel` service in `server/docker-compose.yml` (port 8090, `/var/run/docker.sock`, the `state/` directory and a read-only host mount), deployed by `server/deploy.sh`, Bearer `PANEL_TOKEN` on every API call. Internally everything is written against a **simulation registry** — monitoring code never mentions "the chat"; the PoC registry holds exactly one entry (`agora`, kind `matrix-chat`) and this roadmap adds no second one. In this phase the docker socket is used only for reads (container state, log tails); the actions come in v3.4. Depends on: v3.2 and v0.2.
@@ -323,6 +368,8 @@ The panel is the point of the whole project (VISION §The direction): a FastAPI 
 **Tests:** unit — the Bearer-token gate (401), registry resolution (unknown simulation/agent/service → 404), the read side of the supervisor against a fake docker client (state, log tail), host-metrics parsing from canned `/proc` files, the memory views with a missing or unreadable `state/`; the routes via FastAPI's `TestClient`. No real docker and no network in tests.
 
 ### v3.4 — The panel: control
+
+**Status:** ✅ completed — released `v3.4.0` on 2026-10-04.
 
 **Goal:** the panel runs everything it shows — the agents and the simulation's services start, stop and restart from the page, safely.
 
