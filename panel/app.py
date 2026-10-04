@@ -19,10 +19,12 @@ from fastapi.responses import JSONResponse
 from panel.docker_read import DockerReader
 from panel.health import Prober
 from panel.host import host_metrics
+from panel.memory import local_today, memory_view, usage_view
 from panel.registry import Registry
 
 MIN_TOKEN_LEN = 24
 TAIL_MAX = 500
+USAGE_DAYS_MAX = 31
 
 
 def clamp_tail(tail: int) -> int:
@@ -133,6 +135,19 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
         view = _agent_view(found)
         view["container_state"] = container_view(found.container)
         return view
+
+    @app.get("/api/agents/{name}/memory")
+    def agent_memory(name: str) -> dict:
+        found = reg.agent(name)
+        if found is None:
+            raise HTTPException(404, "not found")
+        return memory_view(state_dir, found.name, local_today())
+
+    @app.get("/api/usage")
+    def usage(days: int = 7, agent: str | None = None) -> dict:
+        if agent is not None and reg.agent(agent) is None:
+            raise HTTPException(404, "not found")
+        return usage_view(state_dir, max(1, min(USAGE_DAYS_MAX, days)), local_today(), agent)
 
     @app.get("/api/agents/{name}/logs")
     def agent_logs(name: str, tail: int = 200) -> dict:
