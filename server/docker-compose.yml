@@ -17,6 +17,55 @@ services:
       CONTINUWUITY_ALLOW_ENCRYPTION: "false"     # no E2EE rooms at all — simpler for the bots
       CONTINUWUITY_ALLOW_REGISTRATION: "false"   # closed since v0.4 — only the admin creates accounts
       CONTINUWUITY_REGISTRATION_TOKEN: "${REGISTRATION_TOKEN}"
+  ada:
+    # one container per agent, the same image (v3.2); the TOML picks the agent
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
+    command: ["agents/ada.toml"]
+    restart: unless-stopped
+    depends_on: [homeserver]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
+      TZ: ${TIMEZONE:-Europe/Kyiv}
+    user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
+    volumes:
+      - ../state:/app/state
+    stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
+
+  bruno:
+    # one container per agent, the same image (v3.2); the TOML picks the agent
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
+    command: ["agents/bruno.toml"]
+    restart: unless-stopped
+    depends_on: [homeserver]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
+      TZ: ${TIMEZONE:-Europe/Kyiv}
+    user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
+    volumes:
+      - ../state:/app/state
+    stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
+
+  usage-report:
+    # the daily token report (v3.1.1), 07:00 in TIMEZONE → ~/matrix-agora/reports/usage/
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
+    entrypoint: ["python", "agents/usage_daily.py"]
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      TZ: ${TIMEZONE:-Europe/Kyiv}
+    user: "1000:1000"
+    volumes:
+      - ../state:/app/state:ro
+      - ../reports:/app/reports
+
 volumes:
   db:
 

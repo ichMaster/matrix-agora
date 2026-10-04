@@ -198,7 +198,7 @@ Changing any of these updates this document and the test that pins it, in the sa
 - The transcript format (`"Name: text"` per line), the `PASS` sentinel, and the prompt-assembly order.
 - The turn-taking semantics (who replies, `bot_streak`).
 - The `server/docker-compose.yml` environment (server name, federation, encryption, registration). `CONTINUWUITY_SERVER_NAME` cannot change without wiping the database.
-- The `server/docker-compose.yml` service set — `homeserver`, `panel` (v3.3), one service per agent (`ada`, `bruno`, v3.2) — the `state/` bind mount, and what `server/deploy.sh` syncs and applies.
+- The `server/docker-compose.yml` service set — `homeserver`, one service per agent (`ada`, `bruno`, v3.2), `usage-report` (v3.2), `panel` (v3.3) — the `../state` and `../reports` bind mounts, the agents' `HOMESERVER` override and `1000:1000` user, and what `server/deploy.sh` syncs and applies (pinned by `tests/test_compose.py`).
 - The `server_con.yaml` shape (`host`, `user`, `password`) read by `server/deploy.sh`.
 - The panel API surface (the v3.3 endpoint set), the simulation-registry entry shape, and the Bearer `PANEL_TOKEN` auth.
 
@@ -241,6 +241,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `MEMORY_WEEKS`, `MEMORY_MONTHS`, `WEEK_MEMORY_MAX_WORDS`, `MONTH_MEMORY_MAX_WORDS`, `YEAR_MEMORY_MAX_WORDS` | v2.2 | memory digests in the prompt and their sizes (4 / 6 / 150 / 200 / 300) |
 | `PLAN_MAX_WORDS`, `TODAY_MAX_WORDS`, `PLAN_MUTATION_RATE` | v2.2 | plans, the today block, plan deviation from the life story (120 / 100 / 0.3) |
 | `PRICE_INPUT_PER_1M`, `PRICE_OUTPUT_PER_1M` | v3.1 | token prices for the cost column |
+| `AGENT_IMAGE_TAG` | v3.2 | which agent image the server runs: `latest` (the newest release) or `edge` (`main`, before a release); `server/.env` only |
 | `PANEL_TOKEN` | v3.3 | the single owner token for the panel API |
 | `PANEL_PORT` | v3.3 | the panel port on the server (8090) |
 | `REGISTRATION_TOKEN` | v0.1 | in `server/.env` on the Ubuntu box only |
@@ -267,8 +268,8 @@ HTTP without TLS on the LAN is a deliberate PoC trade-off: passwords travel in p
 
 ## Deployment and CI/CD
 
-- **Server deploy (from v0.2).** `server/deploy.sh` is the only way server config reaches the Ubuntu host: a local compose preflight → a one-time `ssh-copy-id` key setup (after that, key auth only; the password from `server_con.yaml` never appears in argv, logs or output) → rsync `server/docker-compose.yml` + `server/.env` to `~/matrix-agora/server/` → remote `docker compose pull && docker compose up -d` (the pull from v3.2) → verify `/_matrix/client/versions`. From v3.2 the compose carries one service per agent, from v3.3 the `panel` service — one deploy updates the whole stack. Idempotent; `--dry-run` supported. Never hand-edit files on the host.
-- **Agent image (from v3.2).** One Docker image for both agents (`agents/Dockerfile`: python slim + uv), **one container per agent**: compose services `ada` and `bruno` on the server with env from `server/.env`, the per-agent TOML, `TZ` from `TIMEZONE`, `restart: unless-stopped`, and `~/matrix-agora/state` bind-mounted. `docker stop -t 30` sends SIGTERM, which triggers the shutdown session summary. The image holds no secrets. Dev mode (`uv run agents/agent.py …` on the Mac, local `state/`) remains.
+- **Server deploy (from v0.2).** `server/deploy.sh` is the only way server config reaches the Ubuntu host: a local compose preflight → a one-time `ssh-copy-id` key setup (after that, key auth only; the password from `server_con.yaml` never appears in argv, logs or output) → rsync `server/docker-compose.yml` + `server/.env` to `~/matrix-agora/server/` → `mkdir -p ~/matrix-agora/state ~/matrix-agora/reports` (so the bind mounts stay the host user's) → remote `docker compose pull && docker compose up -d` (the pull from v3.2) → verify `/_matrix/client/versions`. From v3.2 the compose carries one service per agent, from v3.3 the `panel` service — one deploy updates the whole stack. Idempotent; `--dry-run` supported. Never hand-edit files on the host.
+- **Agent image (from v3.2).** One Docker image for both agents (`agents/Dockerfile`: python slim + uv, uid 1000; `.dockerignore` keeps `.env`, `server/.env`, `server_con.yaml`, `state/` and `reports/` out), **one container per agent**: compose services `ada` and `bruno` on the server — `ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}`, the per-agent TOML as the command, env from `server/.env` with `HOMESERVER=http://homeserver:8008` (the compose network), `TZ` from `TIMEZONE`, `user: 1000:1000` (the host user, so the bind-mounted `~/matrix-agora/state` stays theirs), `stop_grace_period: 30s`, `restart: unless-stopped`. `docker stop -t 30` sends SIGTERM, which triggers the shutdown session summary. A third service from the same image, `usage-report` (`agents/usage_daily.py`), writes the daily token report at 07:00 in `TIMEZONE` to `~/matrix-agora/reports/usage/` (`state/` mounted read-only). Each agent holds `flock` on `state/<name>.lock`, so a second instance on the same host exits; logs go to `state/logs/<name>.log` (1 MB × 3) and the console. The image holds no secrets. Dev mode (`uv run agents/agent.py …` on the Mac, local `state/`) remains — never at the same time as the server's agent, since the lock is per host.
 - **CI (from v3.2).** GitHub Actions on every push/PR: ruff, pytest (nio/Gemini mocked — no paid APIs, no secrets in CI), the compose config gate, and the image builds (the agent image; the panel image from v3.3). On a `vA.B.C` tag the images are pushed to GHCR (`ghcr.io/<owner>/matrix-agora-agent`, `…-panel`) using only `GITHUB_TOKEN`.
 - **No cloud-to-LAN CD.** A GitHub runner cannot reach the home network, so CI never deploys. Deploys run from the Mac: `server/deploy.sh` is the one command — the server then pulls the images from GHCR itself.
 
@@ -314,7 +315,9 @@ matrix-agora/
     ada.toml                # name, user_id, canon, …
     bruno.toml
     canon/                  # v2.1: common.md + <name>.md
-    usage_report.py         # v3.1: token report
+    usage_report.py         # v3.1: token report (+ --write: the daily report, v3.1.1)
+    usage_daily.py          # v3.2: the daily report as the compose service usage-report
+    runtime.py              # v3.2: the single-instance lock + the rotating file log
     Dockerfile              # v3.2: one image for both agents
   panel/                    # v3.3: the panel — FastAPI app.py + static/ + Dockerfile
   .github/workflows/ci.yml  # v3.2: gates + image builds; GHCR push on tags
@@ -323,6 +326,7 @@ matrix-agora/
     usage-daily.sh          # v3.1.1: the daily token report
     install-usage-daily.sh  # v3.1.1: the macOS launchd job for it (--uninstall)
   .env.example              # see §Configuration and secrets
+  .dockerignore             # v3.2: secrets and state never enter the image
   state/                    # gitignored: each bot's session, memory (v2.1),
                             # day memories, plans, the today block (v2.2), usage (v3.1), lock + logs (v3.2)
   reports/usage/            # gitignored: daily token reports (v3.1.1)

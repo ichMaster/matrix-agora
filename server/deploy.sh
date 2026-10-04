@@ -38,7 +38,8 @@ fi
 RSYNC_FLAGS=(-ai --checksum)
 [ "$DRY_RUN" = 1 ] && RSYNC_FLAGS+=(-n)
 say "deploy: sync → $TARGET:~/$REMOTE_DIR/"
-ssh "$TARGET" "mkdir -p ~/$REMOTE_DIR"
+# state/ and reports/ exist as the host user before compose bind-mounts them (else docker makes them root's)
+ssh "$TARGET" "mkdir -p ~/$REMOTE_DIR ~/matrix-agora/state ~/matrix-agora/reports"
 CHANGES=$(rsync "${RSYNC_FLAGS[@]}" "$COMPOSE" "$TARGET:$REMOTE_DIR/docker-compose.yml")
 if [ -f "$LOCAL_ENV" ]; then
   CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$LOCAL_ENV" "$TARGET:$REMOTE_DIR/.env")"
@@ -49,11 +50,11 @@ if [ -n "${CHANGES//[[:space:]]/}" ]; then say "deploy: changed:"; say "$CHANGES
 
 # --- apply ---
 if [ "$DRY_RUN" = 1 ]; then
-  say "deploy: --dry-run: would run: ssh $TARGET 'cd ~/$REMOTE_DIR && docker compose up -d'"
+  say "deploy: --dry-run: would run: ssh $TARGET 'cd ~/$REMOTE_DIR && docker compose pull && docker compose up -d'"
 else
-  say "deploy: apply (docker compose up -d)"
-  ssh "$TARGET" "cd ~/$REMOTE_DIR && (docker compose up -d || sudo -n docker compose up -d)" \
-    || die "compose up failed on the host"
+  say "deploy: apply (docker compose pull && docker compose up -d)"
+  ssh "$TARGET" "cd ~/$REMOTE_DIR && { (docker compose pull && docker compose up -d) || (sudo -n docker compose pull && sudo -n docker compose up -d); }" \
+    || die "compose pull/up failed on the host"
 fi
 
 # --- verify: the homeserver answers ---
