@@ -1,3 +1,22 @@
+Version 3.2.0 (2026-10-04)
+---------------------------
+- Ada and Bruno run on the Ubuntu server: one image, one container per agent
+  next to the homeserver; sessions and memories migrated from the Mac, no new
+  devices (AGORA-030, AGORA-032)
+- The agent image (agents/Dockerfile, python slim + uv, uid 1000); no secrets
+  or state inside, pinned by tests (AGORA-029)
+- A single-instance lock (state/<name>.lock) and a rotating log
+  (state/logs/<name>.log, 1 MB x 3); tzdata for slim images (AGORA-028)
+- CI on GitHub Actions: lint, tests, the compose gate, the image build;
+  GHCR publishing with GITHUB_TOKEN only (:edge on main, :vA.B.C + :latest on
+  tags) (AGORA-031)
+- The daily token report runs on the server as the usage-report service,
+  07:00 Kyiv time; deploy.sh pulls images before starting
+- Review fix: init: true, so containers stop on SIGTERM instead of waiting for
+  SIGKILL
+- Tools (not part of the product): the Claude Sessions VS Code panel and the
+  /spawn, /join, /send, /sessions skills
+
 Version 3.1.1 (2026-10-03)
 ---------------------------
 - Daily token report with statistics: reports/usage/YYYY-MM-DD.md and
