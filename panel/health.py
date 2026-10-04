@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from dataclasses import dataclass
 import httpx
 
 PROBE_EVERY_S = 30
+log = logging.getLogger("panel.health")
 PROBE_TIMEOUT_S = 5.0
 
 
@@ -40,13 +42,21 @@ class Prober:
             ok = resp.status_code == 200
         except httpx.HTTPError:
             ok = False
+        except Exception as exc:  # noqa: BLE001 — any failure is "unreachable", never the end of the loop
+            log.warning("health probe for %s failed: %s", sim_id, type(exc).__name__)
+            ok = False
         state = HealthState("healthy" if ok else "unreachable",
                             int((time.perf_counter() - start) * 1000) if ok else None, self.clock())
         self.states[sim_id] = state
         return state
 
     async def run(self) -> None:
+        """Forever: one bad check is logged and the loop goes on (code review #2)."""
         while True:
             for sim_id in list(self.states):
-                await self.check(sim_id)
+                try:
+                    await self.check(sim_id)
+                except Exception as exc:  # noqa: BLE001 — the loop must outlive any single check
+                    log.warning("health check for %s crashed: %s", sim_id, type(exc).__name__)
+                    self.states[sim_id] = HealthState("unreachable", None, self.clock())
             await asyncio.sleep(PROBE_EVERY_S)

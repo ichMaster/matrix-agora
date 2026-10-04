@@ -179,3 +179,33 @@ def test_the_global_status(make, docker_ok, health, state_ok, want):
     assert body["status"] == want and body["docker"] is docker_ok
     assert body["host"]["address"] == "testserver"
     assert body["host"]["containers_running"] == (1 if docker_ok else None)
+
+
+def test_an_unexpected_error_is_unreachable_and_the_loop_survives(monkeypatch):
+    reg = Registry()
+
+    def boom(req):
+        raise ValueError("malformed")
+    p = Prober(reg, transport=httpx.MockTransport(boom), clock=lambda: 5.0)
+    assert asyncio.run(p.check("agora")).status == "unreachable"  # not an exception (code review #2)
+
+    calls = {"n": 0}
+
+    async def flaky(sim_id):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("bug")
+        p.states[sim_id] = HealthState("healthy", 1, 6.0)
+
+    sleeps = {"n": 0}
+
+    async def fake_sleep(_):
+        sleeps["n"] += 1
+        if sleeps["n"] == 2:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(p, "check", flaky)
+    monkeypatch.setattr("panel.health.asyncio.sleep", fake_sleep)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(p.run())
+    assert calls["n"] == 2 and p.states["agora"].status == "healthy"  # the crash did not end the loop
