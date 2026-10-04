@@ -48,7 +48,7 @@ def test_server_env_example_carries_every_agent_variable():
     agent_keys = env_keys(ROOT / ".env.example")
     server_keys = env_keys(ROOT / "server" / ".env.example")
     assert agent_keys <= server_keys
-    assert server_keys - agent_keys == {"REGISTRATION_TOKEN", "AGENT_IMAGE_TAG", "PANEL_TOKEN", "PANEL_IMAGE_TAG", "DOCKER_GID", "PANEL_BIND"}
+    assert server_keys - agent_keys == {"REGISTRATION_TOKEN", "AGENT_IMAGE_TAG", "PANEL_TOKEN", "PANEL_IMAGE_TAG", "DOCKER_GID", "PANEL_BIND", "STACK_DIR"}
 
 
 def test_deploy_pulls_before_up_and_prepares_the_mounts():
@@ -63,15 +63,20 @@ def test_python_is_never_pid_1():
         assert SERVICES[name]["init"] is True, name
 
 
-def test_the_panel_reads_only_and_gets_only_its_own_settings():
+def test_the_panel_gets_only_its_own_settings_and_the_stack_at_its_host_path():
     svc = SERVICES["panel"]
+    stack = "${STACK_DIR:-/home/ich/matrix-agora}/server"
     assert svc["image"] == "ghcr.io/ichmaster/matrix-agora-panel:${PANEL_IMAGE_TAG:-latest}"
-    assert svc["ports"] == ["${PANEL_BIND:-127.0.0.1}:8090:8090"] and svc["init"] is True  # code review #1 and svc["user"] == "1000:1000"
-    assert svc["volumes"] == ["/var/run/docker.sock:/var/run/docker.sock:ro", "../state:/app/state:ro",
-                              "/etc/os-release:/host/os-release:ro"]
-    assert svc["group_add"] == ["${DOCKER_GID:-999}"]
-    assert "env_file" not in svc  # never the agents' keys or passwords
-    assert set(svc["environment"]) == {"PANEL_TOKEN", "PRICE_INPUT_PER_1M", "PRICE_OUTPUT_PER_1M", "TIMEZONE", "TZ"}
+    assert svc["ports"] == ["${PANEL_BIND:-127.0.0.1}:8090:8090"] and svc["init"] is True  # code review #1
+    assert svc["user"] == "1000:1000" and svc["group_add"] == ["${DOCKER_GID:-999}"]
+    assert svc["volumes"] == ["/var/run/docker.sock:/var/run/docker.sock",
+                              "../state:/app/state",                       # v3.4: forget writes here
+                              "/etc/os-release:/host/os-release:ro",
+                              f"{stack}:{stack}:ro"]                       # same path inside: compose resolves host paths
+    assert "env_file" not in svc  # never the agents' keys or passwords in its environment
+    assert set(svc["environment"]) == {"PANEL_TOKEN", "PRICE_INPUT_PER_1M", "PRICE_OUTPUT_PER_1M", "TIMEZONE", "TZ",
+                                       "STACK_DIR", "COMPOSE_PROJECT"}
+    assert svc["environment"]["COMPOSE_PROJECT"] == "server"
     assert not svc.get("privileged") and "cap_add" not in svc and "network_mode" not in svc
 
 

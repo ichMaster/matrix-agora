@@ -24,3 +24,9 @@ def test_the_panel_image_copies_code_only():
               if line.startswith("COPY ") and "--from=" not in line]
     assert {src for args in copies for src in args[:-1]} == {"pyproject.toml", "uv.lock", "agents/", "panel/", "simulations.toml"}
     assert "--only-group panel" in (ROOT / "panel" / "Dockerfile").read_text()  # not the agents' libraries
+
+
+def test_the_panel_gets_docker_and_compose_from_official_images():
+    text = (ROOT / "panel" / "Dockerfile").read_text()
+    assert "COPY --from=docker:27-cli /usr/local/bin/docker " in text
+    assert "COPY --from=docker/compose-bin:v2" in text and "cli-plugins/docker-compose" in text

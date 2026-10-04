@@ -70,7 +70,7 @@ services:
       - ../reports:/app/reports
 
   panel:
-    # the panel (v3.3, read-only): the stack's state, logs, memory and tokens behind PANEL_TOKEN, LAN only
+    # the panel (v3.3 views, v3.4 actions): the stack's state, logs, memory and tokens behind PANEL_TOKEN, LAN only
     image: ghcr.io/ichmaster/matrix-agora-panel:${PANEL_IMAGE_TAG:-latest}
     restart: unless-stopped
     init: true
@@ -83,12 +83,16 @@ services:
       PRICE_OUTPUT_PER_1M: ${PRICE_OUTPUT_PER_1M:-}
       TIMEZONE: ${TIMEZONE:-Europe/Kyiv}
       TZ: ${TIMEZONE:-Europe/Kyiv}
+      STACK_DIR: ${STACK_DIR:-/home/ich/matrix-agora}   # v3.4: compose for a start lives at $STACK_DIR/server
+      COMPOSE_PROJECT: server
     user: "1000:1000"
     group_add: ["${DOCKER_GID:-999}"]            # the host's docker group: the socket is root:docker 0660
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ../state:/app/state:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../state:/app/state                      # v3.4: read-write for "forget" (state/<name>.memory.md only)
       - /etc/os-release:/host/os-release:ro
+      # the stack at its HOST path: compose resolves ../state etc. on this side, the daemon mounts them on the host
+      - ${STACK_DIR:-/home/ich/matrix-agora}/server:${STACK_DIR:-/home/ich/matrix-agora}/server:ro
 
 volumes:
   db:
