@@ -15,7 +15,7 @@ def env_keys(path: Path) -> set[str]:
 
 
 def test_the_service_set():
-    assert set(SERVICES) == {"homeserver", "ada", "bruno", "usage-report"}
+    assert set(SERVICES) == {"homeserver", "ada", "bruno", "usage-report", "panel"}
 
 
 def test_the_homeserver_stays_closed():
@@ -48,7 +48,7 @@ def test_server_env_example_carries_every_agent_variable():
     agent_keys = env_keys(ROOT / ".env.example")
     server_keys = env_keys(ROOT / "server" / ".env.example")
     assert agent_keys <= server_keys
-    assert server_keys - agent_keys == {"REGISTRATION_TOKEN", "AGENT_IMAGE_TAG"}
+    assert server_keys - agent_keys == {"REGISTRATION_TOKEN", "AGENT_IMAGE_TAG", "PANEL_TOKEN", "PANEL_IMAGE_TAG", "DOCKER_GID"}
 
 
 def test_deploy_pulls_before_up_and_prepares_the_mounts():
@@ -61,3 +61,15 @@ def test_python_is_never_pid_1():
     # PID 1 ignores SIGTERM without a handler: stops would wait the grace period and end in SIGKILL (code review #1)
     for name in ("ada", "bruno", "usage-report"):
         assert SERVICES[name]["init"] is True, name
+
+
+def test_the_panel_reads_only_and_gets_only_its_own_settings():
+    svc = SERVICES["panel"]
+    assert svc["image"] == "ghcr.io/ichmaster/matrix-agora-panel:${PANEL_IMAGE_TAG:-latest}"
+    assert svc["ports"] == ["8090:8090"] and svc["init"] is True and svc["user"] == "1000:1000"
+    assert svc["volumes"] == ["/var/run/docker.sock:/var/run/docker.sock:ro", "../state:/app/state:ro",
+                              "/etc/os-release:/host/os-release:ro"]
+    assert svc["group_add"] == ["${DOCKER_GID:-999}"]
+    assert "env_file" not in svc  # never the agents' keys or passwords
+    assert set(svc["environment"]) == {"PANEL_TOKEN", "PRICE_INPUT_PER_1M", "PRICE_OUTPUT_PER_1M", "TIMEZONE", "TZ"}
+    assert not svc.get("privileged") and "cap_add" not in svc and "network_mode" not in svc

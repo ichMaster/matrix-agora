@@ -17,3 +17,10 @@ def test_the_dockerfile_copies_only_code_and_never_secrets():
               if line.startswith("COPY ") and "--from=" not in line]
     sources = {src for args in copies for src in args[:-1]}
     assert sources == {"pyproject.toml", "uv.lock", "agents/", "simulations.toml"}
+
+
+def test_the_panel_image_copies_code_only():
+    copies = [line.split()[1:] for line in (ROOT / "panel" / "Dockerfile").read_text().splitlines()
+              if line.startswith("COPY ") and "--from=" not in line]
+    assert {src for args in copies for src in args[:-1]} == {"pyproject.toml", "uv.lock", "agents/", "panel/", "simulations.toml"}
+    assert "--only-group panel" in (ROOT / "panel" / "Dockerfile").read_text()  # not the agents' libraries

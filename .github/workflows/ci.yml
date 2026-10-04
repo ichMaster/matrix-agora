@@ -1,4 +1,4 @@
-# CI (v3.2): the same gates as the Mac on every push and PR, then the agent image.
+# CI (v3.2, v3.3): the same gates as the Mac on every push and PR, then the images (agent, panel).
 # Publishing to GHCR uses GITHUB_TOKEN only — no paid API keys or other secrets exist in CI.
 #   main push → :edge + :sha-<short>   (the server can run a phase before its release tag)
 #   vA.B.C tag → :vA.B.C + :latest
@@ -33,6 +33,13 @@ jobs:
   image:
     needs: gates
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: agent
+            file: agents/Dockerfile
+          - name: panel
+            file: panel/Dockerfile
     permissions:
       contents: read
       packages: write
@@ -42,7 +49,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/ichmaster/matrix-agora-agent
+          images: ghcr.io/ichmaster/matrix-agora-${{ matrix.name }}
           tags: |
             type=ref,event=tag
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
@@ -57,10 +64,10 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: agents/Dockerfile
+          file: ${{ matrix.file }}
           platforms: linux/amd64
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

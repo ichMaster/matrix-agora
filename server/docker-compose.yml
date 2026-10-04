@@ -69,6 +69,27 @@ services:
       - ../state:/app/state:ro
       - ../reports:/app/reports
 
+  panel:
+    # the panel (v3.3, read-only): the stack's state, logs, memory and tokens behind PANEL_TOKEN, LAN only
+    image: ghcr.io/ichmaster/matrix-agora-panel:${PANEL_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    init: true
+    depends_on: [homeserver]
+    ports:
+      - "8090:8090"
+    environment:                                 # only what it needs — never the agents' keys or passwords
+      PANEL_TOKEN: ${PANEL_TOKEN:-}              # unset or short → the panel refuses to start
+      PRICE_INPUT_PER_1M: ${PRICE_INPUT_PER_1M:-}
+      PRICE_OUTPUT_PER_1M: ${PRICE_OUTPUT_PER_1M:-}
+      TIMEZONE: ${TIMEZONE:-Europe/Kyiv}
+      TZ: ${TIMEZONE:-Europe/Kyiv}
+    user: "1000:1000"
+    group_add: ["${DOCKER_GID:-999}"]            # the host's docker group: the socket is root:docker 0660
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../state:/app/state:ro
+      - /etc/os-release:/host/os-release:ro
+
 volumes:
   db:
 
