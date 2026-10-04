@@ -1,3 +1,19 @@
+Version 3.3.0 (2026-10-04)
+---------------------------
+- The panel, read-only, at http://192.168.1.197:8090 behind the owner token:
+  the Agora simulation (health, services, logs), both agents (state, logs,
+  last session, day memories and digests, plans with deviation badges, today,
+  tokens), the server (uptime, disk, memory, load) and the 7-day token table
+  (AGORA-033..038)
+- A simulation registry (simulations.toml, one entry: agora); the agents
+  resolve their connection through it; agent TOMLs gain simulation + [panel]
+- English UI to the Claude Design handoff: dark + light, phone layout, system
+  fonts, inline icons, a strict CSP — no outside requests
+- The panel image (ghcr.io/ichmaster/matrix-agora-panel) built by CI next to
+  the agent image; the panel gets only its own settings, mounts read-only
+- Review fixes: the panel listens on the LAN address only (Docker bypasses
+  ufw); the health probe survives any error; no flicker, one 10 s refresh
+
 Version 3.2.0 (2026-10-04)
 ---------------------------
 - Ada and Bruno run on the Ubuntu server: one image, one container per agent
