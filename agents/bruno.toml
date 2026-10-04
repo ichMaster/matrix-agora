@@ -2,3 +2,8 @@ name = "Бруно"
 user_id = "@bruno:agora.lan"
 canon = "agents/canon/bruno.md"
 life = "agents/canon/bruno.life.md"
+simulation = "agora"
+
+[panel]                 # shown by the panel only — never part of a prompt
+name = "Bruno"
+role = "sound engineer, 35, Lviv"

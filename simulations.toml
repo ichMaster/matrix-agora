@@ -1,0 +1,19 @@
+# The simulation registry (v3.3): every simulation the panel manages and the agents join.
+# Everything the panel does resolves through an entry here — never through "the chat" by name.
+# The PoC holds exactly one entry; a new simulation is an entry plus its compose services.
+
+[agora]
+kind = "matrix-chat"
+title = "Agora"
+description = "private Matrix room · agora.lan"
+services = ["homeserver"]          # its compose services
+agents = ["ada", "bruno"]          # the agents that join it (agents/<name>.toml)
+
+[agora.health]                     # the health probe: http://<service>:<port><path> on the compose network
+service = "homeserver"
+port = 8008
+path = "/_matrix/client/versions"
+
+[agora.endpoints]                  # the env names its agents connect with
+homeserver = "HOMESERVER"
+room = "ROOM_ID"

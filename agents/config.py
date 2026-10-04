@@ -14,6 +14,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from agents.life import LifeError, LifeStory, parse_life
+from agents.registry import REGISTRY_PATH, RegistryError, load_registry
 
 
 class ConfigError(RuntimeError):
@@ -33,6 +34,7 @@ class AgentConfig:
     owner: str
     password: str
     life: LifeStory | None = None  # the life story (v2.2); optional only for tests
+    simulation: str = "agora"  # the registry entry it joins (v3.3)
 
     @property
     def localpart(self) -> str:
@@ -72,14 +74,16 @@ def load_canon(common: Path, personal: Path) -> str:
     return "\n\n".join(parts)
 
 
-def load_config(toml_path: str | Path, env: dict[str, str] | None = None) -> AgentConfig:
-    """Load the agent TOML and the shared env. `env` is injectable for tests."""
+def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
+                registry_path: Path = REGISTRY_PATH) -> AgentConfig:
+    """Load the agent TOML and the shared env; connection settings resolve through the simulation registry
+    (v3.3). `env` and the registry path are injectable for tests."""
     toml_path = Path(toml_path)
     try:
         data = tomllib.loads(toml_path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
         raise ConfigError(f"agent config not found: {toml_path}") from exc
-    for key in ("name", "user_id", "canon", "life"):
+    for key in ("name", "user_id", "canon", "life", "simulation"):
         if not str(data.get(key, "")).strip():
             raise ConfigError(f"{toml_path}: missing '{key}'")
     canon = load_canon(COMMON_CANON, Path(str(data["canon"])))
@@ -97,13 +101,23 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None) -> Age
 
     user_id = str(data["user_id"]).strip()
     localpart = user_id.split(":", 1)[0].lstrip("@")
+    sim_id = str(data["simulation"]).strip()
+    try:
+        sim = load_registry(registry_path).get(sim_id)
+    except RegistryError as exc:
+        raise ConfigError(str(exc)) from exc
+    if sim is None:
+        raise ConfigError(f"{toml_path}: unknown simulation {sim_id!r}")
+    if localpart not in sim.agents:
+        raise ConfigError(f"{toml_path}: {localpart!r} is not an agent of {sim_id!r}")
     return AgentConfig(
         name=str(data["name"]).strip(),
         user_id=user_id,
         canon=canon,
-        homeserver=_require(env, "HOMESERVER"),
-        room_id=_require(env, "ROOM_ID"),
+        homeserver=_require(env, sim.endpoints["homeserver"]),
+        room_id=_require(env, sim.endpoints["room"]),
         owner=_require(env, "OWNER"),
         password=_require(env, f"{localpart.upper()}_PASSWORD"),
         life=life,
+        simulation=sim_id,
     )

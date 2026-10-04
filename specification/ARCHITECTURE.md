@@ -180,7 +180,7 @@ The panel is the point of the whole project (VISION §The direction). One FastAP
 - **The simulation card (the chat):** the health probe (`/_matrix/client/versions`, every 30 s), per-service container state, start/stop/restart, log tails.
 - **The agent cards:** container state and uptime; start/stop/restart (v3.4); log tail; session summary, day memories, plans, the today block; **"Forget the last session"** (deletes `state/<name>.memory.md`, confirmation required, stopped agents only); the 7-day token table (the v3.1 aggregation).
 - **The host card:** uptime, disk, memory (from `/proc` and a read-only host mount).
-- **Auth:** the UI asks for the owner token once and sends `Authorization: Bearer` on every call — without it every route is 401 and the page shows nothing. One owner, no accounts.
+- **Auth:** the UI asks for the owner token once and sends `Authorization: Bearer` on every call — checked by a middleware before routing (constant-time), so every `/api/*` path, even an unknown one, is 401 without it and the page shows nothing. The panel refuses to start without a `PANEL_TOKEN` of at least 24 characters; the OpenAPI docs routes are off. One owner, no accounts.
 - **Confirmations:** every stop/restart and forget is confirmed in the UI; mutating actions are `POST` + token.
 - **Degrade by card:** docker trouble greys the container cards, an unreadable `state/` greys the memory views; a stopped homeserver never crashes the agents (nio retries until it is back).
 - **Views stay safe:** there is no settings view — the panel never shows or edits `.env` or canons; log views are safe because logs never contain tokens or texts.
@@ -192,7 +192,8 @@ The panel is the point of the whole project (VISION §The direction). One FastAP
 Changing any of these updates this document and the test that pins it, in the same commit:
 
 - The env var names in `.env.example` and `server/.env.example`.
-- The agent TOML schema (`name`, `user_id`, `canon`, `life`, `simulation`, …) and the `agents/canon/` layout.
+- The agent TOML schema (`name`, `user_id`, `canon`, `life`, `simulation`, and the panel-only `[panel] name` / `role`) and the `agents/canon/` layout.
+- The simulation registry `simulations.toml` (repo root): per entry `kind` (`matrix-chat`), `title`, `description`, `services`, `agents`, `health {service, port, path}`, `endpoints {homeserver, room}` — the env names its agents connect with; an agent belongs to one simulation (pinned by `tests/test_registry.py`).
 - The plan file format: items plus hidden mutation tags, which never reach a conversational prompt (pinned by a test).
 - The life-story format (header lines, `## YYYY–YYYY · title` chapters) and its visibility rule: future chapters and the death date never reach the conversational prompt (pinned by a test).
 - The `state/` files: `<name>.json` (session), `<name>.memory.md`, `<name>.days/YYYY-MM-DD.md` + `.talk.md`, `<name>.weeks/YYYY-MM-DD.md`, `<name>.months/YYYY-MM.md`, `<name>.years/YYYY.md`, `<name>.plans/` (year, month, week and day plans, with hidden mutation tags), `<name>.today.md`, `<name>.usage.jsonl` (its fields), `<name>.lock`, `logs/<name>.log`.
@@ -226,7 +227,7 @@ There is no database, and nothing the agents lived is ever deleted: all durable 
 | `state/<name>.lock` | startup (`flock`) | the PID of the running instance |
 | `state/logs/<name>.log` | continuously | rotating log, 1 MB × 3 — no tokens, passwords or texts |
 
-The agent TOML (`agents/<name>.toml`, committed) holds `name`, `user_id`, `canon` and `simulation` (v3.3); the shared `.env` holds everything in §Configuration and secrets. These shapes are contracts (§Contracts).
+The agent TOML (`agents/<name>.toml`, committed) holds `name`, `user_id`, `canon`, `life`, `simulation` (v3.3: the registry entry — its `endpoints` name the env vars the agent connects with) and a panel-only `[panel]` table (the English display name and role, never part of a prompt); the shared `.env` holds everything in §Configuration and secrets. These shapes are contracts (§Contracts).
 
 ## Configuration and secrets
 
@@ -320,8 +321,10 @@ matrix-agora/
     usage_report.py         # v3.1: token report (+ --write: the daily report, v3.1.1)
     usage_daily.py          # v3.2: the daily report as the compose service usage-report
     runtime.py              # v3.2: the single-instance lock + the rotating file log
+    registry.py             # v3.3: loads simulations.toml (agents + panel)
     Dockerfile              # v3.2: one image for both agents
-  panel/                    # v3.3: the panel — FastAPI app.py + static/ + Dockerfile
+  simulations.toml          # v3.3: the simulation registry (one entry: agora)
+  panel/                    # v3.3: the panel — app.py (API + gate), registry.py, static/, Dockerfile
   .github/workflows/ci.yml  # v3.2: gates + image builds; GHCR push on tags
   scripts/
     run-agent.sh            # dev mode: one agent in the foreground

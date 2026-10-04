@@ -8,8 +8,9 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never \
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-default-groups --no-install-project
 COPY agents/ agents/
+COPY simulations.toml ./
 RUN mkdir -p state reports && chown 1000:1000 state reports
 
 USER 1000:1000

@@ -16,4 +16,4 @@ def test_the_dockerfile_copies_only_code_and_never_secrets():
     copies = [line.split()[1:] for line in (ROOT / "agents" / "Dockerfile").read_text().splitlines()
               if line.startswith("COPY ") and "--from=" not in line]
     sources = {src for args in copies for src in args[:-1]}
-    assert sources == {"pyproject.toml", "uv.lock", "agents/"}
+    assert sources == {"pyproject.toml", "uv.lock", "agents/", "simulations.toml"}
