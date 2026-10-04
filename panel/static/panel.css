@@ -321,3 +321,5 @@ code, .mono { font-family: var(--mono); }
 .bar-labels span { white-space: nowrap; overflow: visible; }
 .bars > div, .bar-labels span { width: 32px; }  /* system fonts set "Mo 28" wider than the design's Inter */
 .scrim.settled, .drawer.settled, .toast.settled { animation: none; }  /* entrances play once, not on every poll */
+.dialog-backdrop.settled, .dialog-backdrop.settled .dialog { animation: none; }
+.dot.work { background: var(--st-work); animation: ap-pulse 1.6s ease-out infinite; }

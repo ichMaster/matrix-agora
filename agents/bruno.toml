@@ -7,3 +7,4 @@ simulation = "agora"
 [panel]                 # shown by the panel only — never part of a prompt
 name = "Bruno"
 role = "sound engineer, 35, Lviv"
+pronoun = "he"          # the confirmations: "He will write a session summary"

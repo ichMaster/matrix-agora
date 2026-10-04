@@ -51,7 +51,7 @@ def _sim_view(sim) -> dict:
 
 def _agent_view(agent) -> dict:
     return {"name": agent.name, "display": agent.display, "role": agent.role, "simulation": agent.simulation,
-            "container": agent.container}
+            "container": agent.container, "pronoun": agent.pronoun}
 
 
 def create_app(token: str | None = None, registry: Registry | None = None, docker_reader: DockerReader | None = None,

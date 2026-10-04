@@ -36,10 +36,10 @@ def test_no_outside_requests_and_a_strict_policy():
 
 def test_the_script_talks_only_to_the_panel_api():
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    targets = re.findall(r"api\(\s*[`\"']([^`\"']+)", js)
+    targets = re.findall(r"\b(?:api|post)\(\s*[`\"']([^`\"']+)", js)
     assert targets and all(t.startswith("/api/") for t in targets)
-    assert "fetch(" in js and js.count("fetch(") == 1  # one fetch, inside api(), always with the token
-    assert "Authorization: `Bearer ${S.token}`" in js
+    assert js.count("fetch(") == 2  # api() reads, post() acts — both always with the token
+    assert js.count("Authorization: `Bearer ${S.token}`") == 2
 
 
 def test_no_secret_is_baked_into_the_page():
@@ -48,10 +48,16 @@ def test_no_secret_is_baked_into_the_page():
         assert "PANEL_TOKEN" not in text and not re.search(r"[A-Za-z0-9_-]{32,}", text), name
 
 
-def test_v34_controls_are_absent():
+def test_the_only_state_change_is_post_and_the_dialogs_say_what_happens():
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert not re.search(r"method:\s*[\"']POST", js) and "Forget" not in js
-    assert all(p not in js for p in ('data-act="start"', 'data-act="stop"', 'data-act="restart"'))
+    assert js.count('method: "POST"') == 1 and "async function post(path)" in js  # one helper changes state
+    assert not re.search(r"method:\s*[\"'](PUT|DELETE|PATCH)", js)
+    for text in ("will write a session summary — up to 30 seconds.", "The current session will end with a summary.",
+                 "The summary will be deleted; day memories stay. Stopped agents only.",
+                 "Agents will keep reconnecting until it is back.", "Agents will reconnect briefly.",
+                 "Creates the container and starts it", "creating container…", "v3.4 · control"):
+        assert text in js, text
+    assert 'if (action === "start") perform(' in js  # start runs without a confirmation; the rest ask first
 
 
 def test_static_files_are_the_handoff_stylesheet_plus_additions():

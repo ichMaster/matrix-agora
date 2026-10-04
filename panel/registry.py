@@ -20,6 +20,7 @@ class Agent:
     role: str           # editor, 32, Lviv
     simulation: str     # agora
     container: str      # the compose service: ada
+    pronoun: str = "they"  # from the TOML's [panel] — never guessed from a name
 
 
 class Registry:
@@ -30,7 +31,7 @@ class Registry:
             for name in sim.agents:
                 panel = self._panel_section(agents_dir / f"{name}.toml")
                 self.agents[name] = Agent(name, str(panel.get("name", name.title())), str(panel.get("role", "")),
-                                          sim.id, name)
+                                          sim.id, name, str(panel.get("pronoun", "they")))
 
     @staticmethod
     def _panel_section(path: Path) -> dict:

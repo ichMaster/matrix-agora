@@ -1,4 +1,4 @@
-// Agora panel — the page (v3.3: view only). Vanilla JS, no build step, no outside requests.
+// Agora panel — the page (v3.3 views, v3.4 control). Vanilla JS, no build step, no outside requests.
 // Built to specification/design/design_handoff_agora_panel/ with the owner's adoption notes
 // (specification/design/README.md): English UI, the agents' own texts as-is, only what is recorded.
 "use strict";
@@ -15,6 +15,8 @@ const S = {
   drawerFresh: false,      // true only for the render that opens it: the slide-in plays once
   log: {lines: [], available: true, follow: true, seen: 0},
   usageFilter: "all", expandedDays: {}, toast: null,
+  busy: {},                // target → busy label while its action runs (v3.4)
+  dialog: null,            // {action, kind: "agent"|"service", id, sim} awaiting confirmation
 };
 
 // ── tiny helpers ─────────────────────────────────────────────────────────────
@@ -60,6 +62,15 @@ async function api(path) {
   return resp.json();
 }
 
+// The only call in the page that changes anything: POST + the owner token (same-origin by construction).
+async function post(path) {
+  const resp = await fetch(path, {method: "POST", headers: {Authorization: `Bearer ${S.token}`}, cache: "no-store"});
+  if (resp.status === 401) throw new Unauthorized();
+  const body = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(body.detail || `HTTP ${resp.status}`);
+  return body;
+}
+
 async function loadDashboard() {
   const [health, sims, agents, usage] = await Promise.all([
     api("/api/health"), api("/api/simulations"), api("/api/agents"), api("/api/usage?days=7")]);
@@ -101,10 +112,11 @@ function simHealth(sim) {
   return {cls: "unknown", label: "Unknown"};
 }
 function containerPill(state) {
-  return {running: ["ok", "running"], stopped: ["stop", "stopped"], crashed: ["err", "crashed"],
+  return {running: ["ok", "running"], restarting: ["warn", "restarting"], stopped: ["stop", "stopped"], crashed: ["err", "crashed"],
           missing: ["none", "container not created"], unknown: ["unknown", "unknown"]}[state] || ["unknown", "unknown"];
 }
 function agentStatus(agent) {
+  if (S.busy[agent.container]) return ["work", S.busy[agent.container]];
   const st = agent.container_state?.state;
   const sim = S.data.sims.find((s) => s.id === agent.simulation);
   if (!S.data.health.docker) return ["unknown", "unknown"];
@@ -116,6 +128,73 @@ function globalPill(h) {
           docker: ["unknown", "Docker unreachable"], memory: ["warn", "Memory unavailable"]}[h.status] || ["unknown", "Unknown"];
 }
 
+// ── controls (v3.4) ──────────────────────────────────────────────────────────
+const VERB = {start: "started", stop: "stopped", restart: "restarted"};
+function canAct(state, action, target) {
+  if (!S.data.health.docker || S.busy[target]) return false;
+  if (action === "start") return ["stopped", "missing", "crashed"].includes(state);
+  return ["running", "restarting"].includes(state);
+}
+function busyLabel(action, state, isAgent) {
+  if (action === "start") return state === "missing" ? "creating container…" : "starting…";
+  if (action === "forget") return "forgetting…";
+  return `${action === "stop" ? "stopping" : "restarting"}…${isAgent ? " writing summary" : ""}`;
+}
+function actionButtons({kind, id, sim, state, big}) {
+  const tip = (a) => a === "start" && state === "missing" ? "Creates the container and starts it" : a[0].toUpperCase() + a.slice(1);
+  return [["start", "play"], ["stop", "stop"], ["restart", "arrow-clockwise"]].map(([a, ic]) => {
+    const target = kind === "agent" ? S.data.agents.find((x) => x.name === id).container : id;
+    const attrs = `data-act="do" data-action="${a}" data-kind="${kind}" data-id="${esc(id)}" data-sim="${esc(sim || "")}" title="${esc(tip(a))}" ${canAct(state, a, target) ? "" : "disabled"}`;
+    return big ? `<button class="btn btn-secondary" ${attrs}>${icon(ic, 14)}${a[0].toUpperCase() + a.slice(1)}</button>`
+      : `<button class="btn btn-secondary btn-icon" ${attrs} aria-label="${esc(tip(a))} ${esc(id)}">${icon(ic, 14)}</button>`;
+  }).join("");
+}
+function dialogText(d) {
+  if (d.kind === "service") {
+    return d.action === "stop" ? [`Stop ${d.id}?`, "Agents will keep reconnecting until it is back."]
+      : [`Restart ${d.id}?`, "Agents will reconnect briefly."];
+  }
+  const a = S.data.agents.find((x) => x.name === d.id);
+  const subject = {she: "She", he: "He"}[a.pronoun] || "They";
+  if (d.action === "stop") return [`Stop ${a.display}?`, `${subject} will write a session summary — up to 30 seconds.`];
+  if (d.action === "restart") return [`Restart ${a.display}?`, "The current session will end with a summary."];
+  return [`Forget ${a.display}’s last session?`, "The summary will be deleted; day memories stay. Stopped agents only."];
+}
+function dialogHtml() {
+  const d = S.dialog;
+  if (!d) return "";
+  const [title, body] = dialogText(d);
+  const danger = d.action === "forget";
+  const ic = {stop: "stop", restart: "arrow-clockwise", forget: "eraser"}[d.action];
+  const label = {stop: "Stop", restart: "Restart", forget: "Forget"}[d.action];
+  return `<div class="dialog-backdrop ${d.fresh ? "" : "settled"}" data-act="dialog-cancel"><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title">
+    <div class="dialog-title" id="dlg-title">${esc(title)}</div><div class="dialog-body">${esc(body)}</div>
+    <div class="dialog-actions"><button class="btn btn-secondary" data-act="dialog-cancel">Cancel</button>
+      <button class="btn ${danger ? "btn-danger" : "btn-primary"}" data-act="dialog-ok" autofocus>${icon(ic, 14)}${label}</button></div></div></div>`;
+}
+async function perform(action, kind, id, sim) {
+  const agent = kind === "agent" ? S.data.agents.find((x) => x.name === id) : null;
+  const target = agent ? agent.container : id;
+  const state = agent ? agent.container_state?.state : S.data.sims.find((s) => s.id === sim)?.service_states?.[id]?.state;
+  const name = agent ? agent.display : id;
+  S.busy[target] = busyLabel(action, state, Boolean(agent));
+  render();
+  const path = action === "forget" ? `/api/agents/${encodeURIComponent(id)}/forget`
+    : agent ? `/api/agents/${encodeURIComponent(id)}/${action}`
+    : `/api/simulations/${encodeURIComponent(sim)}/services/${encodeURIComponent(id)}/${action}`;
+  try {
+    const res = await post(path);
+    showToast("ok", action === "forget" ? (res.forgotten ? `${name}’s last session forgotten` : `${name} had no last session`) : `${name} ${VERB[action]}`);
+  } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    showToast("err", `Failed: ${err.message}`);
+  } finally {
+    delete S.busy[target];
+  }
+  await refresh();
+  if (S.drawer?.kind === "agent") await refreshMemory();
+}
+
 // ── render ───────────────────────────────────────────────────────────────────
 function render() {
   const root = $("#app");
@@ -123,11 +202,12 @@ function render() {
   // the page re-renders on every poll: keep each scroll area where the reader left it
   const keep = [".main", ".drawer-body", ".table-scroll", "#log"].map((sel) => [sel, $(sel)?.scrollTop ?? 0]);
   root.innerHTML = topbarHtml() + `<div class="body">${railHtml()}<main class="main"><div class="stack">${
-    S.data ? dashboardHtml() : skeletonHtml()}</div></main></div>${drawerHtml()}${toastHtml()}`;
+    S.data ? dashboardHtml() : skeletonHtml()}</div></main></div>${drawerHtml()}${dialogHtml()}${toastHtml()}`;
   keep.forEach(([sel, top]) => { const el = $(sel); if (el) el.scrollTop = top; });
   if (S.drawer) afterDrawerRender();
   S.drawerFresh = false;
   if (S.toast) S.toast.fresh = false;
+  if (S.dialog) S.dialog.fresh = false;
 }
 
 function gateHtml() {
@@ -189,7 +269,7 @@ function railHtml() {
       <button class="rail-item" data-act="scroll" data-id="host-card">${icon("hard-drives", 16)}Server</button>
       <button class="rail-item" data-act="scroll" data-id="usage-card">${icon("coins", 16)}Tokens</button>
     </div>
-    <div class="rail-phase">v3.3 · view only</div>
+    <div class="rail-phase">v3.4 · control</div>
   </nav>`;
 }
 
@@ -232,10 +312,11 @@ function simCardHtml(sim) {
       ${d.health.docker ? "" : `<div class="notice unknown">${icon("cube", 16)}Docker unreachable — container state unknown</div>`}
       ${sim.services.map((svc) => {
         const c = sim.service_states[svc] || {state: "unknown"};
-        const [cls, label] = containerPill(d.health.docker ? c.state : "unknown");
+        const [cls, label] = S.busy[svc] ? ["work", S.busy[svc]] : containerPill(d.health.docker ? c.state : "unknown");
         return `<div class="inset-row"><span class="svc-name">${esc(svc)}</span><span class="svc-image">${esc(c.image || "")}</span>${pill(cls, label)}
           <span class="muted num" style="font-size:12px">uptime ${esc(fmtDur(c.uptime_s))}</span>
-          <span class="svc-actions"><button class="btn btn-ghost" data-act="svclog" data-sim="${esc(sim.id)}" data-id="${esc(svc)}">${icon("scroll", 15)}Log</button></span></div>`;
+          <span class="svc-actions"><button class="btn btn-ghost" data-act="svclog" data-sim="${esc(sim.id)}" data-id="${esc(svc)}">${icon("scroll", 15)}Log</button>
+            ${actionButtons({kind: "service", id: svc, sim: sim.id, state: d.health.docker ? c.state : "unknown"})}</span></div>`;
       }).join("")}</div>
       <div class="col-agents"><div class="section-label">Agents</div>
         <button class="agents-link" data-act="scroll" data-id="agents"><span style="display:flex;gap:4px">${agents.map((a) => `<span class="mono-sq">${esc(a.display[0])}</span>`).join("")}</span>
@@ -267,6 +348,7 @@ function agentCardHtml(a) {
     </dl>
     <div style="display:flex;flex-direction:column;gap:3px"><div class="label">Today</div>${today}</div>
     <div class="card-foot rule-t"><div class="meta">${tokens == null ? `${icon("database", 13)} Memory unavailable` : `7 days · ${esc(tokens)}`}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${actionButtons({kind: "agent", id: a.name, state: d.health.docker ? c.state : "unknown", big: true})}</div>
       <button class="btn btn-primary" data-act="agent" data-id="${esc(a.name)}">Details${icon("arrow-right", 14)}</button></div>
   </article>`;
 }
@@ -386,10 +468,15 @@ function unavailableBox() {
 function agentTabHtml(a, mem, tab) {
   if (!mem.available) return unavailableBox();
   if (tab === "session") {
-    if (!mem.summary) return `<p class="muted">No summary — the next one is written when a session ends.</p>`;
+    const state = a.container_state?.state;
+    const stopped = S.data.health.docker && ["stopped", "missing"].includes(state) && !S.busy[a.container];
+    const forget = `<div class="rule-t" style="margin-top:22px;padding-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button class="btn btn-danger" data-act="ask" data-action="forget" data-kind="agent" data-id="${esc(a.name)}" ${stopped && mem.summary ? "" : "disabled"}>${icon("eraser", 14)}Forget last session</button>
+      <span class="muted" style="font-size:12px">${stopped ? "Deletes only the last-session summary; day memories stay." : "Stopped agents only"}</span></div>`;
+    if (!mem.summary) return `<p class="muted">No summary — the next one is written when a session ends.</p>${forget}`;
     const at = new Date(mem.summary.written_at);
     return `<div class="meta-line">${icon("clock", 14)}written ${esc(at.toLocaleDateString("en-US", {month: "long", day: "numeric"}))} at ${esc(at.toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"}))} · ${mem.summary.words} words</div>
-      <p class="read" lang="uk">${esc(mem.summary.text)}</p>`;
+      <p class="read" lang="uk">${esc(mem.summary.text)}</p>${forget}`;
   }
   if (tab === "memory") {
     const digests = [["year", "Year"], ["month", "Month"], ["week", "Week"]].map(([k, lbl]) => {
@@ -520,8 +607,17 @@ document.addEventListener("click", (e) => {
   else if (act === "scroll") document.getElementById(id)?.scrollIntoView({behavior: "smooth", block: "start"});
   else if (act === "top") $(".main")?.scrollTo({top: 0, behavior: "smooth"});
   else if (act === "toast-close") { S.toast = null; render(); }
+  else if (act === "do" || act === "ask") {
+    const {action, kind, sim} = el.dataset;
+    if (action === "start") perform(action, kind, id, sim);       // start needs no confirmation
+    else { S.dialog = {action, kind, id, sim, fresh: true}; render(); }
+  } else if (act === "dialog-cancel" && e.target === el) { S.dialog = null; render(); }
+  else if (act === "dialog-ok") { const d = S.dialog; S.dialog = null; perform(d.action, d.kind, d.id, d.sim); }
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && S.drawer) { S.drawer = null; render(); } });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (S.dialog) { S.dialog = null; render(); } else if (S.drawer) { S.drawer = null; render(); }
+});
 
 setInterval(() => { const el = $("#refreshed"); if (el && S.data) el.textContent = `updated ${ago((Date.now() - S.fetchedAt) / 1000)}`; }, 1000);
 setInterval(() => { if (S.token && !document.hidden) refresh(); }, POLL_MS);
