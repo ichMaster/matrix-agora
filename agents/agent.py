@@ -67,6 +67,7 @@ from agents.plans import (
     split_summary,
     strip_tags,
 )
+from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.session import load_session, save_session
 from agents.turns import bot_streak, decide_reply, is_pass, streak_frees_at
 from agents.usage import usage_line
@@ -746,11 +747,15 @@ class Agent:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     if len(sys.argv) != 2:
         print("usage: uv run agents/agent.py agents/<name>.toml", file=sys.stderr)
         raise SystemExit(2)
     cfg = load_config(sys.argv[1])
+    setup_logging(cfg.localpart)
+    lock = acquire_lock(cfg.lock_file)  # held until the process exits (v3.2)
+    if lock is None:
+        log.error("%s: another instance is running (pid %s) — exiting", cfg.localpart, lock_holder(cfg.lock_file))
+        raise SystemExit(1)
     agent = Agent(cfg)
     asyncio.run(agent.run())
 
