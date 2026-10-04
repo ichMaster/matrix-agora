@@ -12,11 +12,13 @@ import contextlib
 import hmac
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from panel.actions import ActionError, ComposeRunner, Supervisor
 from panel.docker_read import DockerReader
 from panel.health import Prober
 from panel.host import host_metrics
@@ -54,7 +56,8 @@ def _agent_view(agent) -> dict:
 
 def create_app(token: str | None = None, registry: Registry | None = None, docker_reader: DockerReader | None = None,
                prober: Prober | None = None, state_dir: Path = Path("state"), proc: Path = Path("/proc"),
-               os_release: Path = Path("/host/os-release"), background: bool = True) -> FastAPI:
+               os_release: Path = Path("/host/os-release"), background: bool = True,
+               supervisor: Supervisor | None = None) -> FastAPI:
     token = token if token is not None else os.environ.get("PANEL_TOKEN", "")
     if len(token) < MIN_TOKEN_LEN:
         raise RuntimeError(f"PANEL_TOKEN must be set (at least {MIN_TOKEN_LEN} characters) — refusing to start")
@@ -62,6 +65,10 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
     reg = registry or Registry()
     dock = docker_reader or DockerReader(project=os.environ.get("COMPOSE_PROJECT", "server"))
     probe = prober or Prober(reg)
+    stack = os.environ.get("STACK_DIR")
+    sup = supervisor or Supervisor(dock, ComposeRunner(os.environ.get("COMPOSE_PROJECT", "server"),
+                                                       f"{stack}/server/docker-compose.yml" if stack else None),
+                                   state_dir)
 
     @contextlib.asynccontextmanager
     async def lifespan(_app):
@@ -92,6 +99,12 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
             if not hmac.compare_digest(given, expected):
                 response = JSONResponse({"detail": "unauthorized"}, status_code=401,
                                         headers={"WWW-Authenticate": "Bearer"})
+                response.headers.update(SECURITY_HEADERS)
+                return response
+            origin = request.headers.get("origin")
+            if request.method not in ("GET", "HEAD") and origin and urlsplit(origin).netloc != request.headers.get("host"):
+                # actions are same-origin only: a page elsewhere can't drive them even with a stolen token
+                response = JSONResponse({"detail": "cross-origin action refused"}, status_code=403)
                 response.headers.update(SECURITY_HEADERS)
                 return response
         response = await call_next(request)
@@ -173,6 +186,34 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
             raise HTTPException(404, "not found")
         lines = dock.logs(found.container, clamp_tail(tail))
         return {"available": lines is not None, "lines": lines or []}
+
+    def run(fn, *args) -> dict:
+        try:
+            return fn(*args)
+        except ActionError as exc:
+            raise HTTPException(exc.status, exc.detail) from exc
+
+    # ── actions (v3.4): POST only, token-gated, same-origin, names only through the registry ──
+    @app.post("/api/agents/{name}/forget")
+    def agent_forget(name: str) -> dict:
+        found = reg.agent(name)
+        if found is None:
+            raise HTTPException(404, "not found")
+        return run(sup.forget, found.name)
+
+    @app.post("/api/agents/{name}/{action}")
+    def agent_action(name: str, action: str) -> dict:
+        found = reg.agent(name)
+        if found is None or action not in ("start", "stop", "restart"):
+            raise HTTPException(404, "not found")
+        return run(sup.act, found.container, action)
+
+    @app.post("/api/simulations/{sim_id}/services/{service}/{action}")
+    def service_action(sim_id: str, service: str, action: str) -> dict:
+        svc = reg.service(sim_id, service)
+        if svc is None or action not in ("start", "stop", "restart"):
+            raise HTTPException(404, "not found")
+        return run(sup.act, svc, action)
 
     # the page: served without the token (it holds no data); everything it shows comes from /api/*
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

@@ -24,7 +24,7 @@ LEVEL = re.compile(r"\b(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|CRITICAL)\b")
 
 @dataclass(frozen=True)
 class ContainerInfo:
-    state: str            # running | stopped | crashed | missing | unknown
+    state: str            # running | restarting | stopped | crashed | missing | unknown
     started_at: str | None = None
     uptime_s: int | None = None
     image: str | None = None
@@ -60,8 +60,10 @@ def _uptime(started_at: str | None, now: datetime) -> int | None:
 
 
 def classify(status: str, exit_code: int | None) -> str:
-    if status == "running" or status == "restarting":
+    if status == "running":
         return "running"
+    if status == "restarting":  # a restart loop is not "running" (v3.3 review #5)
+        return "restarting"
     if status == "dead" or (status == "exited" and exit_code not in STOPPED_EXIT_CODES):
         return "crashed"
     return "stopped"  # exited cleanly, created, paused
@@ -83,6 +85,10 @@ class DockerReader:
         labels = [f"com.docker.compose.project={self.project}", f"com.docker.compose.service={service}"]
         found = self._get().containers.list(all=True, filters={"label": labels})
         return found[0] if found else None
+
+    def find(self, service: str):
+        """The container of a compose service, or None; docker errors propagate (the supervisor maps them)."""
+        return self._find(service)
 
     def available(self) -> bool:
         try:

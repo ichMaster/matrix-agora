@@ -181,7 +181,8 @@ The panel is the point of the whole project (VISION §The direction). One FastAP
 - **The agent cards:** container state and uptime; start/stop/restart (v3.4); log tail; session summary, day memories, plans, the today block; **"Forget the last session"** (deletes `state/<name>.memory.md`, confirmation required, stopped agents only); the 7-day token table (the v3.1 aggregation).
 - **The host card:** uptime, disk, memory (from `/proc` and a read-only host mount).
 - **Auth:** the UI asks for the owner token once and sends `Authorization: Bearer` on every call — checked by a middleware before routing (constant-time), so every `/api/*` path, even an unknown one, is 401 without it and the page shows nothing. The panel refuses to start without a `PANEL_TOKEN` of at least 24 characters; the OpenAPI docs routes are off. One owner, no accounts.
-- **Confirmations:** every stop/restart and forget is confirmed in the UI; mutating actions are `POST` + token.
+- **Actions (v3.4):** `POST /api/agents/{name}/start|stop|restart|forget` and `POST /api/simulations/{id}/services/{service}/start|stop|restart` — token-gated, **same-origin** (a foreign `Origin` → 403), names only through the registry (unknown → 404), one action at a time per target (busy → 409), docker unreachable → 503. Start = `docker compose -p server -f <stack>/server/docker-compose.yml up -d --no-deps <service>` (a fixed argv; creates a missing container); stop = `stop(timeout=30)`; restart = stop + start. Each action is logged as an event (what, target, result, duration). Docker's `restarting` is its own state (warn), not "running".
+- **Confirmations:** every stop/restart and forget is confirmed in the UI; start runs without one; mutating actions are `POST` + token + same-origin.
 - **Degrade by card:** docker trouble greys the container cards, an unreadable `state/` greys the memory views; a stopped homeserver never crashes the agents (nio retries until it is back).
 - **Views stay safe:** there is no settings view — the panel never shows or edits `.env` or canons; log views are safe because logs never contain tokens or texts.
 - **Single instance:** an agent takes `flock` on `state/<name>.lock` (PID inside) at startup, so a second instance on the same host refuses to start. The panel manages containers only and does not detect agents started outside it.
@@ -203,7 +204,7 @@ Changing any of these updates this document and the test that pins it, in the sa
 - The `server/docker-compose.yml` environment (server name, federation, encryption, registration). `CONTINUWUITY_SERVER_NAME` cannot change without wiping the database.
 - The `server/docker-compose.yml` service set — `homeserver`, one service per agent (`ada`, `bruno`, v3.2), `usage-report` (v3.2), `panel` (v3.3) — the `../state` and `../reports` bind mounts, the agents' `HOMESERVER` override and `1000:1000` user, and what `server/deploy.sh` syncs and applies (pinned by `tests/test_compose.py`).
 - The `server_con.yaml` shape (`host`, `user`, `password`) read by `server/deploy.sh`.
-- The panel API surface (the v3.3 read-only `GET` routes, the v3.4 `POST` actions), the simulation-registry entry shape, and the Bearer `PANEL_TOKEN` auth.
+- The panel API surface (the v3.3 read-only `GET` routes; the v3.4 `POST` actions — exactly three routes, pinned by `tests/test_panel_api.py`), the simulation-registry entry shape, and the Bearer `PANEL_TOKEN` auth.
 
 ## Data and state files
 
