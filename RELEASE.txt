@@ -1,3 +1,17 @@
+Version 3.4.0 (2026-10-04)
+---------------------------
+- The panel controls the stack: start / stop / restart for Ada, Bruno and the
+  homeserver, including the first launch of a container that does not exist
+  yet; "Forget last session" for a stopped agent (AGORA-039..043)
+- Every action is a token-gated, same-origin POST, resolved through the
+  registry, one at a time per target, confirmed in the UI (start needs none),
+  with busy states and toasts; stop waits up to 30 s for the session summary
+- The panel image carries the docker CLI and compose and sees the stack at
+  its host path; docker's "restarting" is its own state
+- Review fixes: the panel logs its actions; a failed compose up logs why;
+  quieter agent logs (no AFC / nio noise); start refuses a running container
+  (the panel's compose would recreate it)
+
 Version 3.3.0 (2026-10-04)
 ---------------------------
 - The panel, read-only, at http://192.168.1.197:8090 behind the owner token:
