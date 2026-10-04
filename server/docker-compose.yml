@@ -22,6 +22,7 @@ services:
     image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
     command: ["agents/ada.toml"]
     restart: unless-stopped
+    init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
     depends_on: [homeserver]
     env_file:
       - path: .env
@@ -39,6 +40,7 @@ services:
     image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
     command: ["agents/bruno.toml"]
     restart: unless-stopped
+    init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
     depends_on: [homeserver]
     env_file:
       - path: .env
@@ -56,6 +58,7 @@ services:
     image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
     entrypoint: ["python", "agents/usage_daily.py"]
     restart: unless-stopped
+    init: true
     env_file:
       - path: .env
         required: false

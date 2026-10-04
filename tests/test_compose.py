@@ -55,3 +55,9 @@ def test_deploy_pulls_before_up_and_prepares_the_mounts():
     deploy = (ROOT / "server" / "deploy.sh").read_text()
     assert "docker compose pull && docker compose up -d" in deploy
     assert "~/matrix-agora/state ~/matrix-agora/reports" in deploy
+
+
+def test_python_is_never_pid_1():
+    # PID 1 ignores SIGTERM without a handler: stops would wait the grace period and end in SIGKILL (code review #1)
+    for name in ("ada", "bruno", "usage-report"):
+        assert SERVICES[name]["init"] is True, name
