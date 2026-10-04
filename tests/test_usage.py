@@ -131,3 +131,17 @@ def test_every_call_site_names_its_kind(tmp_path):
     asyncio.run(agent.ensure_today(datetime(2026, 10, 3, 9, tzinfo=ZoneInfo("Europe/Kyiv"))))
     assert llm.kinds[:3] == ["summary", "day_memory", "digest"]
     assert llm.kinds[3:7] == ["plan"] * 4 and llm.kinds[7] == "today"
+
+
+
+def test_automatic_function_calling_is_off(monkeypatch):
+    # no tools are passed, so AFC is pure log noise in the panel's view (v3.4 review #3)
+    seen = {}
+
+    class Capture(FakeModels):
+        async def generate_content(self, **kw):
+            seen.update(kw)
+            return await super().generate_content(**kw)
+    monkeypatch.setattr(llm_mod.genai, "Client", lambda: SimpleNamespace(aio=SimpleNamespace(models=Capture("ok"))))
+    asyncio.run(llm_mod.GeminiClient().generate("c", "s"))
+    assert seen["config"].automatic_function_calling.disable is True

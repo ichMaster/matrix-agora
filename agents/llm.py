@@ -45,6 +45,8 @@ class GeminiClient:
                     system_instruction=system_instruction,
                     max_output_tokens=max_output_tokens,
                     thinking_config=types.ThinkingConfig(thinking_budget=0),
+                    # no tools are passed: AFC only adds a log line per call (v3.4 review #3)
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                 ),
             )
         except Exception as exc:  # noqa: BLE001 — any provider failure means silence

@@ -65,4 +65,6 @@ def setup_logging(localpart: str, log_dir: Path = Path("state/logs")) -> Path:
         h.setFormatter(fmt)
         h._agora = True
         root.addHandler(h)
+    # the panel tails this file: keep it to the agent's own events, not a line per room event (v3.4 review #3)
+    logging.getLogger("nio").setLevel(logging.WARNING)
     return file

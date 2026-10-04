@@ -38,6 +38,7 @@ def test_logging_goes_to_console_and_a_rotating_file(tmp_path, clean_root_logger
     logging.getLogger("agent").info("joined")
     rot[0].flush()
     assert file == tmp_path / "logs" / "ada.log" and "joined" in file.read_text(encoding="utf-8")
+    assert logging.getLogger("nio").level == logging.WARNING  # no line per room event (v3.4 review #3)
     setup_logging("ada", tmp_path / "logs")  # idempotent: no duplicate handlers
     assert len([h for h in logging.getLogger().handlers if getattr(h, "_agora", False)]) == 2
 
