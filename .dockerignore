@@ -1,0 +1,23 @@
+# Nothing secret or lived ever enters the image (v3.2): env and state/ come only from the host.
+.env
+.env.*
+!.env.example
+server/.env
+server_con.yaml
+state/
+reports/
+# not needed in the image
+.git/
+.github/
+.venv/
+.claude/
+tools/
+specification/
+tests/
+scripts/
+**/__pycache__/
+**/*.pyc
+.ruff_cache/
+.pytest_cache/
+.DS_Store
+*.vsix
