@@ -27,7 +27,7 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 | v3.1 | Token accounting and report | ✅ completed | `v3.1.0` (2026-10-03) + `v3.1.1` |
 | v3.2 | Agent images, CI/CD and server deployment | ✅ completed | `v3.2.0` (2026-10-04) |
 | v3.3 | The panel: viewing (read-only) | ✅ completed | `v3.3.0` (2026-10-04) |
-| v3.4 | The panel: control | ✅ completed | `v3.4.0` (2026-10-04) |
+| v3.4 | The panel: control | ✅ completed | `v3.4.0` (2026-10-04) + `v3.4.1` |
 
 ## v0 — Platform: homeserver, server deploy, client, accounts, echo bot
 
@@ -369,7 +369,7 @@ The panel is the point of the whole project (VISION §The direction): a FastAPI 
 
 ### v3.4 — The panel: control
 
-**Status:** ✅ completed — released `v3.4.0` on 2026-10-04.
+**Status:** ✅ completed — released `v3.4.0` on 2026-10-04 · patches `v3.4.1`.
 
 **Goal:** the panel runs everything it shows — the agents and the simulation's services start, stop and restart from the page, safely.
 

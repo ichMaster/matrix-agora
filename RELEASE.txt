@@ -1,3 +1,8 @@
+Version 3.4.1 (2026-10-04)
+---------------------------
+- The PASS sentinel never reaches the room: a reply with text and then PASS
+  (on its own line or at the end) sends only the text; PASS alone is silence
+
 Version 3.4.0 (2026-10-04)
 ---------------------------
 - The panel controls the stack: start / stop / restart for Ada, Bruno and the
