@@ -58,8 +58,12 @@ def test_deploy_pulls_before_up_and_prepares_the_mounts():
 
 
 def test_python_is_never_pid_1():
-    # PID 1 ignores SIGTERM without a handler: stops would wait the grace period and end in SIGKILL (code review #1)
-    for name in ("ada", "bruno", "usage-report"):
+    # PID 1 ignores SIGTERM without a handler: stops would wait the grace period and end in SIGKILL (code review #1).
+    # Every agent the registry lists, not a hand-kept list — the cat's service was unpinned (v4.2 review #12).
+    import tomllib
+    agents = tomllib.loads((ROOT / "simulations.toml").read_text(encoding="utf-8"))["agora"]["agents"]
+    assert "kit" in agents
+    for name in (*agents, "usage-report"):
         assert SERVICES[name]["init"] is True, name
 
 
