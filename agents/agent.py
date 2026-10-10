@@ -800,10 +800,13 @@ class Agent:
                 log.error("mood of the day failed — none today until a retry")
                 self._mood_retry_ms = self.clock() + 600_000
                 return
-            self.mood_file.parent.mkdir(parents=True, exist_ok=True)
-            with self.mood_file.open("a", encoding="utf-8") as f:
-                f.write(log_block(day, reading))
-            self.mood = MoodState(day, split_resolution(reading), reading)
+            self.mood = MoodState(day, split_resolution(reading), reading)  # kept for the day even if the log fails
+            try:
+                self.mood_file.parent.mkdir(parents=True, exist_ok=True)
+                with self.mood_file.open("a", encoding="utf-8") as f:
+                    f.write(log_block(day, reading))
+            except OSError as exc:  # review #9: no repeated paid call per reply
+                log.error("mood log not written (%s) — the mood is kept for today", type(exc).__name__)
 
     async def _mood_reading(self, contents: str, system: str) -> str | None:
         """The day's reading — None when the call failed or the cap cut it: a cut reading would be logged and reused
@@ -821,8 +824,9 @@ class Agent:
         return text
 
     def _read_raw(self, path: Path) -> str | None:
+        """A torn append (disk full, SIGKILL) may leave bad bytes in the log; the day's block is still found."""
         try:
-            return path.read_text(encoding="utf-8")
+            return path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             return None
 

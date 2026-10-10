@@ -28,9 +28,10 @@ def local_today(tz: str | None = None) -> date:
 
 
 def _read(path: Path) -> str | None:
+    """A missing or unreadable file is None; bad bytes (a torn append) are replaced — never a 500 (v4.2 review #9)."""
     try:
-        text = path.read_text(encoding="utf-8").strip()
-    except FileNotFoundError:
+        text = path.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
         return None
     return text or None
 

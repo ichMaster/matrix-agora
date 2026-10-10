@@ -132,3 +132,15 @@ def test_the_memory_route_serves_the_cats_mood_and_not_adas(state, monkeypatch):
     assert c.get("/api/agents/kit/memory", headers=AUTH).json()["mood"]["resolution"] == "Мрр."
     assert c.get("/api/agents/ada/memory", headers=AUTH).json()["mood"] is None
     assert c.get("/api/agents/kit/memory").status_code == 401
+
+
+def test_a_torn_mood_log_never_breaks_the_memory_route(state, monkeypatch):
+    """Review #9: invalid UTF-8 from a torn append made /api/agents/kit/memory a 500 on every poll."""
+    monkeypatch.setattr(app_mod, "local_today", lambda: TODAY)
+    (state / "kit.mood.log").write_bytes(b"\n\n===== 2026-10-03 =====\n\xd0\n\n===== 2026-10-04 =====\n"
+                                         + "РЕЗОЛЮЦІЯ: Мрр.\n".encode())
+    reg = Registry()
+    c = TestClient(create_app(token=TOKEN, registry=reg, docker_reader=DockerReader(client_factory=lambda: None),
+                              prober=Prober(reg), state_dir=state, background=False))
+    r = c.get("/api/agents/kit/memory", headers=AUTH)
+    assert r.status_code == 200 and r.json()["mood"]["resolution"] == "Мрр."

@@ -190,3 +190,25 @@ def test_a_reading_cut_by_the_cap_is_never_kept(tmp_path):
     whole = cat(tmp_path, CompleteLLM("stop"))
     asyncio.run(whole.ensure_mood(datetime(2026, 10, 10, 12, tzinfo=ZoneInfo("Europe/Kyiv"))))
     assert whole.mood.resolution == "Сьогодні колючий і сонний. Уникає людей."
+
+
+def test_a_torn_log_still_yields_the_days_reading(tmp_path):
+    """Review #9: bad bytes from a torn append used to raise past the back-off — a paid call before every reply."""
+    llm = MoodLLM()
+    agent = cat(tmp_path, llm)
+    agent.mood_file.parent.mkdir(parents=True, exist_ok=True)
+    agent.mood_file.write_bytes(b"\n\n===== 2026-10-09 =====\n\xd0" + log_block("2026-10-10", READING).encode())
+    asyncio.run(agent.ensure_mood(datetime(2026, 10, 10, 12, tzinfo=ZoneInfo("Europe/Kyiv"))))
+    assert llm.calls == [] and agent.mood.resolution == "Сьогодні колючий і сонний. Уникає людей."
+
+
+def test_an_unwritable_log_keeps_the_mood_for_the_day(tmp_path):
+    """Review #9: a failed append kept no mood and set no back-off, so every spoken line paid for another reading."""
+    llm = MoodLLM()
+    agent = cat(tmp_path, llm)
+    (tmp_path / "blocked").write_text("a file, not a directory", encoding="utf-8")
+    agent.memory_file = tmp_path / "blocked" / "kit.memory.md"   # the mood log sits beside it: unwritable
+    now = datetime(2026, 10, 10, 12, tzinfo=ZoneInfo("Europe/Kyiv"))
+    asyncio.run(agent.ensure_mood(now))
+    asyncio.run(agent.ensure_mood(now))
+    assert llm.calls == ["mood"] and agent.mood.resolution == "Сьогодні колючий і сонний. Уникає людей."
