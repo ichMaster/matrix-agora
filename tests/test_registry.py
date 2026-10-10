@@ -6,7 +6,7 @@ from agents.config import ConfigError, load_config
 from agents.registry import RegistryError, load_registry, parse_registry, simulation_of
 
 ENV = {"HOMESERVER": "http://hs:8008", "ROOM_ID": "!room", "OWNER": "@ich:agora.lan",
-       "ADA_PASSWORD": "pw", "BRUNO_PASSWORD": "pw"}
+       "ADA_PASSWORD": "pw", "BRUNO_PASSWORD": "pw", "KIT_PASSWORD": "pw"}
 GOOD = """
 [agora]
 kind = "matrix-chat"
@@ -22,7 +22,7 @@ def test_the_real_registry_holds_exactly_agora():
     reg = load_registry()
     assert list(reg) == ["agora"]
     agora = reg["agora"]
-    assert (agora.kind, agora.services, agora.agents) == ("matrix-chat", ("homeserver",), ("ada", "bruno"))
+    assert (agora.kind, agora.services, agora.agents) == ("matrix-chat", ("homeserver",), ("ada", "bruno", "kit"))
     assert agora.health.path == "/_matrix/client/versions" and agora.health.service == "homeserver"
     assert agora.endpoints == {"homeserver": "HOMESERVER", "room": "ROOM_ID"}
     assert simulation_of(reg, "bruno").id == "agora" and simulation_of(reg, "carol") is None
@@ -43,7 +43,7 @@ def test_a_malformed_registry_is_refused(broken, needle):
         parse_registry(broken)
 
 
-@pytest.mark.parametrize("toml", ["agents/ada.toml", "agents/bruno.toml"])
+@pytest.mark.parametrize("toml", ["agents/ada.toml", "agents/bruno.toml", "agents/kit.toml"])
 def test_agents_resolve_their_connection_through_the_registry(toml):
     cfg = load_config(toml, env=ENV)
     assert (cfg.simulation, cfg.homeserver, cfg.room_id) == ("agora", "http://hs:8008", "!room")

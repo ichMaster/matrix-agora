@@ -1,0 +1,18 @@
+name = "Кіт"
+user_id = "@kit:agora.lan"
+canon = "agents/canon/kit.md"
+life = "agents/canon/kit.life.md"
+natal = "agents/canon/kit.natal.md"   # v4.2: Lumi's natal format, read by the daily horoscope (agents/mood.py)
+simulation = "agora"
+type = "creature"        # v4.2: canon, life, world, the daily horoscope — no memories, no plans
+engine = "gemini"
+name_forms = ["кіт", "кота", "коту", "котом", "коті", "коте"]  # an ordinary cat-word addresses him: he is the only cat here
+
+[turns]
+mode = "ambient"        # never one of the chosen repliers; he reacts on his own roll (v4.2)
+weight = 1.0
+
+[panel]                 # shown by the panel only — never part of a prompt
+name = "Kit"
+role = "artificial cat, reborn 2005-04-16"
+pronoun = "he"

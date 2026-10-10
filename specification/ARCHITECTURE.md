@@ -124,6 +124,8 @@ The agents see each other, so without rules they would reply to each other endle
 - `agents/canon/<name>.md` — personal: character, way of speaking, interests, attitudes, what the agent never does.
 - The canons describe the **persona** agents as **humans** (see VISION.md §Principles). Nothing in code — reply rules, summary or memory prompts — may mention that a persona is a model or a bot; the scan (`BANNED_RE` in `agents/logic.py`, pinned by `tests/test_logic.py`) covers the persona prompt builders, `common.md`, and every persona's canon and life story. From v4.2 other types (the cat) may know they are not human — their own canons are outside the scan — and `common.md` names the room's members without describing them. **The outgoing guard:** every non-persona agent drops a reply in which one sentence names a persona and a banned term (`outs_a_persona`), so no member can tell Ada or Bruno they are bots — the line would otherwise enter their memories for good.
 - The TOML points at it: `canon = "agents/canon/<name>.md"`. Read once at startup; a missing or empty canon stops the bot with a clear error.
+- **The cat (v4.2, a `creature`):** `agents/canon/kit.md` (his character and lore — he knows he is artificial), `agents/canon/kit.life.md` (the sysadmin's life from 1965 and his death as past chapters; the rebirth on 2005-04-16 opens the current chapter 2005–2027; the end, 2038-01-19, sits in a hidden future chapter so the year never reaches a prompt), and `agents/canon/kit.natal.md` (Lumi's `core/natal.md` format: the chart of the first Linux commit, 2005-04-16 15:20 PDT, Portland — checked against JPL DE440s and Swiss Ephemeris, Placidus houses), read by the daily horoscope. No real person is named in his story.
+- **An agent loads its room leniently (v4.2):** its own TOML must be valid; a broken other member is skipped with an error line instead of stopping every agent.
 - **How the room addresses an agent (from v4.1):** its TOML's `name_forms` — the lowercase forms of its name, whole words (Ада: «ада», «ади», «аді», «аду», «адою», «адо»; Бруно: «бруно») — plus its Matrix id. They live in the TOML, not in code, so a new agent brings its own forms.
 - Canons are committed to the public repo: no secrets, no private data about the owner.
 - **Life story (from v2.2):** `agents/canon/<name>.life.md` — the agent's whole life from birth to death, anchored to real dates: a header (`Народження: YYYY-MM-DD HH:MM, place`, `Смерть: YYYY-MM-DD`) and chapters `## YYYY–YYYY · title` that never overlap. The chapter containing today's year is the **current chapter** — the most detailed one: the typical week, ongoing matters, places, people. The TOML points at it: `life = "agents/canon/<name>.life.md"`.
@@ -201,7 +203,7 @@ The panel is the point of the whole project (VISION §The direction). One FastAP
 Changing any of these updates this document and the test that pins it, in the same commit:
 
 - The env var names in `.env.example` and `server/.env.example`.
-- The agent TOML schema (`name`, `user_id`, `canon`, `life`, `simulation`; from v4.1 `type` (`persona`), `engine` (`gemini`), `name_forms` (the lowercase forms that address the agent), `[capabilities]` (overrides of the type's defaults: `canon`, `life`, `summary`, `chronicle`, `plans`, `today`, `world` — a persona has all; `canon` and `life` are required only when the type has them) and `[turns]` (`mode` = `ranked` | `ambient` | `mention-only`, `weight` > 0); and the panel-only `[panel] name` / `role` / `pronoun`), parsed by `agents/roster.py` (pinned by `tests/test_roster.py`), and the `agents/canon/` layout.
+- The agent TOML schema (`name`, `user_id`, `canon`, `life`, `simulation`; from v4.1 `type` (`persona`; v4.2 `creature`), `engine` (`gemini`), `name_forms` (the lowercase forms that address the agent), `[capabilities]` (overrides of the type's defaults: `canon`, `life`, `summary`, `chronicle`, `plans`, `today`, `world`, v4.2 `mood` — a persona has all but `mood`; a creature has `canon`, `life`, `world`, `mood`; `canon` and `life` are required only when the type has them), v4.2 `natal` (the natal file, required with `mood`) and `[turns]` (`mode` = `ranked` | `ambient` | `mention-only`, `weight` > 0); and the panel-only `[panel] name` / `role` / `pronoun`), parsed by `agents/roster.py` (pinned by `tests/test_roster.py`), and the `agents/canon/` layout.
 - The simulation registry `simulations.toml` (repo root): per entry `kind` (`matrix-chat`), `title`, `description`, `services`, `agents`, `health {service, port, path}`, `endpoints {homeserver, room}` — the env names its agents connect with; an agent belongs to one simulation (pinned by `tests/test_registry.py`).
 - The plan file format: items plus hidden mutation tags, which never reach a conversational prompt (pinned by a test).
 - The life-story format (header lines, `## YYYY–YYYY · title` chapters) and its visibility rule: future chapters and the death date never reach the conversational prompt (pinned by a test).
@@ -211,7 +213,7 @@ Changing any of these updates this document and the test that pins it, in the sa
 - The transcript format (`"Name: text"` per line), the `PASS` sentinel, and the prompt-assembly order.
 - The turn-taking semantics (from v4.1: `rank`, R1–R4, the group address, `wave_count` with `pending_answers`, the modes and the fallback; pinned by `tests/test_turns.py`).
 - The `server/docker-compose.yml` environment (server name, federation, encryption, registration). `CONTINUWUITY_SERVER_NAME` cannot change without wiping the database.
-- The `server/docker-compose.yml` service set — `homeserver`, one service per agent (`ada`, `bruno`, v3.2), `usage-report` (v3.2), `panel` (v3.3) — the `../state` and `../reports` bind mounts, the agents' `HOMESERVER` override and `1000:1000` user, and what `server/deploy.sh` syncs and applies (pinned by `tests/test_compose.py`).
+- The `server/docker-compose.yml` service set — `homeserver`, one service per agent (`ada`, `bruno`, v3.2; `kit`, v4.2), `usage-report` (v3.2), `panel` (v3.3) — the `../state` and `../reports` bind mounts, the agents' `HOMESERVER` override and `1000:1000` user, and what `server/deploy.sh` syncs and applies (pinned by `tests/test_compose.py`).
 - The `server_con.yaml` shape (`host`, `user`, `password`) read by `server/deploy.sh`.
 - The panel API surface (the v3.3 read-only `GET` routes — from v4.1 the agent view carries `type`, `engine` and `capabilities`; the v3.4 `POST` actions — exactly three routes, pinned by `tests/test_panel_api.py`), the simulation-registry entry shape, and the Bearer `PANEL_TOKEN` auth.
 
@@ -237,7 +239,7 @@ There is no database, and nothing the agents lived is ever deleted: all durable 
 | `state/<name>.lock` | startup (`flock`) | the PID of the running instance |
 | `state/logs/<name>.log` | continuously | rotating log, 1 MB × 3 — no tokens, passwords or texts |
 
-The agent TOML (`agents/<name>.toml`, committed) holds `name`, `user_id`, `canon`, `life`, `simulation` (v3.3: the registry entry — its `endpoints` name the env vars the agent connects with), from v4.1 `type`, `engine`, `name_forms`, `[capabilities]` and `[turns]` (§Contracts), and a panel-only `[panel]` table (the English display name, role and pronoun, never part of a prompt); the shared `.env` holds everything in §Configuration and secrets. These shapes are contracts (§Contracts).
+The agent TOML (`agents/<name>.toml`, committed) holds `name`, `user_id`, `canon`, `life`, `simulation` (v3.3: the registry entry — its `endpoints` name the env vars the agent connects with), from v4.1 `type`, `engine`, `name_forms`, `[capabilities]` and `[turns]`, from v4.2 `natal` (§Contracts), and a panel-only `[panel]` table (the English display name, role and pronoun, never part of a prompt); the shared `.env` holds everything in §Configuration and secrets. These shapes are contracts (§Contracts).
 
 ## Configuration and secrets
 
@@ -246,7 +248,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | Variable | Phase | Meaning (example default) |
 |---|---|---|
 | `HOMESERVER`, `ROOM_ID`, `OWNER` | v0.4 | where and with whom the agents talk |
-| `ADA_PASSWORD`, `BRUNO_PASSWORD` | v0.4 | first-login passwords |
+| `ADA_PASSWORD`, `BRUNO_PASSWORD`, `KIT_PASSWORD` | v0.4, v4.2 | first-login passwords (the cat's account is created in the admin room, since registration is closed) |
 | `GEMINI_API_KEY` | v1.1 | read by `google-genai` from the environment |
 | `HISTORY_N`, `REPLY_DELAY_S`, `MAX_BOT_TURNS`, `BOT_REPLY_P`, `BOT_WINDOW_S` | v1.1–v1.2 | context size and turn-taking (40 from v4.1 / 4 / 3 / 0.5 / 600); from v4.1 `MAX_BOT_TURNS` counts the message being answered (v1.2's value + 1) |
 | `REPLY_MAX_TOKENS` | v4.1 | the output cap of a reply (200); summaries, memories and plans keep their own caps |

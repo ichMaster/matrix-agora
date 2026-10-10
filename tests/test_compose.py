@@ -15,7 +15,7 @@ def env_keys(path: Path) -> set[str]:
 
 
 def test_the_service_set():
-    assert set(SERVICES) == {"homeserver", "ada", "bruno", "usage-report", "panel"}
+    assert set(SERVICES) == {"homeserver", "ada", "bruno", "kit", "usage-report", "panel"}  # v4.2: the cat
 
 
 def test_the_homeserver_stays_closed():
@@ -27,7 +27,7 @@ def test_the_homeserver_stays_closed():
 
 
 def test_one_container_per_agent_from_one_image():
-    for name in ("ada", "bruno"):
+    for name in ("ada", "bruno", "kit"):
         svc = SERVICES[name]
         assert svc["image"] == IMAGE and svc["command"] == [f"agents/{name}.toml"]
         assert svc["environment"]["HOMESERVER"] == "http://homeserver:8008"  # the compose network

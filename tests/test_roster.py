@@ -43,13 +43,13 @@ def write_roster(tmp_path, kit_toml: str):
 
 def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
     roster = load_roster("agora")
-    assert list(roster) == ["ada", "bruno"]
+    assert list(roster) == ["ada", "bruno", "kit"]
     ada = roster["ada"]
     assert (ada.user_id, ada.name, ada.type, ada.engine, ada.mode, ada.weight) == (
         "@ada:agora.lan", "Ада", "persona", "gemini", "ranked", 1.0)
     assert "адо" in ada.name_forms  # the vocative lives in the TOML now, not in code
     assert roster["bruno"].name_forms == ("бруно",)
-    assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES)
+    assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES) - {"mood"}
     assert ada.panel["name"] == "Ada"
 
 
@@ -170,7 +170,7 @@ def test_world_tick_does_nothing_without_chronicle_or_plans():
 
 def test_the_agent_reads_its_members_from_the_roster():
     agent = Agent(CFG, llm=FakeLLM())
-    assert set(agent.others) == {"@bruno:agora.lan"}
+    assert set(agent.others) == {"@bruno:agora.lan", "@kit:agora.lan"}
     assert agent.names["@bruno:agora.lan"] == "Бруно" and agent.names["@ich:agora.lan"] == "Ich"
     assert "адо" in agent.me.name_forms
     injected = {"ada": Member("ada", "@ada:agora.lan", "Ада", ("ада",)),
@@ -180,7 +180,7 @@ def test_the_agent_reads_its_members_from_the_roster():
 
 def test_the_launcher_lists_the_registry_agents():
     out = subprocess.run([sys.executable, "-m", "agents.roster"], capture_output=True, text=True, check=True).stdout
-    assert out.split() == ["ada", "bruno"]
+    assert out.split() == ["ada", "bruno", "kit"]
 
 
 def test_an_unreadable_toml_is_a_roster_error_not_a_crash(tmp_path):
@@ -201,3 +201,43 @@ def test_the_panel_greys_an_unreadable_agent_card_instead_of_crashing(tmp_path):
     (agents / "kit.toml").mkdir()  # unreadable as a file
     panel = Registry(reg, agents)
     assert panel.agent("kit").type == "unknown" and panel.agent("ada").type == "persona"
+
+
+
+# --- v4.2: the creature type and the cat --------------------------------------------------------------------------
+def test_the_cat_is_an_ambient_creature_with_a_horoscope_and_no_memories():
+    kit = load_roster("agora")["kit"]
+    assert (kit.type, kit.mode, kit.name) == ("creature", "ambient", "Кіт")
+    assert kit.capabilities == frozenset({"canon", "life", "world", "mood"})
+    assert {"кіт", "коте", "кота"} <= set(kit.name_forms)
+    assert kit.panel["name"] == "Kit" and kit.panel["pronoun"] == "he"
+
+
+def test_the_cats_config_loads_his_canon_life_and_natal_text():
+    cfg = load_config("agents/kit.toml", env={**ENV, "KIT_PASSWORD": "pw"})
+    assert cfg.type == "creature" and cfg.can("mood") and not cfg.can("summary")
+    assert "штучний кіт" in cfg.canon.lower() and cfg.life is not None
+    assert cfg.natal.startswith("Народження: 16.04.2005, 15:20, Портленд") and "#" not in cfg.natal.splitlines()[0]
+
+
+def test_a_creature_without_a_natal_chart_refuses_to_start(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "agents" / "canon").mkdir(parents=True)
+    (tmp_path / "agents" / "canon" / "common.md").write_text("# Агора\nспільне")
+    (tmp_path / "agents" / "canon" / "x.md").write_text("канон")
+    (tmp_path / "simulations.toml").write_text(REGISTRY.replace('"ada", "bruno", "kit"', '"x"').replace("[sim", "[agora"))
+    toml = tmp_path / "agents" / "x.toml"
+    toml.write_text('name = "X"\nuser_id = "@x:agora.lan"\nsimulation = "agora"\ntype = "creature"\n'
+                    'canon = "agents/canon/x.md"\n[capabilities]\nlife = false\n')
+    with pytest.raises(ConfigError, match="natal"):
+        load_config(toml, env={**ENV, "X_PASSWORD": "pw"})
+
+
+def test_a_broken_other_member_is_skipped_but_ones_own_still_refuses(tmp_path):
+    reg, agents = write_roster(tmp_path, 'name = "Кіт"\nuser_id = "@kit:agora.lan"\ntype = "dragon"\n')
+    roster = load_roster("sim", reg, agents, strict_for="ada")       # Ada loading her room: Кіт is skipped
+    assert list(roster) == ["ada", "bruno"]
+    with pytest.raises(RosterError, match="unknown type"):
+        load_roster("sim", reg, agents, strict_for="kit")             # Кіт loading his own: refuses
+    with pytest.raises(RosterError):
+        load_roster("sim", reg, agents)                               # the strict default (the panel tolerates by itself)

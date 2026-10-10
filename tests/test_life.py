@@ -50,3 +50,17 @@ def test_malformed_stories_are_rejected():
     bad = "Народження: 1990-01-01, X\nСмерть: 2050-01-01\n## 1990–2000 · a\nx\n\n## 1999–2005 · b\ny"
     with pytest.raises(LifeError, match="overlap"):
         parse_life(bad)
+
+
+def test_the_cats_life_story_never_shows_his_death():
+    """v4.2: the cat's human life is past chapters, his rebirth opens the current one (2005–2027), and the hidden
+    end (2038-01-19) sits in a future chapter — the prompt never sees 2038."""
+    from datetime import date
+    from pathlib import Path
+
+    from agents.life import current_chapter, life_section, parse_life
+    story = parse_life(Path("agents/canon/kit.life.md").read_text(encoding="utf-8"))
+    assert story.birth == date(1965, 9, 13) and story.death == date(2038, 1, 19)
+    assert (current_chapter(story, date(2026, 10, 10)).start, current_chapter(story, date(2026, 10, 10)).end) == (2005, 2027)
+    section = life_section(story, date(2026, 10, 10))
+    assert "2038" not in section and "2028" not in section and "Шістнадцятого квітня 2005" in section

@@ -8,6 +8,7 @@ Run `python -m agents.roster` to list the agents of every simulation (scripts/ru
 
 from __future__ import annotations
 
+import logging
 import math
 import sys
 import tomllib
@@ -17,11 +18,15 @@ from pathlib import Path
 from agents.registry import REGISTRY_PATH, RegistryError, load_registry
 
 AGENTS_DIR = Path("agents")
+log = logging.getLogger("agent.roster")
 
-# the type sets the default capabilities; later phases add creature / assistant / bridge
-CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world")
+# the type sets the default capabilities; later phases add assistant / bridge
+CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood")
 TYPES: dict[str, frozenset[str]] = {
-    "persona": frozenset(CAPABILITIES),
+    # a human persona: the full memory stack, no horoscope
+    "persona": frozenset({"canon", "life", "summary", "chronicle", "plans", "today", "world"}),
+    # v4.2 — a creature (the cat): canon, a life story and the world, a daily horoscope; no memories, no plans
+    "creature": frozenset({"canon", "life", "world", "mood"}),
 }
 ENGINES = ("gemini",)
 MODES = ("ranked", "ambient", "mention-only")
@@ -101,15 +106,27 @@ def load_member(path: Path) -> Member:
     return parse_member(path.stem, data, str(path))
 
 
-def load_roster(sim_id: str, registry_path: Path = REGISTRY_PATH, agents_dir: Path = AGENTS_DIR) -> dict[str, Member]:
-    """The simulation's members, in registry order: its `agents` list, then each listed TOML."""
+def load_roster(sim_id: str, registry_path: Path = REGISTRY_PATH, agents_dir: Path = AGENTS_DIR,
+                strict_for: str | None = None) -> dict[str, Member]:
+    """The simulation's members, in registry order: its `agents` list, then each listed TOML.
+
+    With `strict_for` (an agent loading its own room), only that member's TOML must be valid: a broken *other*
+    member is skipped with an error line instead of stopping every agent (v4.1 review #8)."""
     try:
         sim = load_registry(registry_path).get(sim_id)
     except RegistryError as exc:
         raise RosterError(str(exc)) from exc
     if sim is None:
         raise RosterError(f"unknown simulation {sim_id!r}")
-    return {name: load_member(agents_dir / f"{name}.toml") for name in sim.agents}
+    roster: dict[str, Member] = {}
+    for name in sim.agents:
+        try:
+            roster[name] = load_member(agents_dir / f"{name}.toml")
+        except RosterError as exc:
+            if strict_for is None or name == strict_for:
+                raise
+            log.error("roster: skipping %s — %s", name, exc)
+    return roster
 
 
 def main() -> None:

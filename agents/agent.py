@@ -102,7 +102,7 @@ class Agent:
                  roster: dict[str, Member] | None = None) -> None:
         self.cfg = cfg
         # the room's members come from the registry (v4.1): nothing in the code names them
-        self.roster = roster if roster is not None else load_roster(cfg.simulation)
+        self.roster = roster if roster is not None else load_roster(cfg.simulation, strict_for=cfg.localpart)
         self.me = self.roster.get(cfg.localpart) or Member(cfg.localpart, cfg.user_id, cfg.name, (cfg.name.lower(),))
         self.others = {m.user_id: m for m in self.roster.values() if m.user_id != cfg.user_id}
         self.personas = [m for m in self.others.values() if m.type == "persona"]

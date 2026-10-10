@@ -31,7 +31,7 @@ def test_with_the_token_the_registry_is_served(client):
     sims = client.get("/api/simulations", headers=AUTH).json()
     assert [s["id"] for s in sims] == ["agora"] and sims[0]["kind"] == "matrix-chat"
     agents = {a["name"]: a for a in client.get("/api/agents", headers=AUTH).json()}
-    assert set(agents) == {"ada", "bruno"}
+    assert set(agents) == {"ada", "bruno", "kit"}
     assert (agents["ada"]["display"], agents["ada"]["role"]) == ("Ada", "editor, 32, Lviv")
     assert agents["bruno"]["simulation"] == "agora"
 
@@ -57,7 +57,7 @@ def test_the_agent_view_carries_type_engine_and_capabilities(client):
     assert (ada["type"], ada["engine"]) == ("persona", "gemini")
     assert ada["capabilities"] == sorted(["canon", "life", "summary", "chronicle", "plans", "today", "world"])
     assert {a["name"]: a["type"] for a in client.get("/api/agents", headers=AUTH).json()} == {
-        "ada": "persona", "bruno": "persona"}
+        "ada": "persona", "bruno": "persona", "kit": "creature"}
 
 
 def _registry_with(tmp_path, kit_toml):

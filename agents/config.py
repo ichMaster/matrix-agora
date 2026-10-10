@@ -39,6 +39,7 @@ class AgentConfig:
     type: str = "persona"  # the agent type (v4.1); it sets the capabilities
     engine: str = "gemini"
     capabilities: frozenset[str] = TYPES["persona"]
+    natal: str = ""  # v4.2: the natal text (Lumi's natal.md format) for an agent with the `mood` capability
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -96,6 +97,8 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         raise ConfigError(str(exc)) from exc
     # canon and life are required only when the agent's type has them (a persona has both)
     required = [k for k in ("name", "user_id", "canon", "life", "simulation") if k not in ("canon", "life") or member.can(k)]
+    if member.can("mood"):
+        required.append("natal")
     for key in required:
         if not str(data.get(key, "")).strip():
             raise ConfigError(f"{toml_path}: missing '{key}'")
@@ -109,6 +112,17 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
             raise ConfigError(f"life story not found: {life_path}") from exc
         except LifeError as exc:
             raise ConfigError(f"{life_path}: {exc}") from exc
+
+    natal = ""
+    if member.can("mood"):
+        natal_path = Path(str(data["natal"]))
+        try:
+            lines = natal_path.read_text(encoding="utf-8").splitlines()
+        except FileNotFoundError as exc:
+            raise ConfigError(f"natal chart not found: {natal_path}") from exc
+        natal = "\n".join(line for line in lines if not line.lstrip().startswith("#")).strip()
+        if not natal:
+            raise ConfigError(f"natal chart is empty: {natal_path}")
 
     if env is None:
         load_dotenv()
@@ -138,4 +152,5 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         type=member.type,
         engine=member.engine,
         capabilities=member.capabilities,
+        natal=natal,
     )
