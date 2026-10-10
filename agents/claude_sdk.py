@@ -33,7 +33,13 @@ log = logging.getLogger("agent.claude")
 
 OAUTH_VAR = "CLAUDE_CODE_OAUTH_TOKEN"
 FORBIDDEN_PREFIXES = ("ANTHROPIC_", "CLAUDE_CODE_USE_")  # an API key, a gateway, Bedrock / Vertex / Foundry
-FORBIDDEN_NAMES = ("CLAUDE_CODE_SIMPLE",)                # bare mode never reads the OAuth credentials
+FORBIDDEN_NAMES = (
+    "CLAUDE_CODE_SIMPLE",                   # bare mode never reads the OAuth credentials
+    "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR",  # an API key handed over a file descriptor
+    "CLAUDE_CODE_MANAGED_SETTINGS_PATH",    # managed settings are read even with no setting sources (an apiKeyHelper)
+    "CLAUDE_CODE_API_BASE_URL",             # another endpoint
+    "CLAUDE_CODE_HOST_CREDS_FILE",          # host credentials
+)  # v4.4 review #10
 # belt and braces beside `tools=[]`: no built-in tool may ever run in the chat container
 DISALLOWED_TOOLS = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebFetch", "WebSearch", "Agent", "Skill",
                     "NotebookEdit", "TodoWrite", "Task"]
@@ -76,6 +82,7 @@ def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config
         "CLAUDE_CONFIG_DIR": config_dir,
         "MAX_THINKING_TOKENS": "0",
         "CLAUDE_CODE_MAX_RETRIES": "2",  # its own retries stay short; the reply is bounded anyway (review #11)
+        "ENABLE_CLAUDEAI_MCP_SERVERS": "false",  # never the account's claude.ai connectors (review #10)
     }
     if max_output_tokens > 0:
         env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(max_output_tokens)
@@ -86,6 +93,7 @@ def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config
         "permission_mode": "dontAsk",
         "setting_sources": [],
         "mcp_servers": {},
+        "strict_mcp_config": True,
         "max_turns": 1,
         "model": model,
         "cwd": config_dir,
@@ -166,13 +174,16 @@ class ClaudeSdkResponder:
         write_status(self.status_file, self.status)
 
     def _check_init(self, data: Mapping[str, Any]) -> None:
-        """Layer 5: the CLI must say no API key is in use and no tool is available."""
+        """Layer 5: the CLI must say no API key is in use and no tool or MCP server is available."""
         source = data.get("apiKeySource") if isinstance(data, Mapping) else None
         tools = data.get("tools") if isinstance(data, Mapping) else None
+        servers = data.get("mcp_servers") if isinstance(data, Mapping) else None
         if source != "none":
             self.blocked = f"apiKeySource={source!r}"
         elif tools:
             self.blocked = f"tools={', '.join(map(str, tools))}"
+        elif servers:
+            self.blocked = f"mcp_servers={len(servers)}"
         if self.blocked:
             log.error("claude blocked: %s — no reply until restarted", self.blocked)
             self.status.auth = f"blocked: {self.blocked}"

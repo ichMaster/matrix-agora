@@ -87,7 +87,9 @@ def run(r, turn=TURN):
 # --- layer 2: startup refuses; layer 3: the environment is scrubbed --------------------------------------------------
 @pytest.mark.parametrize("var", ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL",
                                  "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
-                                 "CLAUDE_CODE_SIMPLE"])
+                                 "CLAUDE_CODE_SIMPLE", "CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR",
+                                 "CLAUDE_CODE_MANAGED_SETTINGS_PATH", "CLAUDE_CODE_API_BASE_URL",
+                                 "CLAUDE_CODE_HOST_CREDS_FILE"])  # review #10: the gaps
 def test_startup_refuses_every_forbidden_variable_and_names_only_the_variable(var):
     secret = "sk-ant-should-never-be-printed"
     with pytest.raises(AuthRefused) as exc:
@@ -112,11 +114,13 @@ def test_the_forbidden_names_leave_the_environment():
 def test_the_options_turn_off_tools_settings_and_memory():
     o = sdk_options("BRIEF", model="opus", max_output_tokens=300, config_dir="/tmp/claude")
     assert (o["tools"], o["setting_sources"], o["mcp_servers"], o["max_turns"]) == ([], [], {}, 1)
+    assert o["strict_mcp_config"] is True and o["env"]["ENABLE_CLAUDEAI_MCP_SERVERS"] == "false"  # review #10
     assert o["permission_mode"] == "dontAsk" and {"Bash", "Read", "WebFetch", "Agent"} <= set(o["disallowed_tools"])
     assert o["system_prompt"] == "BRIEF" and o["model"] == "opus" and o["cwd"] == "/tmp/claude"
     assert o["env"] == {"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "300", "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
                         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "CLAUDE_CONFIG_DIR": "/tmp/claude",
-                        "MAX_THINKING_TOKENS": "0", "CLAUDE_CODE_MAX_RETRIES": "2"}
+                        "MAX_THINKING_TOKENS": "0", "CLAUDE_CODE_MAX_RETRIES": "2",
+                        "ENABLE_CLAUDEAI_MCP_SERVERS": "false"}
     assert o["thinking"] == {"type": "disabled"}                     # review #1: thinking ate the cap
     uncapped = sdk_options("B", model="opus", max_output_tokens=0, config_dir="/c")
     assert "CLAUDE_CODE_MAX_OUTPUT_TOKENS" not in uncapped["env"]    # 0 = no cap (the owner, 2026-10-11)
@@ -155,6 +159,7 @@ def test_a_reply_cut_by_the_cap_reports_max_tokens(tmp_path):
     ({"apiKeySource": "apiKeyHelper", "tools": []}, "apiKeySource='apiKeyHelper'"),
     ({"tools": []}, "apiKeySource=None"),                      # not reported: fail closed
     ({"apiKeySource": "none", "tools": ["Bash"]}, "tools=Bash"),
+    ({"apiKeySource": "none", "tools": [], "mcp_servers": [{"name": "gmail"}]}, "mcp_servers=1"),  # review #10
 ])
 def test_the_init_check_blocks_any_api_key_or_tool_for_good(tmp_path, data, why):
     sdk = FakeSDK(SystemMessage(subtype="init", data=data), result())
@@ -333,3 +338,16 @@ def test_a_failing_call_is_on_the_card_until_one_succeeds(tmp_path):
     sdk.messages = (INIT_OK, result())
     run(r)
     assert json.loads((tmp_path / "claude.ratelimit.json").read_text())["last_error"] is None
+
+
+
+def test_the_agent_really_scrubs_its_environment(monkeypatch):
+    """Review #10: the scrub is a layer of its own — with the startup check bypassed, the names still leave."""
+    import agents.agent as agent_mod
+    from agents.agent import Agent
+    monkeypatch.setattr(agent_mod, "check_startup", lambda env: None)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "oat")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-x")
+    monkeypatch.setenv("CLAUDE_CODE_MANAGED_SETTINGS_PATH", "/etc/x.json")
+    Agent(claude_cfg())
+    assert "ANTHROPIC_API_KEY" not in os.environ and "CLAUDE_CODE_MANAGED_SETTINGS_PATH" not in os.environ

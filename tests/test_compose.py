@@ -120,7 +120,8 @@ def test_the_cats_example_values_are_the_agents_defaults(monkeypatch):
 
 # --- v4.4: Claude's own service and env file; no API credential anywhere in the stack -------------------------------
 def _forbidden(name: str) -> bool:
-    return name.startswith(("ANTHROPIC_", "CLAUDE_CODE_USE_")) or name == "CLAUDE_CODE_SIMPLE"
+    from agents.claude_sdk import forbidden_vars  # the one list (v4.4 review #10)
+    return bool(forbidden_vars({name: ""}))
 
 
 def test_claude_runs_his_own_image_with_his_own_env_file_only():
