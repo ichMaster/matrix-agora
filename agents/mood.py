@@ -72,12 +72,18 @@ def reading_from_log(log_text: str, day: str) -> str | None:
     return None
 
 
+# A line that *starts* with the marker, Markdown and all: «РЕЗОЛЮЦІЯ: …», «**РЕЗОЛЮЦІЯ:** …», «### Резолюція» (review #6)
+_RESOLUTION_RE = re.compile(r"^[\s*#_>•·—-]*резолюц\w*[\s*_#]*:?[\s*_#]*(.*)$", re.IGNORECASE)
+
+
 def split_resolution(reading: str) -> str:
-    """The RESOLUTION — the text after the «резолюція» line (inline or below it); the last paragraph otherwise."""
+    """The RESOLUTION — the text after the last line that starts with «резолюція» (inline or below it), Markdown
+    stripped; the last paragraph otherwise. A mention of the resolution inside the reading is no marker."""
     lines = reading.splitlines()
-    for i, line in enumerate(lines):
-        if "резолюц" in line.lower():
-            after_colon = line.split(":", 1)[1].strip() if ":" in line else ""
+    for i in range(len(lines) - 1, -1, -1):
+        m = _RESOLUTION_RE.match(lines[i])
+        if m:
+            after_colon = m.group(1).strip().strip("*_#").strip()
             below = "\n".join(lines[i + 1:]).strip().lstrip("-—*#:•· \n").strip()
             parts = [p for p in (after_colon, below) if p]
             if parts:
