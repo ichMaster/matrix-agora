@@ -88,3 +88,11 @@ def test_the_mood_tab_and_the_n_agent_chart():
     assert 'can(a, "mood") ?' in js and "Mood of the day" in js
     assert 'const SERIES = ["a", "b", "c", "d", "e"]' in js and "agents.slice(0, 2)" not in js and "names[1]" not in js
     assert ".bars .c" in css and ".legend .e" in css
+
+
+def test_the_full_reading_stays_open_across_re_renders():
+    """Review #10: every poll re-renders the drawer, and the Mood tab's <details> folded shut each time."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert "openDetails: {}" in js
+    assert 'data-keep="mood:${esc(mem.mood.date)}" ${S.openDetails[`mood:${mem.mood.date}`] ? "open" : ""}' in js
+    assert 'document.addEventListener("toggle"' in js and "S.openDetails[key] = e.target.open" in js

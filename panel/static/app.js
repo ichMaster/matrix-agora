@@ -20,7 +20,7 @@ const S = {
   drawer: null,            // {kind: "agent"|"service", id, tab}
   drawerFresh: false,      // true only for the render that opens it: the slide-in plays once
   log: {lines: [], available: true, follow: true, seen: 0},
-  usageFilter: "all", expandedDays: {}, toast: null,
+  usageFilter: "all", expandedDays: {}, openDetails: {}, toast: null,
   busy: {},                // target → busy label while its action runs (v3.4)
   dialog: null,            // {action, kind: "agent"|"service", id, sim} awaiting confirmation
 };
@@ -488,7 +488,7 @@ function moodTabHtml(mem) {
   return `<div class="meta-line">${icon("clock", 14)}${esc(mem.mood.date)}</div>
     <p class="read" lang="uk">${esc(mem.mood.resolution)}</p>
     ${rhythms ? `<div class="label" style="margin-top:14px">Biorhythms</div><ul class="plain">${rhythms}</ul>` : ""}
-    <details style="margin-top:14px"><summary class="muted">The full reading</summary><p class="read" lang="uk" style="white-space:pre-wrap">${esc(mem.mood.reading)}</p></details>`;
+    <details data-keep="mood:${esc(mem.mood.date)}" ${S.openDetails[`mood:${mem.mood.date}`] ? "open" : ""} style="margin-top:14px"><summary class="muted">The full reading</summary><p class="read" lang="uk" style="white-space:pre-wrap">${esc(mem.mood.reading)}</p></details>`;
 }
 
 function agentTabHtml(a, mem, tab) {
@@ -616,6 +616,12 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   store(localStorage, "agora-theme", theme);
 }
+
+// a <details> keeps its open state across the 10 s re-render (v4.2 review #10); toggle does not bubble: capture it
+document.addEventListener("toggle", (e) => {
+  const key = e.target?.dataset?.keep;
+  if (key) S.openDetails[key] = e.target.open;
+}, true);
 
 document.addEventListener("click", (e) => {
   const el = e.target.closest("[data-act]");
