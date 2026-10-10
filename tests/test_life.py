@@ -64,3 +64,20 @@ def test_the_cats_life_story_never_shows_his_death():
     assert (current_chapter(story, date(2026, 10, 10)).start, current_chapter(story, date(2026, 10, 10)).end) == (2005, 2027)
     section = life_section(story, date(2026, 10, 10))
     assert "2038" not in section and "2028" not in section and "Шістнадцятого квітня 2005" in section
+
+
+@pytest.mark.parametrize("name", ["ada", "bruno", "kit"])
+def test_no_year_of_life_ever_shows_the_death_year(name):
+    """Review #5: the current chapter used to print its end year — for the last chapter, the death year (the cat's
+    hidden 2028–2038 chapter turns current on 2028-01-01). Every year up to the death is checked: the header never
+    carries it, and for the cat nothing in the section does. (Ada's and Bruno's last chapters narrate their deaths
+    in the body — from 2066, a canon edit deferred in the v4.2 review.)"""
+    from pathlib import Path
+    story = parse_life(Path(f"agents/canon/{name}.life.md").read_text(encoding="utf-8"))
+    for year in range(2026, story.death.year + 1):
+        section = life_section(story, date(year, 6, 1))
+        cur = current_chapter(story, date(year, 6, 1))
+        header = f"Зараз (з {cur.start} · {cur.title}):"
+        assert header in section and str(story.death.year) not in header and "(зараз)" not in section, year
+        if name == "kit":
+            assert str(story.death.year) not in section and "Смерть" not in section, year

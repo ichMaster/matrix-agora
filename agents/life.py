@@ -84,12 +84,13 @@ def next_chapter(story: LifeStory, today: date) -> Chapter | None:
 
 
 def life_section(story: LifeStory, today: date) -> str:
-    """«Твоє життя досі»: past openings + the current chapter. Never the future."""
+    """«Твоє життя досі»: past openings + the current chapter. Never the future — so the current chapter shows
+    only when it began: its end year is the future, and the last chapter's is the death year (v4.2 review #5)."""
     cur = current_chapter(story, today)
     parts = ["Твоє життя досі:"]
     for c in story.chapters:
         if cur is not None and c.end < cur.start:
             parts.append(f"{c.start}–{c.end} · {c.title}: {c.opening}")
     if cur is not None:
-        parts.append(f"Зараз ({cur.start}–{cur.end} · {cur.title}):\n{cur.body}")
+        parts.append(f"Зараз (з {cur.start} · {cur.title}):\n{cur.body}")
     return "\n\n".join(parts)
