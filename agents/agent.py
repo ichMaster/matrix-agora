@@ -70,6 +70,7 @@ from agents.mood import (
     reading_from_log,
     split_resolution,
 )
+from agents.pastlife import VERBATIM_WORDS, pastlife_section, pick_memory
 from agents.plans import (
     HORIZONS,
     parse_items,
@@ -136,6 +137,7 @@ class Agent:
         self.cat_react_p = float(os.environ.get("CAT_REACT_P", "0.3"))
         self.cat_purr_p = float(os.environ.get("CAT_PURR_P", "0.8"))
         self.cat_max_words = int(os.environ.get("CAT_MAX_WORDS", "12"))
+        self.cat_memory_p = float(os.environ.get("CAT_MEMORY_P", "0.25"))  # v4.3: a past-life fragment in a line
         self.bot_reply_p = float(os.environ.get("BOT_REPLY_P", "0.5"))
         self.reply_delay_s = float(os.environ.get("REPLY_DELAY_S", "4"))
         self.bot_window_ms = int(float(os.environ.get("BOT_WINDOW_S", "600")) * 1000)
@@ -180,6 +182,7 @@ class Agent:
         self.mood: MoodState | None = None  # v4.2: the day's horoscope (a `mood` agent)
         self._mood_lock = asyncio.Lock()
         self._mood_retry_ms = 0
+        self.told: set[int] = set()  # v4.3: the theses retold this run — RAM only, like the context window
 
     async def login(self) -> None:
         stored = load_session(self.cfg.state_file)
@@ -446,8 +449,8 @@ class Agent:
         return still_current(self.timeline, trigger, "Ich", now, self.bot_window_ms, self.max_bot_turns,
                              self.reserved(now))
 
-    def build_prompt(self) -> str:
-        """The full system instruction for a reply, in contract order."""
+    def build_prompt(self, pastlife: str | None = None) -> str:
+        """The full system instruction for a reply, in contract order; `pastlife` is a chosen thesis (v4.3)."""
         can = self.cfg.can
         now = local_now(self.clock(), self.tz)
         world = None
@@ -463,6 +466,7 @@ class Agent:
             plans=self.plans_section(now) if can("plans") else None,
             today=self.today_section(now) if can("today") else None,
             mood=self.mood_section(now) if can("mood") else None,
+            pastlife=pastlife if can("pastlife") else None,
             rules_extra=CREATURE_RULES if self.cfg.type == "creature" else None,
         )
 
@@ -870,27 +874,17 @@ class Agent:
                     await self.ensure_mood(local_now(self.clock(), self.tz))
                 except Exception:
                     log.exception("mood of the day failed (reply continues)")
-            reply = await self.responder.respond(
-                Turn(list(self.history), self.build_prompt(), self.reply_max_tokens, "reply"))
-            if reply is None:
-                return False  # already logged; stay silent
-            text = reply.text
-            if reply.finish == "max_tokens":  # the cap cut it: never send half a sentence
-                text = trim_to_sentence(text)
-                if text is None:
-                    log.info("silent: cut mid-sentence")
+            memory = self._pick_thesis()
+            prompt = self.build_prompt(pastlife_section(self.cfg.theses[memory]) if memory is not None else None)
+            text = await self._compose(prompt)
+            if text is not None and memory is not None and self._verbatim(text, memory):
+                log.info("verbatim memory: regenerating once")  # his own words, never the thesis (v4.3)
+                text = await self._compose(prompt)
+                if text is not None and self._verbatim(text, memory):
+                    log.info("silent: verbatim memory")
                     return False
-            others = [n for n in {*self.names.values()} if n != self.cfg.name]
-            text = clean_reply(text, self.cfg.name, others)
             if text is None:
-                log.info("silent: the reply spoke only for others")
-                return False
-            text = strip_pass(text)  # PASS alone → silence; text + PASS → the text only
-            if text is None:
-                log.info("silent: model passed")
-                return False
-            if self.cfg.type == "creature":  # v4.2: a small vocabulary, enforced
-                text = cap_words(text, self.cat_max_words)
+                return False  # already logged; stay silent
             if same_message(text, self._last_sent):
                 log.info("silent: duplicate of my previous message")
                 return False
@@ -909,9 +903,48 @@ class Agent:
                 message_type="m.room.message",
                 content={"msgtype": "m.text", "body": text},
             )
+            if memory is not None:
+                self.told.add(memory)
             return True
         finally:
             await self.client.room_typing(room_id, False)
+
+    async def _compose(self, prompt: str) -> str | None:
+        """One model call → the line as it would be sent, or None (logged): never half a sentence, never another's
+        words, PASS honoured, the creature's word cap applied."""
+        reply = await self.responder.respond(Turn(list(self.history), prompt, self.reply_max_tokens, "reply"))
+        if reply is None:
+            return None  # already logged
+        text = reply.text
+        if reply.finish == "max_tokens":  # the cap cut it: never send half a sentence
+            text = trim_to_sentence(text)
+            if text is None:
+                log.info("silent: cut mid-sentence")
+                return None
+        others = [n for n in {*self.names.values()} if n != self.cfg.name]
+        text = clean_reply(text, self.cfg.name, others)
+        if text is None:
+            log.info("silent: the reply spoke only for others")
+            return None
+        text = strip_pass(text)  # PASS alone → silence; text + PASS → the text only
+        if text is None:
+            log.info("silent: model passed")
+            return None
+        if self.cfg.type == "creature":  # v4.2: a small vocabulary, enforced
+            text = cap_words(text, self.cat_max_words)
+        return text
+
+    def _pick_thesis(self) -> int | None:
+        """v4.3 — with CAT_MEMORY_P, the past-life thesis this spoken line retells: chosen by the latest event and
+        the message he answers (`pick_memory`), never one already told this run until all are."""
+        if not (self.cfg.can("pastlife") and self.cfg.theses) or self.rng() >= self.cat_memory_p:
+            return None
+        event_id = str(self.timeline[-1][2]) if self.timeline else ""
+        last_text = self.history[-1][1] if self.history else ""
+        return pick_memory(event_id, last_text, self.cfg.theses, self.told)
+
+    def _verbatim(self, text: str, memory: int) -> bool:
+        return shares_span(text, self.cfg.theses[memory].text, VERBATIM_WORDS)
 
     async def summarize(self) -> bool:
         """Previous summary + this session → a new summary file. On failure the

@@ -21,12 +21,13 @@ AGENTS_DIR = Path("agents")
 log = logging.getLogger("agent.roster")
 
 # the type sets the default capabilities; later phases add assistant / bridge
-CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood")
+CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood", "pastlife")
 TYPES: dict[str, frozenset[str]] = {
     # a human persona: the full memory stack, no horoscope
     "persona": frozenset({"canon", "life", "summary", "chronicle", "plans", "today", "world"}),
-    # v4.2 — a creature (the cat): canon, a life story and the world, a daily horoscope; no memories, no plans
-    "creature": frozenset({"canon", "life", "world", "mood"}),
+    # v4.2 — a creature (the cat): canon, a life story and the world, a daily horoscope; no memories, no plans;
+    # v4.3 — his fixed past-life theses (`pastlife`)
+    "creature": frozenset({"canon", "life", "world", "mood", "pastlife"}),
 }
 ENGINES = ("gemini",)
 MODES = ("ranked", "ambient", "mention-only")
@@ -49,6 +50,7 @@ class Member:
     weight: float = 1.0
     panel: dict = field(default_factory=dict, compare=False, hash=False)  # [panel] — never part of a prompt
     natal: str = ""  # v4.2: the natal file's path (agents with `mood`)
+    memories: str = ""  # v4.3: the past-life theses file's path (agents with `pastlife`)
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -93,6 +95,7 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
         capabilities=frozenset(caps), mode=mode, weight=float(weight),
         panel=dict(panel) if isinstance(panel, dict) else {},
         natal=str(data.get("natal", "")),
+        memories=str(data.get("memories", "")),
     )
 
 

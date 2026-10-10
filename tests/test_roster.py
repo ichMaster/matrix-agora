@@ -49,7 +49,7 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
         "@ada:agora.lan", "Ада", "persona", "gemini", "ranked", 1.0)
     assert "адо" in ada.name_forms  # the vocative lives in the TOML now, not in code
     assert roster["bruno"].name_forms == ("бруно",)
-    assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES) - {"mood"}
+    assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES) - {"mood", "pastlife"}
     assert ada.panel["name"] == "Ada"
 
 
@@ -208,7 +208,8 @@ def test_the_panel_greys_an_unreadable_agent_card_instead_of_crashing(tmp_path):
 def test_the_cat_is_an_ambient_creature_with_a_horoscope_and_no_memories():
     kit = load_roster("agora")["kit"]
     assert (kit.type, kit.mode, kit.name) == ("creature", "ambient", "Кіт")
-    assert kit.capabilities == frozenset({"canon", "life", "world", "mood"})
+    assert kit.capabilities == frozenset({"canon", "life", "world", "mood", "pastlife"})  # v4.3: his past life
+    assert kit.memories == "agents/canon/kit.memories.md"
     assert {"кіт", "коте", "кота"} <= set(kit.name_forms)
     assert kit.panel["name"] == "Kit" and kit.panel["pronoun"] == "he"
 
@@ -218,6 +219,26 @@ def test_the_cats_config_loads_his_canon_life_and_natal_text():
     assert cfg.type == "creature" and cfg.can("mood") and not cfg.can("summary")
     assert "штучний кіт" in cfg.canon.lower() and cfg.life is not None
     assert cfg.natal.startswith("Народження: 16.04.2005, 15:20, Портленд") and "#" not in cfg.natal.splitlines()[0]
+    assert len(cfg.theses) == 93 and cfg.can("pastlife")                 # v4.3: the past-life theses
+
+
+def test_a_creature_needs_a_readable_theses_file(tmp_path):
+    """v4.3 contract: `memories` is required with `pastlife`; missing, empty or malformed refuses to start."""
+    from pathlib import Path
+    base = tmp_path / "kit.toml"
+    toml = Path("agents/kit.toml").read_text(encoding="utf-8")
+    base.write_text(toml.replace('memories = "agents/canon/kit.memories.md"', "#"), encoding="utf-8")
+    with pytest.raises(ConfigError, match="missing 'memories'"):
+        load_config(base, env={**ENV, "KIT_PASSWORD": "pw"})
+    for content, err in [("# no theses here\n", "empty"), ("- [tag text without a bracket\n", "line 1")]:
+        theses = tmp_path / "t.md"
+        theses.write_text(content, encoding="utf-8")
+        base.write_text(toml.replace("agents/canon/kit.memories.md", str(theses)), encoding="utf-8")
+        with pytest.raises(ConfigError, match=err):
+            load_config(base, env={**ENV, "KIT_PASSWORD": "pw"})
+    base.write_text(toml.replace("agents/canon/kit.memories.md", str(tmp_path / "nope.md")), encoding="utf-8")
+    with pytest.raises(ConfigError, match="not found"):
+        load_config(base, env={**ENV, "KIT_PASSWORD": "pw"})
 
 
 def test_a_creature_without_a_natal_chart_refuses_to_start(tmp_path, monkeypatch):

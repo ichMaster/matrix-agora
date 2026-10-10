@@ -3,8 +3,9 @@ user_id = "@kit:agora.lan"
 canon = "agents/canon/kit.md"
 life = "agents/canon/kit.life.md"
 natal = "agents/canon/kit.natal.md"   # v4.2: Lumi's natal format, read by the daily horoscope (agents/mood.py)
+memories = "agents/canon/kit.memories.md"  # v4.3: the past-life theses, `- [tags] text`, retold in his own words
 simulation = "agora"
-type = "creature"        # v4.2: canon, life, world, the daily horoscope — no memories, no plans
+type = "creature"        # v4.2: canon, life, world, the daily horoscope; v4.3 the past-life theses — no plans
 engine = "gemini"
 name_forms = ["кіт", "кота", "коту", "котом", "коті", "коте"]  # an ordinary cat-word addresses him: he is the only cat here
 

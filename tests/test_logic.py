@@ -190,3 +190,13 @@ def test_full_prompt_order_contract():
     order = ["КАНОН", "ЖИТТЯ", "СВІТ", "СПОГАДИ", "ПЛАНИ", "СЬОГОДНІ", "ПІДСУМОК", "Ти — Ада."]
     idx = [out.index(x) for x in order]
     assert idx == sorted(idx)
+
+
+def test_the_creatures_prompt_order_mood_then_a_past_life_memory_then_rules():
+    """v4.3 contract: «Спогад з минулого життя» follows «Настрій дня» and precedes the rules."""
+    from agents.logic import build_instruction
+    out = build_instruction("Кіт", "КАНОН", life="ЖИТТЯ", world="СВІТ", mood="Настрій дня: сонний",
+                            pastlife="Спогад з минулого життя (перекажи своїми словами, уривком, не цитуй): x")
+    order = ["КАНОН", "ЖИТТЯ", "СВІТ", "Настрій дня", "Спогад з минулого життя", "Ти — Кіт."]
+    idx = [out.index(x) for x in order]
+    assert idx == sorted(idx)

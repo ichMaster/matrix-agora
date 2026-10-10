@@ -14,6 +14,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from agents.life import LifeError, LifeStory, parse_life
+from agents.pastlife import ThesesError, parse_theses
 from agents.registry import REGISTRY_PATH, RegistryError, load_registry
 from agents.roster import TYPES, RosterError, parse_member
 
@@ -40,6 +41,7 @@ class AgentConfig:
     engine: str = "gemini"
     capabilities: frozenset[str] = TYPES["persona"]
     natal: str = ""  # v4.2: the natal text (Lumi's natal.md format) for an agent with the `mood` capability
+    theses: tuple = ()  # v4.3: the past-life theses (agents.pastlife.Thesis) for an agent with `pastlife`
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -99,6 +101,8 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
     required = [k for k in ("name", "user_id", "canon", "life", "simulation") if k not in ("canon", "life") or member.can(k)]
     if member.can("mood"):
         required.append("natal")
+    if member.can("pastlife"):
+        required.append("memories")
     for key in required:
         if not str(data.get(key, "")).strip():
             raise ConfigError(f"{toml_path}: missing '{key}'")
@@ -123,6 +127,18 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         natal = "\n".join(line for line in lines if not line.lstrip().startswith("#")).strip()
         if not natal:
             raise ConfigError(f"natal chart is empty: {natal_path}")
+
+    theses: tuple = ()
+    if member.can("pastlife"):
+        theses_path = Path(str(data["memories"]))
+        try:
+            theses = parse_theses(theses_path.read_text(encoding="utf-8"))
+        except FileNotFoundError as exc:
+            raise ConfigError(f"past-life theses not found: {theses_path}") from exc
+        except ThesesError as exc:
+            raise ConfigError(f"{theses_path}: {exc}") from exc
+        if not theses:
+            raise ConfigError(f"past-life theses are empty: {theses_path}")
 
     if env is None:
         load_dotenv()
@@ -153,4 +169,5 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         engine=member.engine,
         capabilities=member.capabilities,
         natal=natal,
+        theses=theses,
     )

@@ -122,14 +122,15 @@ def build_instruction(
     plans: str | None = None,
     today: str | None = None,
     mood: str | None = None,
+    pastlife: str | None = None,
     rules_extra: str | None = None,
 ) -> str:
     """The system instruction, in contract order (ARCHITECTURE §Prompt assembly):
     canon → life so far → place and time → memories → plans → today →
-    last-session memory → rules. Empty sections are skipped. Nothing here may
-    say the agent is a model or a bot."""
+    (v4.2) the mood of the day → (v4.3) a past-life memory → last-session memory → rules. Empty sections are
+    skipped. Nothing here may say a persona is a model or a bot."""
     parts = [canon]
-    parts += [s for s in (life, world, memories, plans, today, mood) if s]  # mood: v4.2, «Настрій дня»
+    parts += [s for s in (life, world, memories, plans, today, mood, pastlife) if s]  # «Настрій дня», «Спогад…»
     if summary:
         parts.append(f"Що ти пам'ятаєш з минулої розмови: {summary}")
     rules = (

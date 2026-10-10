@@ -88,3 +88,9 @@ def test_no_service_publishes_the_panel_on_every_interface():
     # docker-published ports bypass ufw: the panel binds one address, never 0.0.0.0 / [::] (code review #1)
     for port in SERVICES["panel"]["ports"]:
         assert port.count(":") >= 2 and not port.startswith(("0.0.0.0", "[::]", "8090:"))
+
+
+def test_the_cats_settings_are_in_both_env_examples():
+    """v4.2–v4.3: the cat's env names (ARCHITECTURE §Configuration)."""
+    cat = {"CAT_REACT_P", "CAT_PURR_P", "CAT_MAX_WORDS", "CAT_MEMORY_P"}
+    assert cat <= env_keys(ROOT / ".env.example") and cat <= env_keys(ROOT / "server" / ".env.example")
