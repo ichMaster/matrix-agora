@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from agents.usage import aggregate, cost, parse_lines
+from agents.usage import Row, aggregate, cost, parse_lines
 
 DAYS_SHOWN = 60
 ITEM_RE = re.compile(r"^\s*(?:[-•*]|\d+[.)])\s+(.*\S)\s*$")
@@ -169,14 +169,19 @@ def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None
     p_in, p_out = _price("PRICE_INPUT_PER_1M"), _price("PRICE_OUTPUT_PER_1M")
     priced = p_in is not None and p_out is not None
 
-    def money(r):
-        return round(cost(r, p_in, p_out), 6) if priced else None
+    def money(r):  # v4.4: only `api` tokens are priced; a subscription row has no cost, never $0
+        c = cost(r, p_in, p_out) if priced else None
+        return round(c, 6) if c is not None else None
 
-    out_rows, per_agent, per_day = [], {}, {}
+    out_rows, per_agent, per_day, agent_rows = [], {}, {}, {}
+    total_row = Row()
     total = {"calls": 0, "failed": 0, "input": 0, "output": 0, "total": 0}
     for (day, ag, kind), r in rows.items():
         out_rows.append({"day": day, "agent": ag, "kind": kind, "calls": r.calls, "failed": r.failed,
-                         "input": r.prompt, "output": r.output, "total": r.total, "cost": money(r)})
+                         "input": r.prompt, "output": r.output, "total": r.total, "cost": money(r),
+                         "engine": r.engine or "gemini", "billing": r.billing or "api"})
+        agent_rows.setdefault(ag, Row()).add(r)
+        total_row.add(r)
         for acc in (per_agent.setdefault(ag, dict.fromkeys(total, 0)), total):
             acc["calls"] += r.calls
             acc["failed"] += r.failed
@@ -186,13 +191,10 @@ def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None
         per_day.setdefault(day, {}).setdefault(ag, 0)
         per_day[day][ag] += r.total
 
-    def priced_total(t):
-        if not priced:
-            return None
-        return round(t["input"] / 1e6 * p_in + t["output"] / 1e6 * p_out, 6)
-
-    for t in [*per_agent.values(), total]:
-        t["cost"] = priced_total(t)
+    for ag, t in per_agent.items():
+        t.update(cost=money(agent_rows[ag]), engine=agent_rows[ag].engine or "gemini",
+                 billing=agent_rows[ag].billing or "api")
+    total["cost"] = money(total_row)
     return {
         "available": True, "since": since.isoformat(), "until": today.isoformat(), "priced": priced,
         "corrupt_lines": bad, "rows": out_rows, "per_agent": per_agent, "total": total,

@@ -11,7 +11,7 @@ import pytest
 
 import agents.llm as llm_mod
 from agents.agent import Agent
-from agents.usage import KINDS, usage_line
+from agents.usage import KINDS, Row, usage_line
 from tests.test_chronicle import CFG, SeqLLM
 
 META = SimpleNamespace(prompt_token_count=1200, candidates_token_count=80, total_token_count=1280)
@@ -20,7 +20,9 @@ META = SimpleNamespace(prompt_token_count=1200, candidates_token_count=80, total
 # --- the line (contract) ---
 def test_usage_line_shape_and_no_text():
     line = usage_line("2026-10-03T14:00:00+03:00", "ada", "reply", "gemini-2.5-flash", META, True)
-    assert set(line) == {"ts", "agent", "kind", "model", "prompt_tokens", "output_tokens", "total_tokens", "ok"}
+    assert set(line) == {"ts", "agent", "kind", "model", "prompt_tokens", "output_tokens", "total_tokens", "ok",
+                         "engine", "billing", "cache_read_tokens", "cache_write_tokens", "reported_cost_usd"}  # v2
+    assert (line["engine"], line["billing"]) == ("gemini", "api")
     assert (line["prompt_tokens"], line["output_tokens"], line["total_tokens"], line["ok"]) == (1200, 80, 1280, True)
 
 
@@ -145,3 +147,38 @@ def test_automatic_function_calling_is_off(monkeypatch):
     monkeypatch.setattr(llm_mod.genai, "Client", lambda: SimpleNamespace(aio=SimpleNamespace(models=Capture("ok"))))
     asyncio.run(llm_mod.GeminiClient().generate("c", "s"))
     assert seen["config"].automatic_function_calling.disable is True
+
+
+
+# --- v4.4: usage line v2 ------------------------------------------------------------------------------------------------
+def test_a_claude_sdk_line_is_always_subscription_and_carries_no_text():
+    from agents.usage import sdk_usage_line
+    line = sdk_usage_line("2026-10-10T20:00:00+03:00", "claude", "reply", "opus",
+                          {"input_tokens": 900, "output_tokens": 60, "cache_read_input_tokens": 4000,
+                           "cache_creation_input_tokens": 120}, True, reported_cost=0.0123)
+    assert (line["engine"], line["billing"]) == ("claude-sdk", "subscription")
+    assert (line["prompt_tokens"], line["output_tokens"], line["total_tokens"]) == (900, 60, 960)
+    assert (line["cache_read_tokens"], line["cache_write_tokens"], line["reported_cost_usd"]) == (4000, 120, 0.0123)
+    assert sdk_usage_line("2026-10-10T20:00:00", "claude", "reply", "opus", None, False)["total_tokens"] is None
+
+
+def test_only_api_rows_are_priced_and_a_v1_line_is_gemini():
+    from agents.usage import aggregate, cost, parse_lines, render, sdk_usage_line
+    v1 = {"ts": "2026-10-10T10:00:00", "agent": "ada", "kind": "reply", "model": "m", "prompt_tokens": 1000,
+          "output_tokens": 100, "total_tokens": 1100, "ok": True}
+    claude = sdk_usage_line("2026-10-10T11:00:00", "claude", "reply", "opus",
+                            {"input_tokens": 5000, "output_tokens": 500}, True, 0.5)
+    recs, bad = parse_lines([json.dumps(v1), json.dumps(claude)])
+    assert bad == 0
+    rows = aggregate(recs)
+    ada, cl = rows[("2026-10-10", "ada", "reply")], rows[("2026-10-10", "claude", "reply")]
+    assert (ada.engine, ada.billing, cl.engine, cl.billing) == ("gemini", "api", "claude-sdk", "subscription")
+    assert cost(ada, 0.30, 2.50) == pytest.approx(1000 / 1e6 * 0.30 + 100 / 1e6 * 2.50)
+    assert cost(cl, 0.30, 2.50) is None                                   # the subscription is never priced
+    total = Row()
+    for r in rows.values():
+        total.add(r)
+    assert total.billing == "mixed" and cost(total, 0.30, 2.50) == pytest.approx(cost(ada, 0.30, 2.50))
+    out = render(rows, 0.30, 2.50, markdown=True)
+    assert "| subscription | — |" in out and "billing" in out
+    assert parse_lines([json.dumps({**v1, "billing": "free"})])[1] == 1       # an unknown billing is corrupt

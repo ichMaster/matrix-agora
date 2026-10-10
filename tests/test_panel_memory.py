@@ -179,3 +179,19 @@ def test_the_nudge_view_rolls_over_and_degrades(state):
     bad = state / "bad.md"
     bad.write_text("- [broken thesis\n", encoding="utf-8")
     assert pastlife_view(bad) is None and pastlife_view(state / "missing.md") is None and pastlife_view(None) is None
+
+
+
+def test_the_usage_view_never_prices_a_subscription_row(state, monkeypatch):
+    """v4.4: Claude's rows carry tokens, engine and billing, and no cost."""
+    from agents.usage import sdk_usage_line
+    from panel.memory import usage_view
+    monkeypatch.setenv("PRICE_INPUT_PER_1M", "0.30")
+    monkeypatch.setenv("PRICE_OUTPUT_PER_1M", "2.50")
+    line = sdk_usage_line("2026-10-04T12:00:00+03:00", "claude", "reply", "opus",
+                          {"input_tokens": 1000, "output_tokens": 100}, True, 0.2)
+    (state / "claude.usage.jsonl").write_text(json.dumps(line) + "\n", encoding="utf-8")
+    view = usage_view(state, 7, TODAY)
+    row = next(r for r in view["rows"] if r["agent"] == "claude")
+    assert (row["engine"], row["billing"], row["cost"], row["total"]) == ("claude-sdk", "subscription", None, 1100)
+    assert view["per_agent"]["claude"]["cost"] is None and view["per_agent"]["claude"]["billing"] == "subscription"

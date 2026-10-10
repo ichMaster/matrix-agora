@@ -11,6 +11,8 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood")
+# v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan), `external` (Lumi's own)
+BILLING = ("api", "subscription", "external")
 
 
 def _count(usage: Any, field: str) -> int | None:
@@ -19,7 +21,8 @@ def _count(usage: Any, field: str) -> int | None:
 
 
 def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: bool) -> dict:
-    """One record per Gemini call. Missing metadata → nulls. Never any text."""
+    """One record per Gemini call (v2 since v4.4: engine, billing, cache tokens). Missing metadata → nulls. Never any
+    text."""
     return {
         "ts": ts_iso,
         "agent": agent,
@@ -29,10 +32,38 @@ def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: b
         "output_tokens": _count(usage, "candidates_token_count"),
         "total_tokens": _count(usage, "total_token_count"),
         "ok": bool(ok),
+        "engine": "gemini",
+        "billing": "api",
+        "cache_read_tokens": _count(usage, "cached_content_token_count"),
+        "cache_write_tokens": None,
+        "reported_cost_usd": None,
     }
 
 
-COUNT_FIELDS = ("prompt_tokens", "output_tokens", "total_tokens")
+def _int(d: dict, key: str) -> int | None:
+    value = d.get(key) if isinstance(d, dict) else None
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict | None, ok: bool,
+                   reported_cost: float | None = None) -> dict:
+    """v4.4 — one record per Claude Agent SDK call: always `claude-sdk` / `subscription` (the Max plan, never an API
+    key); the SDK's `total_cost_usd` is a client-side estimate, kept as reported and never billed."""
+    usage = usage or {}
+    prompt, output = _int(usage, "input_tokens"), _int(usage, "output_tokens")
+    total = prompt + output if prompt is not None and output is not None else None
+    cost = float(reported_cost) if isinstance(reported_cost, int | float) and not isinstance(reported_cost, bool) else None
+    return {
+        "ts": ts_iso, "agent": agent, "kind": kind, "model": model,
+        "prompt_tokens": prompt, "output_tokens": output, "total_tokens": total, "ok": bool(ok),
+        "engine": "claude-sdk", "billing": "subscription",
+        "cache_read_tokens": _int(usage, "cache_read_input_tokens"),
+        "cache_write_tokens": _int(usage, "cache_creation_input_tokens"),
+        "reported_cost_usd": cost,
+    }
+
+
+COUNT_FIELDS = ("prompt_tokens", "output_tokens", "total_tokens", "cache_read_tokens", "cache_write_tokens")
 
 
 def _valid(rec: Any) -> bool:
@@ -46,7 +77,8 @@ def _valid(rec: Any) -> bool:
     counts_ok = all(rec.get(f) is None or (isinstance(rec[f], int) and not isinstance(rec[f], bool))
                     for f in COUNT_FIELDS)
     return (counts_ok and isinstance(rec.get("ok"), bool)
-            and isinstance(rec.get("agent"), str) and isinstance(rec.get("kind"), str))
+            and isinstance(rec.get("agent"), str) and isinstance(rec.get("kind"), str)
+            and rec.get("billing", "api") in BILLING and isinstance(rec.get("engine", "gemini"), str))
 
 
 def parse_lines(lines: list[str]) -> tuple[list[dict], int]:
@@ -73,6 +105,10 @@ class Row:
     prompt: int = 0
     output: int = 0
     total: int = 0
+    priced_prompt: int = 0  # v4.4: the tokens of `api` calls only — the only ones a price applies to
+    priced_output: int = 0
+    engine: str = ""        # the rows' engine and billing; "mixed" when a total spans several
+    billing: str = ""
 
     def add(self, other: Row) -> None:
         self.calls += other.calls
@@ -80,6 +116,14 @@ class Row:
         self.prompt += other.prompt
         self.output += other.output
         self.total += other.total
+        self.priced_prompt += other.priced_prompt
+        self.priced_output += other.priced_output
+        self.engine = _merge(self.engine, other.engine)
+        self.billing = _merge(self.billing, other.billing)
+
+
+def _merge(a: str, b: str) -> str:
+    return b if not a else a if not b or a == b else "mixed"
 
 
 def aggregate(records: list[dict], since: date | None = None,
@@ -91,18 +135,27 @@ def aggregate(records: list[dict], since: date | None = None,
         if (since and date.fromisoformat(day) < since) or (until and date.fromisoformat(day) > until):
             continue
         row = rows[(day, str(r.get("agent", "?")), str(r.get("kind", "?")))]
+        engine, billing = str(r.get("engine", "gemini")), str(r.get("billing", "api"))  # a v1 line is Gemini's
+        row.engine, row.billing = _merge(row.engine, engine), _merge(row.billing, billing)
         row.calls += 1
         row.failed += 0 if r.get("ok") else 1
         row.prompt += r.get("prompt_tokens") or 0
         row.output += r.get("output_tokens") or 0
         row.total += r.get("total_tokens") or 0
+        if billing == "api":
+            row.priced_prompt += r.get("prompt_tokens") or 0
+            row.priced_output += r.get("output_tokens") or 0
     return dict(sorted(rows.items()))
 
 
 def cost(row: Row, price_in: float | None, price_out: float | None) -> float | None:
+    """The price of a row's `api` tokens (the PRICE_* pair is Gemini's); a row with no `api` part — Claude on the
+    subscription, Lumi's own — has no cost, never $0 (v4.4)."""
     if price_in is None or price_out is None:
         return None
-    return row.prompt / 1e6 * price_in + row.output / 1e6 * price_out
+    if row.billing and row.billing != "api" and not (row.priced_prompt or row.priced_output):
+        return None
+    return row.priced_prompt / 1e6 * price_in + row.priced_output / 1e6 * price_out
 
 
 def render(rows: dict[tuple[str, str, str], Row], price_in: float | None, price_out: float | None,
@@ -110,24 +163,24 @@ def render(rows: dict[tuple[str, str, str], Row], price_in: float | None, price_
     if not rows:
         return "no data"
     with_cost = price_in is not None and price_out is not None
-    head = ["day", "agent", "kind", "calls", "failed", "input", "output", "total"] + (["cost $"] if with_cost else [])
+    prices = (price_in, price_out)
+    head = ["day", "agent", "kind", "calls", "failed", "input", "output", "total", "billing"] \
+        + (["cost $"] if with_cost else [])  # v4.4: billing — only `api` rows carry a cost
     body = []
 
-    def line(cells: list[str]) -> None:
-        body.append(cells)
+    def line(cells: list[str], r: Row) -> None:
+        body.append(cells + [r.billing or "api"] + ([_usd(r, prices)] if with_cost else []))
 
     per_agent: dict[str, Row] = defaultdict(Row)
     overall = Row()
     for (day, agent, kind), r in rows.items():
-        line([day, agent, kind, str(r.calls), str(r.failed), str(r.prompt), str(r.output), str(r.total)]
-             + ([f"{cost(r, price_in, price_out):.4f}"] if with_cost else []))
+        line([day, agent, kind, str(r.calls), str(r.failed), str(r.prompt), str(r.output), str(r.total)], r)
         per_agent[agent].add(r)
         overall.add(r)
     for agent, r in sorted(per_agent.items()):
-        line(["TOTAL", agent, "", str(r.calls), str(r.failed), str(r.prompt), str(r.output), str(r.total)]
-             + ([f"{cost(r, price_in, price_out):.4f}"] if with_cost else []))
+        line(["TOTAL", agent, "", str(r.calls), str(r.failed), str(r.prompt), str(r.output), str(r.total)], r)
     line(["TOTAL", "all", "", str(overall.calls), str(overall.failed), str(overall.prompt), str(overall.output),
-          str(overall.total)] + ([f"{cost(overall, price_in, price_out):.4f}"] if with_cost else []))
+          str(overall.total)], overall)
     return table(head, body, markdown, left=3)
 
 
@@ -208,7 +261,7 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
                       markdown=True), ""]
         out += [f"vs {(yday - timedelta(days=1)).isoformat()}: calls {_change(y.calls, before.calls)}, "
                 f"tokens {_change(y.total, before.total)}"
-                + (f", cost {_change(cost(y, *prices), cost(before, *prices))}"
+                + (f", cost {_change(cost(y, *prices) or 0.0, cost(before, *prices) or 0.0)}"
                    if priced else "") + ".", ""]
         k_head = ["kind", "calls", "share of tokens", "avg input / call", "avg output / call", "failed"] + usd
         k_body = [[k, _n(r.calls), f"{(r.total / y.total * 100 if y.total else 0):.0f}%",
@@ -228,7 +281,7 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
             table(["day", "calls", "failed", "input", "output", "total"] + usd,
                   d_body + [stats_row("**total**", w)], markdown=True), "",
             f"Daily average: {_n(w.calls / 7)} calls, {_n(w.total / 7)} tokens"
-            + (f", ${cost(w, *prices) / 7:.4f}" if priced else "") + "."
+            + (f", ${(cost(w, *prices) or 0.0) / 7:.4f}" if priced else "") + "."
             + (f" Busiest day: {max(by_day.items(), key=lambda kv: kv[1].total)[0]}." if by_day else ""), ""]
 
     # the month of yesterday, so far
@@ -238,7 +291,7 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
     out += [f"## Month so far — {m_first.strftime('%Y-%m')} (days 1–{yday.day} of {m_days})", "",
             f"{_n(m.calls)} calls · {_n(m.failed)} failed · {_n(m.total)} tokens "
             f"({_n(m.prompt)} input, {_n(m.output)} output)"
-            + (f" · ${cost(m, *prices):.4f} · projected month ${cost(m, *prices) / yday.day * m_days:.2f}"
+            + (f" · ${cost(m, *prices) or 0.0:.4f} · projected month ${(cost(m, *prices) or 0.0) / yday.day * m_days:.2f}"
                if priced else "") + ".", ""]
 
     # today so far
