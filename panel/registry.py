@@ -6,11 +6,14 @@ request ever reaches a path, an argv or the docker API without passing here.
 
 from __future__ import annotations
 
-import tomllib
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from agents.registry import REGISTRY_PATH, Simulation, load_registry
+from agents.roster import RosterError, load_member
+
+log = logging.getLogger("panel.registry")
 
 
 @dataclass(frozen=True)
@@ -21,6 +24,9 @@ class Agent:
     simulation: str     # agora
     container: str      # the compose service: ada
     pronoun: str = "they"  # from the TOML's [panel] — never guessed from a name
+    type: str = "persona"  # v4.1: the card follows the type's capabilities
+    engine: str = "gemini"
+    capabilities: frozenset[str] = frozenset()
 
 
 class Registry:
@@ -29,16 +35,16 @@ class Registry:
         self.agents: dict[str, Agent] = {}
         for sim in self.simulations.values():
             for name in sim.agents:
-                panel = self._panel_section(agents_dir / f"{name}.toml")
+                try:  # the same parser the agents use (agents/roster.py)
+                    m = load_member(agents_dir / f"{name}.toml")
+                except RosterError as exc:  # a broken TOML greys out its card, never the panel
+                    log.error("agent %s: %s", name, exc)
+                    self.agents[name] = Agent(name, name.title(), "", sim.id, name, type="unknown", engine="")
+                    continue
+                panel = m.panel
                 self.agents[name] = Agent(name, str(panel.get("name", name.title())), str(panel.get("role", "")),
-                                          sim.id, name, str(panel.get("pronoun", "they")))
-
-    @staticmethod
-    def _panel_section(path: Path) -> dict:
-        try:
-            return tomllib.loads(path.read_text(encoding="utf-8")).get("panel", {})
-        except (OSError, tomllib.TOMLDecodeError):
-            return {}
+                                          sim.id, name, str(panel.get("pronoun", "they")), m.type, m.engine,
+                                          m.capabilities)
 
     def simulation(self, sim_id: str) -> Simulation | None:
         return self.simulations.get(sim_id)

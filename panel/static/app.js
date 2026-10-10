@@ -7,6 +7,11 @@ const POLL_MS = 10000;  // one tick for everything — the dashboard, an open lo
 const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today"];
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
               ["today", "Today"], ["tokens", "Tokens"]];
+// v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
+const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today"};
+const PRONOUN = {she: "She", he: "He", it: "It"};
+function can(a, cap) { return !a.capabilities || a.capabilities.includes(cap); }
+function agentTabs(a) { return TABS.filter(([k]) => !TAB_CAP[k] || can(a, TAB_CAP[k])); }
 
 const S = {
   token: store(sessionStorage, "agora-token"),
@@ -155,9 +160,10 @@ function dialogText(d) {
       : [`Restart ${d.id}?`, "Agents will reconnect briefly."];
   }
   const a = S.data.agents.find((x) => x.name === d.id);
-  const subject = {she: "She", he: "He"}[a.pronoun] || "They";
-  if (d.action === "stop") return [`Stop ${a.display}?`, `${subject} will write a session summary — up to 30 seconds.`];
-  if (d.action === "restart") return [`Restart ${a.display}?`, "The current session will end with a summary."];
+  const subject = PRONOUN[a.pronoun] || "They";
+  const summary = can(a, "summary");  // only agents that write summaries promise one
+  if (d.action === "stop") return [`Stop ${a.display}?`, summary ? `${subject} will write a session summary — up to 30 seconds.` : "The container stops — up to 30 seconds."];
+  if (d.action === "restart") return [`Restart ${a.display}?`, summary ? "The current session will end with a summary." : "The container restarts."];
   return [`Forget ${a.display}’s last session?`, "The summary will be deleted; day memories stay. Stopped agents only."];
 }
 function dialogHtml() {
@@ -177,7 +183,7 @@ async function perform(action, kind, id, sim) {
   const target = agent ? agent.container : id;
   const state = agent ? agent.container_state?.state : S.data.sims.find((s) => s.id === sim)?.service_states?.[id]?.state;
   const name = agent ? agent.display : id;
-  S.busy[target] = busyLabel(action, state, Boolean(agent));
+  S.busy[target] = busyLabel(action, state, Boolean(agent) && can(agent, "summary"));
   render();
   const path = action === "forget" ? `/api/agents/${encodeURIComponent(id)}/forget`
     : agent ? `/api/agents/${encodeURIComponent(id)}/${action}`
@@ -346,7 +352,7 @@ function agentCardHtml(a) {
       <div><dt class="label">Runs on</dt><dd>server · container <code class="chip-code">${esc(a.container)}</code></dd></div>
       <div><dt class="label">Uptime</dt><dd>${esc(c.state === "running" ? fmtDur(c.uptime_s) : "—")}</dd></div>
     </dl>
-    <div style="display:flex;flex-direction:column;gap:3px"><div class="label">Today</div>${today}</div>
+    ${can(a, "today") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Today</div>${today}</div>` : ""}
     <div class="card-foot rule-t"><div class="meta">${tokens == null ? `${icon("database", 13)} Memory unavailable` : `7 days · ${esc(tokens)}`}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${actionButtons({kind: "agent", id: a.name, state: d.health.docker ? c.state : "unknown", big: true})}</div>
       <button class="btn btn-primary" data-act="agent" data-id="${esc(a.name)}">Details${icon("arrow-right", 14)}</button></div>
@@ -425,7 +431,9 @@ function drawerHtml() {
     if (!a) return "";
     const [cls, label] = agentStatus(a), mem = S.data.mem[a.name];
     head = `<div class="avatar">${esc(a.display[0])}</div><div style="flex:1;min-width:0"><div class="drawer-title">${esc(a.display)}</div><div class="drawer-sub">${esc(a.role)}</div></div>${pill(cls, label)}`;
-    tabs = `<div class="tabs rule-b" role="tablist">${TABS.map(([k, lbl]) => {
+    const shown = agentTabs(a);
+    if (!shown.some(([k]) => k === dr.tab)) dr.tab = "log";  // a tab the agent cannot have falls back to its log
+    tabs = `<div class="tabs rule-b" role="tablist">${shown.map(([k, lbl]) => {
       const dim = k !== "log" && !mem.available;
       return `<button class="tab ${dim ? "dim" : ""}" role="tab" aria-selected="${dr.tab === k}" data-act="tab" data-id="${k}">${dim ? icon("database", 13) : ""}${esc(lbl)}</button>`;
     }).join("")}</div>`;

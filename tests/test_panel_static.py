@@ -64,3 +64,16 @@ def test_static_files_are_the_handoff_stylesheet_plus_additions():
     css = (STATIC_DIR / "panel.css").read_text(encoding="utf-8")
     handoff = Path("specification/design/design_handoff_agora_panel/agora-panel.css").read_text(encoding="utf-8")
     assert css.startswith(handoff)
+
+
+def test_the_page_follows_capabilities():
+    """v4.1: tabs, the today field, the summary wording and the busy label need their capability; `it` is a
+    pronoun; with every capability on (Ada, Bruno) the page is unchanged."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert 'const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today"};' in js
+    assert 'PRONOUN = {she: "She", he: "He", it: "It"}' in js
+    assert "agentTabs(a)" in js and 'dr.tab = "log"' in js
+    assert 'can(a, "today") ?' in js                                   # the card's Today field
+    assert 'summary ? `${subject} will write a session summary' in js    # stop wording
+    assert 'Boolean(agent) && can(agent, "summary")' in js               # "writing summary" busy label
+    assert "Forget last session" in js and 'session: "summary"' in js   # Forget lives in the session tab
