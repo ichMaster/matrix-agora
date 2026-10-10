@@ -166,6 +166,23 @@ class ClaudeSdkResponder:
         self.status = ClaudeStatus(model=model)
         self.blocked: str | None = None
 
+    def resume_status(self) -> None:
+        """Review #6: at start the card is refreshed — a refusal or a failure from an earlier run no longer shows —
+        and a mute still running is kept, so a restart during a limit makes no call."""
+        try:
+            old = json.loads(self.status_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            old = None
+        if isinstance(old, dict):
+            for key in ("status", "utilization", "resets_at", "rate_limit_type"):
+                value = old.get(key)
+                if value is None or isinstance(value, str | int | float):
+                    setattr(self.status, key, value)
+            until = old.get("muted_until")
+            if isinstance(until, int | float) and until > self._now():
+                self.status.muted_until = int(until)
+        self._save()
+
     def _now(self) -> int:
         return self.clock() // 1000
 

@@ -1173,6 +1173,8 @@ class Agent:
             self.summary_ms = int(self.memory_file.stat().st_mtime * 1000)
             log.info("%s: last-session memory loaded", self.cfg.localpart)
         await self.login()
+        if hasattr(self.responder, "resume_status"):  # v4.4 review #6: a fresh card, a running mute kept
+            self.responder.resume_status()
         # First sync: only to obtain next_batch; its events are never handled.
         first = await self.client.sync(timeout=10000, full_state=True)
         if isinstance(first, SyncError):

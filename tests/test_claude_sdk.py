@@ -351,3 +351,23 @@ def test_the_agent_really_scrubs_its_environment(monkeypatch):
     monkeypatch.setenv("CLAUDE_CODE_MANAGED_SETTINGS_PATH", "/etc/x.json")
     Agent(claude_cfg())
     assert "ANTHROPIC_API_KEY" not in os.environ and "CLAUDE_CODE_MANAGED_SETTINGS_PATH" not in os.environ
+
+
+
+def test_a_restart_refreshes_the_card_and_keeps_a_running_mute(tmp_path):
+    """Review #6: a fixed refusal no longer shows after a start; a mute still running survives a restart."""
+    path = tmp_path / "claude.ratelimit.json"
+    path.write_text(json.dumps({"status": "rejected", "resets_at": 1_000_900, "muted_until": 1_000_900,
+                                "auth": "refused: forbidden variables set: ANTHROPIC_API_KEY",
+                                "last_error": "timeout", "model": "old", "updated_at": 1}), encoding="utf-8")
+    sdk = FakeSDK(INIT_OK, result())
+    r, _ = responder(tmp_path, sdk)
+    r.resume_status()                                                                         # at the agent's start
+    saved = json.loads(path.read_text())
+    assert (saved["auth"], saved["last_error"], saved["model"]) == (None, None, "opus")       # fresh
+    assert saved["muted_until"] == 1_000_900 and r.muted()                                    # still running
+    assert run(r) is None and sdk.calls == []                                                 # no call meanwhile
+    path.write_text(json.dumps({"muted_until": 999_000, "auth": "oauth"}), encoding="utf-8")
+    r2, _ = responder(tmp_path, sdk)
+    r2.resume_status()
+    assert not r2.muted()                                                                     # an old mute is gone
