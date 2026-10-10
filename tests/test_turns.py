@@ -18,6 +18,7 @@ from agents.turns import (
     owner_repliers,
     pending_answers,
     rank,
+    reservation_lapses_at,
     still_current,
     strip_pass,
     wave_count,
@@ -229,7 +230,9 @@ def test_answers_still_on_their_way_are_reserved_in_the_wave():
     tl = [("Ich", 0, "$o"), ("Бруно", 1_000, "$b")]
     assert pending_answers(tl, "$o", {"Ада", "Бруно", "Сі"}, "Ich") == 2
     assert pending_answers([*tl, ("Ада", 2_000, "$a")], "$o", {"Ада", "Бруно"}, "Ich") == 0
-    assert pending_answers(tl, "$o", {"Ада"}, "Ich", now_ms=W + 1_000, window_ms=W) == 0  # lapses with the window
+    assert pending_answers(tl, "$o", {"Ада"}, "Ich", now_ms=30_000, lapse_ms=30_000) == 0  # lapses at FALLBACK_S
+    assert pending_answers(tl, "$o", {"Ада"}, "Ich", now_ms=29_999, lapse_ms=30_000) == 1
+    assert reservation_lapses_at(tl, "$o", 30_000) == 30_000 and reservation_lapses_at(tl, "$x", 30_000) is None
     assert pending_answers(tl, None, {"Ада"}, "Ich") == 0
 
 
@@ -246,12 +249,12 @@ def simulate(roster, owner_text, seed, *, k=2, max_turns=3, p=0.5):
     n_owner, sent, followers = len(pending), [], []
     chosen = {roster[n].name for n in owner_repliers("$owner", owner_text, roster, k)}
 
-    def reserved(at):
-        return pending_answers(timeline, "$owner", chosen, "Ich", at, W)
+    def reserved(at, me=None):  # an agent never reserves for itself (code review #2)
+        return pending_answers(timeline, "$owner", chosen - {roster[me].name} if me else chosen, "Ich", at, 30_000)
     while pending:
         pending.sort()
         ts, who, trigger = pending.pop(0)
-        if trigger and not still_current(timeline, trigger, "Ich", ts, W, max_turns, reserved(ts)):
+        if trigger and not still_current(timeline, trigger, "Ich", ts, W, max_turns, reserved(ts, who)):
             continue
         eid = f"${who}-{ts}"
         timeline.append((roster[who].name, ts, eid))
@@ -260,7 +263,8 @@ def simulate(roster, owner_text, seed, *, k=2, max_turns=3, p=0.5):
         for m in roster.values():
             if m.localpart == who or any(x[1] == m.localpart for x in pending):
                 continue
-            d = decide_reply(roster[who].user_id, "думка", eid, wave_count(timeline, "Ich", ts, W) + reserved(ts),
+            d = decide_reply(roster[who].user_id, "думка", eid,
+                             wave_count(timeline, "Ich", ts, W) + reserved(ts, m.localpart),
                              cfg_for(m), m, roster, rng=rnd.random, **kw)
             if d.reply:
                 chosen_here += 1

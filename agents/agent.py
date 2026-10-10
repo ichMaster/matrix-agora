@@ -76,6 +76,7 @@ from agents.turns import (
     fallback_replier,
     owner_repliers,
     pending_answers,
+    reservation_lapses_at,
     still_current,
     strip_pass,
     wave_count,
@@ -294,12 +295,14 @@ class Agent:
             log.exception("message handler failed (bot keeps running)")
 
     def reserved(self, now_ms: int) -> int:
-        """The owner's chosen answers still on their way — they hold their place in the wave."""
+        """The owner's chosen answers still on their way — they hold their place in the wave until FALLBACK_S.
+        Never one for this agent itself: whether it still owes an answer is its own knowledge (code review #2)."""
         if self.last_owner is None:
             return 0
         eid, text = self.last_owner
         chosen = {self.roster[n].name for n in owner_repliers(eid, text, self.roster, self.owner_repliers)}
-        return pending_answers(self.timeline, eid, chosen, "Ich", now_ms, self.bot_window_ms)
+        chosen.discard(self.cfg.name)
+        return pending_answers(self.timeline, eid, chosen, "Ich", now_ms, int(self.fallback_s * 1000))
 
     def decide(self, sender: str, text: str, event_id: str, now_ms: int):
         return decide_reply(
@@ -321,10 +324,16 @@ class Agent:
     def pause_until_window_frees(self, room_id: str, sender: str, text: str, event_id: str, now_ms: int) -> None:
         """R4 — the wave limit is a rate, not a lock: resume once the window frees,
         but only if the conversation hasn't moved on in the meantime."""
-        frees = wave_frees_at(self.timeline, "Ich", now_ms, self.bot_window_ms, self.max_bot_turns)
-        if frees is None:
+        wave, reserved = wave_count(self.timeline, "Ich", now_ms, self.bot_window_ms), self.reserved(now_ms)
+        times = []
+        if wave >= self.max_bot_turns:  # the wave itself is full: wait for its oldest turn to age out
+            times.append(wave_frees_at(self.timeline, "Ich", now_ms, self.bot_window_ms, self.max_bot_turns))
+        if reserved and self.last_owner:  # the owner's pending answers hold it: wait for them to lapse
+            times.append(reservation_lapses_at(self.timeline, self.last_owner[0], int(self.fallback_s * 1000)))
+        if not times or any(t is None for t in times):
             log.info("silent: wave-limit")
             return
+        frees = max(times) + 1
         wait_s = (frees - now_ms) / 1000 + 1.0 + self.rng() * max(self.reply_delay_s - 1.0, 0.0)
         log.info("paused: wave-limit; resume check in %.0fs", wait_s)
         self._spawn(self.resume_later(room_id, sender, text, event_id, frees, wait_s))

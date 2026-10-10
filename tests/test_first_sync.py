@@ -362,3 +362,50 @@ def test_an_owner_message_during_an_agent_reply_is_answered_not_swallowed(monkey
     asyncio.run(run())
     agent.client.room_send.assert_awaited_once()
     assert agent.client.room_send.await_args.kwargs["content"]["body"] == "відповідь власнику"
+
+
+def _three():
+    from agents.roster import Member, load_roster
+    return {**load_roster("agora"), "cee": Member("cee", "@cee:agora.lan", "Сі", ("сі",))}
+
+
+def test_an_agent_never_reserves_a_slot_for_itself_and_reservations_lapse():
+    """Code review #2: after the owner's message chose Bruno and Сі, Ada reserves only Сі's missing answer — never
+    her own — and only until FALLBACK_S after the owner's message."""
+    agent = Agent(CFG, llm=FakeLLM(), roster=_three())
+    agent.fallback_s = 30
+    agent.timeline = [("Ich", 0, "$own1"), ("Бруно", 1_000, "$b1")]
+    agent.last_owner = ("$own1", "як справи?")  # R1 → bruno, cee
+    assert agent.reserved(2_000) == 1          # Сі has not answered yet
+    assert agent.reserved(30_000) == 0         # lapsed at FALLBACK_S
+    two = Agent(CFG, llm=FakeLLM())            # Ada and Bruno, both chosen; Ada passed
+    two.timeline = [("Ich", 0, "$o"), ("Бруно", 1_000, "$b")]
+    two.last_owner = ("$o", "як справи?")
+    assert two.reserved(2_000) == 0            # her own missing answer holds nothing
+
+
+def test_r4_resumes_when_only_the_reservation_blocks(monkeypatch):
+    """Code review #2: wave 1 + one reserved answer hits MAX_BOT_TURNS=2; v4.1.0-pre scheduled no resume (a lock).
+    Now the resume fires when the reservation lapses, and Ada answers Bruno."""
+    _fast(monkeypatch)
+    agent = Agent(CFG, llm=FakeLLM(), roster=_three())
+    agent.client = SimpleNamespace(room_send=AsyncMock(), room_typing=AsyncMock())
+    agent.started = True
+    agent.rng = lambda: 0.0
+    agent.max_bot_turns = 2
+    agent.fallback_s = 30
+    agent.clock = lambda: 31_000
+
+    async def run():
+        await agent.on_message(*_ev("@ich:agora.lan", "як справи?", 0, "$own1"))  # R1 → bruno, cee
+        for t in [t for t in agent._tasks]:  # drop Ada's own fallback check for this test
+            t.cancel()
+        await asyncio.gather(*agent._tasks, return_exceptions=True)
+        await agent.on_message(*_ev("@bruno:agora.lan", "б1", 1_000, "$b1"))   # Ada is the next speaker
+        assert len(agent._tasks) == 1                                           # a resume, not silence
+        while agent._tasks:
+            for t in list(agent._tasks):
+                await t
+
+    asyncio.run(run())
+    agent.client.room_send.assert_awaited_once()

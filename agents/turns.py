@@ -110,17 +110,26 @@ def wave_frees_at(timeline: list[Entry], owner_name: str, now_ms: int, window_ms
 
 
 def pending_answers(timeline: list[Entry], owner_event_id: str | None, chosen_names: set[str], owner_name: str,
-                    now_ms: int | None = None, window_ms: int | None = None) -> int:
+                    now_ms: int | None = None, lapse_ms: int | None = None) -> int:
     """How many of the owner's chosen repliers have not answered yet. Every agent computes the chosen set from the
     same owner message (`owner_repliers` is deterministic), so the answers still on their way are reserved in the
-    wave: an agent-to-agent reply never overtakes them. The reservation lapses with the window."""
+    wave: an agent-to-agent reply never overtakes them. A reservation lapses `lapse_ms` (FALLBACK_S) after the
+    owner's message — a chosen agent that passed, failed or is away never holds the wave (code review #2)."""
     for i, (name, ts, eid) in enumerate(timeline):
         if eid == owner_event_id:
-            if window_ms is not None and now_ms is not None and ts < now_ms - window_ms:
+            if lapse_ms is not None and now_ms is not None and now_ms - ts >= lapse_ms:
                 return 0
             arrived = {n for n, *_ in timeline[i + 1:] if n != owner_name}
             return len(chosen_names - arrived)
     return 0
+
+
+def reservation_lapses_at(timeline: list[Entry], owner_event_id: str | None, lapse_ms: int) -> int | None:
+    """When the owner's pending answers stop holding the wave (server ms), or None if the message is not seen."""
+    for _name, ts, eid in timeline:
+        if eid == owner_event_id:
+            return ts + lapse_ms
+    return None
 
 
 def still_current(timeline: list[Entry], trigger_id: str, owner_name: str, now_ms: int, window_ms: int,
