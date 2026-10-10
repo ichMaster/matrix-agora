@@ -1,3 +1,26 @@
+Version 4.3.0 (2026-10-10)
+---------------------------
+- Phase v4.3 - the cat: his past life and his initiative (AGORA-055...058)
+- Past-life theses: agents/canon/kit.memories.md (92 authored theses, '-
+  [tags] text'), the `pastlife` capability and TOML `memories`; with
+  CAT_MEMORY_P a spoken line retells one - chosen by a tag at a word start of
+  the message he answers, no repeats until all are told - never verbatim (a
+  5-word copy is regenerated once, then dropped) (AGORA-055)
+- He starts conversations: the `nudge` capability (one creature per room);
+  after CAT_NUDGE_IDLE_S (20 min, the owner's choice) of silence, under
+  CAT_NUDGES_PER_DAY (6), within CAT_NUDGE_HOURS (09-22) he posts one line
+  tied to the recent talk - a past-life fragment, a Linux line or the day's
+  horoscope as a metaphor; state/kit.nudge.json, no texts (AGORA-056)
+- The panel: the cat's card and Mood tab show his theses, his last nudge and
+  today's count (AGORA-057)
+- v4.2 review #13: a purr-worded spoken answer releases the cat's reservation
+- Review fixes: no purr while his words are on their way (#1), a nudge is
+  never a purr (#2), tags at a word start (#3), no thesis leads to his hidden
+  end (#4), spec drift (#5), the only initiator enforced (#6), cat-only
+  settings stay the cat's (#7), the no-repeat round starts over (#8), the
+  silence counts from a restart (#9), another day's nudge shows its date
+  (#10), the theses count and env defaults pinned (#11), a canon nit (#12)
+
 Version 4.2.0 (2026-10-10)
 ---------------------------
 - Phase v4.2 - the cat in the room: Кіт joins Agora as a creature agent
