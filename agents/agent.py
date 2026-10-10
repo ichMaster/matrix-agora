@@ -795,7 +795,7 @@ class Agent:
             birth = parse_birth_date(self.cfg.natal)
             rhythms = format_biorhythms(biorhythms(birth, now.date())) if birth else None
             system, contents = mood_request(self.cfg.name, self.cfg.natal, day, rhythms)
-            reading = await self.llm.generate(contents, system, max_output_tokens=MOOD_MAX_TOKENS, kind="mood")
+            reading = await self._mood_reading(contents, system)
             if not reading:
                 log.error("mood of the day failed — none today until a retry")
                 self._mood_retry_ms = self.clock() + 600_000
@@ -804,6 +804,21 @@ class Agent:
             with self.mood_file.open("a", encoding="utf-8") as f:
                 f.write(log_block(day, reading))
             self.mood = MoodState(day, split_resolution(reading), reading)
+
+    async def _mood_reading(self, contents: str, system: str) -> str | None:
+        """The day's reading — None when the call failed or the cap cut it: a cut reading would be logged and reused
+        all day, its half-paragraph standing in for the resolution (review #8)."""
+        complete = getattr(self.llm, "complete", None)
+        if complete is None:  # a seam with only generate() (older fakes)
+            return await self.llm.generate(contents, system, max_output_tokens=MOOD_MAX_TOKENS, kind="mood")
+        out = await complete(contents, system, max_output_tokens=MOOD_MAX_TOKENS, kind="mood")
+        if out is None:
+            return None
+        text, finish = out
+        if finish == "max_tokens":
+            log.error("mood of the day cut by the %d-token cap — not kept", MOOD_MAX_TOKENS)
+            return None
+        return text
 
     def _read_raw(self, path: Path) -> str | None:
         try:

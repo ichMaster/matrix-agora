@@ -169,3 +169,24 @@ def test_the_watcher_casts_the_new_days_mood_without_a_reply(tmp_path, monkeypat
     asyncio.run(run())
     assert agent.mood is not None and agent.mood.date == "2026-10-11" and llm.calls == ["mood"]
     agent.client.room_send.assert_not_awaited()
+
+
+class CompleteLLM(MoodLLM):
+    """A seam with complete(): the finish reason tells a cut reading."""
+    def __init__(self, finish):
+        super().__init__()
+        self.finish = finish
+
+    async def complete(self, transcript, system_instruction, max_output_tokens=400, kind="reply"):
+        self.calls.append(kind)
+        return (READING if kind == "mood" else "Мрр."), (self.finish if kind == "mood" else "stop")
+
+
+def test_a_reading_cut_by_the_cap_is_never_kept(tmp_path):
+    """Review #8: a reading cut by MOOD_MAX_TOKENS used to be logged and reused all day."""
+    cut = cat(tmp_path, CompleteLLM("max_tokens"))
+    asyncio.run(cut.ensure_mood(datetime(2026, 10, 10, 12, tzinfo=ZoneInfo("Europe/Kyiv"))))
+    assert cut.mood is None and not cut.mood_file.exists() and cut._mood_retry_ms > 0
+    whole = cat(tmp_path, CompleteLLM("stop"))
+    asyncio.run(whole.ensure_mood(datetime(2026, 10, 10, 12, tzinfo=ZoneInfo("Europe/Kyiv"))))
+    assert whole.mood.resolution == "Сьогодні колючий і сонний. Уникає людей."

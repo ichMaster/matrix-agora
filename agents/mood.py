@@ -28,7 +28,7 @@ MOOD_SYSTEM = (
     "«дозволь собі»): не що РОБИТИ, а ЯКИЙ це стан. Резолюція має відображати справжній характер дня "
     "(хай навіть складний чи тьмяний), а не підбадьорювати. Лише про настрій і тон — не про знання чи вміння."
 )
-MOOD_MAX_TOKENS = 1200
+MOOD_MAX_TOKENS = 2000  # several paragraphs, then the resolution — a reading cut by the cap is not kept (review #8)
 
 # The mood log's per-reading header: "===== 2026-10-10 =====" on its own line.
 _MOOD_LOG_HEADER_RE = re.compile(r"(?m)^===== (\d{4}-\d{2}-\d{2}) =====[ \t]*$")
