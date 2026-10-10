@@ -48,6 +48,7 @@ class Member:
     mode: str = "ranked"
     weight: float = 1.0
     panel: dict = field(default_factory=dict, compare=False, hash=False)  # [panel] — never part of a prompt
+    natal: str = ""  # v4.2: the natal file's path (agents with `mood`)
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -91,6 +92,7 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
         name_forms=tuple(f.strip().lower() for f in forms), type=kind, engine=engine,
         capabilities=frozenset(caps), mode=mode, weight=float(weight),
         panel=dict(panel) if isinstance(panel, dict) else {},
+        natal=str(data.get("natal", "")),
     )
 
 

@@ -6,9 +6,10 @@
 const POLL_MS = 10000;  // one tick for everything — the dashboard, an open log, an open agent's memory (owner)
 const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood"];
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
-              ["today", "Today"], ["tokens", "Tokens"]];
+              ["today", "Today"], ["mood", "Mood"], ["tokens", "Tokens"]];
 // v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
-const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today"};
+const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood"};
+const SERIES = ["a", "b", "c", "d", "e"];  // stacked token bars: one tint of the accent per agent (v4.2: N agents)
 const PRONOUN = {she: "She", he: "He", it: "It"};
 function can(a, cap) { return !a.capabilities || a.capabilities.includes(cap); }
 function agentTabs(a) { return TABS.filter(([k]) => !TAB_CAP[k] || can(a, TAB_CAP[k])); }
@@ -353,6 +354,7 @@ function agentCardHtml(a) {
       <div><dt class="label">Uptime</dt><dd>${esc(c.state === "running" ? fmtDur(c.uptime_s) : "—")}</dd></div>
     </dl>
     ${can(a, "today") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Today</div>${today}</div>` : ""}
+    ${!can(a, "today") && can(a, "mood") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Mood of the day</div>${moodLine(mem)}</div>` : ""}
     <div class="card-foot rule-t"><div class="meta">${tokens == null ? `${icon("database", 13)} Memory unavailable` : `7 days · ${esc(tokens)}`}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${actionButtons({kind: "agent", id: a.name, state: d.health.docker ? c.state : "unknown", big: true})}</div>
       <button class="btn btn-primary" data-act="agent" data-id="${esc(a.name)}">Details${icon("arrow-right", 14)}</button></div>
@@ -395,11 +397,12 @@ function usageCardHtml() {
   const names = agents.map((a) => a.name);
   const max = Math.max(1, ...u.per_day.map((d) => names.reduce((s, n) => s + (filter === "all" || filter === n ? d.agents[n] || 0 : 0), 0)));
   const bars = `<div class="bars">${u.per_day.map((d) => {
-    const a = filter === "all" || filter === names[0] ? d.agents[names[0]] || 0 : 0;
-    const b = filter === "all" || filter === names[1] ? d.agents[names[1]] || 0 : 0;
-    return `<div title="${esc(d.day)}: ${fmtInt(a + b)} tokens"><span class="b" style="height:${(b / max) * 100}%"></span><span class="a" style="height:${(a / max) * 100}%"></span></div>`;
+    const seg = names.map((n, i) => [SERIES[i % SERIES.length], filter === "all" || filter === n ? d.agents[n] || 0 : 0]);
+    const sum = seg.reduce((s, [, v]) => s + v, 0);
+    // a column stacks bottom-up: the first agent at the bottom, so the spans go in reverse
+    return `<div title="${esc(d.day)}: ${fmtInt(sum)} tokens">${[...seg].reverse().map(([c, v]) => `<span class="${c}" style="height:${(v / max) * 100}%"></span>`).join("")}</div>`;
   }).join("")}</div><div class="bar-labels">${u.per_day.map((d) => `<span class="${d.day === u.until ? "today" : ""}">${esc(shortDay(d.day))}</span>`).join("")}</div>`;
-  const legend = `<div class="legend">${agents.slice(0, 2).map((a, i) => `<span><i class="${i ? "b" : "a"}"></i>${esc(a.display)}</span>`).join("")}</div>`;
+  const legend = `<div class="legend">${agents.map((a, i) => `<span><i class="${SERIES[i % SERIES.length]}"></i>${esc(a.display)}</span>`).join("")}</div>`;
   const sorted = [...rows].sort((x, y) => y.day.localeCompare(x.day) || names.indexOf(x.agent) - names.indexOf(y.agent) ||
     KIND_ORDER.indexOf(x.kind) - KIND_ORDER.indexOf(y.kind));
   let prevDay = "";
@@ -473,8 +476,24 @@ function unavailableBox() {
     <span>state/ cannot be read — memories, plans and tokens appear as soon as it is back.</span></div>`;
 }
 
+function moodLine(mem) {
+  if (!mem.available) return `<div class="muted" style="font-size:13px">Memory unavailable</div>`;
+  return mem.mood ? `<div class="today-line" lang="uk">${esc(mem.mood.resolution.split("\n")[0])}</div>`
+    : `<div class="muted" style="font-size:13px">No horoscope yet — it is cast once a day</div>`;
+}
+
+function moodTabHtml(mem) {
+  if (!mem.mood) return `<p class="muted">No horoscope yet — it is cast once a day, before the first reply.</p>`;
+  const rhythms = mem.mood.biorhythms.map((c) => `<li><span class="mono">${esc(c.name)}</span> ${c.value >= 0 ? "+" : ""}${c.value.toFixed(2)} · ${esc(c.label)}</li>`).join("");
+  return `<div class="meta-line">${icon("clock", 14)}${esc(mem.mood.date)}</div>
+    <p class="read" lang="uk">${esc(mem.mood.resolution)}</p>
+    ${rhythms ? `<div class="label" style="margin-top:14px">Biorhythms</div><ul class="plain">${rhythms}</ul>` : ""}
+    <details style="margin-top:14px"><summary class="muted">The full reading</summary><p class="read" lang="uk" style="white-space:pre-wrap">${esc(mem.mood.reading)}</p></details>`;
+}
+
 function agentTabHtml(a, mem, tab) {
   if (!mem.available) return unavailableBox();
+  if (tab === "mood") return moodTabHtml(mem);
   if (tab === "session") {
     const state = a.container_state?.state;
     const stopped = S.data.health.docker && ["stopped", "missing"].includes(state) && !S.busy[a.container];

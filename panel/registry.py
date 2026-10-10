@@ -27,6 +27,7 @@ class Agent:
     type: str = "persona"  # v4.1: the card follows the type's capabilities
     engine: str = "gemini"
     capabilities: frozenset[str] = frozenset()
+    natal: str = ""  # v4.2: the natal file (the mood view computes the biorhythms from its birth date)
 
 
 class Registry:
@@ -44,7 +45,7 @@ class Registry:
                 panel = m.panel
                 self.agents[name] = Agent(name, str(panel.get("name", name.title())), str(panel.get("role", "")),
                                           sim.id, name, str(panel.get("pronoun", "they")), m.type, m.engine,
-                                          m.capabilities)
+                                          m.capabilities, m.natal)
 
     def simulation(self, sim_id: str) -> Simulation | None:
         return self.simulations.get(sim_id)

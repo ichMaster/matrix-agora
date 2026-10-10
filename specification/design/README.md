@@ -30,3 +30,20 @@ The panel's UI (phases v3.3 viewing · v3.4 control).
 
 Everything else is kept as designed: both themes (dark default), the 760 px breakpoint, the status vocabulary,
 the confirmations (v3.4), the formatting rules, the owner-only "deviation" badge on plans.
+
+## Addendum (v4.2): card variants for the new agent types
+
+From v4 the room holds agents of four types, and a card follows its agent's type and capabilities (ARCHITECTURE
+§The panel). The variants reuse the handoff's components and Nocturne tokens and add no new token. Only `creature`
+is built in v4.2; the other two are fixed here so later phases build to them.
+
+| Type | Card body (under "Runs on" / "Uptime") | Drawer tabs | Actions |
+|---|---|---|---|
+| `persona` (Ada, Bruno) | "Today": the today block's first line | Log · Last session · Memories · Plans · Today · Tokens | start / stop / restart; stop/restart promise a session summary; Forget |
+| `creature` (Кіт, v4.2) | "Mood of the day": the horoscope resolution's first line (`today-line`, `lang="uk"`); "No horoscope yet — it is cast once a day" until it exists | Log · Mood · Tokens. Mood: the resolution as `read` text, the date in the `meta-line`, the three biorhythms (name, value, label) as a plain list, the full reading under a collapsed `<details>` | start / stop / restart; no summary promise; no Forget |
+| `assistant` (Claude, v4.4) | One line: engine · model · billing, e.g. "claude-sdk · opus · subscription"; below it the rate-limit status as a pill (ok / warn when muted / err when rejected, with the reset time) | Log · Tokens | start / stop / restart; no summary promise; no Forget |
+| `bridge` (Лілі, v4.6) | One line: Lumi reachable / unreachable (a status dot, the `/v1/health` probe), and the last turn's outcome and time (ok / busy / error / timeout) | Log · Tokens | start / stop / restart (the bridge container); no summary promise; no Forget |
+
+**The token chart for N agents (v4.2):** the stacked bars and the legend show every agent. The series take the
+accent at 100 % (`a`), 42 % (`b`), 70 % (`c`), 24 % (`d`), then the text colour at 35 % (`e`). These are tints of
+existing tokens, so both themes follow.

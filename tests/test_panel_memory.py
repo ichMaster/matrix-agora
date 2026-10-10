@@ -107,3 +107,28 @@ def test_the_routes_validate_names_and_clamp_days(state, monkeypatch):
     assert len(c.get("/api/usage?days=999", headers=AUTH).json()["per_day"]) == 31
     assert len(c.get("/api/usage?days=0", headers=AUTH).json()["per_day"]) == 1
     assert c.get("/api/usage", headers=AUTH).json()["total"]["calls"] == 5
+
+
+# --- v4.2: the cat's mood of the day -------------------------------------------------------------------------------
+def test_the_mood_view_reads_todays_horoscope_and_the_biorhythms(state):
+    from pathlib import Path
+    log = "\n\n===== 2026-10-03 =====\nвчора\n\n===== 2026-10-04 =====\nТранзити.\n\nРЕЗОЛЮЦІЯ: Колючий і сонний.\n"
+    (state / "kit.mood.log").write_text(log, encoding="utf-8")
+    view = memory_view(state, "kit", TODAY, Path("agents/canon/kit.natal.md"), with_mood=True)
+    mood = view["mood"]
+    assert (mood["date"], mood["resolution"]) == ("2026-10-04", "Колючий і сонний.")
+    assert mood["reading"].startswith("Транзити.")
+    assert [c["name"] for c in mood["biorhythms"]] == ["physical", "emotional", "intellectual"]
+    assert memory_view(state, "kit", date(2026, 10, 5), Path("agents/canon/kit.natal.md"), True)["mood"] is None
+    assert memory_view(state, "ada", TODAY)["mood"] is None          # a persona has no mood section
+
+
+def test_the_memory_route_serves_the_cats_mood_and_not_adas(state, monkeypatch):
+    monkeypatch.setattr(app_mod, "local_today", lambda: TODAY)
+    (state / "kit.mood.log").write_text("\n\n===== 2026-10-04 =====\nРЕЗОЛЮЦІЯ: Мрр.\n", encoding="utf-8")
+    reg = Registry()
+    c = TestClient(create_app(token=TOKEN, registry=reg, docker_reader=DockerReader(client_factory=lambda: None),
+                              prober=Prober(reg), state_dir=state, background=False))
+    assert c.get("/api/agents/kit/memory", headers=AUTH).json()["mood"]["resolution"] == "Мрр."
+    assert c.get("/api/agents/ada/memory", headers=AUTH).json()["mood"] is None
+    assert c.get("/api/agents/kit/memory").status_code == 401

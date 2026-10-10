@@ -323,3 +323,7 @@ code, .mono { font-family: var(--mono); }
 .scrim.settled, .drawer.settled, .toast.settled { animation: none; }  /* entrances play once, not on every poll */
 .dialog-backdrop.settled, .dialog-backdrop.settled .dialog { animation: none; }
 .dot.work { background: var(--st-work); animation: ap-pulse 1.6s ease-out infinite; }
+/* v4.2 — the token chart stacks every agent: one more tint of the accent per series (c, d, e) */
+.bars .c, .legend .c { background: color-mix(in srgb, var(--color-accent) 70%, transparent); }  /* v4.2: N agents */
+.bars .d, .legend .d { background: color-mix(in srgb, var(--color-accent) 24%, transparent); }
+.bars .e, .legend .e { background: color-mix(in srgb, var(--color-text) 35%, transparent); }

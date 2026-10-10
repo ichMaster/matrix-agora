@@ -191,7 +191,8 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
         found = reg.agent(name)
         if found is None:
             raise HTTPException(404, "not found")
-        return memory_view(state_dir, found.name, local_today())
+        natal = Path(found.natal) if found.natal else None  # the registry's own path, never request data
+        return memory_view(state_dir, found.name, local_today(), natal, "mood" in found.capabilities)
 
     @app.get("/api/usage")
     def usage(days: int = 7, agent: str | None = None) -> dict:

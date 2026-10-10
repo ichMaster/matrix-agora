@@ -70,10 +70,21 @@ def test_the_page_follows_capabilities():
     """v4.1: tabs, the today field, the summary wording and the busy label need their capability; `it` is a
     pronoun; with every capability on (Ada, Bruno) the page is unchanged."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert 'const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today"};' in js
+    assert 'const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood"};' in js
     assert 'PRONOUN = {she: "She", he: "He", it: "It"}' in js
     assert "agentTabs(a)" in js and 'dr.tab = "log"' in js
     assert 'can(a, "today") ?' in js                                   # the card's Today field
     assert 'summary ? `${subject} will write a session summary' in js    # stop wording
     assert 'Boolean(agent) && can(agent, "summary")' in js               # "writing summary" busy label
     assert "Forget last session" in js and 'session: "summary"' in js   # Forget lives in the session tab
+
+
+
+def test_the_mood_tab_and_the_n_agent_chart():
+    """v4.2: a `mood` agent gets the Mood tab and a mood line on its card; the token chart stacks every agent."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    css = (STATIC_DIR / "panel.css").read_text(encoding="utf-8")
+    assert '["mood", "Mood"]' in js and 'mood: "mood"' in js and "moodTabHtml(mem)" in js
+    assert 'can(a, "mood") ?' in js and "Mood of the day" in js
+    assert 'const SERIES = ["a", "b", "c", "d", "e"]' in js and "agents.slice(0, 2)" not in js and "names[1]" not in js
+    assert ".bars .c" in css and ".legend .e" in css

@@ -58,7 +58,20 @@ def readable(state_dir: Path) -> bool:
     return os.access(state_dir, os.R_OK | os.X_OK)
 
 
-def memory_view(state_dir: Path, name: str, today: date) -> dict:
+def mood_view(state_dir: Path, name: str, today: date, natal: Path | None) -> dict | None:
+    """v4.2 — the day's horoscope: today's reading from `<name>.mood.log` (its resolution, the full reading) and the
+    day's biorhythms from the natal file's birth date. None until the day's reading exists."""
+    from agents.mood import biorhythms, parse_birth_date, reading_from_log, split_resolution
+    reading = reading_from_log(_read(state_dir / f"{name}.mood.log") or "", today.isoformat())
+    if not reading:
+        return None
+    birth = parse_birth_date(_read(natal) or "") if natal else None
+    cycles = [{"name": c.name, "value": round(c.value, 2), "label": c.label} for c in biorhythms(birth, today)] \
+        if birth else []
+    return {"date": today.isoformat(), "resolution": split_resolution(reading), "reading": reading, "biorhythms": cycles}
+
+
+def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = None, with_mood: bool = False) -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -94,6 +107,7 @@ def memory_view(state_dir: Path, name: str, today: date) -> dict:
         "available": True,
         "summary": {"text": summary, "written_at": _stamp(summary_path), "words": len(summary.split())} if summary else None,
         "days": days, "digests": digests, "plans": plans, "today": today_view,
+        "mood": mood_view(state_dir, name, today, natal) if with_mood else None,
     }
 
 
