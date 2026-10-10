@@ -1,0 +1,230 @@
+"""Claude through the Claude Agent SDK, on the owner's Max subscription only (v4.4).
+
+One stateless `query()` per reply: the room transcript as the prompt, the brief as the system prompt, no tools, no
+settings, one turn. An API key can never be used — several independent layers make sure of it:
+  1. the stack carries none (Claude's own env file; a compose test checks every service);
+  2. startup refuses when a forbidden variable is set or the OAuth token is missing (`check_startup`);
+  3. the forbidden names are scrubbed from the environment the SDK's CLI inherits (`scrub`);
+  4. no settings are read (`setting_sources=[]`) and the CLI's config dir is a fresh tmpfs;
+  5. the CLI's `system/init` must report `apiKeySource == "none"` and no tools, or every later reply is blocked;
+  6. no `anthropic` client anywhere — the SDK is imported here, lazily, and nowhere else;
+  7. at a subscription limit he is silent until it resets — no fallback of any kind;
+  8. every usage line is `subscription`.
+The SDK's message classes are matched by name, so the tests need no SDK installed. Never any text in a log or a file.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import time
+from collections.abc import Callable, Mapping, MutableMapping
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
+
+from agents.logic import build_transcript
+from agents.responder import Reply, Turn
+
+log = logging.getLogger("agent.claude")
+
+OAUTH_VAR = "CLAUDE_CODE_OAUTH_TOKEN"
+FORBIDDEN_PREFIXES = ("ANTHROPIC_", "CLAUDE_CODE_USE_")  # an API key, a gateway, Bedrock / Vertex / Foundry
+FORBIDDEN_NAMES = ("CLAUDE_CODE_SIMPLE",)                # bare mode never reads the OAuth credentials
+# belt and braces beside `tools=[]`: no built-in tool may ever run in the chat container
+DISALLOWED_TOOLS = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebFetch", "WebSearch", "Agent", "Skill",
+                    "NotebookEdit", "TodoWrite", "Task"]
+WARN_MUTE_S = 3600  # a limit event without a reset time mutes him for an hour
+
+
+class AuthRefused(RuntimeError):
+    """A forbidden variable is set or the OAuth token is missing — the message names variables, never values."""
+
+
+def forbidden_vars(env: Mapping[str, str]) -> list[str]:
+    return sorted(k for k in env if k.startswith(FORBIDDEN_PREFIXES) or k in FORBIDDEN_NAMES)
+
+
+def check_startup(env: Mapping[str, str]) -> None:
+    """Layer 2: refuse to start on any forbidden variable, or without the subscription's OAuth token."""
+    bad = forbidden_vars(env)
+    if bad:
+        raise AuthRefused(f"forbidden variables set: {', '.join(bad)} — Claude runs on the subscription only")
+    if not str(env.get(OAUTH_VAR, "")).strip():
+        raise AuthRefused(f"{OAUTH_VAR} is missing — run `claude setup-token` and put it into Claude's env file")
+
+
+def scrub(env: MutableMapping[str, str]) -> list[str]:
+    """Layer 3: the SDK passes the whole environment to its CLI — the forbidden names leave it first."""
+    gone = forbidden_vars(env)
+    for k in gone:
+        env.pop(k, None)
+    return gone
+
+
+def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config_dir: str,
+                effort: str | None = None) -> dict[str, Any]:
+    """The `ClaudeAgentOptions` keyword arguments: a chat turn, nothing else."""
+    opts: dict[str, Any] = {
+        "system_prompt": brief or "",
+        "tools": [],
+        "disallowed_tools": list(DISALLOWED_TOOLS),
+        "permission_mode": "dontAsk",
+        "setting_sources": [],
+        "mcp_servers": {},
+        "max_turns": 1,
+        "model": model,
+        "cwd": config_dir,
+        "env": {
+            "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(max_output_tokens),
+            "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
+            "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+            "CLAUDE_CONFIG_DIR": config_dir,
+        },
+    }
+    if effort:
+        opts["effort"] = effort
+    return opts
+
+
+@dataclass
+class ClaudeStatus:
+    """`state/<name>.ratelimit.json` — for the panel; times and words, no texts, no token."""
+    status: str | None = None          # allowed | allowed_warning | rejected
+    utilization: float | None = None
+    resets_at: int | None = None       # epoch seconds
+    rate_limit_type: str | None = None
+    muted_until: int | None = None     # epoch seconds
+    auth: str | None = None            # "oauth" once the init check passed; "blocked: …" / "refused: …"
+    updated_at: int | None = None
+
+
+def write_status(path: Path, status: ClaudeStatus) -> None:
+    """Atomic, private from birth (0600)."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, json.dumps(asdict(status)).encode())
+        finally:
+            os.close(fd)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+    except OSError as exc:
+        log.error("claude status not written (%s)", type(exc).__name__)
+
+
+def _default_query():
+    from claude_agent_sdk import query  # layer 6: the SDK lives here only
+
+    return query
+
+
+def _default_options():
+    from claude_agent_sdk import ClaudeAgentOptions
+
+    return ClaudeAgentOptions
+
+
+class ClaudeSdkResponder:
+    """One stateless `query()` per reply on the subscription; silent when blocked, muted or failed."""
+
+    def __init__(self, *, model: str, max_output_tokens: int, config_dir: str, status_file: Path,
+                 usage_sink: Callable[[str, str, dict | None, bool, float | None], None],
+                 clock: Callable[[], int] = lambda: int(time.time() * 1000), query=None, options=None) -> None:
+        self.model = model
+        self.max_output_tokens = max_output_tokens
+        self.config_dir = config_dir
+        self.status_file = status_file
+        self.usage_sink = usage_sink
+        self.clock = clock
+        self._query = query
+        self._options = options
+        self.status = ClaudeStatus()
+        self.blocked: str | None = None
+
+    def _now(self) -> int:
+        return self.clock() // 1000
+
+    def _save(self) -> None:
+        self.status.updated_at = self._now()
+        write_status(self.status_file, self.status)
+
+    def _check_init(self, data: Mapping[str, Any]) -> None:
+        """Layer 5: the CLI must say no API key is in use and no tool is available."""
+        source = data.get("apiKeySource") if isinstance(data, Mapping) else None
+        tools = data.get("tools") if isinstance(data, Mapping) else None
+        if source != "none":
+            self.blocked = f"apiKeySource={source!r}"
+        elif tools:
+            self.blocked = f"tools={', '.join(map(str, tools))}"
+        if self.blocked:
+            log.error("claude blocked: %s — no reply until restarted", self.blocked)
+            self.status.auth = f"blocked: {self.blocked}"
+        else:
+            self.status.auth = "oauth"
+        self._save()
+
+    def _rate_limit(self, info: Any) -> None:
+        """Layer 7: a warning mutes him before the owner's own work hits the wall; a rejection silences him until
+        the window resets."""
+        status = getattr(info, "status", None)
+        resets_at = getattr(info, "resets_at", None)
+        self.status.status = status
+        self.status.utilization = getattr(info, "utilization", None)
+        self.status.resets_at = resets_at
+        self.status.rate_limit_type = getattr(info, "rate_limit_type", None)
+        if status in ("allowed_warning", "rejected"):
+            self.status.muted_until = int(resets_at) if resets_at else self._now() + WARN_MUTE_S
+            log.warning("claude rate limit %s — muted until %s", status, self.status.muted_until)
+        elif status == "allowed":
+            self.status.muted_until = None
+        self._save()
+
+    def muted(self) -> bool:
+        return bool(self.status.muted_until) and self._now() < int(self.status.muted_until)
+
+    async def respond(self, turn: Turn) -> Reply | None:
+        if self.blocked:
+            log.info("silent: claude blocked (%s)", self.blocked)
+            return None
+        if self.muted():
+            log.info("silent: claude rate limit (until %s)", self.status.muted_until)
+            return None
+        query = self._query or _default_query()
+        options = (self._options or _default_options())(**sdk_options(
+            turn.instruction, model=self.model, max_output_tokens=self.max_output_tokens, config_dir=self.config_dir))
+        parts: list[str] = []
+        result = None
+        try:
+            async for msg in query(prompt=build_transcript(turn.lines), options=options):
+                kind = type(msg).__name__
+                if kind == "SystemMessage" and getattr(msg, "subtype", None) == "init":
+                    self._check_init(getattr(msg, "data", {}) or {})
+                elif kind == "RateLimitEvent":
+                    self._rate_limit(getattr(msg, "rate_limit_info", None))
+                elif kind == "AssistantMessage":
+                    parts += [b.text for b in getattr(msg, "content", []) if isinstance(getattr(b, "text", None), str)]
+                elif kind == "ResultMessage":
+                    result = msg
+        except Exception as exc:  # noqa: BLE001 — any SDK or CLI failure means silence
+            log.error("claude query failed: %s", type(exc).__name__)
+            self.usage_sink(turn.kind, self.model, None, False, None)
+            return None
+        if result is not None:
+            ok = not getattr(result, "is_error", True) and self.blocked is None
+            self.usage_sink(turn.kind, self.model, getattr(result, "usage", None), ok,
+                            getattr(result, "total_cost_usd", None))
+        if self.blocked:
+            return None
+        if result is None or getattr(result, "is_error", True):
+            log.error("claude result error: %s (http %s)", getattr(result, "subtype", None),
+                      getattr(result, "api_error_status", None))
+            return None
+        text = (getattr(result, "result", None) or "".join(parts)).strip()
+        if not text:
+            log.error("claude returned an empty reply")
+            return None
+        return Reply(text, "max_tokens" if getattr(result, "stop_reason", None) == "max_tokens" else "stop")

@@ -207,7 +207,7 @@ The panel is the point of the whole project (VISION §The direction). One FastAP
 
 Changing any of these updates this document and the test that pins it, in the same commit:
 
-- The env var names in `.env.example` and `server/.env.example`.
+- The env var names in `.env.example` and `server/.env.example` (from v4.4 also `server/claude.env.example`: `CLAUDE_MODEL`, `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, `CLAUDE_CONFIG_DIR`), and the **forbidden set** — any `ANTHROPIC_*`, any `CLAUDE_CODE_USE_*`, `CLAUDE_CODE_SIMPLE` — never set anywhere in the stack (pinned by `tests/test_claude_sdk.py` and `tests/test_compose.py`).
 - The agent TOML schema (`name`, `user_id`, `canon`, `life`, `simulation`; from v4.1 `type` (`persona`; v4.2 `creature`; v4.4 `assistant` — no capabilities), `engine` (`gemini`; v4.4 `claude-sdk`), `name_forms` (the lowercase forms that address the agent), `[capabilities]` (overrides of the type's defaults: `canon`, `life`, `summary`, `chronicle`, `plans`, `today`, `world`, v4.2 `mood`, v4.3 `pastlife` and `nudge` — a persona has all but `mood`, `pastlife` and `nudge`; a creature has `canon`, `life`, `world`, `mood`, `pastlife`, `nudge`; `pastlife` and `nudge` belong to the creature type only, and a simulation holds at most one member with `nudge` (v4.3 review #6); `canon` and `life` are required only when the type has them), v4.2 `natal` (the natal file, required with `mood`), v4.3 `memories` (the past-life theses file, required with `pastlife`) and `[turns]` (`mode` = `ranked` | `ambient` | `mention-only`, `weight` > 0); and the panel-only `[panel] name` / `role` / `pronoun`), parsed by `agents/roster.py` (pinned by `tests/test_roster.py`), and the `agents/canon/` layout.
 - The simulation registry `simulations.toml` (repo root): per entry `kind` (`matrix-chat`), `title`, `description`, `services`, `agents`, `health {service, port, path}`, `endpoints {homeserver, room}` — the env names its agents connect with; an agent belongs to one simulation (pinned by `tests/test_registry.py`).
 - The plan file format: items plus hidden mutation tags, which never reach a conversational prompt (pinned by a test).
@@ -243,6 +243,7 @@ There is no database, and nothing the agents lived is ever deleted: all durable 
 | `state/<name>.usage.jsonl` | every Gemini call | one JSON line: `ts`, `agent`, `kind`, `model`, token counts, `ok` — no texts |
 | `state/<name>.mood.log` | the day's first mood call (v4.2, an agent with `mood`) | the daily horoscope readings, `===== YYYY-MM-DD =====` blocks; append-only, 0600 |
 | `state/<name>.nudge.json` | every nudge attempt (v4.3, an agent with `nudge`) | `last_ms` (the last attempt), `day`, `count` (nudges sent that day), `sent_ms` (the last nudge sent, for the panel) — no texts; atomic, 0600 |
+| `state/<name>.ratelimit.json` | every SDK limit event and the init check (v4.4, the `claude-sdk` engine) | `status`, `utilization`, `resets_at`, `rate_limit_type`, `muted_until`, `auth` (`oauth` / `blocked: …` / `refused: <variable names>`), `updated_at` — no texts, no token; atomic, 0600 |
 | `state/<name>.lock` | startup (`flock`) | the PID of the running instance |
 | `state/logs/<name>.log` | continuously | rotating log, 1 MB × 3 — no tokens, passwords or texts |
 
@@ -261,6 +262,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `CAT_REACT_P`, `CAT_PURR_P`, `CAT_MAX_WORDS` | v4.2 | the cat: how often he reacts unasked, how often a reaction is a purr, his word cap (0.3 / 0.8 / 12) |
 | `CAT_MEMORY_P` | v4.3 | how often one of the cat's spoken lines retells a past-life thesis (0.25) |
 | `CAT_NUDGE_IDLE_S`, `CAT_NUDGES_PER_DAY`, `CAT_NUDGE_HOURS` | v4.3 | read only by an agent with `nudge` (review #7) — the cat starts a conversation: after this much room silence (never less than `BOT_WINDOW_S`), at most so many a day, within these local hours (1200 — 20 min, the owner's choice 2026-10-10 / 6 / `09-22`) |
+| `CLAUDE_MODEL`, `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, `CLAUDE_CONFIG_DIR` | v4.4 | Claude's own env file only: the model (`opus`), the subscription's one-year OAuth token (`claude setup-token`; secret), the output cap (300) and the CLI's tmpfs config dir; one stateless `query()` per reply — `tools=[]`, `setting_sources=[]`, `max_turns=1`, `permission_mode="dontAsk"`, `CLAUDE_CODE_SKIP_PROMPT_HISTORY=1` |
 | `REPLY_MAX_TOKENS` | v4.1 | the output cap of a reply (200); summaries, memories and plans keep their own caps |
 | `OWNER_REPLIERS`, `FALLBACK_S` | v4.1 | how many agents answer an owner message that names no one; seconds before the best-ranked unchosen agent answers an unanswered owner (2 / 30) |
 | `SESSION_IDLE_S`, `SESSION_MAX_MESSAGES`, `SUMMARY_MAX_WORDS` | v2.1 | session memory (900 / 200 / 200) |
@@ -290,6 +292,7 @@ From v3.2 the production values live in `server/.env` on the Ubuntu box (synced 
 | A compromised panel container | it holds the host's docker socket (root-equivalent) and, from v3.4, reads `server/.env` (compose needs it to create a missing container) — an accepted PoC trade-off: token-gated, same-origin actions, LAN-only, never internet-exposed. A socket proxy was considered and declined (v3.4): compose needs create / network / volume calls a narrow proxy would have to allow anyway |
 | The deploy password leaks | Key auth after a one-time `ssh-copy-id`; `server_con.yaml` gitignored; the password never in argv, logs or output |
 | Secrets in CI or in the image | CI uses mocks and `GITHUB_TOKEN` only; `.env` and `state/` stay on the host, never in the image |
+| Claude silently billed to an API key (v4.4) | the subscription only, in layers (`agents/claude_sdk.py`): Claude's own env file holds the OAuth token and no service names a forbidden variable (any `ANTHROPIC_*`, `CLAUDE_CODE_USE_*`, `CLAUDE_CODE_SIMPLE`); startup refuses on any of them or a missing `CLAUDE_CODE_OAUTH_TOKEN`, naming variables, never values; they are scrubbed from the environment the SDK's CLI inherits; `setting_sources=[]` and a tmpfs `CLAUDE_CONFIG_DIR`; the CLI's `system/init` must report `apiKeySource == "none"` and no tools, or every later reply is blocked; no `anthropic` import anywhere and the SDK only in the responder; at a limit he is silent until it resets; every usage line is `subscription` |
 
 HTTP without TLS on the LAN is a deliberate PoC trade-off: passwords travel in plaintext over the home network. Before any external access: Tailscale (or a reverse proxy with TLS).
 

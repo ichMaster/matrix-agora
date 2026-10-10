@@ -24,6 +24,11 @@ panel = [
     "docker>=7.1",
     "tzdata>=2024.1",  # zoneinfo in the slim image (the panel installs only this group)
 ]
+# v4.4 — Claude through the Agent SDK (it bundles the Claude Code CLI); only the `claude` image target installs it,
+# the tests mock it, and nothing imports it outside agents/claude_sdk.py
+claude = [
+    "claude-agent-sdk==0.2.165",
+]
 
 
 [tool.ruff]

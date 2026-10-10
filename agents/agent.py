@@ -45,6 +45,14 @@ from agents.chronicle import (
     weeks_due,
     years_due,
 )
+from agents.claude_sdk import (
+    AuthRefused,
+    ClaudeSdkResponder,
+    ClaudeStatus,
+    check_startup,
+    scrub,
+    write_status,
+)
 from agents.config import AgentConfig, load_config
 from agents.life import current_chapter, life_section, next_chapter
 from agents.llm import GeminiClient
@@ -110,7 +118,7 @@ from agents.turns import (
     wave_count,
     wave_frees_at,
 )
-from agents.usage import usage_line
+from agents.usage import sdk_usage_line, usage_line
 from agents.world import (
     MONTHS_NOM,
     day_label,
@@ -136,8 +144,19 @@ class Agent:
         self.client = AsyncClient(cfg.homeserver, cfg.user_id)
         self.started = False  # flips True after the first sync; nothing earlier is handled
         self.started_ms: int | None = None  # when it did (v4.3: the silence before a nudge counts from here at least)
-        self.llm = llm or GeminiClient(sink=self.record_usage)
-        self.responder = responder_for(cfg.engine, self.llm)  # the reply engine seam (v4.1)
+        if cfg.engine == "claude-sdk":  # v4.4: the subscription only — refuse first, then scrub (agents/claude_sdk.py)
+            check_startup(os.environ)
+            scrub(os.environ)
+            self.llm = llm  # no Gemini client: Claude's container has no Gemini key
+            self.responder = ClaudeSdkResponder(
+                model=os.environ.get("CLAUDE_MODEL", "opus"),
+                max_output_tokens=int(os.environ.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS", "300")),
+                config_dir=os.environ.get("CLAUDE_CONFIG_DIR", "/tmp/claude"),
+                status_file=cfg.memory_file.parent / f"{cfg.localpart}.ratelimit.json",
+                usage_sink=self.record_sdk_usage, clock=lambda: self.clock())
+        else:
+            self.llm = llm or GeminiClient(sink=self.record_usage)
+            self.responder = responder_for(cfg.engine, self.llm)  # the reply engine seam (v4.1)
         self.reply_max_tokens = int(os.environ.get("REPLY_MAX_TOKENS", "200"))
         self.history: list[tuple[str, str]] = []
         self.history_n = int(os.environ.get("HISTORY_N", "40"))
@@ -600,9 +619,16 @@ class Agent:
 
     def record_usage(self, kind: str, model: str, usage, ok: bool) -> None:
         """One JSON line per Gemini call (v3.1) — no texts; a write error never blocks."""
+        self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok))
+
+    def record_sdk_usage(self, kind: str, model: str, usage: dict | None, ok: bool,
+                         reported_cost: float | None) -> None:
+        """v4.4 — one line per Claude Agent SDK call: always `subscription`, never priced."""
+        self._append_usage(lambda ts: sdk_usage_line(ts, self.cfg.localpart, kind, model, usage, ok, reported_cost))
+
+    def _append_usage(self, build) -> None:
         try:
-            line = usage_line(local_now(self.clock(), self.tz).isoformat(timespec="seconds"),
-                              self.cfg.localpart, kind, model, usage, ok)
+            line = build(local_now(self.clock(), self.tz).isoformat(timespec="seconds"))
             self.usage_file.parent.mkdir(parents=True, exist_ok=True)
             # private from birth (code review #2): created 0600, a looser old file tightened
             fd = os.open(self.usage_file, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
@@ -1180,7 +1206,13 @@ def main() -> None:
     if lock is None:
         log.error("%s: another instance is running (pid %s) — exiting", cfg.localpart, lock_holder(cfg.lock_file))
         raise SystemExit(1)
-    agent = Agent(cfg)
+    try:
+        agent = Agent(cfg)
+    except AuthRefused as exc:  # v4.4: the names of what tripped it, never a value
+        log.error("%s: %s", cfg.localpart, exc)
+        write_status(cfg.memory_file.parent / f"{cfg.localpart}.ratelimit.json",
+                     ClaudeStatus(auth=f"refused: {exc}", updated_at=int(time.time())))
+        raise SystemExit(1) from None
     asyncio.run(agent.run())
 
 
