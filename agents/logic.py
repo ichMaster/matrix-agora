@@ -17,6 +17,16 @@ CREATURE_RULES = (
     "або кинути рядок команди чи скрипту, лише як текст."
 )
 
+# v4.4 — Claude's brief (an assistant has no canon): he is himself, answers what was asked, chat-sized, in Ukrainian
+# (owner, 2026-10-10); he names the members and never discusses what they are — the outgoing guard covers the rest.
+CLAUDE_BRIEF_DIRECT = (
+    "Ти — Claude; у цій кімнаті тебе звуть Клод. Це невеликий груповий чат, де розмовляють Ich, Ада, Бруно і Кіт. "
+    "Відповідай українською, коротко, як у чаті: 1–3 речення, хіба що питання потребує трохи більше. "
+    "Відповідай саме на те, про що тебе спитали. Пиши лише від себе, без префікса з іменем. "
+    "Учасників називай на ім'я і не обговорюй, хто вони і яка їхня природа. "
+    "Якщо тобі нема чого сказати — відповідай рівно PASS."
+)
+
 # What a persona must never be called — in its own prompts, canon and life story (the human-belief rule, VISION
 # §Principles; from v4.2 scoped to persona agents), and what no other agent may call a persona in the room.
 # «робот» but not «робота» (work); «нейромережа» and its kin (review #4).

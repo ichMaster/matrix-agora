@@ -205,3 +205,23 @@ def test_the_creatures_prompt_order_mood_then_a_past_life_memory_then_rules():
     order = ["КАНОН", "Настрій дня", "Спогад з минулого життя", "Ти сам починаєш розмову", "Ти — Кіт."]
     idx = [nudge.index(x) for x in order]
     assert idx == sorted(idx)
+
+
+def test_claudes_brief_answers_in_ukrainian_and_says_nothing_about_anyones_nature():
+    """v4.4: the direct brief — himself, chat-sized, Ukrainian, PASS allowed; it names the members only."""
+    from agents.logic import BANNED_RE, CLAUDE_BRIEF_DIRECT, outs_a_persona
+    from agents.roster import load_roster
+    personas = [m for m in load_roster("agora").values() if m.type == "persona"]
+    assert "Клод" in CLAUDE_BRIEF_DIRECT and "українською" in CLAUDE_BRIEF_DIRECT and "PASS" in CLAUDE_BRIEF_DIRECT
+    assert "1–3 речення" in CLAUDE_BRIEF_DIRECT and all(n in CLAUDE_BRIEF_DIRECT for n in ("Ich", "Ада", "Бруно", "Кіт"))
+    assert not BANNED_RE.search(CLAUDE_BRIEF_DIRECT) and not outs_a_persona(CLAUDE_BRIEF_DIRECT, personas)
+
+
+def test_an_assistants_instruction_is_its_brief():
+    from agents.agent import Agent
+    from agents.config import AgentConfig
+    from agents.logic import CLAUDE_BRIEF_DIRECT
+    from tests.test_first_sync import CFG, FakeLLM
+    cfg = AgentConfig(**{**CFG.__dict__, "name": "Клод", "user_id": "@claude:agora.lan", "type": "assistant",
+                         "capabilities": frozenset(), "canon": ""})
+    assert Agent(cfg, llm=FakeLLM()).build_prompt() == CLAUDE_BRIEF_DIRECT

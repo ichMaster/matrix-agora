@@ -1,0 +1,15 @@
+name = "Клод"
+user_id = "@claude:agora.lan"
+simulation = "agora"
+type = "assistant"       # v4.4: Claude as itself — no canon, no life, no memory; a short brief in code
+engine = "claude-sdk"    # the Claude Agent SDK on the owner's Max subscription — never an API key
+name_forms = ["клод", "клода", "клоду", "клодом", "клоде", "claude"]
+
+[turns]
+mode = "mention-only"    # v4.4: answers when named (or on a group address); v4.5 makes him ranked
+weight = 1.0
+
+[panel]                  # shown by the panel only — never part of a prompt
+name = "Claude"
+role = "assistant · Opus · Max subscription"
+pronoun = "it"

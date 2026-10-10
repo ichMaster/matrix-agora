@@ -20,7 +20,7 @@ from agents.registry import REGISTRY_PATH, RegistryError, load_registry
 AGENTS_DIR = Path("agents")
 log = logging.getLogger("agent.roster")
 
-# the type sets the default capabilities; later phases add assistant / bridge
+# the type sets the default capabilities; a later phase adds the bridge
 CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood", "pastlife", "nudge")
 TYPES: dict[str, frozenset[str]] = {
     # a human persona: the full memory stack, no horoscope
@@ -28,9 +28,11 @@ TYPES: dict[str, frozenset[str]] = {
     # v4.2 — a creature (the cat): canon, a life story and the world, a daily horoscope; no memories, no plans;
     # v4.3 — his fixed past-life theses (`pastlife`) and the only initiative in the room (`nudge`)
     "creature": frozenset({"canon", "life", "world", "mood", "pastlife", "nudge"}),
+    # v4.4 — an assistant (Claude, as itself): no canon, no life, no memory — a short brief in code
+    "assistant": frozenset(),
 }
 CREATURE_ONLY = frozenset({"pastlife", "nudge"})  # v4.3: no persona remembers a past life or speaks first
-ENGINES = ("gemini",)
+ENGINES = ("gemini", "claude-sdk")  # v4.4: Claude through the Agent SDK, on the subscription only
 MODES = ("ranked", "ambient", "mention-only")
 
 

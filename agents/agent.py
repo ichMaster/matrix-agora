@@ -49,6 +49,7 @@ from agents.config import AgentConfig, load_config
 from agents.life import current_chapter, life_section, next_chapter
 from agents.llm import GeminiClient
 from agents.logic import (
+    CLAUDE_BRIEF_DIRECT,
     CREATURE_RULES,
     append_history,
     build_instruction,
@@ -476,7 +477,9 @@ class Agent:
 
     def build_prompt(self, pastlife: str | None = None, nudge: str | None = None) -> str:
         """The full system instruction for a reply, in contract order; `pastlife` is a chosen thesis, `nudge` a
-        nudge's material and rule (v4.3)."""
+        nudge's material and rule (v4.3). An assistant (v4.4, Claude) has no canon: its brief is the instruction."""
+        if self.cfg.type == "assistant":
+            return CLAUDE_BRIEF_DIRECT
         can = self.cfg.can
         now = local_now(self.clock(), self.tz)
         world = None

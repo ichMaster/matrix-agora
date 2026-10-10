@@ -282,3 +282,15 @@ def test_a_room_has_at_most_one_initiator(tmp_path):
     (agents / "bruno.toml").write_text('name = "Бруно"\nuser_id = "@bruno:agora.lan"\ntype = "creature"\n'
                                        '[capabilities]\nnudge = false\n')
     assert [n for n, m in load_roster("sim", reg, agents).items() if m.can("nudge")] == ["kit"]
+
+
+def test_claude_is_a_mention_only_assistant_with_no_capabilities():
+    """v4.4: Claude as itself — the `assistant` type, the `claude-sdk` engine, answering when named."""
+    from pathlib import Path
+
+    from agents.turns import mentions
+    claude = load_member(Path("agents/claude.toml"))
+    assert (claude.type, claude.engine, claude.mode, claude.name) == ("assistant", "claude-sdk", "mention-only", "Клод")
+    assert claude.capabilities == TYPES["assistant"] == frozenset()
+    assert all(mentions(t, claude.name_forms, claude.user_id) for t in ("Клоде, як ти?", "спитай Клода", "claude?"))
+    assert claude.panel == {"name": "Claude", "role": "assistant · Opus · Max subscription", "pronoun": "it"}
