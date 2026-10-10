@@ -967,6 +967,11 @@ class Agent:
             return None
         event_id = str(self.timeline[-1][2]) if self.timeline else ""
         last_text = self.history[-1][1] if self.history else ""
+        return self._choose_thesis(event_id, last_text)
+
+    def _choose_thesis(self, event_id: str, last_text: str) -> int | None:
+        if len(self.told) >= len(self.cfg.theses):
+            self.told.clear()  # every thesis told: a new round, no repeats again until it is done (review #8)
         return pick_memory(event_id, last_text, self.cfg.theses, self.told)
 
     def _verbatim(self, text: str, memory: int) -> bool:
@@ -1013,7 +1018,7 @@ class Agent:
         memory = None
         if kind == "memory":
             recent = " ".join(text for _, text in self.history[-5:])
-            memory = pick_memory(f"nudge:{day}:{n}", recent, self.cfg.theses, self.told)
+            memory = self._choose_thesis(f"nudge:{day}:{n}", recent)
             prompt = self.build_prompt(pastlife_section(self.cfg.theses[memory]), NUDGE_RULE)
         else:
             material = COMMAND_MATERIAL if kind == "command" else HOROSCOPE_MATERIAL

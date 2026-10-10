@@ -166,3 +166,13 @@ def test_a_tag_matches_only_at_a_word_start():
     from agents.pastlife import tag_found
     assert tag_found("бекап", "з бекапом") and tag_found("п'ятниц", "у п'ятницю")
     assert not tag_found("чат", "почати") and not tag_found("ping", "typing") and not tag_found("зорі", "прозорі")
+
+
+def test_after_a_full_round_the_no_repeat_rule_starts_over():
+    """Review #8: once all were told, `told` stayed full and a thesis could repeat back to back for good."""
+    agent = cat(SeqLLM(), memory_p=1.0)
+    agent.told = {0, 1, 2, 3}
+    first = agent._choose_thesis("$e", "")
+    assert agent.told == set()                     # a new round
+    agent.told.add(first)
+    assert all(agent._choose_thesis(f"$e{i}", "") != first for i in range(30))
