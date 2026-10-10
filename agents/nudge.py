@@ -23,8 +23,9 @@ HOROSCOPE_MATERIAL = "Перекажи свій сьогоднішній гор�
 # the owner, 2026-10-11: a sysadmin joke for the assistant (Claude), framed like a ham-radio telegraph message —
 # «CQ CQ … DE …» first and «73 SK» last, the joke itself in plain Ukrainian; his name opens the line, so he may answer
 TELEGRAM_MATERIAL = ("Надішли {name}у радіограму, як радіоаматор: почни телеграфом — «CQ CQ {upper} DE КІТ» "
-                     "(можна з Q-кодами й скороченнями: QSL, TNX, FB, OM), далі звичайним текстом українською — "
-                     "короткий анекдот про сисадмінів, що пасує до розмови, — і закінчи телеграфом: «73 SK» або «EE».")
+                     "(з Q-кодами й скороченнями зі свого словника: QSL, QRZ?, TNX, FB, OM, HW?, PSE), далі звичайним "
+                     "текстом українською — короткий анекдот про сисадмінів, що пасує до розмови (окремі слова можна "
+                     "замінити скороченнями), — і закінчи телеграфом: «73 SK», «CUL ES 73» або «EE».")
 TELEGRAM_MAX_WORDS = 45  # the frame plus a joke in plain words — more than his usual few
 
 
