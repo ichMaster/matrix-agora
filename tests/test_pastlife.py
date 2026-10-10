@@ -26,9 +26,9 @@ THESES = (
 
 
 # --- the file -------------------------------------------------------------------------------------------------------
-def test_the_real_file_holds_93_theses_with_tags():
+def test_the_real_file_holds_60_to_100_theses_with_tags():
     theses = parse_theses(REAL.read_text(encoding="utf-8"))
-    assert len(theses) == 93
+    assert 60 <= len(theses) <= 100  # ROADMAP §v4.3; the owner edits the file (review #11)
     assert all(t.tags and t.text for t in theses)
     assert all(tag == tag.lower() for t in theses for tag in t.tags)
 

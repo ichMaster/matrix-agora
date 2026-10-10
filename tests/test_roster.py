@@ -219,7 +219,7 @@ def test_the_cats_config_loads_his_canon_life_and_natal_text():
     assert cfg.type == "creature" and cfg.can("mood") and not cfg.can("summary")
     assert "штучний кіт" in cfg.canon.lower() and cfg.life is not None
     assert cfg.natal.startswith("Народження: 16.04.2005, 15:20, Портленд") and "#" not in cfg.natal.splitlines()[0]
-    assert len(cfg.theses) == 93 and cfg.can("pastlife")                 # v4.3: the past-life theses
+    assert 60 <= len(cfg.theses) <= 100 and cfg.can("pastlife")          # v4.3: the past-life theses
 
 
 def test_a_creature_needs_a_readable_theses_file(tmp_path):

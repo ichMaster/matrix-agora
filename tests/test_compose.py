@@ -95,3 +95,24 @@ def test_the_cats_settings_are_in_both_env_examples():
     cat = {"CAT_REACT_P", "CAT_PURR_P", "CAT_MAX_WORDS", "CAT_MEMORY_P", "CAT_NUDGE_IDLE_S", "CAT_NUDGES_PER_DAY",
            "CAT_NUDGE_HOURS"}
     assert cat <= env_keys(ROOT / ".env.example") and cat <= env_keys(ROOT / "server" / ".env.example")
+
+
+def test_the_cats_example_values_are_the_agents_defaults(monkeypatch):
+    """v4.3 review #11: an example value that drifts from the code default (2700 vs 1200) would silently override
+    it once copied into an .env."""
+    from agents.agent import Agent
+    from agents.config import AgentConfig
+    from agents.nudge import parse_hours
+    from agents.roster import TYPES
+    from tests.test_first_sync import CFG, FakeLLM
+    example = dict(line.split("=", 1) for line in (ROOT / ".env.example").read_text().splitlines()
+                   if line.startswith("CAT_"))
+    for key in example:
+        monkeypatch.delenv(key, raising=False)
+    cat = Agent(AgentConfig(**{**CFG.__dict__, "name": "Кіт", "user_id": "@kit:agora.lan", "type": "creature",
+                               "capabilities": TYPES["creature"]}), llm=FakeLLM())
+    assert float(example["CAT_REACT_P"]) == cat.cat_react_p and float(example["CAT_PURR_P"]) == cat.cat_purr_p
+    assert int(example["CAT_MAX_WORDS"]) == cat.cat_max_words and float(example["CAT_MEMORY_P"]) == cat.cat_memory_p
+    assert int(example["CAT_NUDGE_IDLE_S"]) * 1000 == cat.nudge_idle_ms
+    assert int(example["CAT_NUDGES_PER_DAY"]) == cat.nudges_per_day
+    assert parse_hours(example["CAT_NUDGE_HOURS"]) == cat.nudge_hours

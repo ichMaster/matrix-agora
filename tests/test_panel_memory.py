@@ -157,7 +157,11 @@ def test_the_cat_shows_his_theses_his_last_nudge_and_todays_count(state, monkeyp
     c = TestClient(create_app(token=TOKEN, registry=reg, docker_reader=DockerReader(client_factory=lambda: None),
                               prober=Prober(reg), state_dir=state, background=False))
     kit = c.get("/api/agents/kit/memory", headers=AUTH).json()
-    assert kit["pastlife"] == {"theses": 93}
+    from pathlib import Path
+
+    from agents.pastlife import parse_theses
+    real = len(parse_theses(Path("agents/canon/kit.memories.md").read_text(encoding="utf-8")))
+    assert kit["pastlife"] == {"theses": real}                              # what the agent loads (review #11)
     assert kit["nudge"] == {"last": "2026-10-04T14:05:00+03:00", "today": 2}
     ada = c.get("/api/agents/ada/memory", headers=AUTH).json()
     assert ada["pastlife"] is None and ada["nudge"] is None                 # a persona has neither
