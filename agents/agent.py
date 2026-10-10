@@ -696,19 +696,23 @@ class Agent:
         try:
             if delay_s > 0:
                 await asyncio.sleep(delay_s)
-            trigger = self._pending_trigger
-            if trigger and not self._current(trigger):
-                log.info("silent: moved on")
-                return
-            await self.reply(room_id, trigger)
+            for _ in range(3):  # a message that coalesced during generation gets its own pass (code review #1)
+                trigger = self._pending_trigger
+                if trigger and not self._current(trigger):
+                    log.info("silent: moved on")
+                    return
+                if await self.reply(room_id, trigger) or self._pending_trigger == trigger:
+                    return
+                log.info("reply: a newer message arrived while generating — answering it")
         except Exception:
             log.exception("scheduled reply failed (bot keeps running)")
         finally:
             self._reply_pending = False
 
-    async def reply(self, room_id: str, trigger: str | None = None, at_ms: int | None = None) -> None:
+    async def reply(self, room_id: str, trigger: str | None = None, at_ms: int | None = None) -> bool:
         """Typing on → Gemini → m.text; silence on failure or PASS; typing reset in finally. An agent-to-agent
-        reply (`trigger`) is re-checked before sending (R3): the room may have moved on during generation."""
+        reply (`trigger`) is re-checked before sending (R3): the room may have moved on during generation.
+        Returns whether a message was sent."""
         try:
             await self.client.room_typing(room_id, True)
             if self.cfg.can("today"):
@@ -719,34 +723,35 @@ class Agent:
             reply = await self.responder.respond(
                 Turn(list(self.history), self.build_prompt(), self.reply_max_tokens, "reply"))
             if reply is None:
-                return  # already logged; stay silent
+                return False  # already logged; stay silent
             text = reply.text
             if reply.finish == "max_tokens":  # the cap cut it: never send half a sentence
                 text = trim_to_sentence(text)
                 if text is None:
                     log.info("silent: cut mid-sentence")
-                    return
+                    return False
             others = [n for n in {*self.names.values()} if n != self.cfg.name]
             text = clean_reply(text, self.cfg.name, others)
             if text is None:
                 log.info("silent: the reply spoke only for others")
-                return
+                return False
             text = strip_pass(text)  # PASS alone → silence; text + PASS → the text only
             if text is None:
                 log.info("silent: model passed")
-                return
+                return False
             if same_message(text, self._last_sent):
                 log.info("silent: duplicate of my previous message")
-                return
+                return False
             if trigger and not self._current(trigger, at_ms):
                 log.info("silent: moved on")
-                return
+                return False
             self._last_sent = text
             await self.client.room_send(
                 room_id=room_id,
                 message_type="m.room.message",
                 content={"msgtype": "m.text", "body": text},
             )
+            return True
         finally:
             await self.client.room_typing(room_id, False)
 

@@ -326,3 +326,39 @@ def test_the_fallback_answers_when_nobody_else_did(monkeypatch):
     agent.client.room_send.assert_awaited_once()
     asyncio.run(run(answered=True))
     agent.client.room_send.assert_not_awaited()
+
+
+def test_an_owner_message_during_an_agent_reply_is_answered_not_swallowed(monkeypatch):
+    """Code review #1: the owner writes while Ada generates her reply to Bruno; the pre-send R3 check drops the
+    stale reply, and the coalesced owner message gets its own pass — it is never lost."""
+    _fast(monkeypatch)
+
+    class InterruptingLLM(FakeLLM):
+        def __init__(self, agent_ref):
+            super().__init__()
+            self.agent_ref = agent_ref
+            self.n = 0
+
+        async def generate(self, transcript, system_instruction, max_output_tokens=400, kind="reply"):
+            self.n += 1
+            if self.n == 1:  # mid-generation: the owner names Ada
+                await self.agent_ref[0].on_message(*_ev("@ich:agora.lan", "Адо, а ти що скажеш?", 1_500, "$o2"))
+                return "відповідь Бруно"
+            return "відповідь власнику"
+
+    ref = []
+    agent = make_agent(InterruptingLLM(ref))
+    ref.append(agent)
+    agent.started = True
+    agent.rng = lambda: 0.0
+
+    async def run():
+        agent.timeline.append(("Ich", 0, "$o"))
+        await agent.on_message(*_ev("@bruno:agora.lan", "б1", 1_000, "$b1"))  # Ada is the next speaker
+        while agent._tasks:
+            for t in list(agent._tasks):
+                await t
+
+    asyncio.run(run())
+    agent.client.room_send.assert_awaited_once()
+    assert agent.client.room_send.await_args.kwargs["content"]["body"] == "відповідь власнику"
