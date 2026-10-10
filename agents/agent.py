@@ -363,12 +363,18 @@ class Agent:
     async def fallback_later(self, room_id: str, event_id: str) -> None:
         try:
             await asyncio.sleep(self.fallback_s)
-            if not fallback_due(self.timeline, event_id) or self._reply_pending:
+            for _ in range(6):  # busy with another reply: re-arm briefly instead of giving up (code review #3)
+                if not fallback_due(self.timeline, event_id):
+                    return
+                if not self._reply_pending:
+                    break
+                await asyncio.sleep(5)
+            else:
                 return
             log.info("reply: fallback — nobody answered the owner")
             self._reply_pending = True
             try:
-                await self.reply(room_id)
+                await self.reply(room_id, fallback_for=event_id)
             finally:
                 self._reply_pending = False
         except Exception:
@@ -718,7 +724,8 @@ class Agent:
         finally:
             self._reply_pending = False
 
-    async def reply(self, room_id: str, trigger: str | None = None, at_ms: int | None = None) -> bool:
+    async def reply(self, room_id: str, trigger: str | None = None, at_ms: int | None = None,
+                    fallback_for: str | None = None) -> bool:
         """Typing on → Gemini → m.text; silence on failure or PASS; typing reset in finally. An agent-to-agent
         reply (`trigger`) is re-checked before sending (R3): the room may have moved on during generation.
         Returns whether a message was sent."""
@@ -753,6 +760,9 @@ class Agent:
                 return False
             if trigger and not self._current(trigger, at_ms):
                 log.info("silent: moved on")
+                return False
+            if fallback_for and not fallback_due(self.timeline, fallback_for):  # a slow answer landed meanwhile
+                log.info("silent: the owner was answered meanwhile")
                 return False
             self._last_sent = text
             await self.client.room_send(

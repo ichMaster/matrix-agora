@@ -409,3 +409,59 @@ def test_r4_resumes_when_only_the_reservation_blocks(monkeypatch):
 
     asyncio.run(run())
     agent.client.room_send.assert_awaited_once()
+
+
+def _fallback_agent(llm):
+    agent = Agent(CFG, llm=llm, roster=_three())
+    agent.client = SimpleNamespace(room_send=AsyncMock(), room_typing=AsyncMock())
+    agent.started = True
+    agent.rng = lambda: 0.0
+    return agent
+
+
+def test_the_fallback_does_not_double_answer_a_slow_chosen_agent(monkeypatch):
+    """Code review #3: Bruno's slow answer lands while Ada's fallback generates — Ada stays silent."""
+    _fast(monkeypatch)
+    ref = []
+
+    class SlowAnswerLands(FakeLLM):
+        async def generate(self, transcript, system_instruction, max_output_tokens=400, kind="reply"):
+            ref[0].timeline.append(("Бруно", 31_000, "$late"))
+            return "запізніла відповідь"
+
+    agent = _fallback_agent(SlowAnswerLands())
+    ref.append(agent)
+
+    async def run():
+        await agent.on_message(*_ev("@ich:agora.lan", "як справи?", 0, "$own1"))  # Ada: the fallback
+        while agent._tasks:
+            for t in list(agent._tasks):
+                await t
+
+    asyncio.run(run())
+    agent.client.room_send.assert_not_awaited()
+
+
+def test_a_busy_agent_retries_the_fallback_instead_of_dropping_it(monkeypatch):
+    """Code review #3: Ada is busy when the fallback fires; it re-arms and answers once she is free."""
+    real_sleep = asyncio.sleep
+    calls = []
+
+    async def counted_sleep(_):
+        calls.append(1)
+        if len(calls) == 2:  # the first re-arm: Ada finishes her other reply
+            agent._reply_pending = False
+        await real_sleep(0)
+
+    monkeypatch.setattr("agents.agent.asyncio.sleep", counted_sleep)
+    agent = _fallback_agent(FakeLLM())
+
+    async def run():
+        await agent.on_message(*_ev("@ich:agora.lan", "як справи?", 0, "$own1"))
+        agent._reply_pending = True  # busy with something else when the fallback fires
+        while agent._tasks:
+            for t in list(agent._tasks):
+                await t
+
+    asyncio.run(run())
+    agent.client.room_send.assert_awaited_once()
