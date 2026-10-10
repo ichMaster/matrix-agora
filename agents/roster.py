@@ -29,6 +29,7 @@ TYPES: dict[str, frozenset[str]] = {
     # v4.3 — his fixed past-life theses (`pastlife`) and the only initiative in the room (`nudge`)
     "creature": frozenset({"canon", "life", "world", "mood", "pastlife", "nudge"}),
 }
+CREATURE_ONLY = frozenset({"pastlife", "nudge"})  # v4.3: no persona remembers a past life or speaks first
 ENGINES = ("gemini",)
 MODES = ("ranked", "ambient", "mention-only")
 
@@ -75,6 +76,9 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
         if cap not in CAPABILITIES or not isinstance(on, bool):
             raise RosterError(f"{source}: bad capability {cap!r} (true/false of: {', '.join(CAPABILITIES)})")
         (caps.add if on else caps.discard)(cap)
+    for cap in sorted(caps & CREATURE_ONLY):
+        if kind != "creature":  # the past life and the initiative are the cat's alone (v4.3 review #6)
+            raise RosterError(f"{source}: '{cap}' belongs to the creature type only")
     turns = data.get("turns", {})
     if not isinstance(turns, dict):
         raise RosterError(f"{source}: [turns] must be a table")
@@ -131,6 +135,9 @@ def load_roster(sim_id: str, registry_path: Path = REGISTRY_PATH, agents_dir: Pa
             if strict_for is None or name == strict_for:
                 raise
             log.error("roster: skipping %s — %s", name, exc)
+    initiators = [n for n, m in roster.items() if m.can("nudge")]
+    if len(initiators) > 1:  # the only initiator (v4.3): two would race on the same silence (review #6)
+        raise RosterError(f"{sim_id}: only one member may start conversations, got {', '.join(initiators)}")
     return roster
 
 

@@ -262,3 +262,23 @@ def test_a_broken_other_member_is_skipped_but_ones_own_still_refuses(tmp_path):
         load_roster("sim", reg, agents, strict_for="kit")             # Кіт loading his own: refuses
     with pytest.raises(RosterError):
         load_roster("sim", reg, agents)                               # the strict default (the panel tolerates by itself)
+
+
+@pytest.mark.parametrize("cap", ["nudge", "pastlife"])
+def test_only_a_creature_may_remember_a_past_life_or_speak_first(cap):
+    """v4.3 review #6: «no other agent ever initiates» — a persona override is a named error."""
+    data = {"name": "Ада", "user_id": "@ada:agora.lan", "capabilities": {cap: True}}
+    with pytest.raises(RosterError, match=f"'{cap}' belongs to the creature type only"):
+        parse_member("ada", data)
+    assert parse_member("kit", {"name": "Кіт", "user_id": "@kit:agora.lan", "type": "creature"}).can(cap)
+
+
+def test_a_room_has_at_most_one_initiator(tmp_path):
+    """v4.3 review #6: two creatures with `nudge` would race on the same silence."""
+    reg, agents = write_roster(tmp_path, 'name = "Кіт"\nuser_id = "@kit:agora.lan"\ntype = "creature"\n')
+    (agents / "bruno.toml").write_text('name = "Бруно"\nuser_id = "@bruno:agora.lan"\ntype = "creature"\n')
+    with pytest.raises(RosterError, match="only one member may start conversations"):
+        load_roster("sim", reg, agents)
+    (agents / "bruno.toml").write_text('name = "Бруно"\nuser_id = "@bruno:agora.lan"\ntype = "creature"\n'
+                                       '[capabilities]\nnudge = false\n')
+    assert [n for n, m in load_roster("sim", reg, agents).items() if m.can("nudge")] == ["kit"]
