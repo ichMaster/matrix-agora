@@ -3,6 +3,13 @@ user_id = "@bruno:agora.lan"
 canon = "agents/canon/bruno.md"
 life = "agents/canon/bruno.life.md"
 simulation = "agora"
+type = "persona"         # v4.1: the type sets the capabilities (canon, life, memories, plans, today, …)
+engine = "gemini"
+name_forms = ["бруно"]  # what addresses this agent in the room (any case, a whole word)
+
+[turns]
+mode = "ranked"         # ranked | ambient | mention-only
+weight = 1.0
 
 [panel]                 # shown by the panel only — never part of a prompt
 name = "Bruno"

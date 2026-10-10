@@ -67,6 +67,7 @@ from agents.plans import (
     split_summary,
     strip_tags,
 )
+from agents.roster import Member, load_roster
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.session import load_session, save_session
 from agents.turns import bot_streak, decide_reply, streak_frees_at, strip_pass
@@ -84,13 +85,14 @@ from agents.world import (
 
 log = logging.getLogger("agent")
 
-OTHER = {"ada": "@bruno:agora.lan", "bruno": "@ada:agora.lan"}
-
-
 class Agent:
-    def __init__(self, cfg: AgentConfig, llm: GeminiClient | None = None) -> None:
+    def __init__(self, cfg: AgentConfig, llm: GeminiClient | None = None,
+                 roster: dict[str, Member] | None = None) -> None:
         self.cfg = cfg
-        self.other = OTHER.get(cfg.localpart)
+        # the room's members come from the registry (v4.1): nothing in the code names them
+        self.roster = roster if roster is not None else load_roster(cfg.simulation)
+        self.me = self.roster.get(cfg.localpart) or Member(cfg.localpart, cfg.user_id, cfg.name, (cfg.name.lower(),))
+        self.others = {m.user_id: m for m in self.roster.values() if m.user_id != cfg.user_id}
         self.client = AsyncClient(cfg.homeserver, cfg.user_id)
         self.started = False  # flips True after the first sync; nothing earlier is handled
         self.llm = llm or GeminiClient(sink=self.record_usage)
@@ -102,10 +104,7 @@ class Agent:
         self.bot_window_ms = int(float(os.environ.get("BOT_WINDOW_S", "600")) * 1000)
         self.timeline: list[tuple[str, int]] = []  # (name, server_ts_ms), parallel to history
         self.rng = random.random  # injectable in tests
-        self.names = {cfg.user_id: cfg.name, cfg.owner: "Ich"}
-        if self.other:
-            self.names[self.other] = "Ада" if "ada" in self.other else "Бруно"
-        self.other_name = self.names.get(self.other) if self.other else None
+        self.names = {cfg.user_id: cfg.name, cfg.owner: "Ich", **{uid: m.name for uid, m in self.others.items()}}
         self.summary: str | None = None  # last-session memory (v2.1)
         self.memory_file = cfg.memory_file
         self.session: list[tuple[str, str]] = []  # every room message since the last summary
@@ -230,17 +229,19 @@ class Agent:
                 speaker = self.names.get(event.sender, event.sender)
                 self.history = append_history(self.history, speaker, event.body, self.history_n)
                 self.timeline = [*self.timeline, (speaker, now_ms)][-max(self.history_n, 1):]
-                self.session.append((speaker, event.body))
                 self.last_activity_ms = self.clock()
+                if self.cfg.can("summary"):
+                    self.session.append((speaker, event.body))
                 if len(self.session) > 2 * self.session_max:
                     self.session = self.session[-2 * self.session_max:]  # bounded even if summaries fail
                 if (
-                    len(self.session) >= self.session_max
+                    self.cfg.can("summary")
+                    and len(self.session) >= self.session_max
                     and not self._summary_lock.locked()
                     and (self.last_attempt_ms is None or self.clock() - self.last_attempt_ms >= 60_000)
                 ):
                     self._spawn(self.summarize())  # timeline cap → early summary (rate-limited)
-            verdict = should_handle(room.room_id, event.sender, self.cfg, self.other)
+            verdict = should_handle(room.room_id, event.sender, self.cfg, self.others)
             if not verdict.handle:
                 log.info("ignored: %s (room %s)", verdict.reason, room.room_id)
                 return
@@ -265,7 +266,7 @@ class Agent:
         return decide_reply(
             sender, text,
             bot_streak(self.timeline[:-1], "Ich", now_ms, self.bot_window_ms),
-            self.cfg, self.other, self.other_name,
+            self.cfg, self.me, self.others,
             max_bot_turns=self.max_bot_turns,
             bot_reply_p=self.bot_reply_p,
             reply_delay_s=self.reply_delay_s,
@@ -307,16 +308,20 @@ class Agent:
 
     def build_prompt(self) -> str:
         """The full system instruction for a reply, in contract order."""
+        can = self.cfg.can
         now = local_now(self.clock(), self.tz)
-        world = now_line(now, self.location)
-        if self.summary_ms is not None:
-            world += " " + last_talk_line(local_now(self.summary_ms, self.tz), now)
-        life = life_section(self.cfg.life, now.date()) if self.cfg.life else None
+        world = None
+        if can("world"):
+            world = now_line(now, self.location)
+            if self.summary_ms is not None:
+                world += " " + last_talk_line(local_now(self.summary_ms, self.tz), now)
+        life = life_section(self.cfg.life, now.date()) if can("life") and self.cfg.life else None
         return build_instruction(
-            self.cfg.name, self.cfg.canon, self.summary,
+            self.cfg.name, self.cfg.canon if can("canon") else "", self.summary if can("summary") else None,
             life=life, world=world,
-            memories=self.memories_section(now), plans=self.plans_section(now),
-            today=self.today_section(now),
+            memories=self.memories_section(now) if can("chronicle") else None,
+            plans=self.plans_section(now) if can("plans") else None,
+            today=self.today_section(now) if can("today") else None,
         )
 
     # --- v2.2: files under state/ -------------------------------------------------
@@ -550,6 +555,8 @@ class Agent:
     async def world_tick(self, force: bool = False) -> None:
         """Day-boundary work: catch up day memories, digests, then today's plans.
         Cheap when nothing is due; a failure backs off for 10 minutes."""
+        if not (self.cfg.can("chronicle") or self.cfg.can("plans")):
+            return
         now_ms = self.clock()
         today = local_now(now_ms, self.tz).date()
         if now_ms < self._gen_retry_ms:
@@ -560,18 +567,19 @@ class Agent:
             return
         async with self._gen_lock:
             self._last_world_check_ms, self._last_world_day = now_ms, today
-            first = self.first_run(today)
             ok = True
-            for d in days_due(today, first, self._dates_in("days"), self.memory_days):
-                ok = ok and await self.ensure_day_memory(d)
-            day_files = self._dates_in("days")
-            for m in weeks_due(today, first, self._dates_in("weeks"), day_files):
-                ok = ok and await self.ensure_digest("week", m)
-            for ym in months_due(today, first, self._dates_in("months"), day_files):
-                ok = ok and await self.ensure_digest("month", ym)
-            for y in years_due(today, first, self._dates_in("years"), self._dates_in("months")):
-                ok = ok and await self.ensure_digest("year", y)
-            if ok:
+            if self.cfg.can("chronicle"):
+                first = self.first_run(today)
+                for d in days_due(today, first, self._dates_in("days"), self.memory_days):
+                    ok = ok and await self.ensure_day_memory(d)
+                day_files = self._dates_in("days")
+                for m in weeks_due(today, first, self._dates_in("weeks"), day_files):
+                    ok = ok and await self.ensure_digest("week", m)
+                for ym in months_due(today, first, self._dates_in("months"), day_files):
+                    ok = ok and await self.ensure_digest("month", ym)
+                for y in years_due(today, first, self._dates_in("years"), self._dates_in("months")):
+                    ok = ok and await self.ensure_digest("year", y)
+            if ok and self.cfg.can("plans"):
                 await self.ensure_plans(today)
                 ok = all(p.exists() for p in self.plan_paths(today).values())
             if not ok:
@@ -633,10 +641,11 @@ class Agent:
         """Typing on → Gemini → m.text; silence on failure or PASS; typing reset in finally."""
         try:
             await self.client.room_typing(room_id, True)
-            try:
-                await self.ensure_today(local_now(self.clock(), self.tz))
-            except Exception:
-                log.exception("today block refresh failed (reply continues)")
+            if self.cfg.can("today"):
+                try:
+                    await self.ensure_today(local_now(self.clock(), self.tz))
+                except Exception:
+                    log.exception("today block refresh failed (reply continues)")
             text = await self.llm.generate(build_transcript(self.history), self.build_prompt(), kind="reply")
             if text is None:
                 return  # already logged; stay silent
@@ -698,7 +707,8 @@ class Agent:
                 log.exception("world tick failed (bot keeps running)")
             now = self.clock()
             if (
-                self.session
+                self.cfg.can("summary")
+                and self.session
                 and session_ended(self.last_activity_ms, now, self.idle_ms)
                 and (self.last_attempt_ms is None or now - self.last_attempt_ms >= self.idle_ms)
             ):
@@ -706,13 +716,15 @@ class Agent:
 
     async def shutdown(self, timeout_s: float = 20.0) -> None:
         """The shutdown summary, bounded so Ctrl+C never hangs."""
+        if not self.cfg.can("summary"):
+            return
         try:
             await asyncio.wait_for(self.summarize(), timeout=timeout_s)
         except TimeoutError:
             log.error("shutdown summary timed out after %.0fs — keeping the previous one", timeout_s)
 
     async def run(self) -> None:
-        self.summary = load_memory(self.memory_file)
+        self.summary = load_memory(self.memory_file) if self.cfg.can("summary") else None
         if self.summary:
             self.summary_ms = int(self.memory_file.stat().st_mtime * 1000)
             log.info("%s: last-session memory loaded", self.cfg.localpart)

@@ -1,7 +1,12 @@
 import pytest
 
+from agents.roster import load_roster
 from agents.turns import bot_streak, decide_reply, is_pass, mentions, strip_pass
 from tests.test_logic import CFG, OTHER
+
+ROSTER = load_roster("agora")  # the real registry + TOMLs: forms come from agents/<name>.toml (v4.1)
+ME, BRUNO = ROSTER["ada"], ROSTER["bruno"]
+OTHERS = {BRUNO.user_id: BRUNO}
 
 KW = {"max_bot_turns": 2, "bot_reply_p": 0.5, "reply_delay_s": 4.0}
 
@@ -21,49 +26,49 @@ def rng(v):
     ("ада!", True),                   # case-insensitive, punctuation boundary
 ])
 def test_mentions_ada(text, expect):
-    assert mentions(text, "Ада", "@ada:agora.lan") is expect
+    assert mentions(text, ME.name_forms, "@ada:agora.lan") is expect
 
 
 # --- who replies ---
 def test_owner_mentioning_me_replies_now():
-    d = decide_reply(CFG.owner, "Адо, як ти?", 0, CFG, OTHER, "Бруно", rng=rng(0.9), **KW)
+    d = decide_reply(CFG.owner, "Адо, як ти?", 0, CFG, ME, OTHERS, rng=rng(0.9), **KW)
     assert d.reply and d.delay_s == 0.0
 
 
 def test_owner_mentioning_the_other_means_silence():
-    d = decide_reply(CFG.owner, "Бруно, як ти?", 0, CFG, OTHER, "Бруно", rng=rng(0.0), **KW)
+    d = decide_reply(CFG.owner, "Бруно, як ти?", 0, CFG, ME, OTHERS, rng=rng(0.0), **KW)
     assert not d.reply and d.reason == "owner-mentioned-other"
 
 
 def test_owner_no_mention_replies_with_delay_in_bounds():
     for v in (0.0, 0.5, 0.999):
-        d = decide_reply(CFG.owner, "всім привіт", 0, CFG, OTHER, "Бруно", rng=rng(v), **KW)
+        d = decide_reply(CFG.owner, "всім привіт", 0, CFG, ME, OTHERS, rng=rng(v), **KW)
         assert d.reply and 1.0 <= d.delay_s <= 4.0
 
 
 def test_agent_reply_gated_by_streak():
-    d = decide_reply(OTHER, "думка", 2, CFG, OTHER, "Бруно", rng=rng(0.0), **KW)
+    d = decide_reply(OTHER, "думка", 2, CFG, ME, OTHERS, rng=rng(0.0), **KW)
     assert not d.reply and d.reason == "streak-limit"
 
 
 def test_agent_reply_gated_by_probability():
-    assert not decide_reply(OTHER, "думка", 0, CFG, OTHER, "Бруно", rng=rng(0.6), **KW).reply
-    assert decide_reply(OTHER, "думка", 0, CFG, OTHER, "Бруно", rng=rng(0.4), **KW).reply
+    assert not decide_reply(OTHER, "думка", 0, CFG, ME, OTHERS, rng=rng(0.6), **KW).reply
+    assert decide_reply(OTHER, "думка", 0, CFG, ME, OTHERS, rng=rng(0.4), **KW).reply
 
 
 def test_agent_addressing_me_by_name_skips_the_coin_flip():
     # rng 0.99 would fail the BOT_REPLY_P=0.5 gate — the direct address wins
-    d = decide_reply(OTHER, "Адо, а ти як думаєш?", 0, CFG, OTHER, "Бруно", rng=rng(0.99), **KW)
+    d = decide_reply(OTHER, "Адо, а ти як думаєш?", 0, CFG, ME, OTHERS, rng=rng(0.99), **KW)
     assert d.reply and d.reason == "agent-mentioned-me"
 
 
 def test_agent_addressing_me_is_still_bounded_by_the_streak():
-    d = decide_reply(OTHER, "Адо, а ти?", 2, CFG, OTHER, "Бруно", rng=rng(0.0), **KW)
+    d = decide_reply(OTHER, "Адо, а ти?", 2, CFG, ME, OTHERS, rng=rng(0.0), **KW)
     assert not d.reply and d.reason == "streak-limit"
 
 
 def test_unknown_sender_is_silent():
-    assert not decide_reply("@mallory:agora.lan", "hi", 0, CFG, OTHER, "Бруно", rng=rng(0.0), **KW).reply
+    assert not decide_reply("@mallory:agora.lan", "hi", 0, CFG, ME, OTHERS, rng=rng(0.0), **KW).reply
 
 
 # --- bot_streak from the shared timeline ---

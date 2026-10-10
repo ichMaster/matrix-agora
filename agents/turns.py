@@ -7,16 +7,11 @@ timeline, so the count agrees with no shared state.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 
 from agents.config import AgentConfig
-
-# Ukrainian case forms of the agent names (lowercase). Бруно is invariant.
-NAME_FORMS = {
-    "Ада": ["ада", "ади", "аді", "аду", "адою", "адо"],
-    "Бруно": ["бруно"],
-}
+from agents.roster import Member
 
 PASS_RE = re.compile(r"^\W*PASS\W*$")
 TRAILING_PASS_RE = re.compile(r"\s*\bPASS\W*$")
@@ -29,12 +24,12 @@ class ReplyDecision:
     reason: str = ""
 
 
-def mentions(text: str, name: str, user_id: str) -> bool:
-    """True when `text` names this agent (any case form) or its Matrix id."""
+def mentions(text: str, forms: Iterable[str], user_id: str) -> bool:
+    """True when `text` names this agent — any of its `name_forms` from the roster, as a whole word — or its
+    Matrix id."""
     low = text.lower()
     if user_id.lower() in low:
         return True
-    forms = NAME_FORMS.get(name, [name.lower()])
     return any(re.search(rf"(?<!\w){re.escape(f)}(?!\w)", low) for f in forms)
 
 
@@ -80,8 +75,8 @@ def decide_reply(
     text: str,
     streak: int,
     cfg: AgentConfig,
-    other_agent: str | None,
-    other_name: str | None,
+    me: Member,
+    others: Mapping[str, Member],
     *,
     max_bot_turns: int,
     bot_reply_p: float,
@@ -90,17 +85,17 @@ def decide_reply(
 ) -> ReplyDecision:
     """The who-replies rule for one incoming, already-allowlisted message."""
     if sender == cfg.owner:
-        mine = mentions(text, cfg.name, cfg.user_id)
-        others = bool(other_name) and mentions(text, other_name, other_agent or "")
+        mine = mentions(text, me.name_forms, cfg.user_id)
+        named_other = any(mentions(text, m.name_forms, m.user_id) for m in others.values())
         if mine:
             return ReplyDecision(True, 0.0, "owner-mentioned-me")
-        if others:
+        if named_other:
             return ReplyDecision(False, reason="owner-mentioned-other")
         return ReplyDecision(True, 1.0 + rng() * max(reply_delay_s - 1.0, 0.0), "owner-no-mention")
-    if other_agent and sender == other_agent:
+    if sender in others:
         if streak >= max_bot_turns:
             return ReplyDecision(False, reason="streak-limit")
-        if mentions(text, cfg.name, cfg.user_id):
+        if mentions(text, me.name_forms, cfg.user_id):
             # addressed by name: answer for sure — still bounded by the streak above
             return ReplyDecision(True, 1.0 + rng() * max(reply_delay_s - 1.0, 0.0), "agent-mentioned-me")
         if rng() >= bot_reply_p:

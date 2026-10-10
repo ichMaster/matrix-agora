@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 from agents.life import LifeError, LifeStory, parse_life
 from agents.registry import REGISTRY_PATH, RegistryError, load_registry
+from agents.roster import TYPES, RosterError, parse_member
 
 
 class ConfigError(RuntimeError):
@@ -35,6 +36,12 @@ class AgentConfig:
     password: str
     life: LifeStory | None = None  # the life story (v2.2); optional only for tests
     simulation: str = "agora"  # the registry entry it joins (v3.3)
+    type: str = "persona"  # the agent type (v4.1); it sets the capabilities
+    engine: str = "gemini"
+    capabilities: frozenset[str] = TYPES["persona"]
+
+    def can(self, capability: str) -> bool:
+        return capability in self.capabilities
 
     @property
     def localpart(self) -> str:
@@ -83,17 +90,25 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         data = tomllib.loads(toml_path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
         raise ConfigError(f"agent config not found: {toml_path}") from exc
-    for key in ("name", "user_id", "canon", "life", "simulation"):
+    try:
+        member = parse_member(toml_path.stem, data, str(toml_path))
+    except RosterError as exc:
+        raise ConfigError(str(exc)) from exc
+    # canon and life are required only when the agent's type has them (a persona has both)
+    required = [k for k in ("name", "user_id", "canon", "life", "simulation") if k not in ("canon", "life") or member.can(k)]
+    for key in required:
         if not str(data.get(key, "")).strip():
             raise ConfigError(f"{toml_path}: missing '{key}'")
-    canon = load_canon(COMMON_CANON, Path(str(data["canon"])))
-    life_path = Path(str(data["life"]))
-    try:
-        life = parse_life(life_path.read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise ConfigError(f"life story not found: {life_path}") from exc
-    except LifeError as exc:
-        raise ConfigError(f"{life_path}: {exc}") from exc
+    canon = load_canon(COMMON_CANON, Path(str(data["canon"]))) if member.can("canon") else ""
+    life = None
+    if member.can("life"):
+        life_path = Path(str(data["life"]))
+        try:
+            life = parse_life(life_path.read_text(encoding="utf-8"))
+        except FileNotFoundError as exc:
+            raise ConfigError(f"life story not found: {life_path}") from exc
+        except LifeError as exc:
+            raise ConfigError(f"{life_path}: {exc}") from exc
 
     if env is None:
         load_dotenv()
@@ -120,4 +135,7 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         password=_require(env, f"{localpart.upper()}_PASSWORD"),
         life=life,
         simulation=sim_id,
+        type=member.type,
+        engine=member.engine,
+        capabilities=member.capabilities,
     )

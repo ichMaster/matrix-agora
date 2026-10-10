@@ -90,7 +90,7 @@ The invariants every reply path must honor:
 4. **Message filter** (`RoomMessageText` only — edits, notices and other event types never trigger a reply). Handle a message only if all hold:
    - `room.room_id == ROOM_ID`;
    - `event.sender != own user_id`;
-   - `event.sender ∈ {OWNER, the other agent's user_id}` — an **allowlist in code**, like `LUMI_TELEGRAM_ALLOWLIST` in Lili.
+   - `event.sender ∈ {OWNER} ∪ the roster's other members` — an **allowlist in code**, like `LUMI_TELEGRAM_ALLOWLIST` in Lili. The **roster** (from v4.1) is the simulation's `agents` list in `simulations.toml` plus each listed `agents/<name>.toml` (`agents/roster.py`); every image ships the same files, so every agent sees the same roster — shared input, never shared state.
    Everything else is logged as `ignored`.
 5. **Typing:** `room_typing(room_id, True)` before the Gemini call and `False` after it, reset in a `finally`.
 6. **Send as `m.text`**, never `m.notice` — the other agent might treat a notice as a service message.
@@ -103,7 +103,7 @@ Keep the decisions pure: the filter, mention detection, `bot_streak`, who-replie
 The agents see each other, so without rules they would reply to each other endlessly.
 
 1. **The owner's message:**
-   - mentions one agent (by name or mention) — **only that agent** replies; mention detection must handle Ukrainian case forms (the vocative «Адо» for Ада);
+   - mentions one agent (by name or mention) — **only that agent** replies; mention detection must handle Ukrainian case forms (the vocative «Адо» for Ада) — from v4.1 the forms are each agent's TOML `name_forms`, whole words, plus its Matrix id;
    - mentions no one — **both** reply, each after a random delay of 1–`REPLY_DELAY_S` s (default 4), so they don't speak at once and the second sees the first's line in history.
 2. **The other agent's message:** reply only if `bot_streak < MAX_BOT_TURNS` (default 2). If it addresses this agent by name (any case form) or Matrix id, reply for sure; otherwise with probability `BOT_REPLY_P` (e.g. 0.5), so the conversation isn't mechanical. The streak bound applies either way.
    - `bot_streak` = consecutive agent messages since the owner's last message **within the last `BOT_WINDOW_S`** (default 600 s), counted by server timestamps. Both agents compute it from the same room timeline, so the count agrees **without any shared state or coordination** — never add any.
@@ -193,12 +193,12 @@ The panel is the point of the whole project (VISION §The direction). One FastAP
 Changing any of these updates this document and the test that pins it, in the same commit:
 
 - The env var names in `.env.example` and `server/.env.example`.
-- The agent TOML schema (`name`, `user_id`, `canon`, `life`, `simulation`, and the panel-only `[panel] name` / `role`) and the `agents/canon/` layout.
+- The agent TOML schema (`name`, `user_id`, `canon`, `life`, `simulation`; from v4.1 `type` (`persona`), `engine` (`gemini`), `name_forms` (the lowercase forms that address the agent), `[capabilities]` (overrides of the type's defaults: `canon`, `life`, `summary`, `chronicle`, `plans`, `today`, `world` — a persona has all; `canon` and `life` are required only when the type has them) and `[turns]` (`mode` = `ranked` | `ambient` | `mention-only`, `weight` > 0); and the panel-only `[panel] name` / `role` / `pronoun`), parsed by `agents/roster.py` (pinned by `tests/test_roster.py`), and the `agents/canon/` layout.
 - The simulation registry `simulations.toml` (repo root): per entry `kind` (`matrix-chat`), `title`, `description`, `services`, `agents`, `health {service, port, path}`, `endpoints {homeserver, room}` — the env names its agents connect with; an agent belongs to one simulation (pinned by `tests/test_registry.py`).
 - The plan file format: items plus hidden mutation tags, which never reach a conversational prompt (pinned by a test).
 - The life-story format (header lines, `## YYYY–YYYY · title` chapters) and its visibility rule: future chapters and the death date never reach the conversational prompt (pinned by a test).
 - The `state/` files: `<name>.json` (session), `<name>.memory.md`, `<name>.days/YYYY-MM-DD.md` + `.talk.md`, `<name>.weeks/YYYY-MM-DD.md`, `<name>.months/YYYY-MM.md`, `<name>.years/YYYY.md`, `<name>.plans/` (year, month, week and day plans, with hidden mutation tags), `<name>.today.md`, `<name>.usage.jsonl` (its fields), `<name>.lock`, `logs/<name>.log`.
-- The message filter and allowlist rule.
+- The message filter and allowlist rule (`{OWNER} ∪` the roster's other members, pinned by `tests/test_logic.py`).
 - The transcript format (`"Name: text"` per line), the `PASS` sentinel, and the prompt-assembly order.
 - The turn-taking semantics (who replies, `bot_streak`).
 - The `server/docker-compose.yml` environment (server name, federation, encryption, registration). `CONTINUWUITY_SERVER_NAME` cannot change without wiping the database.

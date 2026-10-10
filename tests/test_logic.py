@@ -8,6 +8,7 @@ CFG = AgentConfig(
     homeserver="http://hs", room_id="!room", owner="@ich:agora.lan", password="pw",
 )
 OTHER = "@bruno:agora.lan"
+OTHERS = {OTHER}  # the roster's other members (v4.1)
 
 
 @pytest.mark.parametrize("room,sender,expect,reason", [
@@ -19,13 +20,22 @@ OTHER = "@bruno:agora.lan"
     ("!room", "@mallory:agora.lan", False, "sender-not-allowlisted"),
 ])
 def test_filter_table(room, sender, expect, reason):
-    v = should_handle(room, sender, CFG, OTHER)
+    v = should_handle(room, sender, CFG, OTHERS)
     assert (v.handle, v.reason) == (expect, reason)
 
 
 def test_filter_without_other_agent_allows_owner_only():
-    assert should_handle("!room", OTHER, CFG, other_agent=None).handle is False
-    assert should_handle("!room", "@ich:agora.lan", CFG, other_agent=None).handle is True
+    assert should_handle("!room", OTHER, CFG, others=()).handle is False
+    assert should_handle("!room", "@ich:agora.lan", CFG, others=()).handle is True
+
+
+def test_the_allowlist_is_the_owner_plus_every_other_roster_member():
+    """v4.1: a roster of three — both others pass, self never does, a stranger is ignored."""
+    roster = {"@ada:agora.lan", OTHER, "@kit:agora.lan"}
+    assert should_handle("!room", OTHER, CFG, roster).handle is True
+    assert should_handle("!room", "@kit:agora.lan", CFG, roster).handle is True
+    assert should_handle("!room", "@ada:agora.lan", CFG, roster).reason == "own-message"
+    assert should_handle("!room", "@mallory:agora.lan", CFG, roster).reason == "sender-not-allowlisted"
 
 
 @pytest.mark.parametrize("room,inviter,expect", [

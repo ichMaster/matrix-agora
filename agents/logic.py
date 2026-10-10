@@ -5,6 +5,7 @@ ARCHITECTURE §Message flow: the filter and allowlist guard every reply path.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from agents.config import AgentConfig
@@ -16,13 +17,14 @@ class Verdict:
     reason: str  # "ok" when handle is True, otherwise why it was ignored
 
 
-def should_handle(room_id: str, sender: str, cfg: AgentConfig, other_agent: str | None = None) -> Verdict:
-    """The message filter: only the Agora room, never self, allowlisted senders only."""
+def should_handle(room_id: str, sender: str, cfg: AgentConfig, others: Iterable[str] = ()) -> Verdict:
+    """The message filter: only the Agora room, never self, allowlisted senders only — the owner and the other
+    members of the roster (their user ids)."""
     if room_id != cfg.room_id:
         return Verdict(False, "foreign-room")
     if sender == cfg.user_id:
         return Verdict(False, "own-message")
-    allow = {cfg.owner} | ({other_agent} if other_agent else set())
+    allow = {cfg.owner} | (set(others) - {cfg.user_id})
     if sender not in allow:
         return Verdict(False, "sender-not-allowlisted")
     return Verdict(True, "ok")
