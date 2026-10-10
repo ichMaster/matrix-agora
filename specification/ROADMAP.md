@@ -10,7 +10,7 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 ## Status
 
-v0–v3 are complete — delivered through `v3.4.0` (2026-10-04). **v4 has begun** — v4.1 released as `v4.1.0` (2026-10-10); its design is the draft
+v0–v3 are complete — delivered through `v3.4.0` (2026-10-04). **v4 has begun** — v4.1 released as `v4.1.0`, v4.2 as `v4.2.0` (both 2026-10-10); its design is the draft
 [features/more-agents.md](features/more-agents.md), whose open questions are closed before each v4 phase's issues
 are generated. Other further work (the deferred backlog items in the code-review docs, new simulations) needs new phases.
 
@@ -30,7 +30,7 @@ are generated. Other further work (the deferred backlog items in the code-review
 | v3.3 | The panel: viewing (read-only) | ✅ completed | `v3.3.0` (2026-10-04) |
 | v3.4 | The panel: control | ✅ completed | `v3.4.0` (2026-10-04) + `v3.4.1` |
 | v4.1 | Roster, agent types and N-agent turn-taking | ✅ completed | `v4.1.0` (2026-10-10) |
-| v4.2 | The cat in the room | ⏳ planned | — |
+| v4.2 | The cat in the room | ✅ completed | `v4.2.0` (2026-10-10) |
 | v4.3 | The cat: his past life and his initiative | ⏳ planned | — |
 | v4.4 | Claude on the subscription: answering when asked | ⏳ planned | — |
 | v4.5 | Claude the philosopher | ⏳ planned | — |
@@ -430,7 +430,7 @@ Still with Ada and Bruno only; this alone ends today's long threads. Design: mor
 
 ### v4.2 — The cat in the room
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v4.2.0` on 2026-10-10.
 
 **Goal:** a mystical, artificial cat joins the room — mostly purring, reacting now and then, his mood set each day by a horoscope built exactly as Lumi builds hers.
 
