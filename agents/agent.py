@@ -49,6 +49,7 @@ from agents.config import AgentConfig, load_config
 from agents.life import current_chapter, life_section, next_chapter
 from agents.llm import GeminiClient
 from agents.logic import (
+    CREATURE_RULES,
     append_history,
     build_instruction,
     clean_reply,
@@ -86,8 +87,10 @@ from agents.turns import (
     decide_reply,
     fallback_due,
     fallback_replier,
-    owner_repliers,
+    is_purr,
+    owner_speakers,
     pending_answers,
+    pick_purr,
     reservation_lapses_at,
     still_current,
     strip_pass,
@@ -128,6 +131,10 @@ class Agent:
         self.max_bot_turns = int(os.environ.get("MAX_BOT_TURNS", "3"))
         self.owner_repliers = int(os.environ.get("OWNER_REPLIERS", "2"))
         self.fallback_s = float(os.environ.get("FALLBACK_S", "30"))
+        # v4.2 — the cat (an ambient creature): how often he reacts unasked, how often a reaction is a purr, his cap
+        self.cat_react_p = float(os.environ.get("CAT_REACT_P", "0.3"))
+        self.cat_purr_p = float(os.environ.get("CAT_PURR_P", "0.8"))
+        self.cat_max_words = int(os.environ.get("CAT_MAX_WORDS", "12"))
         self.bot_reply_p = float(os.environ.get("BOT_REPLY_P", "0.5"))
         self.reply_delay_s = float(os.environ.get("REPLY_DELAY_S", "4"))
         self.bot_window_ms = int(float(os.environ.get("BOT_WINDOW_S", "600")) * 1000)
@@ -216,9 +223,9 @@ class Agent:
             speaker = self.names.get(e.sender, e.sender)
             if e.sender == self.cfg.owner:
                 self.last_owner = (str(getattr(e, "event_id", "")), e.body)
-            self.history = append_history(self.history, speaker, e.body, self.history_n)
-            self.timeline = [*self.timeline, (speaker, int(e.server_timestamp), str(getattr(e, "event_id", "")))
-                             ][-max(self.history_n, 1):]
+            self._add_context(speaker, e.body)
+            self.timeline = [*self.timeline, (speaker, int(e.server_timestamp), str(getattr(e, "event_id", "")),
+                                              is_purr(e.body))][-max(self.history_n, 1):]
         return len(texts[-self.history_n:])
 
     async def backfill(self, from_token: str) -> None:
@@ -265,12 +272,13 @@ class Agent:
             if room.room_id == self.cfg.room_id:
                 # the context window sees every room message, own and the other agent's included
                 speaker = self.names.get(event.sender, event.sender)
-                self.history = append_history(self.history, speaker, event.body, self.history_n)
-                self.timeline = [*self.timeline, (speaker, now_ms, event_id)][-max(self.history_n, 1):]
+                self._add_context(speaker, event.body)
+                self.timeline = [*self.timeline, (speaker, now_ms, event_id, is_purr(event.body))
+                                 ][-max(self.history_n, 1):]
                 if event.sender == self.cfg.owner:
                     self.last_owner = (event_id, event.body)
                 self.last_activity_ms = self.clock()
-                if self.cfg.can("summary"):
+                if self.cfg.can("summary") and not self._repeat_purr(self.session, speaker, event.body):
                     self.session.append((speaker, event.body))
                 if len(self.session) > 2 * self.session_max:
                     self.session = self.session[-2 * self.session_max:]  # bounded even if summaries fail
@@ -294,6 +302,10 @@ class Agent:
             if not decision.reply:
                 log.info("silent: %s", decision.reason)
                 return
+            if decision.purr:  # v4.2: a purr is produced in code — zero tokens, no pending reply
+                log.info("reply: %s (in %.1fs)", decision.reason, decision.delay_s)
+                self._spawn(self.purr_later(room.room_id, decision.delay_s, event_id))
+                return
             # An agent-to-agent reply carries its trigger for the fire-time re-check (R3); an answer to the owner
             # carries none. A newer trigger coalesces into the pending reply and becomes what it answers.
             trigger = event_id if event.sender != self.cfg.owner else None
@@ -316,7 +328,8 @@ class Agent:
         if self.last_owner is None:
             return 0
         eid, text = self.last_owner
-        chosen = {self.roster[n].name for n in owner_repliers(eid, text, self.roster, self.owner_repliers)}
+        chosen = {self.roster[n].name for n in owner_speakers(eid, text, self.roster, self.owner_repliers,
+                                                            self.cat_react_p, self.cat_purr_p)}
         chosen.discard(self.cfg.name)
         return pending_answers(self.timeline, eid, chosen, "Ich", now_ms, int(self.fallback_s * 1000))
 
@@ -326,11 +339,36 @@ class Agent:
             wave_count(self.timeline, "Ich", now_ms, self.bot_window_ms) + self.reserved(now_ms),
             self.cfg, self.me, self.roster,
             owner_repliers_k=self.owner_repliers,
+            react_p=self.cat_react_p,
+            purr_p=self.cat_purr_p,
             max_bot_turns=self.max_bot_turns,
             bot_reply_p=self.bot_reply_p,
             reply_delay_s=self.reply_delay_s,
             rng=self.rng,
         )
+
+    @staticmethod
+    def _repeat_purr(lines: list[tuple[str, str]], speaker: str, text: str) -> bool:
+        """A purr right after the same speaker's purr — it collapses into the earlier one (v4.2)."""
+        return bool(lines) and lines[-1][0] == speaker and is_purr(text) and is_purr(lines[-1][1])
+
+    def _add_context(self, speaker: str, text: str) -> None:
+        """The context window, with consecutive purrs collapsed so they never crowd out the talk."""
+        if self._repeat_purr(self.history, speaker, text):
+            self.history = [*self.history[:-1], (speaker, text)]
+        else:
+            self.history = append_history(self.history, speaker, text, self.history_n)
+
+    async def purr_later(self, room_id: str, delay_s: float, event_id: str) -> None:
+        try:
+            if delay_s > 0:
+                await asyncio.sleep(delay_s)
+            await self.client.room_send(
+                room_id=room_id, message_type="m.room.message",
+                content={"msgtype": "m.text", "body": pick_purr(event_id, self.cfg.localpart)},
+            )
+        except Exception:
+            log.exception("purr failed (bot keeps running)")
 
     def _spawn(self, coro) -> None:
         task = asyncio.create_task(coro)
@@ -419,6 +457,7 @@ class Agent:
             plans=self.plans_section(now) if can("plans") else None,
             today=self.today_section(now) if can("today") else None,
             mood=self.mood_section(now) if can("mood") else None,
+            rules_extra=CREATURE_RULES if self.cfg.type == "creature" else None,
         )
 
     # --- v2.2: files under state/ -------------------------------------------------
@@ -819,6 +858,8 @@ class Agent:
             if text is None:
                 log.info("silent: model passed")
                 return False
+            if self.cfg.type == "creature":  # v4.2: a small vocabulary, enforced
+                text = cap_words(text, self.cat_max_words)
             if same_message(text, self._last_sent):
                 log.info("silent: duplicate of my previous message")
                 return False

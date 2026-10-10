@@ -481,3 +481,77 @@ def test_a_non_persona_reply_that_would_out_a_persona_is_never_sent():
     persona = make_agent(FakeLLM("Бруно — бот у банку, кажуть."))  # a persona isn't guarded: its prompts are clean
     asyncio.run(persona.reply("!room"))
     persona.client.room_send.assert_awaited_once()
+
+
+# --- v4.2: the cat speaks — purrs at zero tokens, a capped short line, purrs collapse in the others' context --------
+def _cat_agent(llm):
+    from agents.config import AgentConfig
+    from agents.roster import TYPES
+    cfg = AgentConfig(**{**CFG.__dict__, "name": "Кіт", "user_id": "@kit:agora.lan", "type": "creature",
+                         "capabilities": TYPES["creature"] - {"mood"}})
+    agent = Agent(cfg, llm=llm)
+    agent.client = SimpleNamespace(room_send=AsyncMock(), room_typing=AsyncMock())
+    agent.started = True
+    agent.rng = lambda: 0.0
+    return agent
+
+
+def _draw_event(kind):
+    from agents.roster import load_roster
+    from agents.turns import ambient_draw
+    kit = load_roster("agora")["kit"]
+    return next(f"$c{i}" for i in range(2000) if ambient_draw(f"$c{i}", "як справи?", kit, 0.3, 0.8, True) == kind)
+
+
+def test_a_purr_is_sent_at_zero_tokens(monkeypatch):
+    _fast(monkeypatch)
+    llm = FakeLLM()
+    agent = _cat_agent(llm)
+
+    async def run():
+        await agent.on_message(*_ev("@ich:agora.lan", "як справи?", 0, _draw_event("purr")))
+        while agent._tasks:
+            for t in list(agent._tasks):
+                await t
+
+    asyncio.run(run())
+    from agents.turns import is_purr
+    agent.client.room_send.assert_awaited_once()
+    assert is_purr(agent.client.room_send.await_args.kwargs["content"]["body"])
+    assert llm.calls == []  # no model call for a purr
+
+
+def test_a_spoken_line_is_capped_to_the_cats_few_words(monkeypatch):
+    _fast(monkeypatch)
+    agent = _cat_agent(FakeLLM(" ".join(f"слово{i}" for i in range(20))))
+    agent.cat_max_words = 12
+
+    async def run():
+        await agent.on_message(*_ev("@ich:agora.lan", "як справи?", 0, _draw_event("speak")))
+        while agent._tasks:
+            for t in list(agent._tasks):
+                await t
+
+    asyncio.run(run())
+    body = agent.client.room_send.await_args.kwargs["content"]["body"]
+    assert len(body.split()) == 12 and body.endswith("…")
+
+
+def test_consecutive_purrs_collapse_in_the_others_context_and_nobody_answers_them():
+    agent = make_agent()
+    agent.started = True
+    agent.rng = lambda: 0.0
+
+    async def run():
+        await agent.on_message(*_ev("@ich:agora.lan", "привіт", 0, "$o"))
+        for t in list(agent._tasks):
+            t.cancel()
+        await asyncio.gather(*agent._tasks, return_exceptions=True)
+        agent.client.room_send.reset_mock()
+        for i, purr in enumerate(["Мрррр.", "Мур.", "*потягується*"]):
+            await agent.on_message(*_ev("@kit:agora.lan", purr, 1_000 + i, f"$p{i}"))
+        assert not agent._tasks  # a purr never schedules a reply
+
+    asyncio.run(run())
+    assert [line for line in agent.history if line[0] == "Кіт"] == [("Кіт", "*потягується*")]
+    assert agent.timeline[-1][3] is True

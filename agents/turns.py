@@ -24,8 +24,23 @@ _GROUP = r"(?:всі|усі|всім|усім|кожен|кожна|кожном
 GROUP_RE = re.compile(
     rf"^\W*{_GROUP}(?!\w)|(?<!\w){_GROUP}\s*(?:[,!?]|$)|(?<!\w)(?:ви|вам)\s+{_GROUP}(?!\w)", re.IGNORECASE)
 
-# a timeline entry: (speaker name, server_ts_ms, event_id) — the same for every agent in the room
-Entry = tuple[str, int, str]
+# a timeline entry: (speaker name, server_ts_ms, event_id[, purr]) — the same for every agent in the room
+Entry = tuple
+
+# v4.2 — the cat's purrs: produced in code (zero tokens); every agent recognises one in the timeline
+PURRS = ("Мрррр.", "Мур.", "Мур-мур…", "*потягується*", "*мружиться*", "Мрр… *позіхає*")
+PURR_RE = re.compile(r"^(?:\s*(?:м+у*р+(?:-м+у*р+)?|\*[^*\n]{1,30}\*)[\s.,!…]*)+$", re.IGNORECASE)
+
+
+def is_purr(text: str) -> bool:
+    """A purr-only line («Мрррр.», «мур-мур…», «*потягується*»): it never counts in a wave, never makes anyone
+    answer, and is transparent to "the latest message" (v4.2)."""
+    return bool(PURR_RE.match(text.strip())) if text and text.strip() else False
+
+
+def _real(timeline: list) -> list:
+    """The timeline without purrs."""
+    return [e for e in timeline if not (len(e) > 3 and e[3])]
 
 
 @dataclass(frozen=True)
@@ -33,6 +48,7 @@ class ReplyDecision:
     reply: bool
     delay_s: float = 0.0
     reason: str = ""
+    purr: bool = False  # v4.2: the reply is a purr, produced in code
 
 
 def mentions(text: str, forms: Iterable[str], user_id: str) -> bool:
@@ -97,7 +113,7 @@ def wave_count(timeline: list[Entry], owner_name: str, now_ms: int | None = None
     rate (MAX_BOT_TURNS per window), not a lock until the owner speaks. Replaces v1.2's `bot_streak`, which
     excluded the answered message: the same behavior needs MAX_BOT_TURNS + 1."""
     n = 0
-    for name, ts, *_ in reversed(timeline):
+    for name, ts, *_ in reversed(_real(timeline)):
         if name == owner_name:
             break
         if window_ms is not None and now_ms is not None and int(ts) < now_ms - window_ms:
@@ -109,7 +125,7 @@ def wave_count(timeline: list[Entry], owner_name: str, now_ms: int | None = None
 def wave_frees_at(timeline: list[Entry], owner_name: str, now_ms: int, window_ms: int, max_turns: int) -> int | None:
     """When a blocked wave drops below `max_turns` (server ms), or None if it is not blocked."""
     counted: list[int] = []
-    for name, ts, *_ in reversed(timeline):
+    for name, ts, *_ in reversed(_real(timeline)):
         if name == owner_name or ts < now_ms - window_ms:
             break
         counted.append(ts)
@@ -124,18 +140,19 @@ def pending_answers(timeline: list[Entry], owner_event_id: str | None, chosen_na
     same owner message (`owner_repliers` is deterministic), so the answers still on their way are reserved in the
     wave: an agent-to-agent reply never overtakes them. A reservation lapses `lapse_ms` (FALLBACK_S) after the
     owner's message — a chosen agent that passed, failed or is away never holds the wave (code review #2)."""
-    for i, (name, ts, eid) in enumerate(timeline):
+    real = _real(timeline)
+    for i, (name, ts, eid, *_) in enumerate(real):
         if eid == owner_event_id:
             if lapse_ms is not None and now_ms is not None and now_ms - ts >= lapse_ms:
                 return 0
-            arrived = {n for n, *_ in timeline[i + 1:] if n != owner_name}
+            arrived = {n for n, *_ in real[i + 1:] if n != owner_name}
             return len(chosen_names - arrived)
     return 0
 
 
 def reservation_lapses_at(timeline: list[Entry], owner_event_id: str | None, lapse_ms: int) -> int | None:
     """When the owner's pending answers stop holding the wave (server ms), or None if the message is not seen."""
-    for _name, ts, eid in timeline:
+    for _name, ts, eid, *_ in timeline:
         if eid == owner_event_id:
             return ts + lapse_ms
     return None
@@ -145,14 +162,16 @@ def still_current(timeline: list[Entry], trigger_id: str, owner_name: str, now_m
                   max_turns: int, reserved: int = 0) -> bool:
     """R3 — an agent-to-agent reply fires only while the message it answers is still the latest one and the wave
     (with the owner's answers still on their way) is still below the limit."""
-    return bool(timeline) and timeline[-1][2] == trigger_id and \
+    real = _real(timeline)  # a purr is transparent: it never makes a message "not the latest"
+    return bool(real) and real[-1][2] == trigger_id and \
         wave_count(timeline, owner_name, now_ms, window_ms) + reserved < max_turns
 
 
 def fallback_due(timeline: list[Entry], owner_event_id: str) -> bool:
     """True while the owner's message is still the room's latest: no agent has answered it and the owner has not
     written again (a newer owner message brings its own R1)."""
-    return bool(timeline) and timeline[-1][2] == owner_event_id
+    real = _real(timeline)
+    return bool(real) and real[-1][2] == owner_event_id
 
 
 def fallback_replier(event_id: str, text: str, roster: Mapping[str, Member], k: int) -> str | None:
@@ -178,6 +197,8 @@ def decide_reply(
     bot_reply_p: float,
     reply_delay_s: float,
     rng: Callable[[], float],
+    react_p: float = 0.3,
+    purr_p: float = 0.8,
 ) -> ReplyDecision:
     """The who-replies rule for one incoming, already-allowlisted message. `wave` is `wave_count` with the message
     itself plus the owner's answers still on their way (`pending_answers`); answers to the owner never wait for
@@ -185,6 +206,11 @@ def decide_reply(
     def delay() -> float:
         return 1.0 + rng() * max(reply_delay_s - 1.0, 0.0)
 
+    allowed = sender == cfg.owner or any(m.user_id == sender for m in roster.values())
+    if me.mode == "ambient" and allowed and sender != me.user_id:
+        return _ambient(sender, text, event_id, wave, cfg, me, max_bot_turns, react_p, purr_p, delay)
+    if sender != cfg.owner and is_purr(text):
+        return ReplyDecision(False, reason="purr")  # a purr never makes anyone answer
     if sender == cfg.owner:
         if me.localpart not in owner_repliers(event_id, text, roster, owner_repliers_k):
             return ReplyDecision(False, reason="owner-chose-others")
@@ -200,6 +226,51 @@ def decide_reply(
             return ReplyDecision(False, reason="probability")
         return ReplyDecision(True, delay(), "next-speaker")
     return ReplyDecision(False, reason="not-allowlisted")
+
+
+def ambient_draw(event_id: str, text: str, m: Member, react_p: float, purr_p: float,
+                 from_owner: bool) -> str | None:
+    """An ambient member's deterministic reaction to one message: "speak", "purr" or None. Every agent computes the
+    same answer from the event id and the shared settings — so the owner's pending answers can include the cat's."""
+    named = mentions(text, m.name_forms, m.user_id)
+    if from_owner and named:
+        return "speak"
+    if uniform(event_id, "react:" + m.localpart) >= min(1.0, react_p * (2 if named else 1)):
+        return None
+    return "purr" if uniform(event_id, "purr:" + m.localpart) < purr_p else "speak"
+
+
+def owner_speakers(event_id: str, text: str, roster: Mapping[str, Member], k: int, react_p: float,
+                   purr_p: float) -> list[str]:
+    """Everyone who will *speak* to an owner message: R1's chosen plus the ambient members whose draw is a spoken
+    reaction — the answers reserved in the wave while they are on their way."""
+    out = owner_repliers(event_id, text, roster, k)
+    out += [m.localpart for m in roster.values()
+            if m.mode == "ambient" and ambient_draw(event_id, text, m, react_p, purr_p, True) == "speak"]
+    return out
+
+
+def _ambient(sender: str, text: str, event_id: str, wave: int, cfg: AgentConfig, me: Member, max_bot_turns: int,
+             react_p: float, purr_p: float, delay: Callable[[], float]) -> ReplyDecision:
+    """v4.2 — an ambient member (the cat): named by the owner, it always answers; otherwise it reacts on its own
+    deterministic draw (`react_p`, doubled when an agent names it — raised, not forced), and a reaction is a purr
+    with `purr_p`. A purr is free and never limited; a spoken reaction to an agent obeys the wave limit."""
+    from_owner = sender == cfg.owner
+    draw = ambient_draw(event_id, text, me, react_p, purr_p, from_owner)
+    if from_owner and mentions(text, me.name_forms, me.user_id):
+        return ReplyDecision(True, 0.0, "owner-mentioned-me", purr=False)
+    if draw is None:
+        return ReplyDecision(False, reason="ambient-quiet")
+    if is_purr(text):
+        return ReplyDecision(False, reason="purr")  # never purrs at a purr
+    purr = draw == "purr"
+    if not purr and not from_owner and wave >= max_bot_turns:
+        return ReplyDecision(False, reason="ambient-wave-limit")
+    return ReplyDecision(True, delay(), "ambient-purr" if purr else "ambient-speak", purr=purr)
+
+
+def pick_purr(event_id: str, localpart: str) -> str:
+    return PURRS[int(uniform(event_id, "which:" + localpart) * len(PURRS))]
 
 
 def is_pass(reply: str) -> bool:

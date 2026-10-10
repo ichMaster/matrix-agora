@@ -104,7 +104,9 @@ The agents see each other, so without rules they would reply to each other endle
 
 **The ranking.** `rank(event_id, members)` is weighted rendezvous (highest-random-weight) hashing: `u = (sha256(event_id + "\n" + localpart)[:8] + 1) / (2⁶⁴ + 1)`, `score = −weight / ln(u)`, highest first. The same event gives the same order on every machine (`hashlib`, never Python's salted `hash()`); a member's share of first places follows its `[turns] weight`; different events give different orders.
 
-**Modes** (the TOML's `[turns] mode`): `ranked` takes part in R1 and R2; `mention-only` answers only when named (or on a group address); `ambient` is reserved for v4.2.
+**Modes** (the TOML's `[turns] mode`): `ranked` takes part in R1 and R2; `mention-only` answers only when named (or on a group address); `ambient` (v4.2, the cat) is never chosen by R1 or R2 — named by the owner it always answers; otherwise it reacts to any allowlisted message on its own deterministic draw (`uniform(event_id, "react:"…) < CAT_REACT_P`, doubled when an agent names it — raised, not forced), and a reaction is a **purr** with `CAT_PURR_P` (`uniform(event_id, "purr:"…)`).
+
+**Purrs (v4.2).** A purr («Мрррр.», «Мур.», «*потягується*»…, `is_purr`) is produced in code at zero tokens. Every agent marks it in its timeline entry `(name, ts, event_id, purr)`: a purr is not counted by `wave_count`, never produces an R2 candidate, and is transparent to R3's "still the latest" and to the fallback; consecutive purrs collapse in the context window and the session. A spoken ambient reaction to an agent message obeys the wave limit; one to the owner counts but is never stopped, and is reserved in the wave like R1's answers (`owner_speakers` — every agent computes the cat's draw from the event id and the shared settings). The cat's spoken lines are capped at `CAT_MAX_WORDS`.
 
 1. **R1 — the owner's message:**
    - names one or more agents (any of their `name_forms`, whole words, or their Matrix id) — **exactly the named agents** reply; the named one replies immediately;
@@ -211,7 +213,7 @@ Changing any of these updates this document and the test that pins it, in the sa
 - The message filter and allowlist rule (`{OWNER} ∪` the roster's other members, pinned by `tests/test_logic.py`).
 - The human-belief rule's scope (persona agents) and the outgoing guard (`outs_a_persona`), pinned by `tests/test_logic.py`.
 - The transcript format (`"Name: text"` per line), the `PASS` sentinel, and the prompt-assembly order.
-- The turn-taking semantics (from v4.1: `rank`, R1–R4, the group address, `wave_count` with `pending_answers`, the modes and the fallback; pinned by `tests/test_turns.py`).
+- The turn-taking semantics (from v4.1: `rank`, R1–R4, the group address, `wave_count` with `pending_answers`, the modes and the fallback; v4.2: the `ambient` mode, purrs and `owner_speakers`; pinned by `tests/test_turns.py`).
 - The `server/docker-compose.yml` environment (server name, federation, encryption, registration). `CONTINUWUITY_SERVER_NAME` cannot change without wiping the database.
 - The `server/docker-compose.yml` service set — `homeserver`, one service per agent (`ada`, `bruno`, v3.2; `kit`, v4.2), `usage-report` (v3.2), `panel` (v3.3) — the `../state` and `../reports` bind mounts, the agents' `HOMESERVER` override and `1000:1000` user, and what `server/deploy.sh` syncs and applies (pinned by `tests/test_compose.py`).
 - The `server_con.yaml` shape (`host`, `user`, `password`) read by `server/deploy.sh`.
@@ -251,6 +253,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `ADA_PASSWORD`, `BRUNO_PASSWORD`, `KIT_PASSWORD` | v0.4, v4.2 | first-login passwords (the cat's account is created in the admin room, since registration is closed) |
 | `GEMINI_API_KEY` | v1.1 | read by `google-genai` from the environment |
 | `HISTORY_N`, `REPLY_DELAY_S`, `MAX_BOT_TURNS`, `BOT_REPLY_P`, `BOT_WINDOW_S` | v1.1–v1.2 | context size and turn-taking (40 from v4.1 / 4 / 3 / 0.5 / 600); from v4.1 `MAX_BOT_TURNS` counts the message being answered (v1.2's value + 1) |
+| `CAT_REACT_P`, `CAT_PURR_P`, `CAT_MAX_WORDS` | v4.2 | the cat: how often he reacts unasked, how often a reaction is a purr, his word cap (0.3 / 0.8 / 12) |
 | `REPLY_MAX_TOKENS` | v4.1 | the output cap of a reply (200); summaries, memories and plans keep their own caps |
 | `OWNER_REPLIERS`, `FALLBACK_S` | v4.1 | how many agents answer an owner message that names no one; seconds before the best-ranked unchosen agent answers an unanswered owner (2 / 30) |
 | `SESSION_IDLE_S`, `SESSION_MAX_MESSAGES`, `SUMMARY_MAX_WORDS` | v2.1 | session memory (900 / 200 / 200) |

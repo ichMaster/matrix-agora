@@ -11,6 +11,12 @@ from dataclasses import dataclass
 
 from agents.config import AgentConfig
 
+# v4.2 — the cat's extra reply rules (a creature): one short line, few words, the sky or a shell line as text only
+CREATURE_RULES = (
+    "Пиши один короткий рядок, мало слів. Можеш пояснити свій стан небом — своїм сьогоднішнім гороскопом — "
+    "або кинути рядок команди чи скрипту, лише як текст."
+)
+
 # What a persona must never be called — in its own prompts, canon and life story (the human-belief rule, VISION
 # §Principles; from v4.2 scoped to persona agents), and what no other agent may call a persona in the room.
 BANNED_RE = re.compile(r"\b(бот\w*|модел\w*|штучн\w*|ai|ші|llm|gemini|асистент\w*)\b", re.IGNORECASE)
@@ -108,6 +114,7 @@ def build_instruction(
     plans: str | None = None,
     today: str | None = None,
     mood: str | None = None,
+    rules_extra: str | None = None,
 ) -> str:
     """The system instruction, in contract order (ARCHITECTURE §Prompt assembly):
     canon → life so far → place and time → memories → plans → today →
@@ -117,10 +124,11 @@ def build_instruction(
     parts += [s for s in (life, world, memories, plans, today, mood) if s]  # mood: v4.2, «Настрій дня»
     if summary:
         parts.append(f"Що ти пам'ятаєш з минулої розмови: {summary}")
-    parts.append(
+    rules = (
         f"Ти — {name}. Відповідай лише від себе, коротко, без префікса з іменем. "
         "Якщо тобі нема чого додати — відповідай рівно PASS."
     )
+    parts.append(f"{rules} {rules_extra}" if rules_extra else rules)
     return "\n\n".join(parts)
 
 

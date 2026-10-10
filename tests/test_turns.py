@@ -16,6 +16,7 @@ from agents.turns import (
     mentions,
     next_speaker,
     owner_repliers,
+    owner_speakers,
     pending_answers,
     rank,
     reservation_lapses_at,
@@ -241,38 +242,43 @@ def test_answers_still_on_their_way_are_reserved_in_the_wave():
 
 
 # --- the multi-agent simulation: no wave beyond the limit, one candidate per message ---------------------------------
-def simulate(roster, owner_text, seed, *, k=2, max_turns=3, p=0.5):
+def simulate(roster, owner_text, seed, *, k=2, max_turns=3, p=0.5, purr_p=0.8, react_p=0.3):
     rnd = random.Random(seed)
-    timeline = [("Ich", 0, "$owner")]
-    kw = {"owner_repliers_k": k, "max_bot_turns": max_turns, "bot_reply_p": p, "reply_delay_s": 4.0}
-    pending = []  # (fire_ms, localpart, trigger)
+    timeline = [("Ich", 0, "$owner", False)]
+    kw = {"owner_repliers_k": k, "max_bot_turns": max_turns, "bot_reply_p": p, "reply_delay_s": 4.0,
+          "purr_p": purr_p, "react_p": react_p}
+    pending = []  # (fire_ms, localpart, trigger, purr)
     for m in roster.values():
         d = decide_reply(OWNER, owner_text, "$owner", 0, cfg_for(m), m, roster, rng=rnd.random, **kw)
         if d.reply:
-            pending.append((int(d.delay_s * 1000) + 1, m.localpart, None))
-    n_owner, sent, followers = len(pending), [], []
-    chosen = {roster[n].name for n in owner_repliers("$owner", owner_text, roster, k)}
+            pending.append((int(d.delay_s * 1000) + 1, m.localpart, None, d.purr))
+    n_owner = len([x for x in pending if not x[3]])
+    sent, followers = [], []
+    chosen = {roster[n].name for n in owner_speakers("$owner", owner_text, roster, k, react_p, purr_p)}
 
     def reserved(at, me=None):  # an agent never reserves for itself (code review #2)
         return pending_answers(timeline, "$owner", chosen - {roster[me].name} if me else chosen, "Ich", at, 30_000)
+
     while pending:
         pending.sort()
-        ts, who, trigger = pending.pop(0)
-        if trigger and not still_current(timeline, trigger, "Ich", ts, W, max_turns, reserved(ts, who)):
+        ts, who, trigger, purr = pending.pop(0)
+        if trigger and not purr and not still_current(timeline, trigger, "Ich", ts, W, max_turns, reserved(ts, who)):
             continue
         eid = f"${who}-{ts}"
-        timeline.append((roster[who].name, ts, eid))
-        sent.append(who)
+        text = "Мрррр." if purr else "думка"
+        timeline.append((roster[who].name, ts, eid, purr))
+        if not purr:
+            sent.append(who)
         chosen_here = 0
         for m in roster.values():
             if m.localpart == who or any(x[1] == m.localpart for x in pending):
                 continue
-            d = decide_reply(roster[who].user_id, "думка", eid,
+            d = decide_reply(roster[who].user_id, text, eid,
                              wave_count(timeline, "Ich", ts, W) + reserved(ts, m.localpart),
                              cfg_for(m), m, roster, rng=rnd.random, **kw)
             if d.reply:
-                chosen_here += 1
-                pending.append((ts + int(d.delay_s * 1000) + 1, m.localpart, eid))
+                chosen_here += 0 if d.purr else 1
+                pending.append((ts + int(d.delay_s * 1000) + 1, m.localpart, eid, d.purr))
         followers.append(chosen_here)
     return n_owner, sent, followers
 
@@ -322,3 +328,58 @@ def test_the_uniform_draw_is_strictly_inside_zero_one_at_the_extremes(monkeypatc
         u = turns.uniform("$e", "ada")
         assert 0.0 < u < 1.0
         assert turns.rank("$e", [ME, BRUNO])  # no ZeroDivisionError
+
+
+
+# --- v4.2: the cat — purrs and the ambient reaction ------------------------------------------------------------------
+KIT = Member("kit", "@kit:agora.lan", "Кіт", ("кіт", "кота", "коту", "котом", "коті", "коте"), type="creature",
+             mode="ambient")
+WITH_CAT = {**FOUR, "kit": KIT}
+
+
+@pytest.mark.parametrize("text,expect", [
+    ("Мрррр.", True), ("мур", True), ("Мур-мур…", True), ("*потягується*", True), ("Мрр… *позіхає*", True),
+    ("мур, а ще я думаю", False), ("Марс ретроградний", False), ("", False), ("*потягується* і каже: ні", False),
+])
+def test_is_purr(text, expect):
+    from agents.turns import is_purr
+    assert is_purr(text) is expect
+
+
+def test_the_cat_answers_the_owner_when_named_and_reacts_on_his_own_draws_otherwise():
+    d = decide(OWNER, "Коте, як ти?", KIT, WITH_CAT, eid="$o", wave=0)
+    assert d.reply and d.delay_s == 0.0 and not d.purr
+    reacts = purrs = 0
+    for i in range(3000):
+        d = decide(OWNER, "як справи?", KIT, WITH_CAT, eid=f"$e{i}", wave=0)
+        assert d == decide(OWNER, "як справи?", KIT, WITH_CAT, eid=f"$e{i}", wave=0)  # deterministic per event
+        reacts += d.reply
+        purrs += d.purr
+    assert 0.27 < reacts / 3000 < 0.33          # CAT_REACT_P
+    assert 0.76 < purrs / reacts < 0.84         # CAT_PURR_P of the reactions
+    named = sum(decide(ME.user_id, "а кіт що?", KIT, WITH_CAT, eid=f"$n{i}").reply for i in range(3000))
+    assert 0.55 < named / 3000 < 0.65           # an agent naming him doubles the chance — raised, not forced
+
+
+def test_a_spoken_reaction_obeys_the_wave_but_a_purr_never_does():
+    spoken = next(f"$s{i}" for i in range(500) if decide(ME.user_id, "думка", KIT, WITH_CAT, eid=f"$s{i}").reason
+                  == "ambient-speak")
+    assert decide(ME.user_id, "думка", KIT, WITH_CAT, eid=spoken, wave=3).reason == "ambient-wave-limit"
+    purred = next(f"$p{i}" for i in range(500) if decide(ME.user_id, "думка", KIT, WITH_CAT, eid=f"$p{i}").purr)
+    assert decide(ME.user_id, "думка", KIT, WITH_CAT, eid=purred, wave=9).purr
+
+
+def test_a_purr_is_invisible_to_the_wave_r2_r3_and_the_fallback():
+    tl = [("Ich", 0, "$o", False), ("Бруно", 1_000, "$m", False), ("Кіт", 1_500, "$purr", True)]
+    assert wave_count(tl, "Ich") == 1                                       # the purr isn't counted
+    assert still_current(tl, "$m", "Ich", 2_000, W, 3)                      # $m is still "the latest"
+    assert fallback_due([("Ich", 0, "$o", False), ("Кіт", 1, "$purr", True)], "$o")
+    assert decide(KIT.user_id, "Мрррр.", ME, WITH_CAT).reason == "purr"     # nobody answers a purr
+
+
+@pytest.mark.parametrize("purr_p", [1.0, 0.0])
+def test_simulated_waves_with_the_cat_never_exceed_the_limit(purr_p):
+    for seed in range(300):
+        n_owner, sent, followers = simulate(WITH_CAT, "як справи?", seed, purr_p=purr_p)
+        assert len(sent) <= max(3, n_owner), (seed, sent)                    # purrs excluded
+        assert all(f <= 2 for f in followers)  # one R2 candidate + at most the cat's own ambient reaction

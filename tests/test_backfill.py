@@ -25,8 +25,9 @@ def test_seed_is_chronological_capped_and_never_replied_to():
     n = agent.seed_context(newest_first)
     assert n == 3
     assert agent.history == [("Ich", "друге"), ("Бруно", "третє"), ("Ада", "четверте")]
-    assert [ts for _, ts, _ in agent.timeline] == [2, 3, 4]
-    assert [eid for *_, eid in agent.timeline] == ["$2", "$3", "$4"]  # v4.1: event ids for R2/R3
+    assert [e[1] for e in agent.timeline] == [2, 3, 4]
+    assert [e[2] for e in agent.timeline] == ["$2", "$3", "$4"]  # v4.1: event ids for R2/R3
+    assert [e[3] for e in agent.timeline] == [False, False, False]  # v4.2: none is a purr
     assert agent.last_owner == ("$2", "друге")  # the owner's latest message survives a restart
     assert agent.session == []                      # already summarized — never again
     agent.client.room_send.assert_not_awaited()     # never replied to
