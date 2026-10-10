@@ -159,3 +159,16 @@ def test_deploy_syncs_claudes_env_file_privately_and_it_never_enters_an_image():
     dockerfile = (ROOT / "agents" / "Dockerfile").read_text()
     assert "FROM python:3.12-slim AS agent" in dockerfile and "FROM agent AS claude" in dockerfile
     assert "--group claude" in dockerfile
+
+
+
+def test_claude_shares_the_turn_settings_every_agent_computes_from():
+    """Every agent derives the cat's draws and the reservations from the same settings (no coordination), so
+    Claude's own env file names them too, with the same example values as the shared one."""
+    shared = {line.split("=", 1)[0]: line.split("=", 1)[1] for line in (ROOT / "server" / ".env.example").read_text()
+              .splitlines() if "=" in line and not line.startswith("#")}
+    claude = {line.split("=", 1)[0]: line.split("=", 1)[1] for line in (ROOT / "server" / "claude.env.example")
+              .read_text().splitlines() if "=" in line and not line.startswith("#")}
+    for key in ("MAX_BOT_TURNS", "OWNER_REPLIERS", "FALLBACK_S", "BOT_REPLY_P", "BOT_WINDOW_S", "CAT_REACT_P",
+                "CAT_PURR_P"):
+        assert claude.get(key) == shared.get(key), key
