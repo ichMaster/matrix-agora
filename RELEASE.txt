@@ -1,3 +1,26 @@
+Version 4.1.0 (2026-10-10)
+---------------------------
+- Agents come from a roster: simulations.toml + each agent TOML (type, engine,
+  name_forms, [capabilities], [turns]); a type switches capabilities - Ada and
+  Bruno are personas with all of them (AGORA-044)
+- Turn-taking for any number of agents with no coordination: weighted
+  rendezvous ranking of the event id; an unnamed owner message gets
+  OWNER_REPLIERS (2) answers, a named one only the named agents, «всі»
+  everyone; an agent message has at most one next speaker; the wave counts the
+  answered message (MAX_BOT_TURNS new = old + 1, default 3); R3 re-checks at
+  fire time; an unanswered owner gets the FALLBACK_S fallback (AGORA-045)
+- One reply-engine interface (agents/responder.py); REPLY_MAX_TOKENS (200) caps
+  a reply and a cut one is trimmed to its last sentence; 1-3 sentences by
+  canon; HISTORY_N 40 (AGORA-046)
+- The panel follows each agent's type and capabilities (tabs, Forget, the
+  summary wording, the Today field); the `it` pronoun (AGORA-047)
+- Review fixes #1-#7: an owner message during an agent reply is answered; the
+  owner's pending answers never lock the wave; the fallback never doubles or
+  drops; the group address only counts as an address; an unreadable TOML greys
+  its card; rank's draw stays inside (0, 1)
+- server/.env: OWNER_REPLIERS, FALLBACK_S, REPLY_MAX_TOKENS, HISTORY_N=40;
+  MAX_BOT_TURNS keeps 3 in the new meaning (AGORA-048)
+
 Version 3.4.1 (2026-10-04)
 ---------------------------
 - The PASS sentinel never reaches the room: a reply with text and then PASS
