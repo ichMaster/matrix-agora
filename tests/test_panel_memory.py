@@ -202,7 +202,7 @@ def test_claudes_card_reads_his_rate_limit_and_auth_check(state, monkeypatch):
     monkeypatch.setattr(app_mod, "local_today", lambda: TODAY)
     status = {"status": "allowed_warning", "utilization": 0.82, "resets_at": 1_791_200_000,
               "rate_limit_type": "seven_day_opus", "muted_until": 1_791_200_000, "auth": "oauth", "model": "opus",
-              "updated_at": 1_791_100_000}
+              "last_error": None, "updated_at": 1_791_100_000}
     (state / "claude.ratelimit.json").write_text(json.dumps(status), encoding="utf-8")
     reg = Registry()
     c = TestClient(create_app(token=TOKEN, registry=reg, docker_reader=DockerReader(client_factory=lambda: None),

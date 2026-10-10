@@ -102,7 +102,7 @@ def nudge_view(state_dir: Path, name: str, today: date, tz: str | None = None) -
 
 
 RATELIMIT_FIELDS = ("status", "utilization", "resets_at", "rate_limit_type", "muted_until", "auth", "model",
-                    "updated_at")
+                    "last_error", "updated_at")
 
 
 def ratelimit_view(state_dir: Path, name: str) -> dict | None:

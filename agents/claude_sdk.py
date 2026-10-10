@@ -107,6 +107,7 @@ class ClaudeStatus:
     muted_until: int | None = None     # epoch seconds
     auth: str | None = None            # "oauth" once the init check passed; "blocked: …" / "refused: …"
     model: str | None = None           # the model asked for (the panel's card shows it)
+    last_error: str | None = None      # the last failed call — a subtype, an http status, a type name; never text
     updated_at: int | None = None
 
 
@@ -199,6 +200,11 @@ class ClaudeSdkResponder:
             self.status.muted_until = None
         self._save()
 
+    def _failed(self, why: str) -> None:
+        """Review #14: an expired or revoked token fails every call — the card must not keep showing «OAuth ✓»."""
+        self.status.last_error = why
+        self._save()
+
     def muted(self) -> bool:
         return bool(self.status.muted_until) and self._now() < int(self.status.muted_until)
 
@@ -244,10 +250,12 @@ class ClaudeSdkResponder:
         except TimeoutError:
             log.error("claude query timed out after %.0fs — silent", self.timeout_s)
             self.usage_sink(turn.kind, self.model, None, False, None)
+            self._failed("timeout")
             return None
         except Exception as exc:  # noqa: BLE001 — any SDK or CLI failure means silence
             log.error("claude query failed: %s", type(exc).__name__)
             self.usage_sink(turn.kind, self.model, None, False, None)
+            self._failed(type(exc).__name__)
             return None
         # one usage line per call, ok only for a checked, successful one
         ok = (result is not None and not getattr(result, "is_error", True) and self.blocked is None and saw_init
@@ -269,9 +277,13 @@ class ClaudeSdkResponder:
         if result is None or getattr(result, "is_error", True):
             log.error("claude result error: %s (http %s)", getattr(result, "subtype", None),
                       getattr(result, "api_error_status", None))
+            self._failed(f"{getattr(result, 'subtype', None)} (http {getattr(result, 'api_error_status', None)})")
             return None
         text = (getattr(result, "result", None) or "\n".join(parts)).strip()
         if not text:
             log.error("claude returned an empty reply")
             return None
+        if self.status.last_error:  # a good call clears the last failure from the card
+            self.status.last_error = None
+            self._save()
         return Reply(text, "max_tokens" if getattr(result, "stop_reason", None) == "max_tokens" else "stop")

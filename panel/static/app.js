@@ -493,9 +493,11 @@ function claudeLines(mem) {
   const limit = muted ? (r.status === "rejected" ? `limit reached until ${at(r.muted_until)}` : `muted until ${at(r.muted_until)}`)
     : r.status ? `${r.status}${r.utilization != null ? ` · ${Math.round(r.utilization * 100)} %` : ""}${r.resets_at ? ` · resets ${at(r.resets_at)}` : ""}`
     : "no limit event yet";
-  const auth = !r.auth ? "auth not checked yet" : r.auth === "oauth" ? "OAuth ✓ (no API key)" : r.auth;
-  // the design's pill: ok / warn when muted / err when rejected or the auth check failed
-  const cls = (r.auth && r.auth !== "oauth") || (muted && r.status === "rejected") ? "err" : muted ? "warn" : r.status ? "ok" : "unknown";
+  const auth = r.last_error ? `last call failed: ${r.last_error}` : !r.auth ? "auth not checked yet"
+    : r.auth === "oauth" ? "OAuth ✓ (no API key)" : r.auth;
+  // the design's pill: ok / warn when muted / err when rejected, blocked or failing (a dead token — review #14)
+  const cls = (r.auth && r.auth !== "oauth") || r.last_error || (muted && r.status === "rejected") ? "err"
+    : muted ? "warn" : r.status ? "ok" : "unknown";
   return `<div class="today-line">${esc(`claude-sdk · ${r.model || "opus"} · subscription`)}</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${pill(cls, limit)}<span class="muted" style="font-size:12px">${esc(auth)}</span></div>`;
 }

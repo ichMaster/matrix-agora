@@ -176,7 +176,7 @@ def test_a_limit_mutes_him_until_it_resets(tmp_path, status, until):
     saved = json.loads((tmp_path / "claude.ratelimit.json").read_text())
     assert (saved["status"], saved["muted_until"], saved["rate_limit_type"]) == (status, until, "seven_day_opus")
     assert set(saved) == {"status", "utilization", "resets_at", "rate_limit_type", "muted_until", "auth", "model",
-                          "updated_at"}                         # no text, no token
+                          "last_error", "updated_at"}           # no text, no token
     assert stat.S_IMODE(os.stat(tmp_path / "claude.ratelimit.json").st_mode) == 0o600
     assert run(r) is None and len(sdk.calls) == 1               # muted: no call before the reset
     r.clock = lambda: until * 1000
@@ -321,3 +321,15 @@ def test_a_hung_query_is_bounded_and_closed(tmp_path):
     r, usage = responder(tmp_path, HangingSDK())
     r.timeout_s = 0.05
     assert run(r) is None and usage == [("reply", "opus", None, False, None)] and closed == [True]
+
+
+
+def test_a_failing_call_is_on_the_card_until_one_succeeds(tmp_path):
+    """Review #14: a dead token fails every call; the status says so, and a good call clears it."""
+    sdk = FakeSDK(INIT_OK, result(is_error=True, result=None, subtype="success", api_error_status=401))
+    r, _ = responder(tmp_path, sdk)
+    run(r)
+    assert json.loads((tmp_path / "claude.ratelimit.json").read_text())["last_error"] == "success (http 401)"
+    sdk.messages = (INIT_OK, result())
+    run(r)
+    assert json.loads((tmp_path / "claude.ratelimit.json").read_text())["last_error"] is None
