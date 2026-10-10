@@ -266,3 +266,16 @@ def test_an_init_subclass_with_an_api_key_is_still_caught_and_the_stream_closed(
 
     r, _ = responder(tmp_path, ClosingSDK())
     assert run(r) is None and r.blocked == "apiKeySource='ANTHROPIC_API_KEY'" and closed == [True]
+
+
+
+def test_the_clis_error_text_never_reaches_the_room(tmp_path):
+    """Review #3: an assistant message with `error` set carries the CLI's own text, e.g. "API Error: …"."""
+    err = AssistantMessage(content=[TextBlock(text="API Error: Claude's response exceeded the 300 output token maximum.")],
+                           error="max_output_tokens")
+    r, _ = responder(tmp_path, FakeSDK(INIT_OK, err, result(result=None, stop_reason="max_tokens")))
+    assert run(r) is None
+    ok = AssistantMessage(content=[TextBlock(text="Перше.")], error=None)
+    more = AssistantMessage(content=[TextBlock(text="Друге.")], error=None)
+    r, _ = responder(tmp_path, FakeSDK(INIT_OK, ok, more, result(result=None)))
+    assert run(r).text == "Перше.\nДруге."                                   # parts joined, not glued

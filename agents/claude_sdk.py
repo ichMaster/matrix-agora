@@ -218,7 +218,7 @@ class ClaudeSdkResponder:
                             break  # stop reading a stream that is not on the subscription
                     elif kind == "RateLimitEvent":
                         self._rate_limit(getattr(msg, "rate_limit_info", None))
-                    elif kind == "AssistantMessage":
+                    elif kind == "AssistantMessage" and not getattr(msg, "error", None):  # never the CLI's error text
                         parts += [b.text for b in getattr(msg, "content", []) if isinstance(getattr(b, "text", None),
                                                                                              str)]
                     elif kind == "ResultMessage":
@@ -239,7 +239,7 @@ class ClaudeSdkResponder:
             log.error("claude result error: %s (http %s)", getattr(result, "subtype", None),
                       getattr(result, "api_error_status", None))
             return None
-        text = (getattr(result, "result", None) or "".join(parts)).strip()
+        text = (getattr(result, "result", None) or "\n".join(parts)).strip()
         if not text:
             log.error("claude returned an empty reply")
             return None
