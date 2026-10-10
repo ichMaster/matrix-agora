@@ -86,7 +86,7 @@ The invariants every reply path must honor:
 
 1. **Login once, then the token.** First run logs in with the password and saves `access_token` + `device_id` to `state/<name>.json`; later runs restore them. Logging in with the password on every start would create a new device on the server each time.
 2. **Invites:** join only invites from `OWNER` into `ROOM_ID`. Ignore or leave every other invite.
-3. **Start without the past:** the first `sync` is used only to obtain `next_batch` and its events are **not processed** — otherwise a restarted bot replies to the whole room history. After that, `sync_forever`. **Context survives a restart (from v2.2):** right after the first sync the agent fetches the last `HISTORY_N` messages of `ROOM_ID` once from the server (`/messages`, backwards) and seeds its context window and the `bot_streak` timeline with them, in chronological order — **never replying to any of them** and never adding them to the session timeline (they were already summarized). Nothing is stored locally; the room itself is the source.
+3. **Start without the past:** the first `sync` is used only to obtain `next_batch` and its events are **not processed** — otherwise a restarted bot replies to the whole room history. After that, `sync_forever`. **Context survives a restart (from v2.2):** right after the first sync the agent fetches the last `HISTORY_N` messages of `ROOM_ID` once from the server (`/messages`, backwards) and seeds its context window and the turn-taking timeline (with event ids, and the owner's latest message) with them, in chronological order — **never replying to any of them** and never adding them to the session timeline (they were already summarized). Nothing is stored locally; the room itself is the source.
 4. **Message filter** (`RoomMessageText` only — edits, notices and other event types never trigger a reply). Handle a message only if all hold:
    - `room.room_id == ROOM_ID`;
    - `event.sender != own user_id`;
@@ -96,20 +96,27 @@ The invariants every reply path must honor:
 6. **Send as `m.text`**, never `m.notice` — the other agent might treat a notice as a service message.
 7. **On a failed or empty Gemini reply:** log the error, send nothing, keep running. The bot never crashes on a model failure.
 
-Keep the decisions pure: the filter, mention detection, `bot_streak`, who-replies, transcript and prompt assembly are functions over plain data, so tests need no nio objects and the nio callbacks stay thin adapters.
+Keep the decisions pure: the filter, mention detection, the ranking, `wave_count`, who-replies, transcript and prompt assembly are functions over plain data, so tests need no nio objects and the nio callbacks stay thin adapters.
 
 ## Turn-taking and loop protection
 
-The agents see each other, so without rules they would reply to each other endlessly.
+The agents see each other, so without rules they would reply to each other endlessly. From v4.1 the rules hold for any number of agents. Every agent derives every decision from the same inputs — the server-assigned `event_id`, the shared room timeline and the roster — so they agree **without any shared state or coordination**; never add any. The functions are pure (`agents/turns.py`), with the rng and the clock injected.
 
-1. **The owner's message:**
-   - mentions one agent (by name or mention) — **only that agent** replies; mention detection must handle Ukrainian case forms (the vocative «Адо» for Ада) — from v4.1 the forms are each agent's TOML `name_forms`, whole words, plus its Matrix id;
-   - mentions no one — **both** reply, each after a random delay of 1–`REPLY_DELAY_S` s (default 4), so they don't speak at once and the second sees the first's line in history.
-2. **The other agent's message:** reply only if `bot_streak < MAX_BOT_TURNS` (default 2). If it addresses this agent by name (any case form) or Matrix id, reply for sure; otherwise with probability `BOT_REPLY_P` (e.g. 0.5), so the conversation isn't mechanical. The streak bound applies either way.
-   - `bot_streak` = consecutive agent messages since the owner's last message **within the last `BOT_WINDOW_S`** (default 600 s), counted by server timestamps. Both agents compute it from the same room timeline, so the count agrees **without any shared state or coordination** — never add any.
-   - An owner message resets it to 0.
-   - The limit is a **rate, not a lock**: when an agent's reply is blocked by the streak, it pauses until the window frees (the oldest counted turn ages out) and then resumes — only if nothing newer arrived meanwhile. So the agents talk in bursts of at most `MAX_BOT_TURNS` per window until `PASS` or the probability gate ends the exchange; the owner never has to restart it.
-3. **`PASS`:** if the model returns exactly `PASS` (tolerating surrounding whitespace), send nothing. The prompt must explicitly allow this. A `PASS` on its own line or at the very end of a longer reply is dropped and the rest is sent; nothing of its own left → nothing is sent — the sentinel never reaches the room (pinned by `tests/test_turns.py` and `tests/test_first_sync.py`).
+**The ranking.** `rank(event_id, members)` is weighted rendezvous (highest-random-weight) hashing: `u = (sha256(event_id + "\n" + localpart)[:8] + 1) / (2⁶⁴ + 1)`, `score = −weight / ln(u)`, highest first. The same event gives the same order on every machine (`hashlib`, never Python's salted `hash()`); a member's share of first places follows its `[turns] weight`; different events give different orders.
+
+**Modes** (the TOML's `[turns] mode`): `ranked` takes part in R1 and R2; `mention-only` answers only when named (or on a group address); `ambient` is reserved for v4.2.
+
+1. **R1 — the owner's message:**
+   - names one or more agents (any of their `name_forms`, whole words, or their Matrix id) — **exactly the named agents** reply; the named one replies immediately;
+   - addresses everyone («всі», «усі», «всім», «усім», «кожен», «кожна», «кожному», «ви всі») — **every ranked and mention-only member** replies;
+   - names no one — the top `OWNER_REPLIERS` (default 2) of `rank(event_id, ranked members)` reply, each after a random delay of 1–`REPLY_DELAY_S` s (default 4), so they don't speak at once and the second sees the first's line in history;
+   - answers to the owner are never stopped by the limit, but they count toward it.
+2. **R2 — an agent's message M:** at most **one** candidate: among the members M names (ranked or mention-only, never its sender), otherwise among the ranked members other than its sender — the top of `rank(M.event_id, …)`. The candidate replies if the wave is below `MAX_BOT_TURNS` (default 3) and a roll passes `BOT_REPLY_P` (e.g. 0.5) — **naming decides who, not whether**: the roll applies to a named candidate too.
+   - **The wave** = `wave_count`: agent messages since the owner's last message **within the last `BOT_WINDOW_S`** (default 600 s), counted by server timestamps, **including M**, plus the owner's chosen answers still on their way (`pending_answers` — every agent computes R1's choice for the owner's latest message, so an agent-to-agent reply never overtakes them; the reservation lapses with the window). v1.2's `bot_streak` excluded M, so the same behavior needs `MAX_BOT_TURNS` + 1. An owner message resets it.
+3. **R3 — the re-check at fire time** (agent-to-agent replies only): after the delay, before the model call and again before sending, M must still be the room's latest message and the wave still below the limit; otherwise the reply is dropped (`silent: moved on`). A newer agent message that makes the same agent its candidate coalesces into the pending reply and becomes what it answers.
+4. **R4 — a rate, not a lock:** a candidate blocked by the limit pauses until the window frees (the oldest counted turn ages out) and then re-evaluates — only if nothing newer arrived meanwhile. So the agents talk in bursts of at most `MAX_BOT_TURNS` per window until `PASS` or the probability gate ends the exchange; the owner never has to restart it (owner, 2026-10-10: background waves stay).
+5. **The fallback:** if no agent has answered an unnamed, non-group owner message within `FALLBACK_S` (default 30), the best-ranked ranked member that R1 did not choose answers. Each agent checks for itself from the timeline.
+6. **`PASS`:** if the model returns exactly `PASS` (tolerating surrounding whitespace), send nothing. The prompt must explicitly allow this. A `PASS` on its own line or at the very end of a longer reply is dropped and the rest is sent; nothing of its own left → nothing is sent — the sentinel never reaches the room (pinned by `tests/test_turns.py` and `tests/test_first_sync.py`).
 
 ## Canon
 
@@ -200,7 +207,7 @@ Changing any of these updates this document and the test that pins it, in the sa
 - The `state/` files: `<name>.json` (session), `<name>.memory.md`, `<name>.days/YYYY-MM-DD.md` + `.talk.md`, `<name>.weeks/YYYY-MM-DD.md`, `<name>.months/YYYY-MM.md`, `<name>.years/YYYY.md`, `<name>.plans/` (year, month, week and day plans, with hidden mutation tags), `<name>.today.md`, `<name>.usage.jsonl` (its fields), `<name>.lock`, `logs/<name>.log`.
 - The message filter and allowlist rule (`{OWNER} ∪` the roster's other members, pinned by `tests/test_logic.py`).
 - The transcript format (`"Name: text"` per line), the `PASS` sentinel, and the prompt-assembly order.
-- The turn-taking semantics (who replies, `bot_streak`).
+- The turn-taking semantics (from v4.1: `rank`, R1–R4, the group address, `wave_count` with `pending_answers`, the modes and the fallback; pinned by `tests/test_turns.py`).
 - The `server/docker-compose.yml` environment (server name, federation, encryption, registration). `CONTINUWUITY_SERVER_NAME` cannot change without wiping the database.
 - The `server/docker-compose.yml` service set — `homeserver`, one service per agent (`ada`, `bruno`, v3.2), `usage-report` (v3.2), `panel` (v3.3) — the `../state` and `../reports` bind mounts, the agents' `HOMESERVER` override and `1000:1000` user, and what `server/deploy.sh` syncs and applies (pinned by `tests/test_compose.py`).
 - The `server_con.yaml` shape (`host`, `user`, `password`) read by `server/deploy.sh`.
@@ -239,7 +246,8 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `HOMESERVER`, `ROOM_ID`, `OWNER` | v0.4 | where and with whom the agents talk |
 | `ADA_PASSWORD`, `BRUNO_PASSWORD` | v0.4 | first-login passwords |
 | `GEMINI_API_KEY` | v1.1 | read by `google-genai` from the environment |
-| `HISTORY_N`, `REPLY_DELAY_S`, `MAX_BOT_TURNS`, `BOT_REPLY_P`, `BOT_WINDOW_S` | v1.1–v1.2 | context size and turn-taking (30 / 4 / 2 / 0.5 / 600) |
+| `HISTORY_N`, `REPLY_DELAY_S`, `MAX_BOT_TURNS`, `BOT_REPLY_P`, `BOT_WINDOW_S` | v1.1–v1.2 | context size and turn-taking (30 / 4 / 3 / 0.5 / 600); from v4.1 `MAX_BOT_TURNS` counts the message being answered (v1.2's value + 1) |
+| `OWNER_REPLIERS`, `FALLBACK_S` | v4.1 | how many agents answer an owner message that names no one; seconds before the best-ranked unchosen agent answers an unanswered owner (2 / 30) |
 | `SESSION_IDLE_S`, `SESSION_MAX_MESSAGES`, `SUMMARY_MAX_WORDS` | v2.1 | session memory (900 / 200 / 200) |
 | `LOCATION`, `TIMEZONE`, `MEMORY_DAYS`, `DAY_MEMORY_MAX_WORDS` | v2.2 | world awareness (Львів / Europe/Kyiv / 7 / 120) |
 | `MEMORY_WEEKS`, `MEMORY_MONTHS`, `WEEK_MEMORY_MAX_WORDS`, `MONTH_MEMORY_MAX_WORDS`, `YEAR_MEMORY_MAX_WORDS` | v2.2 | memory digests in the prompt and their sizes (4 / 6 / 150 / 200 / 300) |
@@ -351,7 +359,7 @@ Automated gates need no network: `matrix-nio` and `google-genai` are mocked, the
 
 Before v0.5 there is no `pyproject.toml`, so the Python gates are `n/a`, not passed.
 
-- **Unit tests** cover the pure logic: the filter and allowlist, mention detection (Ukrainian case forms), `bot_streak` and who-replies, transcript and prompt assembly (section order), the session-end decision, memory file read/write (missing, corrupt, atomic), calendar strings (including DST switches), which days, plan periods and digest periods need generating, the layered memory selection (no overlap, oldest first), the hourly today-refresh decision, "a past day's memory or plan is never rewritten", `usage_metadata` parsing and aggregation, the panel's supervisor and registry resolution (a fake docker client; an unknown simulation/agent/service → 404), the single-instance lock, and the Bearer-token check (401 without the token).
+- **Unit tests** cover the pure logic: the filter and allowlist, mention detection (Ukrainian case forms), the ranking, `wave_count` and who-replies (R1–R4, the fallback, a multi-agent simulation), transcript and prompt assembly (section order), the session-end decision, memory file read/write (missing, corrupt, atomic), calendar strings (including DST switches), which days, plan periods and digest periods need generating, the layered memory selection (no overlap, oldest first), the hourly today-refresh decision, "a past day's memory or plan is never rewritten", `usage_metadata` parsing and aggregation, the panel's supervisor and registry resolution (a fake docker client; an unknown simulation/agent/service → 404), the single-instance lock, and the Bearer-token check (401 without the token).
 - **Contract tests** pin the seams in §Contracts; a contract change updates the test in the same commit.
 - **CI** (`.github/workflows/ci.yml`, from v3.2) runs the same gates plus the image builds on every push/PR; a `vA.B.C` tag publishes `:vA.B.C` + `:latest`, a `main` push `:edge` (pinned by `tests/test_ci.py`). No paid keys ever exist in CI.
 - **Manual (owner) checks** are the DoD items that need the live homeserver, Element or a real Gemini key. The read-only `curl` checks may be run by tooling; everything on the Ubuntu host, in Element, or that spends real tokens is performed or confirmed by the owner, and counts as passed only then.

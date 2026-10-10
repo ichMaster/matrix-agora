@@ -65,12 +65,12 @@ The full mechanisms live in ARCHITECTURE.md; these are the invariants most often
 - **Login once, reuse the token** (`state/<name>.json`), or every start creates a new device.
 - **Never process the first sync's events** — a restarted bot would reply to the whole history.
 - **The allowlist guards every reply path**: only `ROOM_ID`, only `{OWNER, other agent}`, only `RoomMessageText`; everything else logged as `ignored`.
-- **`bot_streak` is derived from the shared room timeline** — never add shared state or coordination between the agents.
+- **Turn-taking is derived from shared inputs** — the `event_id`, the shared room timeline and the roster (`rank`, `wave_count`, R1–R4) — never add shared state or coordination between the agents.
 - **Send `m.text`, never `m.notice`**; typing reset in `finally`; on a failed/empty Gemini reply log and stay silent, never crash.
 - **The agents never know their future.** Future life-story chapters, the death date and the hidden plan-mutation tags never reach a conversational prompt; only the plan generator sees the next chapter.
 - **The agents believe they are human.** No code path or prompt — reply rules, summary prompts, memory prompts — may say an agent is a model or a bot.
 - **Nothing lived is deleted, and nothing past is rewritten**: day memories, digests (week/month/year) and plans stay forever, and room facts in memories, plans and the today block come only from the conversation journal.
-- **Keep decisions pure**: the filter, mentions, `bot_streak`, who-replies, prompt assembly, session-end, day and plan-period selection, the hourly today-refresh decision and usage aggregation are functions over plain data with an injected clock.
+- **Keep decisions pure**: the filter, mentions, the ranking and `wave_count`, who-replies, prompt assembly, session-end, day and plan-period selection, the hourly today-refresh decision and usage aggregation are functions over plain data with an injected clock.
 - **Secrets stay out**: never print `.env`, `server/.env`, `server_con.yaml` or anything under `state/`; no tokens, passwords, keys or message/summary/memory texts in logs, argv, commits or issue comments. To check a value is set, test it without echoing it (`grep -q '^GEMINI_API_KEY=.' .env`).
 
 ## Contracts

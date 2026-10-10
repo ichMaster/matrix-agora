@@ -250,3 +250,79 @@ def test_the_pass_sentinel_never_reaches_the_room(reply, sent):
     else:
         assert agent.client.room_send.await_args.kwargs["content"]["body"] == sent
     assert agent.client.room_typing.await_args_list[-1].args == ("!room", False)
+
+
+# --- v4.1: R3 at fire time, coalescing into the newest trigger, and the fallback ------------------------------------
+def _ev(sender, body, ts, eid):
+    return SimpleNamespace(room_id="!room"), SimpleNamespace(sender=sender, body=body, server_timestamp=ts, event_id=eid)
+
+
+def _fast(monkeypatch):
+    real_sleep = asyncio.sleep
+
+    async def fast_sleep(_):
+        await real_sleep(0)
+    monkeypatch.setattr("agents.agent.asyncio.sleep", fast_sleep)
+
+
+def test_r3_drops_an_agent_reply_when_the_room_moved_on_before_it_fired(monkeypatch):
+    _fast(monkeypatch)
+    agent = make_agent()
+    agent.started = True
+    agent.rng = lambda: 0.0
+
+    async def run():
+        await agent.on_message(*_ev("@ich:agora.lan", "тема", 0, "$o"))
+        for t in list(agent._tasks):  # Ada answers the owner first
+            await t
+        agent.client.room_send.reset_mock()
+        await agent.on_message(*_ev("@bruno:agora.lan", "б1", 1_000, "$b1"))  # Ada is the next speaker
+        # before it fires, a stranger's line lands in the room: the pending reply's trigger is no longer the latest
+        agent.timeline.append(("@x:agora.lan", 1_500, "$x"))
+        for t in list(agent._tasks):
+            await t
+        agent.client.room_send.assert_not_awaited()
+
+    asyncio.run(run())
+
+
+def test_a_newer_trigger_coalesces_into_the_pending_reply(monkeypatch):
+    _fast(monkeypatch)
+    agent = make_agent()
+    agent.started = True
+    agent.rng = lambda: 0.0
+
+    async def run():
+        agent.timeline.append(("Ich", 0, "$o"))
+        await agent.on_message(*_ev("@bruno:agora.lan", "б1", 1_000, "$b1"))
+        await agent.on_message(*_ev("@bruno:agora.lan", "б2", 1_100, "$b2"))  # coalesced: now answers $b2
+        assert agent._pending_trigger == "$b2"
+        for t in list(agent._tasks):
+            await t
+        agent.client.room_send.assert_awaited_once()
+
+    asyncio.run(run())
+
+
+def test_the_fallback_answers_when_nobody_else_did(monkeypatch):
+    from agents.roster import Member, load_roster
+    _fast(monkeypatch)
+    roster = {**load_roster("agora"), "cee": Member("cee", "@cee:agora.lan", "Сі", ("сі",))}
+    agent = Agent(CFG, llm=FakeLLM(), roster=roster)
+    agent.client = SimpleNamespace(room_send=AsyncMock(), room_typing=AsyncMock())
+    agent.started = True
+    agent.rng = lambda: 0.0
+
+    async def run(answered: bool):
+        agent.client.room_send.reset_mock()
+        # "$own1": R1 picks Bruno and Сі; Ada is the best-ranked unchosen member
+        await agent.on_message(*_ev("@ich:agora.lan", "як справи?", 0, "$own1"))
+        if answered:
+            agent.timeline.append(("Бруно", 500, "$b"))
+        for t in list(agent._tasks):
+            await t
+
+    asyncio.run(run(answered=False))
+    agent.client.room_send.assert_awaited_once()
+    asyncio.run(run(answered=True))
+    agent.client.room_send.assert_not_awaited()

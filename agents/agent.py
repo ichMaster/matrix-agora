@@ -70,7 +70,17 @@ from agents.plans import (
 from agents.roster import Member, load_roster
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.session import load_session, save_session
-from agents.turns import bot_streak, decide_reply, streak_frees_at, strip_pass
+from agents.turns import (
+    decide_reply,
+    fallback_due,
+    fallback_replier,
+    owner_repliers,
+    pending_answers,
+    still_current,
+    strip_pass,
+    wave_count,
+    wave_frees_at,
+)
 from agents.usage import usage_line
 from agents.world import (
     MONTHS_NOM,
@@ -97,12 +107,16 @@ class Agent:
         self.started = False  # flips True after the first sync; nothing earlier is handled
         self.llm = llm or GeminiClient(sink=self.record_usage)
         self.history: list[tuple[str, str]] = []
-        self.history_n = int(os.environ.get("HISTORY_N", "30"))
-        self.max_bot_turns = int(os.environ.get("MAX_BOT_TURNS", "2"))
+        self.history_n = int(os.environ.get("HISTORY_N", "40"))
+        # v4.1: MAX_BOT_TURNS counts the message being answered (v1.2's count excluded it: new = old + 1)
+        self.max_bot_turns = int(os.environ.get("MAX_BOT_TURNS", "3"))
+        self.owner_repliers = int(os.environ.get("OWNER_REPLIERS", "2"))
+        self.fallback_s = float(os.environ.get("FALLBACK_S", "30"))
         self.bot_reply_p = float(os.environ.get("BOT_REPLY_P", "0.5"))
         self.reply_delay_s = float(os.environ.get("REPLY_DELAY_S", "4"))
         self.bot_window_ms = int(float(os.environ.get("BOT_WINDOW_S", "600")) * 1000)
-        self.timeline: list[tuple[str, int]] = []  # (name, server_ts_ms), parallel to history
+        self.timeline: list[tuple[str, int, str]] = []  # (name, server_ts_ms, event_id), parallel to history
+        self.last_owner: tuple[str, str] | None = None  # (event_id, text) of the owner's latest message
         self.rng = random.random  # injectable in tests
         self.names = {cfg.user_id: cfg.name, cfg.owner: "Ich", **{uid: m.name for uid, m in self.others.items()}}
         self.summary: str | None = None  # last-session memory (v2.1)
@@ -136,6 +150,7 @@ class Agent:
         self._last_world_check_ms = 0
         self._last_world_day = None
         self._reply_pending = False  # one pending reply per agent; it reads the latest context anyway
+        self._pending_trigger: str | None = None  # what the pending reply answers: an agent message, or None
         self._last_sent = ""
         self._tasks: set[asyncio.Task] = set()  # strong refs: pending tasks are only weakly referenced
 
@@ -180,8 +195,11 @@ class Agent:
         texts = [e for e in reversed(events_newest_first) if isinstance(e, RoomMessageText)]
         for e in texts[-self.history_n:]:
             speaker = self.names.get(e.sender, e.sender)
+            if e.sender == self.cfg.owner:
+                self.last_owner = (str(getattr(e, "event_id", "")), e.body)
             self.history = append_history(self.history, speaker, e.body, self.history_n)
-            self.timeline = [*self.timeline, (speaker, int(e.server_timestamp))][-max(self.history_n, 1):]
+            self.timeline = [*self.timeline, (speaker, int(e.server_timestamp), str(getattr(e, "event_id", "")))
+                             ][-max(self.history_n, 1):]
         return len(texts[-self.history_n:])
 
     async def backfill(self, from_token: str) -> None:
@@ -224,11 +242,14 @@ class Agent:
             if not self.started:
                 return  # first-sync backlog: never replay history
             now_ms = int(getattr(event, "server_timestamp", 0) or time.time() * 1000)
+            event_id = str(getattr(event, "event_id", "") or f"${now_ms}:{len(self.timeline)}")
             if room.room_id == self.cfg.room_id:
                 # the context window sees every room message, own and the other agent's included
                 speaker = self.names.get(event.sender, event.sender)
                 self.history = append_history(self.history, speaker, event.body, self.history_n)
-                self.timeline = [*self.timeline, (speaker, now_ms)][-max(self.history_n, 1):]
+                self.timeline = [*self.timeline, (speaker, now_ms, event_id)][-max(self.history_n, 1):]
+                if event.sender == self.cfg.owner:
+                    self.last_owner = (event_id, event.body)
                 self.last_activity_ms = self.clock()
                 if self.cfg.can("summary"):
                     self.session.append((speaker, event.body))
@@ -245,28 +266,45 @@ class Agent:
             if not verdict.handle:
                 log.info("ignored: %s (room %s)", verdict.reason, room.room_id)
                 return
-            decision = self.decide(event.sender, event.body, now_ms)
-            if decision.reason == "streak-limit":
-                self.pause_until_window_frees(room.room_id, event.sender, event.body, now_ms)
+            decision = self.decide(event.sender, event.body, event_id, now_ms)
+            if decision.reason == "wave-limit":
+                self.pause_until_window_frees(room.room_id, event.sender, event.body, event_id, now_ms)
                 return
+            if decision.reason == "owner-chose-others":
+                self.maybe_fallback(room.room_id, event.body, event_id)
             if not decision.reply:
                 log.info("silent: %s", decision.reason)
                 return
+            # An agent-to-agent reply carries its trigger for the fire-time re-check (R3); an answer to the owner
+            # carries none. A newer trigger coalesces into the pending reply and becomes what it answers.
+            trigger = event_id if event.sender != self.cfg.owner else None
             if self._reply_pending:
+                if self._pending_trigger is not None:
+                    self._pending_trigger = trigger
                 log.info("reply: %s — coalesced into the pending reply", decision.reason)
                 return
             log.info("reply: %s (in %.1fs)", decision.reason, decision.delay_s)
             # scheduled, so the sync loop keeps running; context is read at fire time
             self._reply_pending = True
+            self._pending_trigger = trigger
             self._spawn(self.reply_later(room.room_id, decision.delay_s))
         except Exception:
             log.exception("message handler failed (bot keeps running)")
 
-    def decide(self, sender: str, text: str, now_ms: int):
+    def reserved(self, now_ms: int) -> int:
+        """The owner's chosen answers still on their way — they hold their place in the wave."""
+        if self.last_owner is None:
+            return 0
+        eid, text = self.last_owner
+        chosen = {self.roster[n].name for n in owner_repliers(eid, text, self.roster, self.owner_repliers)}
+        return pending_answers(self.timeline, eid, chosen, "Ich", now_ms, self.bot_window_ms)
+
+    def decide(self, sender: str, text: str, event_id: str, now_ms: int):
         return decide_reply(
-            sender, text,
-            bot_streak(self.timeline[:-1], "Ich", now_ms, self.bot_window_ms),
-            self.cfg, self.me, self.others,
+            sender, text, event_id,
+            wave_count(self.timeline, "Ich", now_ms, self.bot_window_ms) + self.reserved(now_ms),
+            self.cfg, self.me, self.roster,
+            owner_repliers_k=self.owner_repliers,
             max_bot_turns=self.max_bot_turns,
             bot_reply_p=self.bot_reply_p,
             reply_delay_s=self.reply_delay_s,
@@ -278,33 +316,58 @@ class Agent:
         self._tasks.add(task)  # strong ref: pending tasks are only weakly referenced
         task.add_done_callback(self._tasks.discard)
 
-    def pause_until_window_frees(self, room_id: str, sender: str, text: str, now_ms: int) -> None:
-        """The streak limit is a rate, not a lock: resume once the window frees,
+    def pause_until_window_frees(self, room_id: str, sender: str, text: str, event_id: str, now_ms: int) -> None:
+        """R4 — the wave limit is a rate, not a lock: resume once the window frees,
         but only if the conversation hasn't moved on in the meantime."""
-        frees = streak_frees_at(self.timeline[:-1], "Ich", now_ms, self.bot_window_ms, self.max_bot_turns)
+        frees = wave_frees_at(self.timeline, "Ich", now_ms, self.bot_window_ms, self.max_bot_turns)
         if frees is None:
-            log.info("silent: streak-limit")
+            log.info("silent: wave-limit")
             return
         wait_s = (frees - now_ms) / 1000 + 1.0 + self.rng() * max(self.reply_delay_s - 1.0, 0.0)
-        log.info("paused: streak-limit; resume check in %.0fs", wait_s)
-        self._spawn(self.resume_later(room_id, sender, text, self.timeline[-1], frees, wait_s))
+        log.info("paused: wave-limit; resume check in %.0fs", wait_s)
+        self._spawn(self.resume_later(room_id, sender, text, event_id, frees, wait_s))
 
-    async def resume_later(
-        self, room_id: str, sender: str, text: str, marker: tuple[str, int], at_ms: int, wait_s: float,
-    ) -> None:
+    async def resume_later(self, room_id: str, sender: str, text: str, event_id: str, at_ms: int,
+                           wait_s: float) -> None:
         try:
             await asyncio.sleep(wait_s)
-            if not self.timeline or self.timeline[-1] != marker:
+            if not self.timeline or self.timeline[-1][2] != event_id:
                 log.info("resume dropped: the conversation moved on")
                 return
-            decision = self.decide(sender, text, at_ms)
+            decision = self.decide(sender, text, event_id, at_ms)
             if not decision.reply:
                 log.info("resume: silent (%s)", decision.reason)
                 return
             log.info("resume: %s", decision.reason)
-            await self.reply(room_id)
+            await self.reply(room_id, event_id, at_ms)
         except Exception:
             log.exception("resume failed (bot keeps running)")
+
+    def maybe_fallback(self, room_id: str, text: str, event_id: str) -> None:
+        """If no agent answers the owner within FALLBACK_S, the best-ranked unchosen member does — each agent
+        checks for itself from the shared timeline, with no coordination."""
+        if fallback_replier(event_id, text, self.roster, self.owner_repliers) == self.me.localpart:
+            self._spawn(self.fallback_later(room_id, event_id))
+
+    async def fallback_later(self, room_id: str, event_id: str) -> None:
+        try:
+            await asyncio.sleep(self.fallback_s)
+            if not fallback_due(self.timeline, event_id) or self._reply_pending:
+                return
+            log.info("reply: fallback — nobody answered the owner")
+            self._reply_pending = True
+            try:
+                await self.reply(room_id)
+            finally:
+                self._reply_pending = False
+        except Exception:
+            log.exception("fallback failed (bot keeps running)")
+
+    def _current(self, trigger: str, at_ms: int | None = None) -> bool:
+        """R3 for an agent-to-agent reply: the answered message is still the latest and the wave below the limit."""
+        now = at_ms if at_ms is not None else self.clock()
+        return still_current(self.timeline, trigger, "Ich", now, self.bot_window_ms, self.max_bot_turns,
+                             self.reserved(now))
 
     def build_prompt(self) -> str:
         """The full system instruction for a reply, in contract order."""
@@ -631,14 +694,19 @@ class Agent:
         try:
             if delay_s > 0:
                 await asyncio.sleep(delay_s)
-            await self.reply(room_id)
+            trigger = self._pending_trigger
+            if trigger and not self._current(trigger):
+                log.info("silent: moved on")
+                return
+            await self.reply(room_id, trigger)
         except Exception:
             log.exception("scheduled reply failed (bot keeps running)")
         finally:
             self._reply_pending = False
 
-    async def reply(self, room_id: str) -> None:
-        """Typing on → Gemini → m.text; silence on failure or PASS; typing reset in finally."""
+    async def reply(self, room_id: str, trigger: str | None = None, at_ms: int | None = None) -> None:
+        """Typing on → Gemini → m.text; silence on failure or PASS; typing reset in finally. An agent-to-agent
+        reply (`trigger`) is re-checked before sending (R3): the room may have moved on during generation."""
         try:
             await self.client.room_typing(room_id, True)
             if self.cfg.can("today"):
@@ -660,6 +728,9 @@ class Agent:
                 return
             if same_message(text, self._last_sent):
                 log.info("silent: duplicate of my previous message")
+                return
+            if trigger and not self._current(trigger, at_ms):
+                log.info("silent: moved on")
                 return
             self._last_sent = text
             await self.client.room_send(
