@@ -161,20 +161,24 @@ def reservation_lapses_at(timeline: list[Entry], owner_event_id: str | None, lap
     return None
 
 
+def is_latest(timeline: list[Entry], event_id: str) -> bool:
+    """The event is still the room's latest message — a purr is transparent: it never makes a message "not the
+    latest" (R3, R4's resume and the fallback all ask this)."""
+    real = _real(timeline)
+    return bool(real) and real[-1][2] == event_id
+
+
 def still_current(timeline: list[Entry], trigger_id: str, owner_name: str, now_ms: int, window_ms: int,
                   max_turns: int, reserved: int = 0) -> bool:
     """R3 — an agent-to-agent reply fires only while the message it answers is still the latest one and the wave
     (with the owner's answers still on their way) is still below the limit."""
-    real = _real(timeline)  # a purr is transparent: it never makes a message "not the latest"
-    return bool(real) and real[-1][2] == trigger_id and \
-        wave_count(timeline, owner_name, now_ms, window_ms) + reserved < max_turns
+    return is_latest(timeline, trigger_id) and wave_count(timeline, owner_name, now_ms, window_ms) + reserved < max_turns
 
 
 def fallback_due(timeline: list[Entry], owner_event_id: str) -> bool:
     """True while the owner's message is still the room's latest: no agent has answered it and the owner has not
     written again (a newer owner message brings its own R1)."""
-    real = _real(timeline)
-    return bool(real) and real[-1][2] == owner_event_id
+    return is_latest(timeline, owner_event_id)
 
 
 def fallback_replier(event_id: str, text: str, roster: Mapping[str, Member], k: int) -> str | None:

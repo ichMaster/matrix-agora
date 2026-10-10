@@ -87,6 +87,7 @@ from agents.turns import (
     decide_reply,
     fallback_due,
     fallback_replier,
+    is_latest,
     is_purr,
     owner_speakers,
     pending_answers,
@@ -401,7 +402,7 @@ class Agent:
                            wait_s: float) -> None:
         try:
             await asyncio.sleep(wait_s)
-            if not self.timeline or self.timeline[-1][2] != event_id:
+            if not is_latest(self.timeline, event_id):  # a purr since the pause is no move (review #3)
                 log.info("resume dropped: the conversation moved on")
                 return
             decision = self.decide(sender, text, event_id, at_ms)

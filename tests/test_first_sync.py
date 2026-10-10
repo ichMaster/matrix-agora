@@ -576,3 +576,33 @@ def test_the_owners_purr_like_message_resets_the_wave_and_can_be_fallen_back_on(
     assert agent.timeline[-1][2:] == ("$o", False)
     assert wave_count(agent.timeline, "Ich") == 0 and fallback_due(agent.timeline, "$o")
     assert agent.last_owner[0] == "$o"
+
+
+def test_a_purr_never_cancels_a_paused_wave_limit_resume(monkeypatch):
+    """Review #3: the cat purrs at the message a wave-limit pause holds — purrs are transparent, so the resume
+    still fires (it used to be dropped as "the conversation moved on")."""
+    _fast(monkeypatch)
+    agent = make_agent()
+    agent.started = True
+    agent.rng = lambda: 0.0
+    agent.max_bot_turns = 2
+    agent.bot_window_ms = 600_000
+
+    async def run():
+        for sender, body, ts, eid in [("@ich:agora.lan", "тема", 0, "$o"), ("@bruno:agora.lan", "б1", 1_000, "$b1"),
+                                      ("@ada:agora.lan", "а1", 2_000, "$a1")]:
+            await agent.on_message(*_ev(sender, body, ts, eid))
+        stale = list(agent._tasks)
+        for t in stale:
+            t.cancel()
+        await asyncio.gather(*stale, return_exceptions=True)
+        agent.client.room_send.reset_mock()
+        await agent.on_message(*_ev("@bruno:agora.lan", "б2", 3_000, "$b2"))  # the limit: paused
+        assert len(agent._tasks) == 1
+        await agent.on_message(*_ev("@kit:agora.lan", "Мрррр.", 3_500, "$purr"))  # the cat purrs at it
+        while agent._tasks:
+            for t in list(agent._tasks):
+                await t
+
+    asyncio.run(run())
+    agent.client.room_send.assert_awaited_once()  # the conversation continued after the pause
