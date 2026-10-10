@@ -36,7 +36,7 @@ FORBIDDEN_NAMES = ("CLAUDE_CODE_SIMPLE",)                # bare mode never reads
 # belt and braces beside `tools=[]`: no built-in tool may ever run in the chat container
 DISALLOWED_TOOLS = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebFetch", "WebSearch", "Agent", "Skill",
                     "NotebookEdit", "TodoWrite", "Task"]
-WARN_MUTE_S = 3600  # a limit event without a reset time mutes him for an hour
+WARN_MUTE_S = 3600  # a warning mutes him for an hour, then the next call re-checks (review #9)
 
 
 class AuthRefused(RuntimeError):
@@ -176,16 +176,20 @@ class ClaudeSdkResponder:
         self._save()
 
     def _rate_limit(self, info: Any) -> None:
-        """Layer 7: a warning mutes him before the owner's own work hits the wall; a rejection silences him until
-        the window resets."""
+        """Layer 7: a warning mutes him for an hour before the owner's own work hits the wall — the CLI's warnings
+        track the pace within a window, so a weekly one would otherwise mute him for days; a rejection silences him
+        until the window resets."""
         status = getattr(info, "status", None)
         resets_at = getattr(info, "resets_at", None)
         self.status.status = status
         self.status.utilization = getattr(info, "utilization", None)
         self.status.resets_at = resets_at
         self.status.rate_limit_type = getattr(info, "rate_limit_type", None)
-        if status in ("allowed_warning", "rejected"):
+        if status == "rejected":
             self.status.muted_until = int(resets_at) if resets_at else self._now() + WARN_MUTE_S
+            log.warning("claude rate limit %s — muted until %s", status, self.status.muted_until)
+        elif status == "allowed_warning":
+            self.status.muted_until = self._now() + WARN_MUTE_S
             log.warning("claude rate limit %s — muted until %s", status, self.status.muted_until)
         elif status == "allowed":
             self.status.muted_until = None

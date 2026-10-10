@@ -165,19 +165,21 @@ def test_the_init_check_blocks_any_api_key_or_tool_for_good(tmp_path, data, why)
     assert run(r) is None and len(sdk.calls) == 1               # no later call at all
 
 
-@pytest.mark.parametrize("status", ["allowed_warning", "rejected"])
-def test_a_limit_mutes_him_until_it_resets(tmp_path, status):
+@pytest.mark.parametrize("status,until", [("allowed_warning", 1_000_000 + 3600), ("rejected", 1_000_600)])
+def test_a_limit_mutes_him_until_it_resets(tmp_path, status, until):
+    """A rejection waits for the reset; a warning mutes for an hour and re-checks (review #9: a weekly window's
+    warning would otherwise mute him for days)."""
     info = SimpleNamespace(status=status, resets_at=1_000_600, rate_limit_type="seven_day_opus", utilization=0.91)
     sdk = FakeSDK(INIT_OK, RateLimitEvent(rate_limit_info=info), result())
     r, _ = responder(tmp_path, sdk)
     run(r)
     saved = json.loads((tmp_path / "claude.ratelimit.json").read_text())
-    assert (saved["status"], saved["muted_until"], saved["rate_limit_type"]) == (status, 1_000_600, "seven_day_opus")
+    assert (saved["status"], saved["muted_until"], saved["rate_limit_type"]) == (status, until, "seven_day_opus")
     assert set(saved) == {"status", "utilization", "resets_at", "rate_limit_type", "muted_until", "auth", "model",
                           "updated_at"}                         # no text, no token
     assert stat.S_IMODE(os.stat(tmp_path / "claude.ratelimit.json").st_mode) == 0o600
     assert run(r) is None and len(sdk.calls) == 1               # muted: no call before the reset
-    r.clock = lambda: 1_000_600 * 1000
+    r.clock = lambda: until * 1000
     run(r)
     assert len(sdk.calls) == 2                                  # the window reset
 
