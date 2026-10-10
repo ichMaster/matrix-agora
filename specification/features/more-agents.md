@@ -443,6 +443,7 @@ def rank(event_id: str, members: Iterable[Member]) -> list[str]:
 **R1. The owner's message.**
 - **Names agents:** exactly the named ones answer.
 - **Names no one:** the top `OWNER_REPLIERS` of `rank(event_id, ranked members)` answer.
+- **Addresses everyone** («всі», «кожен», «ви всі»): every ranked member answers (owner, 2026-10-10).
 - **Never suppressed.** Answers to the owner are never stopped by the limit, but they count toward it.
 
 **R2. An agent's message M.**
@@ -765,7 +766,7 @@ Each step is shippable on its own; they are ROADMAP v4.1–v4.7, and the last it
 
 ## Open questions
 
-Ranked by how much each answer changes the design.
+Ranked by how much each answer changes the design. Items 6–8 (v4.1) were decided on 2026-10-10.
 
 1. **Ada and Bruno, and VISION** (decided: no descriptions of the newcomers; they figure it out themselves):
    - Do Ada and Bruno keep believing they are human (recommended)?
@@ -789,9 +790,9 @@ Ranked by how much each answer changes the design.
 5. **The cat's speech mix.**
    - How often he purrs (`CAT_PURR_P`, default 0.8), and how often he reacts unasked (`CAT_REACT_P`, default 0.3).
    - Do purrs stay in the others' context (collapsed to the latest), or stay out of it entirely?
-6. **`OWNER_REPLIERS`:** 2, or 1? Should a group address («всі», «кожен», "everyone", "each of you") make all ranked members answer?
-7. **Background waves.** Keep "a rate, not a lock" (agents keep talking in 15-minute waves until `PASS` or the gate stops them)? Or stop after the owner's question is answered, until the owner writes again?
-8. **`HISTORY_N`** with six speakers: 40, or keep 30?
+6. **`OWNER_REPLIERS`**: decided, 2; a group address («всі», «кожен», «ви всі») makes every ranked member answer.
+7. **Background waves**: decided, keep "a rate, not a lock"; the agents may continue in waves until `PASS` or the gate stops them.
+8. **`HISTORY_N`**: decided, 40.
 
 ## Still to verify before building
 

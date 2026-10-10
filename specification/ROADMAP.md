@@ -413,8 +413,9 @@ Still with Ada and Bruno only; this alone ends today's long threads. Design: mor
 - Agent TOML gains `type`, `engine`, `name_forms`, `[capabilities]`, `[turns]` (`mode`, `weight`); `canon` and `life` become optional by type; startup, `build_prompt`, `ensure_today`, `ensure_plans`, the chronicle and the summaries are gated by capability.
 - The roster from `simulations.toml` + the listed TOMLs replaces `OTHER`, the hard-coded names and `NAME_FORMS`; the allowlist becomes `{OWNER} ∪ roster − self`; `scripts/run-agent.sh` reads the roster.
 - The `Responder` interface; `GeminiResponder` keeps today's behavior.
-- Turn-taking: weighted rendezvous `rank(event_id, …)` (`hashlib`, never `hash()`); R1 (named → the named; unnamed → top `OWNER_REPLIERS`), R2 (at most one next speaker; naming decides who, not whether), R3 (re-check at fire time, per engine), R4 (the rate); `wave_count` includes the message being answered (`MAX_BOT_TURNS` new = old + 1); modes `ranked` / `ambient` / `mention-only`; the coordination-free fallback after `FALLBACK_S`.
+- Turn-taking: weighted rendezvous `rank(event_id, …)` (`hashlib`, never `hash()`); R1 (named → the named; a group address «всі»/«кожен» → every ranked agent; unnamed → top `OWNER_REPLIERS`), R2 (at most one next speaker; naming decides who, not whether), R3 (re-check at fire time, per engine), R4 (the rate); `wave_count` includes the message being answered (`MAX_BOT_TURNS` new = old + 1); modes `ranked` / `ambient` / `mention-only`; the coordination-free fallback after `FALLBACK_S`.
 - Reply length: `REPLY_MAX_TOKENS`, the «1–3 речення» rule in `common.md`, trimming to the last complete sentence.
+- `HISTORY_N` default 40; background waves stay "a rate, not a lock".
 - `server/.env` migration of `MAX_BOT_TURNS` to the new meaning (owner).
 - The panel: the agent view gains `type`, `engine` and capabilities; tabs, Forget and the stop/restart confirmations follow capabilities; the token table gains engine and billing columns; `[panel] pronoun` gains `it`.
 
