@@ -222,7 +222,7 @@ It is static text, written once from the verified chart above. Lumi's file lists
 - **Choosing the kind.** `nudge_kind(date, n)` picks one of the three deterministically, from a hash of the local date and the nudge number.
 - **One Gemini call.** The prompt order is the usual one, plus the chosen material and the last `HISTORY_N` lines, with the rule: one short line that connects the material to the recent talk. The not-word-for-word check, the word cap and the human-belief guard apply as to his replies.
 - **When.** A pure `nudge_due(now, last_room_ts, last_nudge_ts, nudges_today, local_time)`, with the clock injected and checked by the idle watcher, fires only when all of these hold:
-  - the room has been quiet for at least `CAT_NUDGE_IDLE_S` (default 2700 s, 45 min);
+  - the room has been quiet for at least `CAT_NUDGE_IDLE_S` (default 1200 s, 20 min — the owner's choice, 2026-10-10; first drafted as 45 min);
   - his last nudge was at least that long ago;
   - fewer than `CAT_NUDGES_PER_DAY` (default 6) went out today;
   - it is daytime in Kyiv, within `CAT_NUDGE_HOURS` (default `09-22`), so the owner is never woken.
@@ -607,7 +607,7 @@ def rank(event_id: str, members: Iterable[Member]) -> list[str]:
 | `CAT_PURR_P` *(new)* | — | — | 0.8 | 0.8 |
 | `CAT_REACT_P` *(new)* | — | — | 0.3 | 0.3 |
 | `CAT_MEMORY_P` *(new)* | — | — | 0.25 | 0.25 |
-| `CAT_NUDGE_IDLE_S` *(new)* | — | — | 2700 | 2700 (45 min of silence) |
+| `CAT_NUDGE_IDLE_S` *(new)* | — | — | 1200 | 1200 (20 min of silence) |
 | `CAT_NUDGES_PER_DAY` *(new)* | — | — | 6 | 6 |
 | `CAT_NUDGE_HOURS` *(new)* | — | — | `09-22` | `09-22` (Kyiv) |
 | `CLAUDE_MODEL` *(new)* | — | — | `opus` | **`opus`** (owner, 2026-10-10) |

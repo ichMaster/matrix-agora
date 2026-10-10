@@ -32,7 +32,7 @@ from agents.turns import decide_reply, next_speaker, wave_count
 from tests.test_first_sync import CFG
 
 KYIV = ZoneInfo("Europe/Kyiv")
-IDLE = 2_700_000
+IDLE = 1_200_000  # CAT_NUDGE_IDLE_S default: 20 min (owner, 2026-10-10)
 HOURS = (9, 22)
 
 
@@ -42,6 +42,11 @@ def at(hhmm: str, day: str = "2026-10-12") -> tuple[int, datetime]:
 
 
 # --- nudge_due ------------------------------------------------------------------------------------------------------
+def test_the_default_silence_is_twenty_minutes(tmp_path):
+    """The owner's choice (2026-10-10): CAT_NUDGE_IDLE_S defaults to 1200 s."""
+    assert cat(tmp_path, SeqLLM()).nudge_idle_ms == IDLE == 1_200_000
+
+
 def test_due_after_silence_in_the_daytime_under_the_cap():
     now_ms, now = at("14:00")
     assert nudge_due(now_ms, now, now_ms - IDLE, None, 0, IDLE, 6, HOURS)
