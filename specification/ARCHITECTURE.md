@@ -219,7 +219,7 @@ Changing any of these updates this document and the test that pins it, in the sa
 - The `server/docker-compose.yml` environment (server name, federation, encryption, registration). `CONTINUWUITY_SERVER_NAME` cannot change without wiping the database.
 - The `server/docker-compose.yml` service set — `homeserver`, one service per agent (`ada`, `bruno`, v3.2; `kit`, v4.2), `usage-report` (v3.2), `panel` (v3.3) — the `../state` and `../reports` bind mounts, the agents' `HOMESERVER` override and `1000:1000` user, and what `server/deploy.sh` syncs and applies (pinned by `tests/test_compose.py`).
 - The `server_con.yaml` shape (`host`, `user`, `password`) read by `server/deploy.sh`.
-- The panel API surface (the v3.3 read-only `GET` routes — from v4.1 the agent view carries `type`, `engine` and `capabilities`; from v4.2 the memory view carries `mood`, from v4.3 `pastlife` and `nudge`; the v3.4 `POST` actions — exactly three routes, pinned by `tests/test_panel_api.py`), the simulation-registry entry shape, and the Bearer `PANEL_TOKEN` auth.
+- The panel API surface (the v3.3 read-only `GET` routes — from v4.1 the agent view carries `type`, `engine` and `capabilities`; from v4.2 the memory view carries `mood`, from v4.3 `pastlife` and `nudge` — pinned by `tests/test_panel_memory.py`; the v3.4 `POST` actions — exactly three routes, pinned by `tests/test_panel_api.py`), the simulation-registry entry shape, and the Bearer `PANEL_TOKEN` auth.
 
 ## Data and state files
 
