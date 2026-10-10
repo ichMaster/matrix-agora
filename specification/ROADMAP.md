@@ -506,6 +506,8 @@ Design: more-agents.md §Claude, §7, §9, §10. Depends on: v4.1 (v4.2 for the 
 
 Design: more-agents.md §Claude (two reply modes). Depends on: v4.4, its quota use seen in the room.
 
+Owner decisions (2026-10-11): Claude's weight is 1, as designed; the outgoing guard's pronoun rule binds him too (the v4.4 review #8 question) — a safer Ada and Bruno over an occasionally silent Claude.
+
 **Tasks:**
 - `agents/claude.toml`: `[turns] mode = "ranked"`, weight 1 — Claude joins R1 and R2.
 - **Two reply modes** (`claude_mode`): **direct** when addressed by name (v4.4); **philosopher** when the turn-taking brings him in unasked — over a wider window (`CLAUDE_HISTORY_N`, a RAM buffer seeded from the room) he reflects in 2–4 sentences on the philosophy of the metaphorical image running through the talk, or answers `PASS`; a higher reasoning effort than the direct mode.
