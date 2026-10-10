@@ -23,7 +23,7 @@ class ThesesError(ValueError):
 
 @dataclass(frozen=True)
 class Thesis:
-    tags: tuple[str, ...]  # lowercase stems or terms, matched as substrings of the message
+    tags: tuple[str, ...]  # lowercase stems or terms, matched at a word start in the message
     text: str
 
 
@@ -45,9 +45,14 @@ def parse_theses(text: str) -> tuple[Thesis, ...]:
     return tuple(out)
 
 
+def tag_found(tag: str, said: str) -> bool:
+    """A tag counts at a word start only — «бекап» in «бекапом», never «чат» in «почати» (v4.3 review #3)."""
+    return re.search(r"(?<!\w)" + re.escape(tag), said) is not None
+
+
 def pick_memory(event_id: str, last_text: str, theses: tuple[Thesis, ...], told: set[int] | frozenset[int]) -> int | None:
-    """The index of the thesis to retell: not yet told this run (all again once every one is told), a tag found in
-    `last_text` preferred, then `uniform(event_id, "memory")` — the same answer for the same inputs."""
+    """The index of the thesis to retell: not yet told this run (all again once every one is told), a tag starting
+    a word of `last_text` preferred, then `uniform(event_id, "memory")` — the same answer for the same inputs."""
     # a local import: turns imports config, which reads the theses through this module
     from agents.turns import uniform
 
@@ -55,7 +60,7 @@ def pick_memory(event_id: str, last_text: str, theses: tuple[Thesis, ...], told:
         return None
     candidates = [i for i in range(len(theses)) if i not in told] or list(range(len(theses)))
     said = _norm(last_text)
-    matching = [i for i in candidates if any(tag in said for tag in theses[i].tags)]
+    matching = [i for i in candidates if any(tag_found(tag, said) for tag in theses[i].tags)]
     pool = matching or candidates
     return pool[min(int(uniform(event_id, "memory") * len(pool)), len(pool) - 1)]
 

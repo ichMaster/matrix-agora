@@ -141,3 +141,25 @@ def test_a_persona_never_gets_a_past_life_section():
     agent.cat_memory_p = 1.0
     asyncio.run(agent.reply("!room"))
     assert "Спогад з минулого життя" not in llm.calls[0][1] and not agent.cfg.can("pastlife")
+
+
+COMMON = ("багато", "цікаво", "цікава", "почати", "початок", "справа", "справді", "перспектива", "посуд", "на сходах",
+          "прозорі", "діалоги", "психологи", "до побачення", "відповідь", "відповідно", "місце", "на місці", "гуляти",
+          "прогулянка", "регулярно", "зачекай секунду", "привіт", "дякую", "добре", "швидко", "пам'ятаю",
+          "минулого тижня", "історія", "процес", "перевірю", "судячи з усього", "доступний", "жорстко", "література",
+          "редакторка", "жарт", "сьогодні", "завтра", "вчора", "як справи", "що нового", "desktop", "blog", "login",
+          "groups", "circle", "afraid", "typing", "shopping", "topic", "upset")
+
+
+@pytest.mark.parametrize("said", COMMON)
+def test_everyday_words_trigger_no_tag_of_the_real_file(said):
+    """v4.3 review #3: tags match at a word start, and no tag starts an everyday word."""
+    from agents.pastlife import tag_found
+    hits = [tag for t in parse_theses(REAL.read_text(encoding="utf-8")) for tag in t.tags if tag_found(tag, said)]
+    assert hits == [], hits
+
+
+def test_a_tag_matches_only_at_a_word_start():
+    from agents.pastlife import tag_found
+    assert tag_found("бекап", "з бекапом") and tag_found("п'ятниц", "у п'ятницю")
+    assert not tag_found("чат", "почати") and not tag_found("ping", "typing") and not tag_found("зорі", "прозорі")
