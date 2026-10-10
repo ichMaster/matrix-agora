@@ -115,7 +115,11 @@ def test_the_options_turn_off_tools_settings_and_memory():
     assert o["permission_mode"] == "dontAsk" and {"Bash", "Read", "WebFetch", "Agent"} <= set(o["disallowed_tools"])
     assert o["system_prompt"] == "BRIEF" and o["model"] == "opus" and o["cwd"] == "/tmp/claude"
     assert o["env"] == {"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "300", "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
-                        "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "CLAUDE_CONFIG_DIR": "/tmp/claude"}
+                        "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "CLAUDE_CONFIG_DIR": "/tmp/claude",
+                        "MAX_THINKING_TOKENS": "0"}
+    assert o["thinking"] == {"type": "disabled"}                     # review #1: thinking ate the cap
+    uncapped = sdk_options("B", model="opus", max_output_tokens=0, config_dir="/c")
+    assert "CLAUDE_CODE_MAX_OUTPUT_TOKENS" not in uncapped["env"]    # 0 = no cap (the owner, 2026-10-11)
     assert not any(k.startswith(("ANTHROPIC_", "CLAUDE_CODE_USE_")) for k in o["env"])
     assert "effort" not in o and sdk_options("B", model="opus", max_output_tokens=1, config_dir="/c",
                                              effort="high")["effort"] == "high"
@@ -220,7 +224,7 @@ def test_the_agent_starts_without_a_gemini_key_and_scrubs_its_environment(monkey
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "oat")
     agent = Agent(claude_cfg())
     assert isinstance(agent.responder, ClaudeSdkResponder) and agent.llm is None
-    assert agent.responder.model == "opus" and agent.responder.max_output_tokens == 300
+    assert agent.responder.model == "opus" and agent.responder.max_output_tokens == 0
 
 
 def test_the_agent_writes_a_subscription_usage_line(tmp_path, monkeypatch):

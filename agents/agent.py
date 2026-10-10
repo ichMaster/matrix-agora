@@ -152,7 +152,7 @@ class Agent:
             self.llm = llm  # no Gemini client: Claude's container has no Gemini key
             self.responder = ClaudeSdkResponder(
                 model=os.environ.get("CLAUDE_MODEL", "opus"),
-                max_output_tokens=int(os.environ.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS", "300")),
+                max_output_tokens=int(os.environ.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS", "0")),  # 0: no cap
                 config_dir=os.environ.get("CLAUDE_CONFIG_DIR", "/tmp/claude"),
                 status_file=cfg.memory_file.parent / f"{cfg.localpart}.ratelimit.json",
                 usage_sink=self.record_sdk_usage, clock=lambda: self.clock())

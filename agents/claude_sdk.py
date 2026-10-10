@@ -65,7 +65,17 @@ def scrub(env: MutableMapping[str, str]) -> list[str]:
 
 def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config_dir: str,
                 effort: str | None = None) -> dict[str, Any]:
-    """The `ClaudeAgentOptions` keyword arguments: a chat turn, nothing else."""
+    """The `ClaudeAgentOptions` keyword arguments: a chat turn, nothing else. Thinking is off — the CLI thinks by
+    default and its thinking counts against the output cap (v4.4 review #1); `max_output_tokens` 0 means no cap (the
+    owner, 2026-10-11) — the brief keeps replies chat-sized."""
+    env = {
+        "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
+        "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+        "CLAUDE_CONFIG_DIR": config_dir,
+        "MAX_THINKING_TOKENS": "0",
+    }
+    if max_output_tokens > 0:
+        env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(max_output_tokens)
     opts: dict[str, Any] = {
         "system_prompt": brief or "",
         "tools": [],
@@ -76,12 +86,8 @@ def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config
         "max_turns": 1,
         "model": model,
         "cwd": config_dir,
-        "env": {
-            "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(max_output_tokens),
-            "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
-            "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
-            "CLAUDE_CONFIG_DIR": config_dir,
-        },
+        "thinking": {"type": "disabled"},
+        "env": env,
     }
     if effort:
         opts["effort"] = effort
