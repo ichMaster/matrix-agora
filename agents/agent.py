@@ -1025,6 +1025,9 @@ class Agent:
             if text is None:
                 log.info("nudge silent (%s)", kind)
                 return kind, False
+            if is_purr(text):  # every agent would mark it a purr and nobody would answer (v4.3 review #2)
+                log.info("nudge silent: purr")
+                return kind, False
             if same_message(text, self._last_sent):
                 log.info("nudge silent: duplicate of my previous message")
                 return kind, False

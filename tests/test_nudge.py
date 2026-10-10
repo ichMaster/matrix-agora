@@ -195,7 +195,7 @@ def test_the_room_speaking_during_generation_drops_the_nudge(tmp_path):
     assert state["count"] == 0 and state["last_ms"] == agent.clock()                    # an attempt, not a nudge
 
 
-@pytest.mark.parametrize("reply", ["PASS", "Ти теж бот."])
+@pytest.mark.parametrize("reply", ["PASS", "Ти теж бот.", "Мрр… *позіхає*"])  # review #2: never a purr
 def test_a_silent_attempt_spaces_the_next_but_does_not_count(tmp_path, reply):
     agent = cat(tmp_path, SeqLLM(reply))
     assert asyncio.run(agent.maybe_nudge()) is False
