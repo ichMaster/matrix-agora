@@ -309,3 +309,16 @@ def test_strip_pass_never_lets_the_sentinel_reach_the_room(reply, sent):
     assert strip_pass(reply) == sent
 
 
+
+
+def test_the_uniform_draw_is_strictly_inside_zero_one_at_the_extremes(monkeypatch):
+    """Code review #6: the top and bottom digests never give u = 1.0 or 0.0 (a division by zero in `rank`)."""
+    from types import SimpleNamespace
+
+    from agents import turns
+    for digest in (b"\xff" * 32, b"\x00" * 32):
+        fake = SimpleNamespace(sha256=lambda _b, d=digest: SimpleNamespace(digest=lambda: d))
+        monkeypatch.setattr(turns, "hashlib", fake)
+        u = turns.uniform("$e", "ada")
+        assert 0.0 < u < 1.0
+        assert turns.rank("$e", [ME, BRUNO])  # no ZeroDivisionError

@@ -67,6 +67,8 @@ def test_defaults_and_registry_order(tmp_path):
     ('[turns]\nmode = "shouting"', "unknown turn mode"),
     ('[turns]\nweight = 0', "weight"),
     ('[turns]\nweight = true', "weight"),
+    ('[turns]\nweight = nan', "weight"),    # code review #6
+    ('[turns]\nweight = inf', "weight"),
     ('[capabilities]\nwings = true', "bad capability"),
     ('[capabilities]\ntoday = "yes"', "bad capability"),
     ('name_forms = []', "name_forms"),

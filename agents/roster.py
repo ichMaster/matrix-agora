@@ -8,6 +8,7 @@ Run `python -m agents.roster` to list the agents of every simulation (scripts/ru
 
 from __future__ import annotations
 
+import math
 import sys
 import tomllib
 from dataclasses import dataclass, field
@@ -73,8 +74,8 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
     if mode not in MODES:
         raise RosterError(f"{source}: unknown turn mode {mode!r} (known: {', '.join(MODES)})")
     weight = turns.get("weight", 1.0)
-    if isinstance(weight, bool) or not isinstance(weight, int | float) or weight <= 0:
-        raise RosterError(f"{source}: [turns] weight must be a positive number")
+    if isinstance(weight, bool) or not isinstance(weight, int | float) or not math.isfinite(weight) or weight <= 0:
+        raise RosterError(f"{source}: [turns] weight must be a positive finite number")
     name = str(data["name"]).strip()
     forms = data.get("name_forms", [name.lower()])
     if not isinstance(forms, list) or not forms or not all(isinstance(f, str) and f.strip() for f in forms):

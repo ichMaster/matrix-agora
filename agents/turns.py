@@ -54,10 +54,16 @@ def rank(event_id: str, members: Iterable[Member]) -> list[str]:
     The same `event_id` always gives the same order on every machine — `hashlib`, never Python's salted `hash()`;
     a member's share of first places follows its weight; different events give different orders."""
     def score(m: Member) -> tuple[float, str]:
-        digest = hashlib.sha256(f"{event_id}\n{m.localpart}".encode()).digest()[:8]
-        u = (int.from_bytes(digest, "big") + 1) / (2**64 + 1)  # in (0, 1)
-        return (-m.weight / math.log(u), m.localpart)
+        return (-m.weight / math.log(uniform(event_id, m.localpart)), m.localpart)
     return [m.localpart for m in sorted(members, key=score, reverse=True)]
+
+
+def uniform(event_id: str, localpart: str) -> float:
+    """A deterministic draw strictly inside (0, 1): 52 bits of sha256, centred — (x + 0.5) / 2**52 is exactly
+    representable, so it never rounds to 0.0 or 1.0 (code review #6: the old (x + 1) / (2**64 + 1) rounded to 1.0
+    for the top digests)."""
+    x = int.from_bytes(hashlib.sha256(f"{event_id}\n{localpart}".encode()).digest()[:8], "big") >> 12
+    return (x + 0.5) / 2**52
 
 
 def named(text: str, members: Iterable[Member]) -> list[Member]:
