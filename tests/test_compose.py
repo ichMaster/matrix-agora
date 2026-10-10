@@ -92,5 +92,6 @@ def test_no_service_publishes_the_panel_on_every_interface():
 
 def test_the_cats_settings_are_in_both_env_examples():
     """v4.2–v4.3: the cat's env names (ARCHITECTURE §Configuration)."""
-    cat = {"CAT_REACT_P", "CAT_PURR_P", "CAT_MAX_WORDS", "CAT_MEMORY_P"}
+    cat = {"CAT_REACT_P", "CAT_PURR_P", "CAT_MAX_WORDS", "CAT_MEMORY_P", "CAT_NUDGE_IDLE_S", "CAT_NUDGES_PER_DAY",
+           "CAT_NUDGE_HOURS"}
     assert cat <= env_keys(ROOT / ".env.example") and cat <= env_keys(ROOT / "server" / ".env.example")

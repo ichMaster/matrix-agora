@@ -200,3 +200,8 @@ def test_the_creatures_prompt_order_mood_then_a_past_life_memory_then_rules():
     order = ["КАНОН", "ЖИТТЯ", "СВІТ", "Настрій дня", "Спогад з минулого життя", "Ти — Кіт."]
     idx = [out.index(x) for x in order]
     assert idx == sorted(idx)
+    nudge = build_instruction("Кіт", "КАНОН", mood="Настрій дня: x", pastlife="Спогад з минулого життя: y",
+                              nudge="Ти сам починаєш розмову")  # v4.3: a nudge's rule after the material
+    order = ["КАНОН", "Настрій дня", "Спогад з минулого життя", "Ти сам починаєш розмову", "Ти — Кіт."]
+    idx = [nudge.index(x) for x in order]
+    assert idx == sorted(idx)

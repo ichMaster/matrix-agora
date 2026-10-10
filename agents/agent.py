@@ -70,6 +70,16 @@ from agents.mood import (
     reading_from_log,
     split_resolution,
 )
+from agents.nudge import (
+    COMMAND_MATERIAL,
+    HOROSCOPE_MATERIAL,
+    NUDGE_RULE,
+    load_nudge_state,
+    nudge_due,
+    nudge_kind,
+    parse_hours,
+    save_nudge_state,
+)
 from agents.pastlife import VERBATIM_WORDS, pastlife_section, pick_memory
 from agents.plans import (
     HORIZONS,
@@ -138,6 +148,10 @@ class Agent:
         self.cat_purr_p = float(os.environ.get("CAT_PURR_P", "0.8"))
         self.cat_max_words = int(os.environ.get("CAT_MAX_WORDS", "12"))
         self.cat_memory_p = float(os.environ.get("CAT_MEMORY_P", "0.25"))  # v4.3: a past-life fragment in a line
+        # v4.3 — the cat's initiative: after this much silence, at most so many a day, only in these local hours
+        self.nudge_idle_ms = int(float(os.environ.get("CAT_NUDGE_IDLE_S", "2700")) * 1000)
+        self.nudges_per_day = int(os.environ.get("CAT_NUDGES_PER_DAY", "6"))
+        self.nudge_hours = parse_hours(os.environ.get("CAT_NUDGE_HOURS", "09-22"))
         self.bot_reply_p = float(os.environ.get("BOT_REPLY_P", "0.5"))
         self.reply_delay_s = float(os.environ.get("REPLY_DELAY_S", "4"))
         self.bot_window_ms = int(float(os.environ.get("BOT_WINDOW_S", "600")) * 1000)
@@ -183,6 +197,7 @@ class Agent:
         self._mood_lock = asyncio.Lock()
         self._mood_retry_ms = 0
         self.told: set[int] = set()  # v4.3: the theses retold this run — RAM only, like the context window
+        self._nudging = False
 
     async def login(self) -> None:
         stored = load_session(self.cfg.state_file)
@@ -449,8 +464,9 @@ class Agent:
         return still_current(self.timeline, trigger, "Ich", now, self.bot_window_ms, self.max_bot_turns,
                              self.reserved(now))
 
-    def build_prompt(self, pastlife: str | None = None) -> str:
-        """The full system instruction for a reply, in contract order; `pastlife` is a chosen thesis (v4.3)."""
+    def build_prompt(self, pastlife: str | None = None, nudge: str | None = None) -> str:
+        """The full system instruction for a reply, in contract order; `pastlife` is a chosen thesis, `nudge` a
+        nudge's material and rule (v4.3)."""
         can = self.cfg.can
         now = local_now(self.clock(), self.tz)
         world = None
@@ -467,6 +483,7 @@ class Agent:
             today=self.today_section(now) if can("today") else None,
             mood=self.mood_section(now) if can("mood") else None,
             pastlife=pastlife if can("pastlife") else None,
+            nudge=nudge if can("nudge") else None,
             rules_extra=CREATURE_RULES if self.cfg.type == "creature" else None,
         )
 
@@ -946,6 +963,86 @@ class Agent:
     def _verbatim(self, text: str, memory: int) -> bool:
         return shares_span(text, self.cfg.theses[memory].text, VERBATIM_WORDS)
 
+    # --- v4.3: the cat starts conversations -------------------------------------------------------------------------
+    @property
+    def nudge_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.nudge.json"
+
+    async def maybe_nudge(self) -> bool:
+        """After a quiet daytime stretch, one line of his own (`nudge_due`); never while a reply is on its way."""
+        if not (self.started and self.cfg.can("nudge")) or self._nudging or self._reply_pending:
+            return False
+        now_ms = self.clock()
+        now = local_now(now_ms, self.tz)
+        state = load_nudge_state(self.nudge_file, now.date().isoformat())
+        last_room_ms = int(self.timeline[-1][1]) if self.timeline else None
+        if not nudge_due(now_ms, now, last_room_ms, state.last_ms, state.count, self.nudge_idle_ms,
+                         self.nudges_per_day, self.nudge_hours):
+            return False
+        self._nudging = True
+        try:
+            state.last_ms = now_ms  # every attempt spaces the next one; only a sent nudge counts
+            save_nudge_state(self.nudge_file, state)
+            _kind, sent = await self.nudge(now, state.count + 1)
+            if sent:
+                state.count += 1
+                save_nudge_state(self.nudge_file, state)
+            return sent
+        finally:
+            self._nudging = False
+
+    async def nudge(self, now, n: int) -> tuple[str, bool]:
+        """The day's n-th nudge: its material by kind, the reply's checks, and a pre-send check that the room is
+        still quiet. Logs the kind and the outcome — never the text."""
+        day = now.date().isoformat()
+        kind = nudge_kind(day, n)
+        if kind == "horoscope" and self.mood_section(now) is None:
+            kind = "memory"  # no horoscope today: a memory instead
+        if kind == "memory" and not (self.cfg.can("pastlife") and self.cfg.theses):
+            kind = "command"
+        memory = None
+        if kind == "memory":
+            recent = " ".join(text for _, text in self.history[-5:])
+            memory = pick_memory(f"nudge:{day}:{n}", recent, self.cfg.theses, self.told)
+            prompt = self.build_prompt(pastlife_section(self.cfg.theses[memory]), NUDGE_RULE)
+        else:
+            material = COMMAND_MATERIAL if kind == "command" else HOROSCOPE_MATERIAL
+            prompt = self.build_prompt(nudge=f"{material} {NUDGE_RULE}")
+        marker = self.timeline[-1][2] if self.timeline else None
+        room_id = self.cfg.room_id
+        try:
+            await self.client.room_typing(room_id, True)
+            text = await self._compose(prompt)
+            if text is not None and memory is not None and self._verbatim(text, memory):
+                text = await self._compose(prompt)  # his own words, never the thesis
+                if text is not None and self._verbatim(text, memory):
+                    text = None
+                    log.info("nudge silent: verbatim memory")
+            if text is None:
+                log.info("nudge silent (%s)", kind)
+                return kind, False
+            if same_message(text, self._last_sent):
+                log.info("nudge silent: duplicate of my previous message")
+                return kind, False
+            if self.cfg.type != "persona" and outs_a_persona(text, self.personas):
+                log.info("nudge silent: would out a persona")
+                return kind, False
+            if (self.timeline[-1][2] if self.timeline else None) != marker:
+                log.info("nudge silent: the room spoke meanwhile")
+                return kind, False
+            self._last_sent = text
+            await self.client.room_send(
+                room_id=room_id,
+                message_type="m.room.message",
+                content={"msgtype": "m.text", "body": text},
+            )
+            if memory is not None:
+                self.told.add(memory)
+            log.info("nudge sent (%s)", kind)
+            return kind, True
+        finally:
+            await self.client.room_typing(room_id, False)
+
     async def summarize(self) -> bool:
         """Previous summary + this session → a new summary file. On failure the
         previous summary and the session are kept for a later retry."""
@@ -986,6 +1083,11 @@ class Agent:
                     await self.ensure_mood(local_now(self.clock(), self.tz))
                 except Exception:
                     log.exception("mood of the day failed (bot keeps running)")
+            if self.cfg.can("nudge"):  # v4.3: the only agent that ever speaks first
+                try:
+                    await self.maybe_nudge()
+                except Exception:
+                    log.exception("nudge failed (bot keeps running)")
             now = self.clock()
             if (
                 self.cfg.can("summary")

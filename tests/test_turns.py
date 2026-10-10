@@ -407,3 +407,12 @@ def test_simulated_waves_with_the_cat_never_exceed_the_limit(purr_p):
         n_owner, sent, followers = simulate(WITH_CAT, "як справи?", seed, purr_p=purr_p)
         assert len(sent) <= max(3, n_owner), (seed, sent)                    # purrs excluded
         assert all(f <= 2 for f in followers)  # one R2 candidate + at most the cat's own ambient reaction
+
+
+def test_a_purr_worded_spoken_answer_releases_the_cats_reservation():
+    """v4.2 review #13 (fixed in v4.3): the cat reserved to speak answers «Мрр.» — every agent marks it a purr, but
+    it is his answer: the reservation is released at once, not held until FALLBACK_S."""
+    from agents.turns import pending_answers
+    tl = [("Ich", 0, "$o", False), ("Кіт", 1_000, "$k", True)]
+    assert pending_answers(tl, "$o", {"Кіт"}, "Ich", 2_000, 30_000) == 0
+    assert pending_answers(tl[:1], "$o", {"Кіт"}, "Ich", 2_000, 30_000) == 1

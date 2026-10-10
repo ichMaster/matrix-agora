@@ -21,13 +21,13 @@ AGENTS_DIR = Path("agents")
 log = logging.getLogger("agent.roster")
 
 # the type sets the default capabilities; later phases add assistant / bridge
-CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood", "pastlife")
+CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood", "pastlife", "nudge")
 TYPES: dict[str, frozenset[str]] = {
     # a human persona: the full memory stack, no horoscope
     "persona": frozenset({"canon", "life", "summary", "chronicle", "plans", "today", "world"}),
     # v4.2 — a creature (the cat): canon, a life story and the world, a daily horoscope; no memories, no plans;
-    # v4.3 — his fixed past-life theses (`pastlife`)
-    "creature": frozenset({"canon", "life", "world", "mood", "pastlife"}),
+    # v4.3 — his fixed past-life theses (`pastlife`) and the only initiative in the room (`nudge`)
+    "creature": frozenset({"canon", "life", "world", "mood", "pastlife", "nudge"}),
 }
 ENGINES = ("gemini",)
 MODES = ("ranked", "ambient", "mention-only")

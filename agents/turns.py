@@ -142,13 +142,13 @@ def pending_answers(timeline: list[Entry], owner_event_id: str | None, chosen_na
     """How many of the owner's chosen repliers have not answered yet. Every agent computes the chosen set from the
     same owner message (`owner_repliers` is deterministic), so the answers still on their way are reserved in the
     wave: an agent-to-agent reply never overtakes them. A reservation lapses `lapse_ms` (FALLBACK_S) after the
-    owner's message — a chosen agent that passed, failed or is away never holds the wave (code review #2)."""
-    real = _real(timeline)
-    for i, (name, ts, eid, *_) in enumerate(real):
+    owner's message — a chosen agent that passed, failed or is away never holds the wave (code review #2). Any
+    line counts as arriving, a purr-worded one too: the cat's spoken «Мрр.» is his answer (v4.2 review #13)."""
+    for i, (name, ts, eid, *_) in enumerate(timeline):
         if eid == owner_event_id:
             if lapse_ms is not None and now_ms is not None and now_ms - ts >= lapse_ms:
                 return 0
-            arrived = {n for n, *_ in real[i + 1:] if n != owner_name}
+            arrived = {n for n, *_ in timeline[i + 1:] if n != owner_name}
             return len(chosen_names - arrived)
     return 0
 
