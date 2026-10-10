@@ -462,7 +462,7 @@ Design: more-agents.md §The cat, §6, §8, §10. Depends on: v4.1.
 Design: more-agents.md §The cat (past-life memories, he starts conversations). Depends on: v4.2, seen in the room.
 
 **Tasks:**
-- Past-life memories: `agents/canon/kit.memories.md` (60–100 authored theses, `- [tags] text`; drafted for the owner's edit); the pure `pick_memory(event_id, last_text, theses, told)` (tag match first, then the hash; no repeats until all are told; RAM only); with `CAT_MEMORY_P` one thesis enters a non-purr prompt, retold in his own words — a reply copying 5+ of its words (`shares_span`) is regenerated once, then dropped.
+- Past-life memories: `agents/canon/kit.memories.md` (60–100 authored theses, `- [tags] text`; drafted 2026-10-10 — 93 theses, tags are Ukrainian stems matched as substrings — for the owner's edit); the pure `pick_memory(event_id, last_text, theses, told)` (tag match first, then the hash; no repeats until all are told; RAM only); with `CAT_MEMORY_P` one thesis enters a non-purr prompt, retold in his own words — a reply copying 5+ of its words (`shares_span`) is regenerated once, then dropped.
 - **He starts conversations**: after `CAT_NUDGE_IDLE_S` of room silence, at most `CAT_NUDGES_PER_DAY`, within `CAT_NUDGE_HOURS` (Kyiv), he posts one line tied to the recent talk — a past-life fragment, a Linux command, or the day's horoscope in metaphorical form (`nudge_due`, `nudge_kind`, `state/kit.nudge.json`); a nudge opens a fresh wave; no other agent ever initiates.
 - His panel card adds the number of theses, his last nudge and today's count.
 

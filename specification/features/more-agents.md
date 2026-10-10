@@ -172,7 +172,7 @@ The room then holds six participants: Ich plus five agents. On top of the turn-t
 - **When.** In a non-purr reply, with probability `CAT_MEMORY_P` (default 0.25), the chosen thesis enters his prompt as «Спогад з минулого життя: …» ("A memory from a past life: …"). The rule says to retell it in his own words: briefly, in fragments, never as a quote.
 - **Not word for word.** If the reply copies 5 or more consecutive words of the thesis, it is regenerated once, and if it still does, it is dropped (silence). The check is `shares_span(reply, thesis, n=5)`, the helper day memories already use against the life story.
 - **In fragments, by design.** He was born from a commit that is "not bothering with the full history", so he remembers his past only in pieces.
-- **Examples of the tone** (the full list is written in v4.3; the owner edits it like any canon):
+- **Examples of the tone** (the full list, drafted 2026-10-10, is `agents/canon/kit.memories.md`; the owner edits it like any canon):
   - `[worm, 1988]` Мій хробак мав лише полагодити `.rhosts` на трьох машинах кафедри. До ранку він «полагодив» усі.
   - `[rm, prod]` `rm -rf / tmp/build`, з пробілом. Сервер думав недовго.
   - `[backup]` Бекапи були щоночі, п'ять років поспіль. Відновлення — жодного разу. Перше не вдалося.
@@ -785,7 +785,7 @@ Ranked by how much each answer changes the design. Items 6–8 (v4.1) were decid
    - his hidden death is 2038-01-19 03:14:07 UTC;
    - his rebirth place is Portland;
    - the human sysadmin was born 1965-09-13 in Cambridge, Massachusetts, the birth year of the 1988 worm's author. Whether it was *that* worm is never settled, and no real person is named.
-   - Still open, for v4.3: who writes the 60–100 theses (drafted by Claude for your edit, recommended, or by you).
+   - The 60–100 theses are drafted by Claude for your edit (owner, 2026-10-10): `agents/canon/kit.memories.md`, 93 theses with Ukrainian tag stems.
 5. **The cat's speech mix.**
    - How often he purrs (`CAT_PURR_P`, default 0.8), and how often he reacts unasked (`CAT_REACT_P`, default 0.3).
    - Do purrs stay in the others' context (collapsed to the latest), or stay out of it entirely?
