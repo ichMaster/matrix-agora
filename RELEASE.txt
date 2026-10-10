@@ -1,3 +1,29 @@
+Version 4.2.0 (2026-10-10)
+---------------------------
+- Phase v4.2 - the cat in the room: Кіт joins Agora as a creature agent
+  (AGORA-049...054)
+- The human-belief rule is scoped to persona agents, and a non-persona agent
+  never sends a line that would call a persona a model or a bot
+  (outs_a_persona) (AGORA-049)
+- The creature type, the cat's canon, his life story (a sysadmin born 1965,
+  reborn on the first Linux commit, his end hidden) and his natal chart, his
+  compose service and settings (AGORA-050)
+- Lumi's mood service, ported: a daily horoscope from the natal chart and
+  biorhythms, logged in state/<name>.mood.log, its resolution in the cat's
+  prompt as «Настрій дня» (AGORA-051)
+- The cat's speech: purrs at zero tokens that never count in a wave or make
+  anyone answer, an ambient reaction draw, a 12-word cap on spoken lines, his
+  answer to the owner reserved in the wave (AGORA-052)
+- The panel: cards by capability, the Mood tab, card variants for
+  creature/assistant/bridge, the token chart stacks every agent (AGORA-053)
+- Review fixes: purr detection in linear time (#1), the owner's «мур» is a
+  message (#2), purrs never cancel a paused resume (#3), a wider outgoing
+  guard (#4), the current life chapter never shows its end year (#5), the
+  resolution survives Markdown (#6), the day's mood cast at the day's start
+  (#7), a cut reading never kept (#8), torn or unwritable mood logs (#9), the
+  full reading stays open (#10), the mood log 0600 (#11), init pinned for
+  every agent (#12)
+
 Version 4.1.0 (2026-10-10)
 ---------------------------
 - Agents come from a roster: simulations.toml + each agent TOML (type, engine,
