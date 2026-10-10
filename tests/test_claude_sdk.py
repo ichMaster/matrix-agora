@@ -235,3 +235,34 @@ def test_the_agent_writes_a_subscription_usage_line(tmp_path, monkeypatch):
     agent.record_sdk_usage("reply", "opus", {"input_tokens": 10, "output_tokens": 2}, True, 0.001)
     line = json.loads(agent.usage_file.read_text().splitlines()[-1])
     assert (line["engine"], line["billing"], line["total_tokens"]) == ("claude-sdk", "subscription", 12)
+
+
+
+def test_without_an_init_message_he_stays_silent(tmp_path):
+    """Review #2: the auth source unverified — the reply is not sent (the call is counted, never as ok)."""
+    r, usage = responder(tmp_path, FakeSDK(result()))
+    assert run(r) is None and usage[-1][3] is False                          # counted, never as ok
+    assert not r.blocked                                                     # one unchecked call, not a block
+
+
+def test_an_init_subclass_with_an_api_key_is_still_caught_and_the_stream_closed(tmp_path):
+    """Review #2: init is matched by its subtype, whatever the class; a bad init stops reading at once."""
+    class TaskStartedMessage(SystemMessage):
+        pass
+    closed = []
+
+    class ClosingSDK(FakeSDK):
+        def query(self, *, prompt, options):
+            self.calls.append((prompt, options))
+
+            async def gen():
+                try:
+                    yield TaskStartedMessage(subtype="init", data={"apiKeySource": "ANTHROPIC_API_KEY", "tools": []})
+                    yield AssistantMessage(content=[TextBlock(text="billed to a key")])
+                    yield result("billed to a key")
+                finally:
+                    closed.append(True)
+            return gen()
+
+    r, _ = responder(tmp_path, ClosingSDK())
+    assert run(r) is None and r.blocked == "apiKeySource='ANTHROPIC_API_KEY'" and closed == [True]

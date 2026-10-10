@@ -15,6 +15,7 @@ The SDK's message classes are matched by name, so the tests need no SDK installe
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -205,26 +206,34 @@ class ClaudeSdkResponder:
             turn.instruction, model=self.model, max_output_tokens=self.max_output_tokens, config_dir=self.config_dir))
         parts: list[str] = []
         result = None
+        saw_init = False
         try:
-            async for msg in query(prompt=build_transcript(turn.lines), options=options):
-                kind = type(msg).__name__
-                if kind == "SystemMessage" and getattr(msg, "subtype", None) == "init":
-                    self._check_init(getattr(msg, "data", {}) or {})
-                elif kind == "RateLimitEvent":
-                    self._rate_limit(getattr(msg, "rate_limit_info", None))
-                elif kind == "AssistantMessage":
-                    parts += [b.text for b in getattr(msg, "content", []) if isinstance(getattr(b, "text", None), str)]
-                elif kind == "ResultMessage":
-                    result = msg
+            async with contextlib.aclosing(query(prompt=build_transcript(turn.lines), options=options)) as stream:
+                async for msg in stream:
+                    kind = type(msg).__name__
+                    if getattr(msg, "subtype", None) == "init" and isinstance(getattr(msg, "data", None), Mapping):
+                        saw_init = True  # any SystemMessage subclass: matched by its subtype, not its class name
+                        self._check_init(msg.data)
+                        if self.blocked:
+                            break  # stop reading a stream that is not on the subscription
+                    elif kind == "RateLimitEvent":
+                        self._rate_limit(getattr(msg, "rate_limit_info", None))
+                    elif kind == "AssistantMessage":
+                        parts += [b.text for b in getattr(msg, "content", []) if isinstance(getattr(b, "text", None),
+                                                                                             str)]
+                    elif kind == "ResultMessage":
+                        result = msg
         except Exception as exc:  # noqa: BLE001 — any SDK or CLI failure means silence
             log.error("claude query failed: %s", type(exc).__name__)
             self.usage_sink(turn.kind, self.model, None, False, None)
             return None
-        if result is not None:
-            ok = not getattr(result, "is_error", True) and self.blocked is None
-            self.usage_sink(turn.kind, self.model, getattr(result, "usage", None), ok,
-                            getattr(result, "total_cost_usd", None))
+        # one usage line per call, ok only for a checked, successful one
+        ok = result is not None and not getattr(result, "is_error", True) and self.blocked is None and saw_init
+        self.usage_sink(turn.kind, self.model, getattr(result, "usage", None), ok, getattr(result, "total_cost_usd", None))
         if self.blocked:
+            return None
+        if not saw_init:  # the auth source unverified: never speak on an unchecked call (review #2)
+            log.error("claude: no init message — the auth source is unverified; silent")
             return None
         if result is None or getattr(result, "is_error", True):
             log.error("claude result error: %s (http %s)", getattr(result, "subtype", None),
