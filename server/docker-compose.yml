@@ -88,6 +88,21 @@ services:
       TZ: ${TIMEZONE:-Europe/Kyiv}
       HOME: /tmp/claude                          # the CLI's home and config: a tmpfs, nothing survives a restart
       CLAUDE_CONFIG_DIR: /tmp/claude
+      # the room and the turn settings every agent computes from — interpolated from the shared .env, so Claude can
+      # never drift from the others (v4.4 review #5); only these names, never a secret of the shared file
+      ROOM_ID: ${ROOM_ID:-}
+      OWNER: ${OWNER:-}
+      TIMEZONE: ${TIMEZONE:-Europe/Kyiv}
+      HISTORY_N: ${HISTORY_N:-40}
+      REPLY_MAX_TOKENS: ${REPLY_MAX_TOKENS:-200}
+      MAX_BOT_TURNS: ${MAX_BOT_TURNS:-3}
+      OWNER_REPLIERS: ${OWNER_REPLIERS:-2}
+      FALLBACK_S: ${FALLBACK_S:-30}
+      BOT_REPLY_P: ${BOT_REPLY_P:-0.5}
+      REPLY_DELAY_S: ${REPLY_DELAY_S:-4}
+      BOT_WINDOW_S: ${BOT_WINDOW_S:-600}
+      CAT_REACT_P: ${CAT_REACT_P:-0.3}
+      CAT_PURR_P: ${CAT_PURR_P:-0.8}
     tmpfs:
       - /tmp/claude:uid=1000,gid=1000,mode=0700,size=64m   # bounded (review #7)
     user: "1000:1000"

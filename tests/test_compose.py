@@ -145,8 +145,7 @@ def test_no_service_and_no_env_example_names_a_forbidden_variable():
 
 def test_claudes_env_example_holds_his_settings_and_nothing_of_the_others():
     keys = env_keys(ROOT / "server" / "claude.env.example")
-    assert {"ROOM_ID", "OWNER", "CLAUDE_PASSWORD", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_MODEL",
-            "CLAUDE_CODE_MAX_OUTPUT_TOKENS"} <= keys
+    assert {"CLAUDE_PASSWORD", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_MODEL", "CLAUDE_CODE_MAX_OUTPUT_TOKENS"} <= keys
     assert not keys & {"GEMINI_API_KEY", "ADA_PASSWORD", "BRUNO_PASSWORD", "KIT_PASSWORD", "PANEL_TOKEN",
                        "REGISTRATION_TOKEN"}
 
@@ -163,13 +162,13 @@ def test_deploy_syncs_claudes_env_file_privately_and_it_never_enters_an_image():
 
 
 
-def test_claude_shares_the_turn_settings_every_agent_computes_from():
-    """Every agent derives the cat's draws and the reservations from the same settings (no coordination), so
-    Claude's own env file names them too, with the same example values as the shared one."""
-    shared = {line.split("=", 1)[0]: line.split("=", 1)[1] for line in (ROOT / "server" / ".env.example").read_text()
-              .splitlines() if "=" in line and not line.startswith("#")}
-    claude = {line.split("=", 1)[0]: line.split("=", 1)[1] for line in (ROOT / "server" / "claude.env.example")
-              .read_text().splitlines() if "=" in line and not line.startswith("#")}
-    for key in ("MAX_BOT_TURNS", "OWNER_REPLIERS", "FALLBACK_S", "BOT_REPLY_P", "BOT_WINDOW_S", "CAT_REACT_P",
-                "CAT_PURR_P"):
-        assert claude.get(key) == shared.get(key), key
+def test_claude_takes_the_room_and_the_turn_settings_from_the_shared_file():
+    """Review #5: every agent computes waves and reservations from the same settings (no coordination), so Claude's
+    service interpolates them from the shared .env — a single source; his own file holds only his own."""
+    env = SERVICES["claude"]["environment"]
+    for key in ("ROOM_ID", "OWNER", "TIMEZONE", "HISTORY_N", "REPLY_MAX_TOKENS", "MAX_BOT_TURNS", "OWNER_REPLIERS",
+                "FALLBACK_S", "BOT_REPLY_P", "REPLY_DELAY_S", "BOT_WINDOW_S", "CAT_REACT_P", "CAT_PURR_P"):
+        assert str(env[key]).startswith("${" + key + ":-"), key
+    assert env_keys(ROOT / "server" / "claude.env.example") == {"CLAUDE_PASSWORD", "CLAUDE_CODE_OAUTH_TOKEN",
+                                                                  "CLAUDE_MODEL", "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
+                                                                  "CLAUDE_TIMEOUT_S"}
