@@ -346,6 +346,20 @@ def test_is_purr(text, expect):
     assert is_purr(text) is expect
 
 
+@pytest.mark.parametrize("text", ["мур " * 40 + "котику", "мур   " * 40 + "ну", "мрр. " * 40 + "x", "*а* " * 40 + "б"])
+def test_a_near_purr_is_rejected_in_linear_time(text):
+    """Review #1: the old pattern let two parts match the same whitespace, so each extra word doubled the time
+    (25 words: 6 s) — and every agent's event loop runs it on every room message."""
+    import time
+
+    from agents.turns import PURR_MAX_CHARS, PURR_RE, PURRS, is_purr
+    start = time.perf_counter()
+    assert is_purr(text) is False
+    assert PURR_RE.match(text.strip()) is None            # the pattern itself, past the length cap
+    assert time.perf_counter() - start < 0.5
+    assert all(is_purr(p) for p in PURRS) and is_purr("мур " * 20) and not is_purr("мур " * PURR_MAX_CHARS)
+
+
 def test_the_cat_answers_the_owner_when_named_and_reacts_on_his_own_draws_otherwise():
     d = decide(OWNER, "Коте, як ти?", KIT, WITH_CAT, eid="$o", wave=0)
     assert d.reply and d.delay_s == 0.0 and not d.purr

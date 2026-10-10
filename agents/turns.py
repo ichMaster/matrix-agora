@@ -29,13 +29,16 @@ Entry = tuple
 
 # v4.2 — the cat's purrs: produced in code (zero tokens); every agent recognises one in the timeline
 PURRS = ("Мрррр.", "Мур.", "Мур-мур…", "*потягується*", "*мружиться*", "Мрр… *позіхає*")
-PURR_RE = re.compile(r"^(?:\s*(?:м+у*р+(?:-м+у*р+)?|\*[^*\n]{1,30}\*)[\s.,!…]*)+$", re.IGNORECASE)
+# One way only to split a line into tokens: the separators trail each token, so nothing can backtrack (review #1).
+PURR_RE = re.compile(r"^(?:(?:м+у*р+(?:-м+у*р+)?|\*[^*\n]{1,30}\*)[\s.,!…]*)+$", re.IGNORECASE)
+PURR_MAX_CHARS = 80
 
 
 def is_purr(text: str) -> bool:
     """A purr-only line («Мрррр.», «мур-мур…», «*потягується*»): it never counts in a wave, never makes anyone
     answer, and is transparent to "the latest message" (v4.2)."""
-    return bool(PURR_RE.match(text.strip())) if text and text.strip() else False
+    t = (text or "").strip()
+    return bool(t) and len(t) <= PURR_MAX_CHARS and bool(PURR_RE.match(t))
 
 
 def _real(timeline: list) -> list:
