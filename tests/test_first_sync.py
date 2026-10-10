@@ -606,3 +606,20 @@ def test_a_purr_never_cancels_a_paused_wave_limit_resume(monkeypatch):
 
     asyncio.run(run())
     agent.client.room_send.assert_awaited_once()  # the conversation continued after the pause
+
+
+def test_the_cat_never_purrs_while_his_words_are_on_their_way(monkeypatch):
+    """v4.3 review #1: a purr counts as arriving (v4.2 review #13), so one sent while his spoken answer to the owner
+    is still generating released his reservation early and let the wave reach four agent lines."""
+    _fast(monkeypatch)
+    agent = _cat_agent(FakeLLM())
+    agent._reply_pending = True
+
+    async def run():
+        await agent.purr_later("!room", 0.0, "$x")
+
+    asyncio.run(run())
+    agent.client.room_send.assert_not_awaited()
+    agent._reply_pending = False
+    asyncio.run(agent.purr_later("!room", 0.0, "$x"))
+    agent.client.room_send.assert_awaited_once()

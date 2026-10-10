@@ -387,6 +387,9 @@ class Agent:
         try:
             if delay_s > 0:
                 await asyncio.sleep(delay_s)
+            if self._reply_pending:  # his words are on their way: a purr now would count as his answer (v4.3 review #1)
+                log.info("purr dropped: a reply is on its way")
+                return
             await self.client.room_send(
                 room_id=room_id, message_type="m.room.message",
                 content={"msgtype": "m.text", "body": pick_purr(event_id, self.cfg.localpart)},
