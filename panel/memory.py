@@ -7,6 +7,7 @@ module raw: they become `deviation: true` for the owner's eyes only.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from datetime import date, datetime, timedelta
@@ -72,7 +73,36 @@ def mood_view(state_dir: Path, name: str, today: date, natal: Path | None) -> di
     return {"date": today.isoformat(), "resolution": split_resolution(reading), "reading": reading, "biorhythms": cycles}
 
 
-def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = None, with_mood: bool = False) -> dict:
+def pastlife_view(theses: Path | None) -> dict | None:
+    """v4.3 — how many past-life theses the agent holds; None without the file or when it does not parse."""
+    from agents.pastlife import ThesesError, parse_theses
+    text = _read(theses) if theses else None
+    if not text:
+        return None
+    try:
+        return {"theses": len(parse_theses(text))}
+    except ThesesError:
+        return None
+
+
+def nudge_view(state_dir: Path, name: str, today: date, tz: str | None = None) -> dict | None:
+    """v4.3 — the cat's initiative from `<name>.nudge.json` (times and a count, no texts): the last nudge sent and
+    today's count. No file yet → none sent; an unreadable file → None, never a 500."""
+    try:
+        data = json.loads((state_dir / f"{name}.nudge.json").read_text(encoding="utf-8"))
+        sent = data.get("sent_ms")
+        last = (datetime.fromtimestamp(int(sent) / 1000, ZoneInfo(tz or os.environ.get("TIMEZONE", "Europe/Kyiv")))
+                .isoformat(timespec="seconds") if sent is not None else None)
+        count = int(data["count"]) if str(data["day"]) == today.isoformat() else 0
+    except FileNotFoundError:
+        return {"last": None, "today": 0}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, OverflowError):
+        return None
+    return {"last": last, "today": count}
+
+
+def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = None, with_mood: bool = False,
+                memories: Path | None = None, with_nudge: bool = False) -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -109,6 +139,8 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "summary": {"text": summary, "written_at": _stamp(summary_path), "words": len(summary.split())} if summary else None,
         "days": days, "digests": digests, "plans": plans, "today": today_view,
         "mood": mood_view(state_dir, name, today, natal) if with_mood else None,
+        "pastlife": pastlife_view(memories),
+        "nudge": nudge_view(state_dir, name, today) if with_nudge else None,
     }
 
 

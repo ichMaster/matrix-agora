@@ -355,6 +355,7 @@ function agentCardHtml(a) {
     </dl>
     ${can(a, "today") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Today</div>${today}</div>` : ""}
     ${!can(a, "today") && can(a, "mood") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Mood of the day</div>${moodLine(mem)}</div>` : ""}
+    ${can(a, "pastlife") || can(a, "nudge") ? `<div class="muted" style="font-size:12px">${pastLifeLine(mem)}</div>` : ""}
     <div class="card-foot rule-t"><div class="meta">${tokens == null ? `${icon("database", 13)} Memory unavailable` : `7 days · ${esc(tokens)}`}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${actionButtons({kind: "agent", id: a.name, state: d.health.docker ? c.state : "unknown", big: true})}</div>
       <button class="btn btn-primary" data-act="agent" data-id="${esc(a.name)}">Details${icon("arrow-right", 14)}</button></div>
@@ -482,10 +483,24 @@ function moodLine(mem) {
     : `<div class="muted" style="font-size:13px">No horoscope yet — it is cast once a day</div>`;
 }
 
+// v4.3 — the cat's past life and initiative: «93 theses · last nudge 14:05 · 2 today»
+function pastLifeLine(mem) {
+  if (!mem.available) return "";
+  const parts = [];
+  if (mem.pastlife) parts.push(`${Number(mem.pastlife.theses)} theses`);
+  if (mem.nudge) {
+    const last = mem.nudge.last ? new Date(mem.nudge.last) : null;
+    parts.push(last ? `last nudge ${last.toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"})}` : "no nudge yet");
+    parts.push(`${Number(mem.nudge.today)} today`);
+  }
+  return esc(parts.join(" · "));
+}
+
 function moodTabHtml(mem) {
-  if (!mem.mood) return `<p class="muted">No horoscope yet — it is cast once a day, before the first reply.</p>`;
+  const past = mem.pastlife || mem.nudge ? `<div class="meta-line" style="margin-bottom:10px">${pastLifeLine(mem)}</div>` : "";
+  if (!mem.mood) return `${past}<p class="muted">No horoscope yet — it is cast once a day, before the first reply.</p>`;
   const rhythms = mem.mood.biorhythms.map((c) => `<li><span class="mono">${esc(c.name)}</span> ${c.value >= 0 ? "+" : ""}${c.value.toFixed(2)} · ${esc(c.label)}</li>`).join("");
-  return `<div class="meta-line">${icon("clock", 14)}${esc(mem.mood.date)}</div>
+  return `${past}<div class="meta-line">${icon("clock", 14)}${esc(mem.mood.date)}</div>
     <p class="read" lang="uk">${esc(mem.mood.resolution)}</p>
     ${rhythms ? `<div class="label" style="margin-top:14px">Biorhythms</div><ul class="plain">${rhythms}</ul>` : ""}
     <details data-keep="mood:${esc(mem.mood.date)}" ${S.openDetails[`mood:${mem.mood.date}`] ? "open" : ""} style="margin-top:14px"><summary class="muted">The full reading</summary><p class="read" lang="uk" style="white-space:pre-wrap">${esc(mem.mood.reading)}</p></details>`;

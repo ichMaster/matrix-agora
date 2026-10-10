@@ -78,9 +78,11 @@ def test_state_round_trip_private_and_textless(tmp_path):
     assert load_nudge_state(path, "2026-10-12") == NudgeState(None, "2026-10-12", 0)        # missing → fresh
     save_nudge_state(path, NudgeState(123, "2026-10-12", 2))
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
-    assert json.loads(path.read_text()) == {"last_ms": 123, "day": "2026-10-12", "count": 2}
+    assert json.loads(path.read_text()) == {"last_ms": 123, "day": "2026-10-12", "count": 2, "sent_ms": None}
     assert load_nudge_state(path, "2026-10-12") == NudgeState(123, "2026-10-12", 2)
     assert load_nudge_state(path, "2026-10-13") == NudgeState(123, "2026-10-13", 0)        # a new day, the gap kept
+    save_nudge_state(path, NudgeState(200, "2026-10-12", 3, 150))
+    assert load_nudge_state(path, "2026-10-12") == NudgeState(200, "2026-10-12", 3, 150)
     path.write_text("{not json")
     assert load_nudge_state(path, "2026-10-12") == NudgeState(None, "2026-10-12", 0)        # corrupt → fresh
 
@@ -131,7 +133,8 @@ def test_a_nudge_after_silence_is_sent_and_counted(tmp_path):
     assert asyncio.run(agent.maybe_nudge()) is True
     assert sent_body(agent) == "Бекапи. Ніхто не перевіряв."
     state = json.loads(agent.nudge_file.read_text())
-    assert state["count"] == 1 and set(state) == {"last_ms", "day", "count"}            # no text, ever
+    assert state["count"] == 1 and set(state) == {"last_ms", "day", "count", "sent_ms"}  # no text, ever
+    assert state["sent_ms"] == state["last_ms"] == agent.clock()
     assert asyncio.run(agent.maybe_nudge()) is False                                    # the gap holds
 
 

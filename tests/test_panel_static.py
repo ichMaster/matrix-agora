@@ -96,3 +96,11 @@ def test_the_full_reading_stays_open_across_re_renders():
     assert "openDetails: {}" in js
     assert 'data-keep="mood:${esc(mem.mood.date)}" ${S.openDetails[`mood:${mem.mood.date}`] ? "open" : ""}' in js
     assert 'document.addEventListener("toggle"' in js and "S.openDetails[key] = e.target.open" in js
+
+
+def test_the_creature_card_shows_his_past_life_line():
+    """v4.3: «93 theses · last nudge 14:05 · 2 today» on the card and the Mood tab — only with the capabilities."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert 'can(a, "pastlife") || can(a, "nudge") ? `<div class="muted" style="font-size:12px">${pastLifeLine(mem)}' in js
+    assert "function pastLifeLine(mem)" in js and "${past}<div class=\"meta-line\">" in js
+    assert 'return esc(parts.join(" · "));' in js

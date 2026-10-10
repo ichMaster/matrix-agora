@@ -27,6 +27,7 @@ class NudgeState:
     last_ms: int | None  # the last attempt (sent or silent), wall-clock ms
     day: str             # the local day the count belongs to
     count: int           # nudges sent that day
+    sent_ms: int | None = None  # the last nudge actually sent (the panel's "last nudge")
 
 
 def parse_hours(spec: str) -> tuple[int, int]:
@@ -66,12 +67,13 @@ def load_nudge_state(path: Path, day: str) -> NudgeState:
     holds across midnight) and starts the count at 0."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        last = data.get("last_ms")
+        last, sent = data.get("last_ms"), data.get("sent_ms")
         last = int(last) if last is not None else None
+        sent = int(sent) if sent is not None else None
         stored_day, count = str(data["day"]), int(data["count"])
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return NudgeState(None, day, 0)
-    return NudgeState(last, day, count if stored_day == day else 0)
+    return NudgeState(last, day, count if stored_day == day else 0, sent)
 
 
 def save_nudge_state(path: Path, state: NudgeState) -> None:
@@ -80,7 +82,8 @@ def save_nudge_state(path: Path, state: NudgeState) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        os.write(fd, json.dumps({"last_ms": state.last_ms, "day": state.day, "count": state.count}).encode())
+        os.write(fd, json.dumps({"last_ms": state.last_ms, "day": state.day, "count": state.count,
+                                 "sent_ms": state.sent_ms}).encode())
     finally:
         os.close(fd)
     os.chmod(tmp, 0o600)

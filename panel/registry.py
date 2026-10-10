@@ -28,6 +28,7 @@ class Agent:
     engine: str = "gemini"
     capabilities: frozenset[str] = frozenset()
     natal: str = ""  # v4.2: the natal file (the mood view computes the biorhythms from its birth date)
+    memories: str = ""  # v4.3: the past-life theses file (the memory view counts them)
 
 
 class Registry:
@@ -45,7 +46,7 @@ class Registry:
                 panel = m.panel
                 self.agents[name] = Agent(name, str(panel.get("name", name.title())), str(panel.get("role", "")),
                                           sim.id, name, str(panel.get("pronoun", "they")), m.type, m.engine,
-                                          m.capabilities, m.natal)
+                                          m.capabilities, m.natal, m.memories)
 
     def simulation(self, sim_id: str) -> Simulation | None:
         return self.simulations.get(sim_id)

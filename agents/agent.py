@@ -986,6 +986,7 @@ class Agent:
             _kind, sent = await self.nudge(now, state.count + 1)
             if sent:
                 state.count += 1
+                state.sent_ms = now_ms
                 save_nudge_state(self.nudge_file, state)
             return sent
         finally:

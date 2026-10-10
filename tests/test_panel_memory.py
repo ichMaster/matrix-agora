@@ -144,3 +144,34 @@ def test_a_torn_mood_log_never_breaks_the_memory_route(state, monkeypatch):
                               prober=Prober(reg), state_dir=state, background=False))
     r = c.get("/api/agents/kit/memory", headers=AUTH)
     assert r.status_code == 200 and r.json()["mood"]["resolution"] == "Мрр."
+
+
+# --- v4.3: the cat's past life and initiative -----------------------------------------------------------------------
+def test_the_cat_shows_his_theses_his_last_nudge_and_todays_count(state, monkeypatch):
+    monkeypatch.setattr(app_mod, "local_today", lambda: TODAY)
+    monkeypatch.setenv("TIMEZONE", "Europe/Kyiv")
+    sent = 1_791_111_900_000  # 2026-10-04 14:05 Kyiv
+    (state / "kit.nudge.json").write_text(json.dumps({"last_ms": sent, "day": "2026-10-04", "count": 2,
+                                                      "sent_ms": sent}), encoding="utf-8")
+    reg = Registry()
+    c = TestClient(create_app(token=TOKEN, registry=reg, docker_reader=DockerReader(client_factory=lambda: None),
+                              prober=Prober(reg), state_dir=state, background=False))
+    kit = c.get("/api/agents/kit/memory", headers=AUTH).json()
+    assert kit["pastlife"] == {"theses": 93}
+    assert kit["nudge"] == {"last": "2026-10-04T14:05:00+03:00", "today": 2}
+    ada = c.get("/api/agents/ada/memory", headers=AUTH).json()
+    assert ada["pastlife"] is None and ada["nudge"] is None                 # a persona has neither
+    assert c.get("/api/agents/kit/memory").status_code == 401
+
+
+def test_the_nudge_view_rolls_over_and_degrades(state):
+    from panel.memory import nudge_view, pastlife_view
+    assert nudge_view(state, "kit", TODAY) == {"last": None, "today": 0}     # no file yet: none sent
+    (state / "kit.nudge.json").write_text(json.dumps({"last_ms": 1, "day": "2026-10-03", "count": 5,
+                                                      "sent_ms": None}), encoding="utf-8")
+    assert nudge_view(state, "kit", TODAY) == {"last": None, "today": 0}     # yesterday's count
+    (state / "kit.nudge.json").write_text("{torn", encoding="utf-8")
+    assert nudge_view(state, "kit", TODAY) is None                          # never a 500
+    bad = state / "bad.md"
+    bad.write_text("- [broken thesis\n", encoding="utf-8")
+    assert pastlife_view(bad) is None and pastlife_view(state / "missing.md") is None and pastlife_view(None) is None
