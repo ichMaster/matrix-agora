@@ -416,3 +416,28 @@ def test_a_purr_worded_spoken_answer_releases_the_cats_reservation():
     tl = [("Ich", 0, "$o", False), ("Кіт", 1_000, "$k", True)]
     assert pending_answers(tl, "$o", {"Кіт"}, "Ich", 2_000, 30_000) == 0
     assert pending_answers(tl[:1], "$o", {"Кіт"}, "Ich", 2_000, 30_000) == 1
+
+
+
+# --- v4.5: Claude ranked among Ada and Bruno, the cat ambient ----------------------------------------------------------
+def test_claude_is_chosen_by_r1_and_r2_like_the_others():
+    from agents.roster import load_roster
+    roster = load_roster("agora")
+    ranked = {n for n, m in roster.items() if m.mode == "ranked"}
+    assert ranked == {"ada", "bruno", "claude"}
+    picks = [tuple(sorted(owner_repliers(f"$o{i}", "як вам вечір?", roster, 2))) for i in range(600)]
+    assert all(len(p) == 2 and set(p) <= ranked for p in picks)
+    share = sum("claude" in p for p in picks) / len(picks)
+    assert 0.58 < share < 0.75                                   # two of three, weight 1 each
+    nexts = {next_speaker(f"$a{i}", roster["ada"].user_id, "думка", roster) for i in range(200)}
+    assert nexts == {"bruno", "claude"}                           # never the sender, never the ambient cat
+
+
+@pytest.mark.parametrize("text", ["як справи?", "всім привіт", "Клоде, а ти?"])
+def test_simulated_waves_with_claude_ranked_never_exceed_the_limit(text):
+    from agents.roster import load_roster
+    roster = load_roster("agora")
+    for seed in range(200):
+        n_owner, sent, followers = simulate(roster, text, seed, purr_p=0.8)
+        assert len(sent) <= max(3, n_owner), (seed, sent)
+        assert all(f <= 2 for f in followers)

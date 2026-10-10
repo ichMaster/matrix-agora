@@ -25,8 +25,15 @@ class FakeLLM:
         return self.text
 
 
+def v44_room():
+    """The room these mechanics tests were written for — Ada, Bruno and the cat; Claude (ranked from v4.5) would
+    reshuffle their pinned R1/R2 draws, and his own turns are pinned in tests/test_turns.py."""
+    from agents.roster import load_roster
+    return {k: m for k, m in load_roster("agora").items() if k != "claude"}
+
+
 def make_agent(llm=None) -> Agent:
-    agent = Agent(CFG, llm=llm or FakeLLM())
+    agent = Agent(CFG, llm=llm or FakeLLM(), roster=v44_room())
     agent.client = SimpleNamespace(
         room_send=AsyncMock(), join=AsyncMock(), room_leave=AsyncMock(), room_typing=AsyncMock(),
     )
@@ -305,9 +312,9 @@ def test_a_newer_trigger_coalesces_into_the_pending_reply(monkeypatch):
 
 
 def test_the_fallback_answers_when_nobody_else_did(monkeypatch):
-    from agents.roster import Member, load_roster
+    from agents.roster import Member
     _fast(monkeypatch)
-    roster = {**load_roster("agora"), "cee": Member("cee", "@cee:agora.lan", "Сі", ("сі",))}
+    roster = {**v44_room(), "cee": Member("cee", "@cee:agora.lan", "Сі", ("сі",))}
     agent = Agent(CFG, llm=FakeLLM(), roster=roster)
     agent.client = SimpleNamespace(room_send=AsyncMock(), room_typing=AsyncMock())
     agent.started = True
@@ -365,8 +372,8 @@ def test_an_owner_message_during_an_agent_reply_is_answered_not_swallowed(monkey
 
 
 def _three():
-    from agents.roster import Member, load_roster
-    return {**load_roster("agora"), "cee": Member("cee", "@cee:agora.lan", "Сі", ("сі",))}
+    from agents.roster import Member
+    return {**v44_room(), "cee": Member("cee", "@cee:agora.lan", "Сі", ("сі",))}
 
 
 def test_an_agent_never_reserves_a_slot_for_itself_and_reservations_lapse():
@@ -378,7 +385,7 @@ def test_an_agent_never_reserves_a_slot_for_itself_and_reservations_lapse():
     agent.last_owner = ("$own1", "як справи?")  # R1 → bruno, cee
     assert agent.reserved(2_000) == 1          # Сі has not answered yet
     assert agent.reserved(30_000) == 0         # lapsed at FALLBACK_S
-    two = Agent(CFG, llm=FakeLLM())            # Ada and Bruno, both chosen; Ada passed
+    two = Agent(CFG, llm=FakeLLM(), roster=v44_room())  # Ada and Bruno, both chosen; Ada passed
     two.timeline = [("Ich", 0, "$o"), ("Бруно", 1_000, "$b")]
     two.last_owner = ("$o", "як справи?")
     assert two.reserved(2_000) == 0            # her own missing answer holds nothing
@@ -489,7 +496,7 @@ def _cat_agent(llm):
     from agents.roster import TYPES
     cfg = AgentConfig(**{**CFG.__dict__, "name": "Кіт", "user_id": "@kit:agora.lan", "type": "creature",
                          "capabilities": TYPES["creature"] - {"mood"}})
-    agent = Agent(cfg, llm=llm)
+    agent = Agent(cfg, llm=llm, roster=v44_room())
     agent.client = SimpleNamespace(room_send=AsyncMock(), room_typing=AsyncMock())
     agent.started = True
     agent.rng = lambda: 0.0

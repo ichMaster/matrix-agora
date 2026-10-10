@@ -6,8 +6,8 @@ engine = "claude-sdk"    # the Claude Agent SDK on the owner's Max subscription 
 name_forms = ["клод", "клода", "клоду", "клодом", "клоде", "claude"]
 
 [turns]
-mode = "mention-only"    # v4.4: answers when named (or on a group address); v4.5 makes him ranked
-weight = 1.0
+mode = "ranked"          # v4.5: R1 and R2 may choose him — unasked, he speaks as the philosopher
+weight = 1.0             # the owner's choice (2026-10-11), as designed
 
 [panel]                  # shown by the panel only — never part of a prompt
 name = "Claude"
