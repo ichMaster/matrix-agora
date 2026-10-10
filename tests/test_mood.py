@@ -212,3 +212,17 @@ def test_an_unwritable_log_keeps_the_mood_for_the_day(tmp_path):
     asyncio.run(agent.ensure_mood(now))
     asyncio.run(agent.ensure_mood(now))
     assert llm.calls == ["mood"] and agent.mood.resolution == "Сьогодні колючий і сонний. Уникає людей."
+
+
+def test_the_mood_log_is_private_from_birth(tmp_path):
+    """Review #11: the log was created with the default umask (0644); every text-bearing state file is 0600."""
+    import os
+    import stat
+    agent = cat(tmp_path, MoodLLM())
+    asyncio.run(agent.ensure_mood(datetime(2026, 10, 10, 12, tzinfo=ZoneInfo("Europe/Kyiv"))))
+    assert stat.S_IMODE(os.stat(agent.mood_file).st_mode) == 0o600
+    os.chmod(agent.mood_file, 0o644)                                   # an older, looser file is tightened
+    asyncio.run(cat(tmp_path, MoodLLM(), "2026-10-11 12:00").ensure_mood(
+        datetime(2026, 10, 11, 12, tzinfo=ZoneInfo("Europe/Kyiv"))))
+    assert stat.S_IMODE(os.stat(agent.mood_file).st_mode) == 0o600
+    assert reading_from_log(agent.mood_file.read_text(encoding="utf-8"), "2026-10-11") == READING.strip()

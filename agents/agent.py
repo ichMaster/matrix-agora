@@ -803,8 +803,14 @@ class Agent:
             self.mood = MoodState(day, split_resolution(reading), reading)  # kept for the day even if the log fails
             try:
                 self.mood_file.parent.mkdir(parents=True, exist_ok=True)
-                with self.mood_file.open("a", encoding="utf-8") as f:
-                    f.write(log_block(day, reading))
+                # private from birth, like the usage file (review #11): created 0600, a looser old file tightened
+                fd = os.open(self.mood_file, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+                try:
+                    if stat.S_IMODE(os.fstat(fd).st_mode) != 0o600:
+                        os.fchmod(fd, 0o600)
+                    os.write(fd, log_block(day, reading).encode("utf-8"))
+                finally:
+                    os.close(fd)
             except OSError as exc:  # review #9: no repeated paid call per reply
                 log.error("mood log not written (%s) — the mood is kept for today", type(exc).__name__)
 

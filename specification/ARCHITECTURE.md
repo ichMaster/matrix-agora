@@ -238,6 +238,7 @@ There is no database, and nothing the agents lived is ever deleted: all durable 
 | `state/<name>.plans/YYYY-MM-DD.md` | first build of a new day | day plan, ≤ `PLAN_MAX_WORDS` words; frozen after its day |
 | `state/<name>.today.md` | hourly; reset at midnight | the today block (+ the hour it was built for), ≤ `TODAY_MAX_WORDS` words |
 | `state/<name>.usage.jsonl` | every Gemini call | one JSON line: `ts`, `agent`, `kind`, `model`, token counts, `ok` — no texts |
+| `state/<name>.mood.log` | the day's first mood call (v4.2, an agent with `mood`) | the daily horoscope readings, `===== YYYY-MM-DD =====` blocks; append-only, 0600 |
 | `state/<name>.lock` | startup (`flock`) | the PID of the running instance |
 | `state/logs/<name>.log` | continuously | rotating log, 1 MB × 3 — no tokens, passwords or texts |
 
