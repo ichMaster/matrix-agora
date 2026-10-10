@@ -417,7 +417,7 @@ Still with Ada and Bruno only; this alone ends today's long threads. Design: mor
 - Reply length: `REPLY_MAX_TOKENS`, the «1–3 речення» rule in `common.md`, trimming to the last complete sentence.
 - `HISTORY_N` default 40; background waves stay "a rate, not a lock".
 - `server/.env` migration of `MAX_BOT_TURNS` to the new meaning (owner).
-- The panel: the agent view gains `type`, `engine` and capabilities; tabs, Forget and the stop/restart confirmations follow capabilities; the token table gains engine and billing columns; `[panel] pronoun` gains `it`.
+- The panel: the agent view gains `type`, `engine` and capabilities; tabs, Forget and the stop/restart confirmations follow capabilities; `[panel] pronoun` gains `it`.
 
 **DoD:**
 - An owner message without names gets exactly `OWNER_REPLIERS` answers; a named one only the named agents; an agent message has at most one next speaker; a simulated wave never exceeds `MAX_BOT_TURNS` agent messages beyond the answers to the owner.
@@ -486,7 +486,7 @@ Design: more-agents.md §Claude, §7, §9, §10. Depends on: v4.1 (v4.2 for the 
 - `ClaudeSdkResponder`: one stateless `query()` per reply on Opus (`CLAUDE_MODEL=opus`) — `tools=[]`, `setting_sources=[]`, `max_turns=1`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, `CLAUDE_CODE_SKIP_PROMPT_HISTORY`, a tmpfs `CLAUDE_CONFIG_DIR`; `RateLimitEvent`: mute on warning, silent until reset on rejection.
 - **No API key, enforced:** no forbidden variable (`ANTHROPIC_*`, `CLAUDE_CODE_USE_*`, `CLAUDE_CODE_SIMPLE`) anywhere in the stack; startup refuses on any of them or a missing OAuth token; they are scrubbed from the SDK's inherited environment; a non-OAuth auth source in `system/init` stops replies; no `anthropic` client in the code; every usage row `subscription`.
 - The second image target `matrix-agora-agent-claude` (+ CI); the `claude` compose service with its own env file, not loading the shared `.env`; `server/deploy.sh` syncs that file.
-- Usage line v2 (`engine`, `billing`, cache tokens, reported cost); prices per engine; the outgoing guard on Claude's replies.
+- Usage line v2 (`engine`, `billing`, cache tokens, reported cost); prices per engine; the panel's token table gains engine and billing columns; the outgoing guard on Claude's replies.
 - **Claude's panel card**: engine, model (Opus), billing `subscription`, the rate-limit status from `state/claude.ratelimit.json`, the startup auth check; its token rows unpriced; no memory tabs, no Forget.
 - (Owner) `claude setup-token` → the token into Claude's env file; the Matrix account, the invite.
 
