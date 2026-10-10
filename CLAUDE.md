@@ -18,7 +18,7 @@ Read these before planning work; they are the project's contract with itself.
 
 Proof of concept: a private Matrix room where the owner and two LLM agents ("Ada" and "Bruno", Gemini 2.5 Flash) talk together. So far the repo holds only the specification. The panel is the point of the project: it will grow into an admin panel for simulations and agents like Lili; the chat is the first simulation (VISION §The direction).
 
-Latest release: v3.4.1 (phase v3.4 + the PASS fix: the sentinel never reaches the room). All roadmap phases are complete. Version v2 (Persona & memory) is complete; v3 (Operations) has begun.
+Latest release: v3.4.1 (phase v3.4 + the PASS fix: the sentinel never reaches the room). Versions v0–v3 are complete. Version v4 (Ensemble) is planned: phases v4.1–v4.7 in ROADMAP, designed in the draft [specification/features/more-agents.md](specification/features/more-agents.md) (Ukrainian copy: `more-agents-UA.md`).
 
 | Version | Phases | What it delivers |
 |---|---|---|
@@ -26,6 +26,7 @@ Latest release: v3.4.1 (phase v3.4 + the PASS fix: the sentinel never reaches th
 | `v1` Conversation | v1.1 Gemini replies · v1.2 turn-taking | code |
 | `v2` Persona & memory | v2.1 canons + session memory · v2.2 a life story, world awareness, plans (with mutations) + day memories + the hourly today block | code + canon files |
 | `v3` Operations | v3.1 token accounting · v3.2 agent images + CI/CD + server deployment · v3.3 the panel: viewing (read-only) · v3.4 the panel: control | code |
+| `v4` Ensemble (planned) | v4.1 roster, agent types, N-agent turn-taking · v4.2 the cat in the room · v4.3 the cat's past life and initiative · v4.4 Claude on the subscription, when asked · v4.5 Claude the philosopher · v4.6 the Lumi bridge, when named · v4.7 Лілі under the full rules | code + canon files |
 
 ## Layout and commands
 

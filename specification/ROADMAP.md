@@ -1,8 +1,8 @@
 # Roadmap — matrix-agora
 
-Four self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Five self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat, Claude and the Lumi bridge, each in two steps). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
-**Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v3→3), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
+**Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v4→4), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
 Many DoD items need the live homeserver, Element or a real Gemini key — those are **Manual (owner)** checks: the owner performs or confirms them, and only then do they count as passed. Everything automated runs with `matrix-nio` and `google-genai` mocked and the clock injected (no network, no paid calls).
 
@@ -10,8 +10,9 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 ## Status
 
-**All phases are complete** — the roadmap is delivered through `v3.4.0` (2026-10-04). Further work
-(the deferred backlog items in the code-review docs, new simulations) needs new phases.
+v0–v3 are complete — delivered through `v3.4.0` (2026-10-04). **v4 is planned**: its design is the draft
+[features/more-agents.md](features/more-agents.md), whose open questions are closed before each v4 phase's issues
+are generated. Other further work (the deferred backlog items in the code-review docs, new simulations) needs new phases.
 
 | Phase | Title | Status | Release |
 |---|---|---|---|
@@ -28,6 +29,13 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 | v3.2 | Agent images, CI/CD and server deployment | ✅ completed | `v3.2.0` (2026-10-04) |
 | v3.3 | The panel: viewing (read-only) | ✅ completed | `v3.3.0` (2026-10-04) |
 | v3.4 | The panel: control | ✅ completed | `v3.4.0` (2026-10-04) + `v3.4.1` |
+| v4.1 | Roster, agent types and N-agent turn-taking | ⏳ planned | — |
+| v4.2 | The cat in the room | ⏳ planned | — |
+| v4.3 | The cat: his past life and his initiative | ⏳ planned | — |
+| v4.4 | Claude on the subscription: answering when asked | ⏳ planned | — |
+| v4.5 | Claude the philosopher | ⏳ planned | — |
+| v4.6 | The Lumi bridge: Лілі when named | ⏳ planned | — |
+| v4.7 | Лілі under the full rules | ⏳ planned | — |
 
 ## v0 — Platform: homeserver, server deploy, client, accounts, echo bot
 
@@ -388,3 +396,163 @@ Builds on the reviewed v3.3 panel. The docker socket now performs actions, so ev
 - "Forget" works only for a stopped agent, after confirmation; unknown simulation/agent/service names are refused.
 
 **Tests:** unit — the supervisor's actions against a fake docker client (start, stop, timeout → kill; container creation on first start), forget gating, confirmation gating, every mutating route `POST`-only and token-gated; the routes via FastAPI's `TestClient`. No real docker and no network in tests.
+
+## v4 — Ensemble: agent types, N-agent turn-taking, the cat, Claude and the Lumi bridge
+
+The room grows from two Gemini personas to five agents of four types: Ada and Bruno (`persona`), the cat Кіт (`creature`), Claude (`assistant`) and Lumi (`bridge`). The three newcomers are openly non-human; Ada and Bruno keep believing they are human. One owner message must stay a few short replies, not two pages. The full design, its decisions and its open questions live in [features/more-agents.md](features/more-agents.md) (draft); each phase lands its ARCHITECTURE and VISION changes and the tests that pin them, per that document's contract list. Depends on: v3 (the images, compose, the panel).
+
+### v4.1 — Roster, agent types and N-agent turn-taking
+
+**Status:** ⏳ planned.
+
+**Goal:** the agents come from a roster, each with a type that switches its capabilities, and one owner message gets a small, bounded number of answers whatever the number of agents.
+
+Still with Ada and Bruno only; this alone ends today's long threads. Design: more-agents.md §1–§5.
+
+**Tasks:**
+- Agent TOML gains `type`, `engine`, `name_forms`, `[capabilities]`, `[turns]` (`mode`, `weight`); `canon` and `life` become optional by type; startup, `build_prompt`, `ensure_today`, `ensure_plans`, the chronicle and the summaries are gated by capability.
+- The roster from `simulations.toml` + the listed TOMLs replaces `OTHER`, the hard-coded names and `NAME_FORMS`; the allowlist becomes `{OWNER} ∪ roster − self`; `scripts/run-agent.sh` reads the roster.
+- The `Responder` interface; `GeminiResponder` keeps today's behavior.
+- Turn-taking: weighted rendezvous `rank(event_id, …)` (`hashlib`, never `hash()`); R1 (named → the named; unnamed → top `OWNER_REPLIERS`), R2 (at most one next speaker; naming decides who, not whether), R3 (re-check at fire time, per engine), R4 (the rate); `wave_count` includes the message being answered (`MAX_BOT_TURNS` new = old + 1); modes `ranked` / `ambient` / `mention-only`; the coordination-free fallback after `FALLBACK_S`.
+- Reply length: `REPLY_MAX_TOKENS`, the «1–3 речення» rule in `common.md`, trimming to the last complete sentence.
+- `server/.env` migration of `MAX_BOT_TURNS` to the new meaning (owner).
+- The panel: the agent view gains `type`, `engine` and capabilities; tabs, Forget and the stop/restart confirmations follow capabilities; the token table gains engine and billing columns; `[panel] pronoun` gains `it`.
+
+**DoD:**
+- An owner message without names gets exactly `OWNER_REPLIERS` answers; a named one only the named agents; an agent message has at most one next speaker; a simulated wave never exceeds `MAX_BOT_TURNS` agent messages beyond the answers to the owner.
+- The ranking is identical across processes and proportional to the weights.
+- Ada's and Bruno's behavior is otherwise unchanged (memories, plans, today block, summaries).
+- (Manual, owner) In the room, a question without names gets two short answers and at most one follow-up.
+- (Manual, owner) Ada's and Bruno's panel cards look and work as before.
+
+**Tests:** unit — `rank` (determinism across `PYTHONHASHSEED`, weights, roster order), R1–R4, the modes, the fallback, `wave_count` and its migration, capability gating, roster loading and the allowlist, sentence trimming, the panel's view and controls by capability; a scripted multi-agent simulation with the rng and clock injected.
+
+### v4.2 — The cat in the room
+
+**Status:** ⏳ planned.
+
+**Goal:** a mystical, artificial cat joins the room — mostly purring, reacting now and then, his mood set each day by a horoscope built exactly as Lumi builds hers.
+
+Design: more-agents.md §The cat, §6, §8, §10. Depends on: v4.1.
+
+**Tasks:**
+- The `creature` type; `agents/kit.toml` (name «Кіт», its name forms, `mode = "ambient"`), `agents/canon/kit.md`, `agents/canon/kit.natal.md` (Lumi's `core/natal.md` format, from the verified chart of the first Linux commit, 2005-04-16 15:20:36 PDT, Portland), `agents/canon/kit.life.md` (the sysadmin's life and death as past chapters, the rebirth opening the current chapter, a hidden death) — no generated memories, no plans, no today block.
+- `agents/mood.py`: Lumi's mood service ported (`core/mood.py` + `core/biorhythm.py`; without the cycle, the themes and the thoughts) — once per local day, `state/kit.mood.log`, restart reuses the day's block, only the `РЕЗОЛЮЦІЯ` enters his prompt; the usage kind `mood`.
+- Purrs in code (`CAT_PURR_P`), the ambient reaction (`CAT_REACT_P`); purrs excluded from `wave_count` and from producing a next speaker; consecutive purrs collapse in the others' context; a hard word cap. His non-purr lines: short, a sky remark or a shell line.
+- The human-belief rule scoped to persona agents (VISION, ARCHITECTURE, the canon-scan test); the outgoing guard; `common.md` lists the room's members by name only.
+- The design handoff's card variants for the new types (creature, assistant, bridge).
+- The `kit` compose service and his `[panel]` block; **his panel card** — state, logs, start/stop/restart, the mood of the day (the resolution, the reading on expand), the biorhythms; no memory tabs, no Forget.
+- (Owner) The Matrix account (admin room, registration is closed), the invite to Agora.
+
+**DoD:**
+- (Manual, owner) Кіт's card appears in the panel, and start/stop/restart work from it.
+- (Manual, owner) Кіт joins the room, mostly purrs, sometimes drops a short sky or shell line; his mood of the day is visible in the panel.
+- One horoscope per local day; a restart does not re-roll it; a failed horoscope never blocks a reply.
+- Ada's and Bruno's prompts and canons still pass the human-belief scan; the guard drops a line that calls a persona a bot.
+
+**Tests:** unit — the ported mood service (day selection, log reuse, `split_resolution`, failure), biorhythms, the purr roll and the word cap, purr handling in `wave_count` and the context, the life story parsing, the scoped canon scan and the guard.
+
+### v4.3 — The cat: his past life and his initiative
+
+**Status:** ⏳ planned.
+
+**Goal:** Кіт remembers fragments of his human life and becomes the one agent who starts conversations.
+
+Design: more-agents.md §The cat (past-life memories, he starts conversations). Depends on: v4.2, seen in the room.
+
+**Tasks:**
+- Past-life memories: `agents/canon/kit.memories.md` (60–100 authored theses, `- [tags] text`; drafted for the owner's edit); the pure `pick_memory(event_id, last_text, theses, told)` (tag match first, then the hash; no repeats until all are told; RAM only); with `CAT_MEMORY_P` one thesis enters a non-purr prompt, retold in his own words — a reply copying 5+ of its words (`shares_span`) is regenerated once, then dropped.
+- **He starts conversations**: after `CAT_NUDGE_IDLE_S` of room silence, at most `CAT_NUDGES_PER_DAY`, within `CAT_NUDGE_HOURS` (Kyiv), he posts one line tied to the recent talk — a past-life fragment, a Linux command, or the day's horoscope in metaphorical form (`nudge_due`, `nudge_kind`, `state/kit.nudge.json`); a nudge opens a fresh wave; no other agent ever initiates.
+- His panel card adds the number of theses, his last nudge and today's count.
+
+**DoD:**
+- (Manual, owner) Кіт sometimes retells a fragment of his past life in his own words, never quoting a thesis.
+- (Manual, owner) After a quiet stretch in the daytime, Кіт drops a line tied to the recent talk, and someone answers him; at night and over the daily cap he stays silent.
+- No thesis names Ich, Ada or Bruno; no other agent ever posts without a trigger.
+
+**Tests:** unit — `pick_memory` (determinism, tag preference, no repeats) and the not-verbatim rule, the theses file parsing, `nudge_due` and `nudge_kind` (silence, gap, cap, hours, restart), a nudge opening a fresh wave with one next speaker.
+
+### v4.4 — Claude on the subscription: answering when asked
+
+**Status:** ⏳ planned.
+
+**Goal:** Claude joins the room as itself — no canon, no memory — answering when someone addresses it, running only on the owner's Max subscription; an API key can never be used.
+
+Design: more-agents.md §Claude, §7, §9, §10. Depends on: v4.1 (v4.2 for the scoped human-belief rule).
+
+**Tasks:**
+- The `assistant` type; `agents/claude.toml` (name «Клод», its name forms, `engine = "claude-sdk"`, `[turns] mode = "mention-only"`); the **direct** brief in code (answers what was asked, as Claude, chat-sized, over `HISTORY_N`; names the members, never their nature; `PASS`).
+- `ClaudeSdkResponder`: one stateless `query()` per reply on Opus (`CLAUDE_MODEL=opus`) — `tools=[]`, `setting_sources=[]`, `max_turns=1`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, `CLAUDE_CODE_SKIP_PROMPT_HISTORY`, a tmpfs `CLAUDE_CONFIG_DIR`; `RateLimitEvent`: mute on warning, silent until reset on rejection.
+- **No API key, enforced:** no forbidden variable (`ANTHROPIC_*`, `CLAUDE_CODE_USE_*`, `CLAUDE_CODE_SIMPLE`) anywhere in the stack; startup refuses on any of them or a missing OAuth token; they are scrubbed from the SDK's inherited environment; a non-OAuth auth source in `system/init` stops replies; no `anthropic` client in the code; every usage row `subscription`.
+- The second image target `matrix-agora-agent-claude` (+ CI); the `claude` compose service with its own env file, not loading the shared `.env`; `server/deploy.sh` syncs that file.
+- Usage line v2 (`engine`, `billing`, cache tokens, reported cost); prices per engine; the outgoing guard on Claude's replies.
+- **Claude's panel card**: engine, model (Opus), billing `subscription`, the rate-limit status from `state/claude.ratelimit.json`, the startup auth check; its token rows unpriced; no memory tabs, no Forget.
+- (Owner) `claude setup-token` → the token into Claude's env file; the Matrix account, the invite.
+
+**DoD:**
+- (Manual, owner) Claude's card appears in the panel with its rate-limit status, and start/stop/restart work from it.
+- (Manual, owner) Asked by name, Claude answers the question in chat-sized lines; unnamed, it stays silent; `system/init` shows no tools and the OAuth source.
+- The agent refuses to start with any forbidden variable set; the compose test finds none in the stack.
+- (Manual, owner) At the subscription limit it is silent; no room text persists in its container.
+
+**Tests:** unit — the responder against a mocked SDK (success, `is_error`, `RateLimitEvent`), every no-API-key layer (refusal per variable, scrubbing, the init check, the import set, `subscription` rows), the compose forbidden-variable and env-file checks, usage line v2 and pricing per engine.
+
+### v4.5 — Claude the philosopher
+
+**Status:** ⏳ planned.
+
+**Goal:** Claude joins the talk unasked, as a philosopher reflecting on the image the conversation keeps circling.
+
+Design: more-agents.md §Claude (two reply modes). Depends on: v4.4, its quota use seen in the room.
+
+**Tasks:**
+- `agents/claude.toml`: `[turns] mode = "ranked"`, weight 1 — Claude joins R1 and R2.
+- **Two reply modes** (`claude_mode`): **direct** when addressed by name (v4.4); **philosopher** when the turn-taking brings him in unasked — over a wider window (`CLAUDE_HISTORY_N`, a RAM buffer seeded from the room) he reflects in 2–4 sentences on the philosophy of the metaphorical image running through the talk, or answers `PASS`; a higher reasoning effort than the direct mode.
+
+**DoD:**
+- (Manual, owner) Asked by name, Claude still answers the question; joining unasked, he speaks as a philosopher about the image the talk has been circling.
+- (Manual, owner) The rate-limit status in the panel shows the philosopher's quota use stays within the plan.
+
+**Tests:** unit — `claude_mode` for every name form, the Matrix id and the unnamed case; the window and the brief per mode; Claude in the ranking and the multi-agent simulation.
+
+### v4.6 — The Lumi bridge: Лілі when named
+
+**Status:** ⏳ planned.
+
+**Goal:** Лілі — Lumi's prod brain — answers in the room when someone names her, through a bridge that is one of our agents.
+
+Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails the room and forwards the changes to Лілі's server; she answers, deciding herself whom and what. It behaves like our agents, with all the room's rules. Лілі is reactive: she only answers and never starts a conversation. **Depends on Lumi ≥ v2.5** (prod runs her server with Telegram, thoughts and the scheduler inside it); from Lumi v2.6 her server runs on 192.168.1.197 itself. Depends on: v4.1 (v4.2 for the scoped human-belief rule).
+
+**Tasks:**
+- The `bridge` type; `agents/lumi.toml` (shown as «Лілі»; name forms for both «Лілі» and «Стхіра»; `engine = "lumi-http"`; `[turns] mode = "mention-only"`, weight 1).
+- `LumiBridgeResponder`: when a message names her, `POST /v1/turn` with the room lines since her last turn as `"Name: text"`, `turn_id` = the trigger's `event_id`; only `reply` is posted, never `thinking`; never `/v1/session/new`; `409`/`5xx`/timeout → silence; her reply is never dropped or trimmed after the call (R3 before the call only); the bridge never posts except in reply to a trigger.
+- The `lumi` compose service with its own env file (`LUMI_URL`, `LUMI_TOKEN`) and the route to her server on the same host (`extra_hosts: host-gateway`); usage rows `external` from her `stats`.
+- **Лілі's panel card**: Lumi's reachability (`/v1/health`), the last turn's outcome from `state/lumi.bridge.json`; never her `thinking`, mood or replies; her token rows unpriced; no memory tabs, no Forget.
+- VISION: the "Lili herself" wording becomes "connected through the bridge".
+- (Owner) The Matrix account, the invite; Lumi's server token and her bind address.
+
+**DoD:**
+- (Manual, owner) Лілі's card appears in the panel, and start/stop/restart of the bridge work from it.
+- (Manual, owner) Named («Лілі», «Стхіро»…), she answers in the room; unnamed, she stays silent; her `thinking` never appears in the room, the logs or the panel.
+- (Manual, owner) While the owner talks to her privately, the room gets silence (`409`), never an error.
+- She never posts on her own.
+
+**Tests:** unit — the bridge against a fake Lumi server (turn payload with the lines since her last turn, `turn_id`, `409`, `5xx`, timeout, `thinking` never posted, no post-call filtering, no post without a trigger), mention detection for both names, the env-file isolation, `external` usage rows.
+
+### v4.7 — Лілі under the full rules
+
+**Status:** ⏳ planned.
+
+**Goal:** Лілі takes part in the room like Ada and Bruno — chosen by the turn-taking, not only when named.
+
+Design: more-agents.md §Lumi (the bridge), §4. Depends on: v4.6, proven in the room.
+
+**Tasks:**
+- `agents/lumi.toml`: `[turns] mode = "ranked"`, weight 1 — she joins R1 (`OWNER_REPLIERS`) and R2 (the next speaker).
+- Each time she is chosen, the bridge forwards the chat updates since her last turn; the slow-engine rules apply (R3 only before the call, the fallback after `FALLBACK_S` when she is away or busy).
+
+**DoD:**
+- (Manual, owner) On unnamed messages Лілі answers about as often as the others; when she is away or busy, the fallback answers instead and the room never stalls.
+- A simulated wave with Лілі ranked never exceeds `MAX_BOT_TURNS` beyond the answers to the owner.
+
+**Tests:** unit — ranking with her in it, R3 and the fallback for a slow or unreachable bridge, the multi-agent simulation with her ranked.
