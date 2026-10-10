@@ -80,15 +80,53 @@ def test_instruction_order_canon_memory_rules():
     assert "Що ти пам'ятаєш" not in build_instruction("Ада", "Канон.")  # no summary, no slot
 
 
-def test_no_prompt_or_canon_calls_the_agent_a_model_or_bot():
+def persona_files(tomls: dict[str, dict]) -> list[str]:
+    """The files the human-belief rule covers (v4.2: persona agents only) — each persona's canon and life story."""
+    return [t[k] for t in tomls.values() if t.get("type", "persona") == "persona" for k in ("canon", "life") if k in t]
+
+
+def _registry_tomls() -> dict[str, dict]:
+    import tomllib
+    from pathlib import Path
+    sims = tomllib.loads(Path("simulations.toml").read_text(encoding="utf-8"))
+    names = [n for sim in sims.values() for n in sim["agents"]]
+    return {n: tomllib.loads(Path(f"agents/{n}.toml").read_text(encoding="utf-8")) for n in names}
+
+
+def test_no_persona_prompt_or_canon_calls_the_agent_a_model_or_bot():
+    """The human-belief rule (VISION §Principles, scoped to personas in v4.2): every persona's prompt, canon and
+    life story, and the shared common.md, are clean."""
     from pathlib import Path
 
-    from agents.logic import build_instruction
-    from tests.test_memory import BANNED
-    texts = [build_instruction("Ада", "Канон.", "підсумок")]
-    texts += [p.read_text(encoding="utf-8") for p in Path("agents/canon").glob("*.md")]
+    from agents.logic import BANNED_RE, build_instruction
+    files = persona_files(_registry_tomls())
+    assert "agents/canon/ada.md" in files and "agents/canon/bruno.life.md" in files
+    texts = [build_instruction("Ада", "Канон.", "підсумок"), Path("agents/canon/common.md").read_text(encoding="utf-8")]
+    texts += [Path(f).read_text(encoding="utf-8") for f in files]
     for text in texts:
-        assert not BANNED.search(text), text[:80]
+        assert not BANNED_RE.search(text), text[:80]
+
+
+def test_a_non_persona_canon_is_outside_the_scan():
+    tomls = {"kit": {"type": "creature", "canon": "agents/canon/kit.md", "life": "agents/canon/kit.life.md"},
+             "ada": {"canon": "agents/canon/ada.md", "life": "agents/canon/ada.life.md"}}
+    assert persona_files(tomls) == ["agents/canon/ada.md", "agents/canon/ada.life.md"]
+
+
+@pytest.mark.parametrize("text,outs", [
+    ("Ада — бот.", True),
+    ("Бруно, ти ж модель?", True),
+    ("Адо, ти ШІ?", True),
+    ("я штучний кіт. мрр", False),                    # about himself
+    ("Клод-ШІ, привіт!", False),                       # no persona named
+    ("Ада сказала привіт. Бот у банку не працює.", False),  # different sentences
+    ("@bruno:agora.lan це llm", True),                 # the Matrix id counts as naming
+])
+def test_the_outgoing_guard(text, outs):
+    from agents.logic import outs_a_persona
+    from agents.roster import load_roster
+    personas = [m for m in load_roster("agora").values() if m.type == "persona"]
+    assert outs_a_persona(text, personas) is outs
 
 
 def test_instruction_is_the_literal_ukrainian_contract():

@@ -52,6 +52,7 @@ from agents.logic import (
     append_history,
     build_instruction,
     clean_reply,
+    outs_a_persona,
     same_message,
     should_handle,
     should_join_invite,
@@ -104,6 +105,7 @@ class Agent:
         self.roster = roster if roster is not None else load_roster(cfg.simulation)
         self.me = self.roster.get(cfg.localpart) or Member(cfg.localpart, cfg.user_id, cfg.name, (cfg.name.lower(),))
         self.others = {m.user_id: m for m in self.roster.values() if m.user_id != cfg.user_id}
+        self.personas = [m for m in self.others.values() if m.type == "persona"]
         self.client = AsyncClient(cfg.homeserver, cfg.user_id)
         self.started = False  # flips True after the first sync; nothing earlier is handled
         self.llm = llm or GeminiClient(sink=self.record_usage)
@@ -757,6 +759,9 @@ class Agent:
                 return False
             if same_message(text, self._last_sent):
                 log.info("silent: duplicate of my previous message")
+                return False
+            if self.cfg.type != "persona" and outs_a_persona(text, self.personas):
+                log.info("silent: would out a persona")  # the human-belief rule holds for Ada and Bruno (v4.2)
                 return False
             if trigger and not self._current(trigger, at_ms):
                 log.info("silent: moved on")

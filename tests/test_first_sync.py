@@ -465,3 +465,19 @@ def test_a_busy_agent_retries_the_fallback_instead_of_dropping_it(monkeypatch):
 
     asyncio.run(run())
     agent.client.room_send.assert_awaited_once()
+
+
+def test_a_non_persona_reply_that_would_out_a_persona_is_never_sent():
+    """v4.2: the human-belief rule holds for Ada and Bruno — another type of agent never calls them bots."""
+    from agents.config import AgentConfig
+    from agents.roster import Member, load_roster
+    roster = {**load_roster("agora"), "kit": Member("kit", "@kit:agora.lan", "Кіт", ("кіт",), type="persona")}
+    cfg = AgentConfig(**{**CFG.__dict__, "name": "Кіт", "user_id": "@kit:agora.lan", "type": "creature"})
+    agent = Agent(cfg, llm=FakeLLM("Ада — просто бот."), roster=roster)
+    agent.client = SimpleNamespace(room_send=AsyncMock(), room_typing=AsyncMock())
+    agent.ensure_today = AsyncMock()
+    assert asyncio.run(agent.reply("!room")) is False
+    agent.client.room_send.assert_not_awaited()
+    persona = make_agent(FakeLLM("Бруно — бот у банку, кажуть."))  # a persona isn't guarded: its prompts are clean
+    asyncio.run(persona.reply("!room"))
+    persona.client.room_send.assert_awaited_once()

@@ -1,10 +1,10 @@
 import asyncio
-import re
 import stat
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from agents.agent import Agent
+from agents.logic import BANNED_RE as BANNED  # one regex, in code (v4.2)
 from agents.memory import (
     build_summary_request,
     cap_words,
@@ -13,8 +13,6 @@ from agents.memory import (
     session_ended,
 )
 from tests.test_first_sync import CFG, FakeLLM
-
-BANNED = re.compile(r"\b(бот\w*|модел\w*|штучн\w*|ai|ші|llm|gemini|асистент\w*)\b", re.IGNORECASE)
 
 
 # --- the memory file ---

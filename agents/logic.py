@@ -5,10 +5,28 @@ ARCHITECTURE §Message flow: the filter and allowlist guard every reply path.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
 from agents.config import AgentConfig
+
+# What a persona must never be called — in its own prompts, canon and life story (the human-belief rule, VISION
+# §Principles; from v4.2 scoped to persona agents), and what no other agent may call a persona in the room.
+BANNED_RE = re.compile(r"\b(бот\w*|модел\w*|штучн\w*|ai|ші|llm|gemini|асистент\w*)\b", re.IGNORECASE)
+SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+|\n+")
+
+
+def outs_a_persona(text: str, personas: Iterable) -> bool:
+    """True when one sentence names a persona (any of its forms, or its Matrix id) and calls something a model or a
+    bot — the outgoing guard every non-persona agent applies before it speaks (v4.2). Talking *about* an AI is
+    fine; tying a persona to one is not."""
+    from agents.turns import mentions  # local: turns imports this module's neighbours, not this one
+    people = list(personas)
+    for sentence in SENTENCE_SPLIT.split(text):
+        if BANNED_RE.search(sentence) and any(mentions(sentence, p.name_forms, p.user_id) for p in people):
+            return True
+    return False
 
 
 @dataclass(frozen=True)

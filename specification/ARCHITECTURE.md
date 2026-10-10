@@ -120,9 +120,9 @@ The agents see each other, so without rules they would reply to each other endle
 
 ## Canon
 
-- `agents/canon/common.md` — shared by both agents: what the room is, who the owner is, who the other agent is, the language and tone of conversation.
+- `agents/canon/common.md` — shared by every agent: what the room is, who is in it (by name only — Ich, Ада, Бруно, Кіт), who the owner is, the language and tone of conversation (1–3 sentences).
 - `agents/canon/<name>.md` — personal: character, way of speaking, interests, attitudes, what the agent never does.
-- The canons describe the agents as **humans** (see VISION.md §Principles). Nothing in code — reply rules, summary or memory prompts — may mention that the agent is a model or a bot.
+- The canons describe the **persona** agents as **humans** (see VISION.md §Principles). Nothing in code — reply rules, summary or memory prompts — may mention that a persona is a model or a bot; the scan (`BANNED_RE` in `agents/logic.py`, pinned by `tests/test_logic.py`) covers the persona prompt builders, `common.md`, and every persona's canon and life story. From v4.2 other types (the cat) may know they are not human — their own canons are outside the scan — and `common.md` names the room's members without describing them. **The outgoing guard:** every non-persona agent drops a reply in which one sentence names a persona and a banned term (`outs_a_persona`), so no member can tell Ada or Bruno they are bots — the line would otherwise enter their memories for good.
 - The TOML points at it: `canon = "agents/canon/<name>.md"`. Read once at startup; a missing or empty canon stops the bot with a clear error.
 - **How the room addresses an agent (from v4.1):** its TOML's `name_forms` — the lowercase forms of its name, whole words (Ада: «ада», «ади», «аді», «аду», «адою», «адо»; Бруно: «бруно») — plus its Matrix id. They live in the TOML, not in code, so a new agent brings its own forms.
 - Canons are committed to the public repo: no secrets, no private data about the owner.
@@ -207,6 +207,7 @@ Changing any of these updates this document and the test that pins it, in the sa
 - The life-story format (header lines, `## YYYY–YYYY · title` chapters) and its visibility rule: future chapters and the death date never reach the conversational prompt (pinned by a test).
 - The `state/` files: `<name>.json` (session), `<name>.memory.md`, `<name>.days/YYYY-MM-DD.md` + `.talk.md`, `<name>.weeks/YYYY-MM-DD.md`, `<name>.months/YYYY-MM.md`, `<name>.years/YYYY.md`, `<name>.plans/` (year, month, week and day plans, with hidden mutation tags), `<name>.today.md`, `<name>.usage.jsonl` (its fields), `<name>.lock`, `logs/<name>.log`.
 - The message filter and allowlist rule (`{OWNER} ∪` the roster's other members, pinned by `tests/test_logic.py`).
+- The human-belief rule's scope (persona agents) and the outgoing guard (`outs_a_persona`), pinned by `tests/test_logic.py`.
 - The transcript format (`"Name: text"` per line), the `PASS` sentinel, and the prompt-assembly order.
 - The turn-taking semantics (from v4.1: `rank`, R1–R4, the group address, `wave_count` with `pending_answers`, the modes and the fallback; pinned by `tests/test_turns.py`).
 - The `server/docker-compose.yml` environment (server name, federation, encryption, registration). `CONTINUWUITY_SERVER_NAME` cannot change without wiping the database.
