@@ -252,3 +252,13 @@ def test_the_silence_is_never_shorter_than_the_wave_window(tmp_path, monkeypatch
     monkeypatch.setenv("CAT_NUDGE_IDLE_S", "300")
     monkeypatch.setenv("BOT_WINDOW_S", "600")
     assert cat(tmp_path, SeqLLM()).nudge_idle_ms == 600_000
+
+
+def test_after_a_restart_the_silence_counts_from_the_start(tmp_path):
+    """Review #9: a restart whose backfill failed left an empty timeline — quiet — and he nudged at the first tick."""
+    agent = cat(tmp_path, SeqLLM("рядок"))
+    agent.timeline = []
+    agent.started_ms = agent.clock() - 60_000                                           # started a minute ago
+    assert asyncio.run(agent.maybe_nudge()) is False
+    agent.started_ms = agent.clock() - IDLE
+    assert asyncio.run(agent.maybe_nudge()) is True

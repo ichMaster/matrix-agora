@@ -134,6 +134,7 @@ class Agent:
         self.personas = [m for m in self.others.values() if m.type == "persona"]
         self.client = AsyncClient(cfg.homeserver, cfg.user_id)
         self.started = False  # flips True after the first sync; nothing earlier is handled
+        self.started_ms: int | None = None  # when it did (v4.3: the silence before a nudge counts from here at least)
         self.llm = llm or GeminiClient(sink=self.record_usage)
         self.responder = responder_for(cfg.engine, self.llm)  # the reply engine seam (v4.1)
         self.reply_max_tokens = int(os.environ.get("REPLY_MAX_TOKENS", "200"))
@@ -989,7 +990,10 @@ class Agent:
         now_ms = self.clock()
         now = local_now(now_ms, self.tz)
         state = load_nudge_state(self.nudge_file, now.date().isoformat())
-        last_room_ms = int(self.timeline[-1][1]) if self.timeline else None
+        # the silence counts from the later of the room's last message and this start: a restart whose backfill
+        # failed (an empty timeline) never nudges at once (review #9)
+        marks = [int(self.timeline[-1][1])] if self.timeline else []
+        last_room_ms = max([*marks, *([self.started_ms] if self.started_ms is not None else [])], default=None)
         if not nudge_due(now_ms, now, last_room_ms, state.last_ms, state.count, self.nudge_idle_ms,
                          self.nudges_per_day, self.nudge_hours):
             return False
@@ -1139,6 +1143,7 @@ class Agent:
         except Exception:
             log.exception("context backfill failed (starting without it)")
         self.started = True
+        self.started_ms = self.clock()
         await self.join_pending_invites()
         self._spawn(self.world_tick(force=True))  # startup kick: catch up memories and today's plans
         if self.cfg.can("mood"):
