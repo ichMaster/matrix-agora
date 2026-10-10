@@ -1,5 +1,6 @@
 .env
 server/.env
+server/claude.env
 state/
 .venv/
 __pycache__/
