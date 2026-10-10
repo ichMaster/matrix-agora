@@ -72,6 +72,29 @@ services:
       - ../state:/app/state
     stop_grace_period: 30s                       # a creature writes no summary; the grace period stays
 
+  claude:
+    # v4.4 — Claude as itself, on the owner's Max subscription only: its own image (the Agent SDK) and its OWN env
+    # file — never the shared .env, so no Gemini key, no other password and never an API key reach it
+    image: ghcr.io/ichmaster/matrix-agora-agent-claude:${AGENT_IMAGE_TAG:-latest}
+    command: ["agents/claude.toml"]
+    restart: unless-stopped
+    init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
+    depends_on: [homeserver]
+    env_file:
+      - path: claude.env
+        required: false
+    environment:
+      HOMESERVER: http://homeserver:8008
+      TZ: ${TIMEZONE:-Europe/Kyiv}
+      HOME: /tmp/claude                          # the CLI's home and config: a tmpfs, nothing survives a restart
+      CLAUDE_CONFIG_DIR: /tmp/claude
+    tmpfs:
+      - /tmp/claude:uid=1000,gid=1000,mode=0700
+    user: "1000:1000"
+    volumes:
+      - ../state:/app/state
+    stop_grace_period: 30s
+
   usage-report:
     # the daily token report (v3.1.1), 07:00 in TIMEZONE → ~/matrix-agora/reports/usage/
     image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}

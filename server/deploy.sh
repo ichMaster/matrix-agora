@@ -8,6 +8,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONF="$REPO_DIR/server_con.yaml"
 COMPOSE="$REPO_DIR/server/docker-compose.yml"
 LOCAL_ENV="$REPO_DIR/server/.env"
+CLAUDE_ENV="$REPO_DIR/server/claude.env"   # v4.4: Claude's own env file (the subscription's OAuth token)
 REMOTE_DIR="matrix-agora/server"
 DRY_RUN=0
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=1
@@ -45,6 +46,9 @@ if [ -f "$LOCAL_ENV" ]; then
   CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$LOCAL_ENV" "$TARGET:$REMOTE_DIR/.env")"
 else
   say "deploy: no local server/.env — leaving the host's .env untouched"
+fi
+if [ -f "$CLAUDE_ENV" ]; then   # never printed: rsync -i lists the file name only
+  CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" --chmod=F600 "$CLAUDE_ENV" "$TARGET:$REMOTE_DIR/claude.env")"
 fi
 if [ -n "${CHANGES//[[:space:]]/}" ]; then say "deploy: changed:"; say "$CHANGES"; else say "deploy: nothing to sync"; fi
 

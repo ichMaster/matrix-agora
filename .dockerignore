@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 server/.env
+server/claude.env
 server_con.yaml
 state/
 reports/

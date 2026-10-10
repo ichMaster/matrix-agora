@@ -38,8 +38,13 @@ jobs:
         include:
           - name: agent
             file: agents/Dockerfile
+            target: agent
+          - name: agent-claude              # v4.4: + the Claude Agent SDK (its bundled CLI)
+            file: agents/Dockerfile
+            target: claude
           - name: panel
             file: panel/Dockerfile
+            target: ""
     permissions:
       contents: read
       packages: write
@@ -65,6 +70,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
           platforms: linux/amd64
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}

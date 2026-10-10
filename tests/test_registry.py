@@ -22,7 +22,7 @@ def test_the_real_registry_holds_exactly_agora():
     reg = load_registry()
     assert list(reg) == ["agora"]
     agora = reg["agora"]
-    assert (agora.kind, agora.services, agora.agents) == ("matrix-chat", ("homeserver",), ("ada", "bruno", "kit"))
+    assert (agora.kind, agora.services, agora.agents) == ("matrix-chat", ("homeserver",), ("ada", "bruno", "kit", "claude"))
     assert agora.health.path == "/_matrix/client/versions" and agora.health.service == "homeserver"
     assert agora.endpoints == {"homeserver": "HOMESERVER", "room": "ROOM_ID"}
     assert simulation_of(reg, "bruno").id == "agora" and simulation_of(reg, "carol") is None

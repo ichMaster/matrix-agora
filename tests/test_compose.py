@@ -15,7 +15,7 @@ def env_keys(path: Path) -> set[str]:
 
 
 def test_the_service_set():
-    assert set(SERVICES) == {"homeserver", "ada", "bruno", "kit", "usage-report", "panel"}  # v4.2: the cat
+    assert set(SERVICES) == {"homeserver", "ada", "bruno", "kit", "claude", "usage-report", "panel"}  # v4.4
 
 
 def test_the_homeserver_stays_closed():
@@ -116,3 +116,45 @@ def test_the_cats_example_values_are_the_agents_defaults(monkeypatch):
     assert int(example["CAT_NUDGE_IDLE_S"]) * 1000 == cat.nudge_idle_ms
     assert int(example["CAT_NUDGES_PER_DAY"]) == cat.nudges_per_day
     assert parse_hours(example["CAT_NUDGE_HOURS"]) == cat.nudge_hours
+
+
+# --- v4.4: Claude's own service and env file; no API credential anywhere in the stack -------------------------------
+def _forbidden(name: str) -> bool:
+    return name.startswith(("ANTHROPIC_", "CLAUDE_CODE_USE_")) or name == "CLAUDE_CODE_SIMPLE"
+
+
+def test_claude_runs_his_own_image_with_his_own_env_file_only():
+    svc = SERVICES["claude"]
+    assert svc["image"] == "ghcr.io/ichmaster/matrix-agora-agent-claude:${AGENT_IMAGE_TAG:-latest}"
+    assert svc["command"] == ["agents/claude.toml"] and svc["init"] is True and svc["user"] == "1000:1000"
+    assert svc["env_file"] == [{"path": "claude.env", "required": False}]           # never the shared .env
+    assert svc["environment"]["CLAUDE_CONFIG_DIR"] == svc["environment"]["HOME"] == "/tmp/claude"
+    assert svc["tmpfs"] == ["/tmp/claude:uid=1000,gid=1000,mode=0700"]              # nothing survives a restart
+    assert svc["volumes"] == ["../state:/app/state"]
+
+
+def test_no_service_and_no_env_example_names_a_forbidden_variable():
+    for name, svc in SERVICES.items():
+        env = svc.get("environment") or {}
+        keys = env if isinstance(env, dict) else [e.split("=", 1)[0] for e in env]
+        assert not [k for k in keys if _forbidden(k)], name
+    for example in (".env.example", "server/.env.example", "server/claude.env.example"):
+        assert not [k for k in env_keys(ROOT / example) if _forbidden(k)], example
+
+
+def test_claudes_env_example_holds_his_settings_and_nothing_of_the_others():
+    keys = env_keys(ROOT / "server" / "claude.env.example")
+    assert {"ROOM_ID", "OWNER", "CLAUDE_PASSWORD", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_MODEL",
+            "CLAUDE_CODE_MAX_OUTPUT_TOKENS"} <= keys
+    assert not keys & {"GEMINI_API_KEY", "ADA_PASSWORD", "BRUNO_PASSWORD", "KIT_PASSWORD", "PANEL_TOKEN",
+                       "REGISTRATION_TOKEN"}
+
+
+def test_deploy_syncs_claudes_env_file_privately_and_it_never_enters_an_image():
+    deploy = (ROOT / "server" / "deploy.sh").read_text()
+    assert 'CLAUDE_ENV="$REPO_DIR/server/claude.env"' in deploy and "--chmod=F600" in deploy
+    assert "server/claude.env" in (ROOT / ".dockerignore").read_text().splitlines()
+    assert "server/claude.env" in (ROOT / ".gitignore").read_text().splitlines()
+    dockerfile = (ROOT / "agents" / "Dockerfile").read_text()
+    assert "FROM python:3.12-slim AS agent" in dockerfile and "FROM agent AS claude" in dockerfile
+    assert "--group claude" in dockerfile

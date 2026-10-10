@@ -33,9 +33,11 @@ def test_the_image_and_its_tags():
     steps = {s.get("id") or s["uses"].split("@")[0]: s for s in CI["jobs"]["image"]["steps"] if "uses" in s}
     meta = steps["meta"]["with"]
     assert meta["images"] == "ghcr.io/ichmaster/matrix-agora-${{ matrix.name }}"  # what server/docker-compose.yml pulls
-    matrix = {m["name"]: m["file"] for m in CI["jobs"]["image"]["strategy"]["matrix"]["include"]}
-    assert matrix == {"agent": "agents/Dockerfile", "panel": "panel/Dockerfile"}
+    matrix = {m["name"]: (m["file"], m["target"]) for m in CI["jobs"]["image"]["strategy"]["matrix"]["include"]}
+    assert matrix == {"agent": ("agents/Dockerfile", "agent"), "agent-claude": ("agents/Dockerfile", "claude"),
+                      "panel": ("panel/Dockerfile", "")}  # v4.4: Claude's image is the `claude` target
     for tag in ("type=ref,event=tag", "value=latest", "value=edge", "type=sha"):
         assert tag in meta["tags"]
     build = steps["docker/build-push-action"]["with"]
     assert build["file"] == "${{ matrix.file }}" and build["push"] == "${{ github.event_name == 'push' }}"
+    assert build["target"] == "${{ matrix.target }}"

@@ -7,7 +7,7 @@ kind = "matrix-chat"
 title = "Agora"
 description = "private Matrix room · agora.lan"
 services = ["homeserver"]          # its compose services
-agents = ["ada", "bruno", "kit"]          # the agents that join it (agents/<name>.toml)
+agents = ["ada", "bruno", "kit", "claude"]          # the agents that join it (agents/<name>.toml)
 
 [agora.health]                     # the health probe: http://<service>:<port><path> on the compose network
 service = "homeserver"
