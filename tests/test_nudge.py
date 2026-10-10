@@ -235,3 +235,20 @@ def test_a_nudge_after_silence_opens_a_fresh_wave_with_one_next_speaker():
                          bot_reply_p=1.0, reply_delay_s=4.0, rng=lambda: 0.0)
         answers.append(d.reply)
     assert answers.count(True) == 1                                                     # exactly one next speaker
+
+
+def test_a_cat_only_typo_never_takes_down_the_others(tmp_path, monkeypatch):
+    """Review #7: every agent parsed CAT_NUDGE_HOURS, so «22-09» crash-looped Ada and Bruno too."""
+    from tests.test_first_sync import FakeLLM, make_agent
+    monkeypatch.setenv("CAT_NUDGE_HOURS", "22-09")
+    monkeypatch.setenv("CAT_NUDGE_IDLE_S", "not a number")
+    make_agent(FakeLLM())                                                               # Ada starts
+    with pytest.raises(ValueError):
+        cat(tmp_path, SeqLLM())                                                         # the cat's own error
+
+
+def test_the_silence_is_never_shorter_than_the_wave_window(tmp_path, monkeypatch):
+    """Review #7: a nudge must land in an empty wave window, or R2 blocks every answer."""
+    monkeypatch.setenv("CAT_NUDGE_IDLE_S", "300")
+    monkeypatch.setenv("BOT_WINDOW_S", "600")
+    assert cat(tmp_path, SeqLLM()).nudge_idle_ms == 600_000

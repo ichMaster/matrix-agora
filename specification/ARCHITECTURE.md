@@ -259,7 +259,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `HISTORY_N`, `REPLY_DELAY_S`, `MAX_BOT_TURNS`, `BOT_REPLY_P`, `BOT_WINDOW_S` | v1.1–v1.2 | context size and turn-taking (40 from v4.1 / 4 / 3 / 0.5 / 600); from v4.1 `MAX_BOT_TURNS` counts the message being answered (v1.2's value + 1) |
 | `CAT_REACT_P`, `CAT_PURR_P`, `CAT_MAX_WORDS` | v4.2 | the cat: how often he reacts unasked, how often a reaction is a purr, his word cap (0.3 / 0.8 / 12) |
 | `CAT_MEMORY_P` | v4.3 | how often one of the cat's spoken lines retells a past-life thesis (0.25) |
-| `CAT_NUDGE_IDLE_S`, `CAT_NUDGES_PER_DAY`, `CAT_NUDGE_HOURS` | v4.3 | the cat starts a conversation: after this much room silence, at most so many a day, within these local hours (1200 — 20 min, the owner's choice 2026-10-10 / 6 / `09-22`) |
+| `CAT_NUDGE_IDLE_S`, `CAT_NUDGES_PER_DAY`, `CAT_NUDGE_HOURS` | v4.3 | read only by an agent with `nudge` (review #7) — the cat starts a conversation: after this much room silence (never less than `BOT_WINDOW_S`), at most so many a day, within these local hours (1200 — 20 min, the owner's choice 2026-10-10 / 6 / `09-22`) |
 | `REPLY_MAX_TOKENS` | v4.1 | the output cap of a reply (200); summaries, memories and plans keep their own caps |
 | `OWNER_REPLIERS`, `FALLBACK_S` | v4.1 | how many agents answer an owner message that names no one; seconds before the best-ranked unchosen agent answers an unanswered owner (2 / 30) |
 | `SESSION_IDLE_S`, `SESSION_MAX_MESSAGES`, `SUMMARY_MAX_WORDS` | v2.1 | session memory (900 / 200 / 200) |

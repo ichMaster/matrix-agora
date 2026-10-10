@@ -148,13 +148,19 @@ class Agent:
         self.cat_purr_p = float(os.environ.get("CAT_PURR_P", "0.8"))
         self.cat_max_words = int(os.environ.get("CAT_MAX_WORDS", "12"))
         self.cat_memory_p = float(os.environ.get("CAT_MEMORY_P", "0.25"))  # v4.3: a past-life fragment in a line
-        # v4.3 — the cat's initiative: after this much silence, at most so many a day, only in these local hours
-        self.nudge_idle_ms = int(float(os.environ.get("CAT_NUDGE_IDLE_S", "1200")) * 1000)
-        self.nudges_per_day = int(os.environ.get("CAT_NUDGES_PER_DAY", "6"))
-        self.nudge_hours = parse_hours(os.environ.get("CAT_NUDGE_HOURS", "09-22"))
         self.bot_reply_p = float(os.environ.get("BOT_REPLY_P", "0.5"))
         self.reply_delay_s = float(os.environ.get("REPLY_DELAY_S", "4"))
         self.bot_window_ms = int(float(os.environ.get("BOT_WINDOW_S", "600")) * 1000)
+        # v4.3 — the cat's initiative: after this much silence, at most so many a day, only in these local hours.
+        # Only an agent with `nudge` reads them, so a typo never takes the whole room down (review #7).
+        self.nudge_idle_ms, self.nudges_per_day, self.nudge_hours = 0, 0, (0, 0)
+        if cfg.can("nudge"):
+            self.nudge_hours = parse_hours(os.environ.get("CAT_NUDGE_HOURS", "09-22"))
+            self.nudges_per_day = int(os.environ.get("CAT_NUDGES_PER_DAY", "6"))
+            self.nudge_idle_ms = int(float(os.environ.get("CAT_NUDGE_IDLE_S", "1200")) * 1000)
+            if self.nudge_idle_ms < self.bot_window_ms:  # the silence must empty the wave window
+                log.warning("CAT_NUDGE_IDLE_S below BOT_WINDOW_S — using %d s", self.bot_window_ms // 1000)
+                self.nudge_idle_ms = self.bot_window_ms
         self.timeline: list[tuple[str, int, str]] = []  # (name, server_ts_ms, event_id), parallel to history
         self.last_owner: tuple[str, str] | None = None  # (event_id, text) of the owner's latest message
         self.rng = random.random  # injectable in tests
