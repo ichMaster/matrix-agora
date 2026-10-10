@@ -80,7 +80,6 @@ def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config
         "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
         "CLAUDE_CONFIG_DIR": config_dir,
-        "MAX_THINKING_TOKENS": "0",
         "CLAUDE_CODE_MAX_RETRIES": "2",  # its own retries stay short; the reply is bounded anyway (review #11)
         "ENABLE_CLAUDEAI_MCP_SERVERS": "false",  # never the account's claude.ai connectors (review #10)
     }
@@ -97,13 +96,16 @@ def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config
         "max_turns": 1,
         "model": model,
         "cwd": config_dir,
-        "thinking": {"type": "disabled"},
+        # thinking off for a chat answer (review #1); the philosopher thinks (v4.5) — there is no cap to eat into
+        "thinking": {"type": "adaptive"} if effort else {"type": "disabled"},
         # no session transcript anywhere (review #7): accepted by the bundled CLI in the SDK's stream-json mode
         "extra_args": {"no-session-persistence": None},
         "env": env,
     }
     if effort:
         opts["effort"] = effort
+    else:
+        env["MAX_THINKING_TOKENS"] = "0"
     return opts
 
 
@@ -247,7 +249,8 @@ class ClaudeSdkResponder:
             return None
         query = self._query or _default_query()
         options = (self._options or _default_options())(**sdk_options(
-            turn.instruction, model=self.model, max_output_tokens=self.max_output_tokens, config_dir=self.config_dir))
+            turn.instruction, model=self.model, max_output_tokens=self.max_output_tokens, config_dir=self.config_dir,
+            effort=turn.effort))
         parts: list[str] = []
         result = None
         saw_init = over_limit = False

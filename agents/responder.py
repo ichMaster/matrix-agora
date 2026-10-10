@@ -22,6 +22,7 @@ class Turn:
     instruction: str | None       # the system instruction (None: the engine owns its identity)
     max_tokens: int
     kind: str = "reply"
+    effort: str | None = None     # v4.5: a higher reasoning effort for an engine that has one (Claude the philosopher)
 
 
 @dataclass(frozen=True)

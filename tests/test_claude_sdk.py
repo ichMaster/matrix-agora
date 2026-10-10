@@ -372,3 +372,104 @@ def test_a_restart_refreshes_the_card_and_keeps_a_running_mute(tmp_path):
     r2, _ = responder(tmp_path, sdk)
     r2.resume_status()
     assert not r2.muted()                                                                     # an old mute is gone
+
+
+# --- v4.5: the philosopher --------------------------------------------------------------------------------------------
+@pytest.mark.parametrize("text,mode", [
+    ("Клод, а ти що скажеш?", "direct"), ("спитаю Клода", "direct"), ("дай Клоду слово", "direct"),
+    ("з Клодом цікаво", "direct"), ("Клоде, поясни", "direct"), ("Claude, explain", "direct"),
+    ("@claude:agora.lan ну?", "direct"), ("гарний вечір, правда?", "philosopher"), ("", "philosopher"),
+])
+def test_claude_mode_for_every_name_form_the_id_and_the_unnamed_case(text, mode):
+    from agents.roster import load_member
+    from agents.turns import claude_mode
+    claude = load_member(Path("agents/claude.toml"))
+    assert claude_mode(text, claude.name_forms, claude.user_id) == mode
+
+
+def test_the_philosophers_options_think_and_the_direct_ones_do_not():
+    direct = sdk_options("B", model="opus", max_output_tokens=0, config_dir="/c")
+    wise = sdk_options("B", model="opus", max_output_tokens=0, config_dir="/c", effort="high")
+    assert direct["thinking"] == {"type": "disabled"} and direct["env"]["MAX_THINKING_TOKENS"] == "0"
+    assert "effort" not in direct
+    assert wise["thinking"] == {"type": "adaptive"} and wise["effort"] == "high"
+    assert "MAX_THINKING_TOKENS" not in wise["env"]
+
+
+def test_the_philosophers_brief_names_the_members_and_no_ones_nature():
+    from agents.logic import BANNED_RE, CLAUDE_BRIEF_PHILOSOPHER, outs_a_persona
+    from agents.roster import load_roster
+    personas = [m for m in load_roster("agora").values() if m.type == "persona"]
+    assert "2–4 речення" in CLAUDE_BRIEF_PHILOSOPHER and "PASS" in CLAUDE_BRIEF_PHILOSOPHER
+    assert "метафоричний образ" in CLAUDE_BRIEF_PHILOSOPHER and "українською" in CLAUDE_BRIEF_PHILOSOPHER
+    assert not BANNED_RE.search(CLAUDE_BRIEF_PHILOSOPHER) and not outs_a_persona(CLAUDE_BRIEF_PHILOSOPHER, personas)
+
+
+class RecordingResponder:
+    def __init__(self, text="Думка."):
+        self.turns = []
+        self.text = text
+
+    async def respond(self, turn):
+        from agents.responder import Reply
+        self.turns.append(turn)
+        return Reply(self.text)
+
+
+def claude_agent(monkeypatch):
+    from types import SimpleNamespace as NS
+    from unittest.mock import AsyncMock
+
+    from agents.agent import Agent
+    for k in [k for k in os.environ if k.startswith(("ANTHROPIC_", "CLAUDE_CODE_USE_"))]:
+        monkeypatch.delenv(k)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "oat")
+    agent = Agent(claude_cfg())
+    agent.responder = RecordingResponder()
+    agent.client = NS(room_send=AsyncMock(), room_typing=AsyncMock())
+    agent.history = [("Ich", "коротке")]
+    agent.wide_history = [("Ада", f"рядок {i}") for i in range(100)] + [("Ich", "коротке")]
+    return agent
+
+
+@pytest.mark.parametrize("owner_text,mode", [("Клоде, котра година?", "direct"), ("Як вам вечір?", "philosopher")])
+def test_an_answer_to_the_owner_picks_its_mode_from_his_message(monkeypatch, owner_text, mode):
+    from agents.logic import CLAUDE_BRIEF_DIRECT, CLAUDE_BRIEF_PHILOSOPHER
+    agent = claude_agent(monkeypatch)
+    agent.last_owner = ("$o", owner_text)
+    asyncio.run(agent.reply("!room"))
+    turn = agent.responder.turns[0]
+    if mode == "direct":
+        assert (turn.instruction, len(turn.lines), turn.effort) == (CLAUDE_BRIEF_DIRECT, 1, None)
+    else:
+        assert (turn.instruction, len(turn.lines), turn.effort) == (CLAUDE_BRIEF_PHILOSOPHER, 101, "high")
+
+
+def test_an_agent_trigger_that_names_him_is_answered_directly(monkeypatch):
+    from agents.logic import CLAUDE_BRIEF_DIRECT
+    agent = claude_agent(monkeypatch)
+    agent.last_owner = ("$o", "Як вам вечір?")                 # the owner did not name him…
+    agent._remember_text("$b", "Клоде, а що ти думаєш?")       # …but Bruno, whom he answers, did
+    agent.timeline = [("Бруно", 1, "$b", False)]
+    agent._current = lambda trigger, at_ms=None: True
+    asyncio.run(agent.reply("!room", "$b"))
+    assert agent.responder.turns[0].instruction == CLAUDE_BRIEF_DIRECT
+
+
+def test_the_wider_window_is_seeded_and_bounded(monkeypatch):
+    from types import SimpleNamespace as NS
+
+    from nio import RoomMessageText
+    agent = claude_agent(monkeypatch)
+    agent.history, agent.wide_history = [], []
+    events = []
+    for i in range(200):
+        e = RoomMessageText.__new__(RoomMessageText)
+        e.__dict__.update(sender="@ich:agora.lan", body=f"m{i}", server_timestamp=i, event_id=f"$e{i}",
+                          source={}, flattened={})
+        events.append(e)
+    agent.seed_context(list(reversed(events)))
+    assert len(agent.history) == agent.history_n == 40 and len(agent.wide_history) == agent.wide_n == 150
+    assert agent.wide_history[-1] == ("Ich", "m199") and agent._texts["$e199"] == "m199"
+    from tests.test_first_sync import FakeLLM, make_agent
+    assert make_agent(FakeLLM()).wide_n == 0 and NS                        # a persona keeps no wide window

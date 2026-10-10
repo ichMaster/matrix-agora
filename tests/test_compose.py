@@ -170,7 +170,8 @@ def test_claude_takes_the_room_and_the_turn_settings_from_the_shared_file():
     service interpolates them from the shared .env — a single source; his own file holds only his own."""
     env = SERVICES["claude"]["environment"]
     for key in ("ROOM_ID", "OWNER", "TIMEZONE", "HISTORY_N", "REPLY_MAX_TOKENS", "MAX_BOT_TURNS", "OWNER_REPLIERS",
-                "FALLBACK_S", "BOT_REPLY_P", "REPLY_DELAY_S", "BOT_WINDOW_S", "CAT_REACT_P", "CAT_PURR_P"):
+                "FALLBACK_S", "BOT_REPLY_P", "REPLY_DELAY_S", "BOT_WINDOW_S", "CAT_REACT_P", "CAT_PURR_P",
+                "CLAUDE_HISTORY_N"):
         assert str(env[key]).startswith("${" + key + ":-"), key
     assert env_keys(ROOT / "server" / "claude.env.example") == {"CLAUDE_PASSWORD", "CLAUDE_CODE_OAUTH_TOKEN",
                                                                   "CLAUDE_MODEL", "CLAUDE_CODE_MAX_OUTPUT_TOKENS",

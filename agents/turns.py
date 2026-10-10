@@ -63,6 +63,12 @@ def mentions(text: str, forms: Iterable[str], user_id: str) -> bool:
     return any(re.search(rf"(?<!\w){re.escape(f)}(?!\w)", low) for f in forms)
 
 
+def claude_mode(answered_text: str, name_forms: Iterable[str], user_id: str) -> str:
+    """v4.5 — Claude's reply mode from the message he answers: `direct` when it names him (any name form or his
+    Matrix id), `philosopher` when the turn-taking brought him in unasked."""
+    return "direct" if mentions(answered_text or "", name_forms, user_id) else "philosopher"
+
+
 def addresses_everyone(text: str) -> bool:
     return bool(GROUP_RE.search(text))
 

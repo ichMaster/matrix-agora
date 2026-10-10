@@ -58,6 +58,7 @@ from agents.life import current_chapter, life_section, next_chapter
 from agents.llm import GeminiClient
 from agents.logic import (
     CLAUDE_BRIEF_DIRECT,
+    CLAUDE_BRIEF_PHILOSOPHER,
     CREATURE_RULES,
     append_history,
     build_instruction,
@@ -106,6 +107,7 @@ from agents.roster import Member, load_roster
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.session import load_session, save_session
 from agents.turns import (
+    claude_mode,
     decide_reply,
     fallback_due,
     fallback_replier,
@@ -163,6 +165,10 @@ class Agent:
         self.reply_max_tokens = int(os.environ.get("REPLY_MAX_TOKENS", "200"))
         self.history: list[tuple[str, str]] = []
         self.history_n = int(os.environ.get("HISTORY_N", "40"))
+        # v4.5 — Claude the philosopher reads a wider window (RAM only, seeded from the room like the regular one)
+        self.wide_n = int(os.environ.get("CLAUDE_HISTORY_N", "150")) if cfg.type == "assistant" else 0
+        self.wide_history: list[tuple[str, str]] = []
+        self._texts: dict[str, str] = {}  # event id → text of recent room messages: what a reply answers
         # v4.1: MAX_BOT_TURNS counts the message being answered (v1.2's count excluded it: new = old + 1)
         self.max_bot_turns = int(os.environ.get("MAX_BOT_TURNS", "3"))
         self.owner_repliers = int(os.environ.get("OWNER_REPLIERS", "2"))
@@ -268,18 +274,21 @@ class Agent:
         """Restart backfill: room messages become context (history + streak
         timeline), chronologically — never replied to, never re-summarized."""
         texts = [e for e in reversed(events_newest_first) if isinstance(e, RoomMessageText)]
-        for e in texts[-self.history_n:]:
+        window = max(self.history_n, self.wide_n)
+        for e in texts[-window:]:
             speaker = self.names.get(e.sender, e.sender)
             if e.sender == self.cfg.owner:
                 self.last_owner = (str(getattr(e, "event_id", "")), e.body)
             self._add_context(speaker, e.body)
+            self._remember_text(str(getattr(e, "event_id", "")), e.body)
             self.timeline = [*self.timeline, (speaker, int(e.server_timestamp), str(getattr(e, "event_id", "")),
                                               self._purr_in_timeline(e.sender, e.body))][-max(self.history_n, 1):]
-        return len(texts[-self.history_n:])
+        return len(texts[-window:])
 
     async def backfill(self, from_token: str) -> None:
         resp = await self.client.room_messages(
-            self.cfg.room_id, start=from_token, direction=MessageDirection.back, limit=self.history_n,
+            self.cfg.room_id, start=from_token, direction=MessageDirection.back,
+            limit=max(self.history_n, self.wide_n),
         )
         if isinstance(resp, RoomMessagesError):
             log.error("context backfill failed: %s", resp.message)
@@ -322,6 +331,7 @@ class Agent:
                 # the context window sees every room message, own and the other agent's included
                 speaker = self.names.get(event.sender, event.sender)
                 self._add_context(speaker, event.body)
+                self._remember_text(event_id, event.body)
                 self.timeline = [*self.timeline, (speaker, now_ms, event_id,
                                                   self._purr_in_timeline(event.sender, event.body))
                                  ][-max(self.history_n, 1):]
@@ -412,6 +422,19 @@ class Agent:
             self.history = [*self.history[:-1], (speaker, text)]
         else:
             self.history = append_history(self.history, speaker, text, self.history_n)
+        if self.wide_n:  # v4.5: the philosopher's wider window
+            if self._repeat_purr(self.wide_history, speaker, text):
+                self.wide_history = [*self.wide_history[:-1], (speaker, text)]
+            else:
+                self.wide_history = append_history(self.wide_history, speaker, text, self.wide_n)
+
+    def _remember_text(self, event_id: str, text: str) -> None:
+        """What a reply answers (v4.5: Claude's mode depends on it) — bounded like the windows."""
+        if not event_id:
+            return
+        self._texts[event_id] = text
+        while len(self._texts) > max(self.history_n, self.wide_n, 1) * 2:
+            self._texts.pop(next(iter(self._texts)))
 
     async def purr_later(self, room_id: str, delay_s: float, event_id: str) -> None:
         try:
@@ -935,7 +958,14 @@ class Agent:
                     log.exception("mood of the day failed (reply continues)")
             memory = self._pick_thesis()
             prompt = self.build_prompt(pastlife_section(self.cfg.theses[memory]) if memory is not None else None)
-            text = await self._compose(prompt)
+            lines, effort = None, None
+            if self.cfg.type == "assistant":  # v4.5: direct when named, otherwise the philosopher
+                answered = (self._texts.get(trigger, "") if trigger
+                            else self.last_owner[1] if self.last_owner else "")
+                if claude_mode(answered, self.me.name_forms, self.cfg.user_id) == "philosopher":
+                    prompt, lines, effort = CLAUDE_BRIEF_PHILOSOPHER, self.wide_history, "high"
+                    log.info("claude mode: philosopher")
+            text = await self._compose(prompt, lines=lines, effort=effort)
             if text is not None and memory is not None and self._verbatim(text, memory):
                 log.info("verbatim memory: regenerating once")  # his own words, never the thesis (v4.3)
                 text = await self._compose(prompt)
@@ -968,10 +998,12 @@ class Agent:
         finally:
             await self.client.room_typing(room_id, False)
 
-    async def _compose(self, prompt: str, max_words: int | None = None) -> str | None:
+    async def _compose(self, prompt: str, max_words: int | None = None, lines: list | None = None,
+                       effort: str | None = None) -> str | None:
         """One model call → the line as it would be sent, or None (logged): never half a sentence, never another's
         words, PASS honoured, the creature's word cap applied (`max_words` overrides it: a telegram's joke)."""
-        reply = await self.responder.respond(Turn(list(self.history), prompt, self.reply_max_tokens, "reply"))
+        reply = await self.responder.respond(Turn(list(self.history if lines is None else lines), prompt,
+                                                  self.reply_max_tokens, "reply", effort))
         if reply is None:
             return None  # already logged
         text = reply.text

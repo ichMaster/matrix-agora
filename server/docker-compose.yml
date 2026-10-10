@@ -103,6 +103,7 @@ services:
       BOT_WINDOW_S: ${BOT_WINDOW_S:-600}
       CAT_REACT_P: ${CAT_REACT_P:-0.3}
       CAT_PURR_P: ${CAT_PURR_P:-0.8}
+      CLAUDE_HISTORY_N: ${CLAUDE_HISTORY_N:-150}   # v4.5: the philosopher's wider window
     tmpfs:
       - /tmp/claude:uid=1000,gid=1000,mode=0700,size=64m   # bounded (review #7)
     user: "1000:1000"
