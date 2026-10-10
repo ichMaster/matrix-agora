@@ -156,6 +156,9 @@ def test_deploy_syncs_claudes_env_file_privately_and_it_never_enters_an_image():
     assert "--chmod" not in deploy                                  # the Mac's rsync has no --chmod
     assert "server/claude.env" in (ROOT / ".dockerignore").read_text().splitlines()
     assert "server/claude.env" in (ROOT / ".gitignore").read_text().splitlines()
+    for ignore in (".gitignore", ".dockerignore"):  # review #15: any copy of a server env file, never the examples
+        lines = (ROOT / ignore).read_text().splitlines()
+        assert "server/*.env*" in lines and "!server/*.env.example" in lines, ignore
     dockerfile = (ROOT / "agents" / "Dockerfile").read_text()
     assert "FROM python:3.12-slim AS agent" in dockerfile and "FROM agent AS claude" in dockerfile
     assert "--group claude" in dockerfile

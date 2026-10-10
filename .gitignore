@@ -1,6 +1,9 @@
 .env
 server/.env
 server/claude.env
+# any copy of a server env file (a backup, an editor's swap) — never the examples (v4.4 review #15)
+server/*.env*
+!server/*.env.example
 state/
 .venv/
 __pycache__/
