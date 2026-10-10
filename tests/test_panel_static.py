@@ -104,3 +104,10 @@ def test_the_creature_card_shows_his_past_life_line():
     assert 'can(a, "pastlife") || can(a, "nudge") ? `<div class="muted" style="font-size:12px">${pastLifeLine(mem)}' in js
     assert "function pastLifeLine(mem)" in js and "${past}<div class=\"meta-line\">" in js
     assert 'return esc(parts.join(" · "));' in js
+
+
+def test_another_days_nudge_shows_its_date():
+    """v4.3 review #10: «last nudge 21:40 · 0 today» three days later read as today's."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert 'last.toDateString() !== new Date().toDateString()' in js
+    assert '`${last.toLocaleDateString("en-US", {month: "short", day: "numeric"})}, ${time}`' in js

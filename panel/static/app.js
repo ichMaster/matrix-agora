@@ -490,7 +490,11 @@ function pastLifeLine(mem) {
   if (mem.pastlife) parts.push(`${Number(mem.pastlife.theses)} theses`);
   if (mem.nudge) {
     const last = mem.nudge.last ? new Date(mem.nudge.last) : null;
-    parts.push(last ? `last nudge ${last.toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"})}` : "no nudge yet");
+    const time = last ? last.toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"}) : "";
+    // another day's nudge carries its date, so it never reads as today's (v4.3 review #10)
+    const when = last && last.toDateString() !== new Date().toDateString()
+      ? `${last.toLocaleDateString("en-US", {month: "short", day: "numeric"})}, ${time}` : time;
+    parts.push(last ? `last nudge ${when}` : "no nudge yet");
     parts.push(`${Number(mem.nudge.today)} today`);
   }
   return esc(parts.join(" · "));
