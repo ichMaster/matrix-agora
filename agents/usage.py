@@ -50,15 +50,18 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
     """v4.4 — one record per Claude Agent SDK call: always `claude-sdk` / `subscription` (the Max plan, never an API
     key); the SDK's `total_cost_usd` is a client-side estimate, kept as reported and never billed."""
     usage = usage or {}
-    prompt, output = _int(usage, "input_tokens"), _int(usage, "output_tokens")
+    fresh, output = _int(usage, "input_tokens"), _int(usage, "output_tokens")
+    cache_read, cache_write = _int(usage, "cache_read_input_tokens"), _int(usage, "cache_creation_input_tokens")
+    # the whole prompt, as Gemini's count includes its cache (review #12); the cache parts stay in their columns
+    prompt = fresh + (cache_read or 0) + (cache_write or 0) if fresh is not None else None
     total = prompt + output if prompt is not None and output is not None else None
     cost = float(reported_cost) if isinstance(reported_cost, int | float) and not isinstance(reported_cost, bool) else None
     return {
         "ts": ts_iso, "agent": agent, "kind": kind, "model": model,
         "prompt_tokens": prompt, "output_tokens": output, "total_tokens": total, "ok": bool(ok),
         "engine": "claude-sdk", "billing": "subscription",
-        "cache_read_tokens": _int(usage, "cache_read_input_tokens"),
-        "cache_write_tokens": _int(usage, "cache_creation_input_tokens"),
+        "cache_read_tokens": cache_read,
+        "cache_write_tokens": cache_write,
         "reported_cost_usd": cost,
     }
 

@@ -157,7 +157,7 @@ def test_a_claude_sdk_line_is_always_subscription_and_carries_no_text():
                           {"input_tokens": 900, "output_tokens": 60, "cache_read_input_tokens": 4000,
                            "cache_creation_input_tokens": 120}, True, reported_cost=0.0123)
     assert (line["engine"], line["billing"]) == ("claude-sdk", "subscription")
-    assert (line["prompt_tokens"], line["output_tokens"], line["total_tokens"]) == (900, 60, 960)
+    assert (line["prompt_tokens"], line["output_tokens"], line["total_tokens"]) == (5020, 60, 5080)  # review #12
     assert (line["cache_read_tokens"], line["cache_write_tokens"], line["reported_cost_usd"]) == (4000, 120, 0.0123)
     assert sdk_usage_line("2026-10-10T20:00:00", "claude", "reply", "opus", None, False)["total_tokens"] is None
 
