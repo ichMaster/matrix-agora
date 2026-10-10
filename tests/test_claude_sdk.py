@@ -279,3 +279,20 @@ def test_the_clis_error_text_never_reaches_the_room(tmp_path):
     more = AssistantMessage(content=[TextBlock(text="Друге.")], error=None)
     r, _ = responder(tmp_path, FakeSDK(INIT_OK, ok, more, result(result=None)))
     assert run(r).text == "Перше.\nДруге."                                   # parts joined, not glued
+
+
+
+@pytest.mark.parametrize("info", [
+    SimpleNamespace(status="rejected", resets_at=1_000_600, rate_limit_type="five_hour", utilization=1.0, raw={}),
+    SimpleNamespace(status="allowed_warning", resets_at=None, rate_limit_type="five_hour", utilization=0.9,
+                    raw={"isUsingOverage": True}),
+])
+def test_a_reply_billed_as_extra_usage_is_never_sent(tmp_path, info):
+    """Review #4: a rejected window answered anyway is overage — dropped, counted, never ok."""
+    r, usage = responder(tmp_path, FakeSDK(INIT_OK, RateLimitEvent(rate_limit_info=info), result()))
+    assert run(r) is None and usage[-1][3] is False and r.muted()
+
+
+def test_a_429_result_mutes_him(tmp_path):
+    r, _ = responder(tmp_path, FakeSDK(INIT_OK, result(is_error=True, result=None, api_error_status=429)))
+    assert run(r) is None and r.muted()

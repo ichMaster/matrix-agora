@@ -206,7 +206,7 @@ class ClaudeSdkResponder:
             turn.instruction, model=self.model, max_output_tokens=self.max_output_tokens, config_dir=self.config_dir))
         parts: list[str] = []
         result = None
-        saw_init = False
+        saw_init = over_limit = False
         try:
             async with contextlib.aclosing(query(prompt=build_transcript(turn.lines), options=options)) as stream:
                 async for msg in stream:
@@ -217,7 +217,12 @@ class ClaudeSdkResponder:
                         if self.blocked:
                             break  # stop reading a stream that is not on the subscription
                     elif kind == "RateLimitEvent":
-                        self._rate_limit(getattr(msg, "rate_limit_info", None))
+                        info = getattr(msg, "rate_limit_info", None)
+                        self._rate_limit(info)
+                        raw = getattr(info, "raw", None)
+                        # a rejected window answered anyway is extra usage — never a reply (review #4)
+                        over_limit = over_limit or getattr(info, "status", None) == "rejected" or bool(
+                            isinstance(raw, Mapping) and raw.get("isUsingOverage"))
                     elif kind == "AssistantMessage" and not getattr(msg, "error", None):  # never the CLI's error text
                         parts += [b.text for b in getattr(msg, "content", []) if isinstance(getattr(b, "text", None),
                                                                                              str)]
@@ -228,9 +233,18 @@ class ClaudeSdkResponder:
             self.usage_sink(turn.kind, self.model, None, False, None)
             return None
         # one usage line per call, ok only for a checked, successful one
-        ok = result is not None and not getattr(result, "is_error", True) and self.blocked is None and saw_init
+        ok = (result is not None and not getattr(result, "is_error", True) and self.blocked is None and saw_init
+              and not over_limit)
         self.usage_sink(turn.kind, self.model, getattr(result, "usage", None), ok, getattr(result, "total_cost_usd", None))
         if self.blocked:
+            return None
+        if over_limit:
+            log.warning("silent: claude is over the subscription's limit — no extra usage, ever")
+            return None
+        if getattr(result, "api_error_status", None) == 429:  # the limit, told as an error: wait as for a rejection
+            self.status.muted_until = max(int(self.status.muted_until or 0), self._now() + WARN_MUTE_S)
+            self._save()
+            log.warning("silent: claude rate limited (429) — muted until %s", self.status.muted_until)
             return None
         if not saw_init:  # the auth source unverified: never speak on an unchecked call (review #2)
             log.error("claude: no init message — the auth source is unverified; silent")
