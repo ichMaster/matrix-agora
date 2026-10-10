@@ -10,7 +10,7 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 ## Status
 
-v0–v3 are complete — delivered through `v3.4.0` (2026-10-04). **v4 has begun** — v4.1 released as `v4.1.0`, v4.2 as `v4.2.0`, v4.3 as `v4.3.0` (all 2026-10-10); its design is the draft
+v0–v3 are complete — delivered through `v3.4.0` (2026-10-04). **v4 has begun** — v4.1 released as `v4.1.0`, v4.2 as `v4.2.0`, v4.3 as `v4.3.0` (all 2026-10-10), v4.4 as `v4.4.0` (2026-10-11); its design is the draft
 [features/more-agents.md](features/more-agents.md), whose open questions are closed before each v4 phase's issues
 are generated. Other further work (the deferred backlog items in the code-review docs, new simulations) needs new phases.
 
@@ -32,7 +32,7 @@ are generated. Other further work (the deferred backlog items in the code-review
 | v4.1 | Roster, agent types and N-agent turn-taking | ✅ completed | `v4.1.0` (2026-10-10) |
 | v4.2 | The cat in the room | ✅ completed | `v4.2.0` (2026-10-10) |
 | v4.3 | The cat: his past life and his initiative | ✅ completed | `v4.3.0` (2026-10-10) |
-| v4.4 | Claude on the subscription: answering when asked | ⏳ planned | — |
+| v4.4 | Claude on the subscription: answering when asked | ✅ completed | `v4.4.0` (2026-10-11) |
 | v4.5 | Claude the philosopher | ⏳ planned | — |
 | v4.6 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v4.7 | Лілі under the full rules | ⏳ planned | — |
@@ -475,7 +475,7 @@ Design: more-agents.md §The cat (past-life memories, he starts conversations). 
 
 ### v4.4 — Claude on the subscription: answering when asked
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v4.4.0` on 2026-10-11.
 
 **Goal:** Claude joins the room as itself — no canon, no memory — answering when someone addresses it, running only on the owner's Max subscription; an API key can never be used.
 
