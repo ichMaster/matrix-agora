@@ -179,3 +179,23 @@ def test_the_agent_reads_its_members_from_the_roster():
 def test_the_launcher_lists_the_registry_agents():
     out = subprocess.run([sys.executable, "-m", "agents.roster"], capture_output=True, text=True, check=True).stdout
     assert out.split() == ["ada", "bruno"]
+
+
+def test_an_unreadable_toml_is_a_roster_error_not_a_crash(tmp_path):
+    """Code review #5: a directory, a permission problem or a non-UTF-8 file is a clear RosterError."""
+    (tmp_path / "dir.toml").mkdir()
+    with pytest.raises(RosterError, match="unreadable"):
+        load_member(tmp_path / "dir.toml")
+    bad = tmp_path / "latin.toml"
+    bad.write_bytes('name = "Кіт"'.encode("cp1251"))
+    with pytest.raises(RosterError, match="unreadable"):
+        load_member(bad)
+
+
+def test_the_panel_greys_an_unreadable_agent_card_instead_of_crashing(tmp_path):
+    from panel.registry import Registry
+    reg, agents = write_roster(tmp_path, 'name = "Кіт"\nuser_id = "@kit:agora.lan"\n')
+    (agents / "kit.toml").unlink()
+    (agents / "kit.toml").mkdir()  # unreadable as a file
+    panel = Registry(reg, agents)
+    assert panel.agent("kit").type == "unknown" and panel.agent("ada").type == "persona"

@@ -93,6 +93,8 @@ def load_member(path: Path) -> Member:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
         raise RosterError(f"agent config not found: {path}") from exc
+    except (OSError, UnicodeDecodeError) as exc:  # a directory, no permission, not UTF-8 (code review #5)
+        raise RosterError(f"{path}: unreadable ({type(exc).__name__})") from exc
     except tomllib.TOMLDecodeError as exc:
         raise RosterError(f"{path}: {exc}") from exc
     return parse_member(path.stem, data, str(path))
