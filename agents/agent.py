@@ -51,7 +51,6 @@ from agents.llm import GeminiClient
 from agents.logic import (
     append_history,
     build_instruction,
-    build_transcript,
     clean_reply,
     same_message,
     should_handle,
@@ -67,6 +66,7 @@ from agents.plans import (
     split_summary,
     strip_tags,
 )
+from agents.responder import Turn, responder_for, trim_to_sentence
 from agents.roster import Member, load_roster
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.session import load_session, save_session
@@ -106,6 +106,8 @@ class Agent:
         self.client = AsyncClient(cfg.homeserver, cfg.user_id)
         self.started = False  # flips True after the first sync; nothing earlier is handled
         self.llm = llm or GeminiClient(sink=self.record_usage)
+        self.responder = responder_for(cfg.engine, self.llm)  # the reply engine seam (v4.1)
+        self.reply_max_tokens = int(os.environ.get("REPLY_MAX_TOKENS", "200"))
         self.history: list[tuple[str, str]] = []
         self.history_n = int(os.environ.get("HISTORY_N", "40"))
         # v4.1: MAX_BOT_TURNS counts the message being answered (v1.2's count excluded it: new = old + 1)
@@ -714,9 +716,16 @@ class Agent:
                     await self.ensure_today(local_now(self.clock(), self.tz))
                 except Exception:
                     log.exception("today block refresh failed (reply continues)")
-            text = await self.llm.generate(build_transcript(self.history), self.build_prompt(), kind="reply")
-            if text is None:
+            reply = await self.responder.respond(
+                Turn(list(self.history), self.build_prompt(), self.reply_max_tokens, "reply"))
+            if reply is None:
                 return  # already logged; stay silent
+            text = reply.text
+            if reply.finish == "max_tokens":  # the cap cut it: never send half a sentence
+                text = trim_to_sentence(text)
+                if text is None:
+                    log.info("silent: cut mid-sentence")
+                    return
             others = [n for n in {*self.names.values()} if n != self.cfg.name]
             text = clean_reply(text, self.cfg.name, others)
             if text is None:

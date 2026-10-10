@@ -37,6 +37,13 @@ class GeminiClient:
     async def generate(
         self, transcript: str, system_instruction: str, max_output_tokens: int = 400, kind: str = "reply",
     ) -> str | None:
+        out = await self.complete(transcript, system_instruction, max_output_tokens, kind)
+        return out[0] if out else None
+
+    async def complete(
+        self, transcript: str, system_instruction: str | None, max_output_tokens: int = 400, kind: str = "reply",
+    ) -> tuple[str, str] | None:
+        """(text, finish) — finish is "max_tokens" when the cap cut the reply, else "stop"; None on failure."""
         try:
             resp = await self._client.aio.models.generate_content(
                 model=MODEL,
@@ -58,4 +65,11 @@ class GeminiClient:
         if not text:
             log.error("gemini returned an empty reply")
             return None
-        return text
+        return text, finish_of(resp)
+
+
+def finish_of(resp: Any) -> str:
+    """The candidate's finish reason, mapped to the responder's vocabulary."""
+    candidates = getattr(resp, "candidates", None) or []
+    reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+    return "max_tokens" if "MAX_TOKENS" in str(getattr(reason, "name", reason) or "") else "stop"
