@@ -143,3 +143,29 @@ def test_a_persona_has_no_mood():
     asyncio.run(agent.reply("!room"))
     assert "Настрій дня" not in agent.build_prompt()
     assert not agent.cfg.can("mood")
+
+
+def test_the_watcher_casts_the_new_days_mood_without_a_reply(tmp_path, monkeypatch):
+    """Review #7: purrs skip `reply()`, so past midnight the day's mood waited for the cat's first spoken line —
+    the panel could say "No horoscope yet" all day. The idle watcher casts it."""
+    real_sleep = asyncio.sleep
+
+    async def fast_sleep(_):
+        await real_sleep(0)
+
+    monkeypatch.setattr("agents.agent.asyncio.sleep", fast_sleep)
+    llm = MoodLLM()
+    agent = cat(tmp_path, llm, "2026-10-11 00:05")
+
+    async def run():
+        task = asyncio.create_task(agent.idle_watcher())
+        for _ in range(100):
+            await real_sleep(0)
+            if agent.mood is not None:
+                break
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(run())
+    assert agent.mood is not None and agent.mood.date == "2026-10-11" and llm.calls == ["mood"]
+    agent.client.room_send.assert_not_awaited()

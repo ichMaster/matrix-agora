@@ -923,6 +923,11 @@ class Agent:
                 await self.world_tick()
             except Exception:
                 log.exception("world tick failed (bot keeps running)")
+            if self.cfg.can("mood"):  # the day's horoscope at the day's start, not at the first spoken line (review #7)
+                try:
+                    await self.ensure_mood(local_now(self.clock(), self.tz))
+                except Exception:
+                    log.exception("mood of the day failed (bot keeps running)")
             now = self.clock()
             if (
                 self.cfg.can("summary")
