@@ -98,6 +98,8 @@ def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config
         "model": model,
         "cwd": config_dir,
         "thinking": {"type": "disabled"},
+        # no session transcript anywhere (review #7): accepted by the bundled CLI in the SDK's stream-json mode
+        "extra_args": {"no-session-persistence": None},
         "env": env,
     }
     if effort:

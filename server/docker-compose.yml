@@ -89,7 +89,7 @@ services:
       HOME: /tmp/claude                          # the CLI's home and config: a tmpfs, nothing survives a restart
       CLAUDE_CONFIG_DIR: /tmp/claude
     tmpfs:
-      - /tmp/claude:uid=1000,gid=1000,mode=0700
+      - /tmp/claude:uid=1000,gid=1000,mode=0700,size=64m   # bounded (review #7)
     user: "1000:1000"
     volumes:
       - ../state:/app/state

@@ -122,6 +122,7 @@ def test_the_options_turn_off_tools_settings_and_memory():
                         "MAX_THINKING_TOKENS": "0", "CLAUDE_CODE_MAX_RETRIES": "2",
                         "ENABLE_CLAUDEAI_MCP_SERVERS": "false"}
     assert o["thinking"] == {"type": "disabled"}                     # review #1: thinking ate the cap
+    assert o["extra_args"] == {"no-session-persistence": None}       # review #7: no session transcript
     uncapped = sdk_options("B", model="opus", max_output_tokens=0, config_dir="/c")
     assert "CLAUDE_CODE_MAX_OUTPUT_TOKENS" not in uncapped["env"]    # 0 = no cap (the owner, 2026-10-11)
     assert not any(k.startswith(("ANTHROPIC_", "CLAUDE_CODE_USE_")) for k in o["env"])
