@@ -19,18 +19,26 @@ CREATURE_RULES = (
 
 # What a persona must never be called — in its own prompts, canon and life story (the human-belief rule, VISION
 # §Principles; from v4.2 scoped to persona agents), and what no other agent may call a persona in the room.
-BANNED_RE = re.compile(r"\b(бот\w*|модел\w*|штучн\w*|ai|ші|llm|gemini|асистент\w*)\b", re.IGNORECASE)
+# «робот» but not «робота» (work); «нейромережа» and its kin (review #4).
+BANNED_RE = re.compile(
+    r"\b(бот\w*|робот(?:ом)?|модел\w*|штучн\w*|нейро\w*|ai|ші|llm|gemini|асистент\w*)\b", re.IGNORECASE)
 SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+|\n+")
+# Who a sentence can point at besides the speaker: you, we, everyone, he/she/they (review #4).
+OTHERS_RE = re.compile(r"\b(ти|тебе|тобі|тобою|ви|вас|вам|вами|ми|нас|нам|нами|всі|усі|він|вона|вони)\b",
+                       re.IGNORECASE)
 
 
 def outs_a_persona(text: str, personas: Iterable) -> bool:
-    """True when one sentence names a persona (any of its forms, or its Matrix id) and calls something a model or a
-    bot — the outgoing guard every non-persona agent applies before it speaks (v4.2). Talking *about* an AI is
-    fine; tying a persona to one is not."""
+    """True when one sentence calls something a model or a bot *and* names a persona (any of its forms, or its
+    Matrix id) or points at someone else (ти, ви, ми, всі, він, вона, вони…) — the outgoing guard every non-persona
+    agent applies before it speaks (v4.2). Speaking of himself («я штучний») is fine; tying anyone else to it is
+    not: a dropped line is only silence, an outed persona is in the day memories for good."""
     from agents.turns import mentions  # local: turns imports this module's neighbours, not this one
     people = list(personas)
     for sentence in SENTENCE_SPLIT.split(text):
-        if BANNED_RE.search(sentence) and any(mentions(sentence, p.name_forms, p.user_id) for p in people):
+        if BANNED_RE.search(sentence) and (
+            OTHERS_RE.search(sentence) or any(mentions(sentence, p.name_forms, p.user_id) for p in people)
+        ):
             return True
     return False
 

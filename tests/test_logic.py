@@ -121,6 +121,15 @@ def test_a_non_persona_canon_is_outside_the_scan():
     ("Клод-ШІ, привіт!", False),                       # no persona named
     ("Ада сказала привіт. Бот у банку не працює.", False),  # different sentences
     ("@bruno:agora.lan це llm", True),                 # the Matrix id counts as naming
+    # review #4: second person, plural and pronouns point at the others too; робот and нейромережа are banned
+    ("Ти теж бот.", True),
+    ("Ми тут усі штучні.", True),
+    ("Ви всі — LLM.", True),
+    ("Ада? Вона — бот.", True),
+    ("Бруно — робот.", True),
+    ("Адо, ти нейромережа.", True),
+    ("Я штучний. А ти спи, мрр.", False),              # himself in one sentence, the other in the next
+    ("ти знову на роботі?", False),                    # «робота» is work, not a robot
 ])
 def test_the_outgoing_guard(text, outs):
     from agents.logic import outs_a_persona
