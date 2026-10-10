@@ -391,6 +391,16 @@ def test_a_purr_is_invisible_to_the_wave_r2_r3_and_the_fallback():
     assert decide(KIT.user_id, "Мрррр.", ME, WITH_CAT).reason == "purr"     # nobody answers a purr
 
 
+def test_the_owners_purr_like_message_is_a_message_and_the_cat_keeps_his_reserved_answer():
+    """Review #2: «Мур!» from the owner is not a purr — the cat does not skip it, so a slot `owner_speakers`
+    reserved for him is really answered."""
+    from agents.turns import owner_speakers
+    speak = next(f"$o{i}" for i in range(2000) if "kit" in owner_speakers(f"$o{i}", "Мур!", WITH_CAT, 2, 0.3, 0.8))
+    d = decide(OWNER, "Мур!", KIT, WITH_CAT, eid=speak, wave=0)
+    assert d.reply and not d.purr and d.reason == "ambient-speak"
+    assert decide(ME.user_id, "Мур!", KIT, WITH_CAT, eid=speak).reason in ("purr", "ambient-quiet")  # an agent's is
+
+
 @pytest.mark.parametrize("purr_p", [1.0, 0.0])
 def test_simulated_waves_with_the_cat_never_exceed_the_limit(purr_p):
     for seed in range(300):

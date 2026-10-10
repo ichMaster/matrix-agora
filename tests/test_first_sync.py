@@ -555,3 +555,24 @@ def test_consecutive_purrs_collapse_in_the_others_context_and_nobody_answers_the
     asyncio.run(run())
     assert [line for line in agent.history if line[0] == "Кіт"] == [("Кіт", "*потягується*")]
     assert agent.timeline[-1][3] is True
+
+
+def test_the_owners_purr_like_message_resets_the_wave_and_can_be_fallen_back_on():
+    """Review #2: the owner's «Мур!» is a message — it ends the agents' wave and is the owner's latest event."""
+    from agents.turns import fallback_due, wave_count
+    agent = make_agent()
+    agent.started = True
+    agent.rng = lambda: 0.99  # nobody is chosen by a probability gate; only the timeline matters here
+
+    async def run():
+        for sender, body, ts, eid in [("@bruno:agora.lan", "б1", 1_000, "$b1"), ("@ada:agora.lan", "а1", 2_000, "$a1"),
+                                      ("@ich:agora.lan", "Мур!", 3_000, "$o")]:
+            await agent.on_message(*_ev(sender, body, ts, eid))
+        for t in list(agent._tasks):
+            t.cancel()
+        await asyncio.gather(*agent._tasks, return_exceptions=True)
+
+    asyncio.run(run())
+    assert agent.timeline[-1][2:] == ("$o", False)
+    assert wave_count(agent.timeline, "Ich") == 0 and fallback_due(agent.timeline, "$o")
+    assert agent.last_owner[0] == "$o"

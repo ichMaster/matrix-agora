@@ -225,7 +225,7 @@ class Agent:
                 self.last_owner = (str(getattr(e, "event_id", "")), e.body)
             self._add_context(speaker, e.body)
             self.timeline = [*self.timeline, (speaker, int(e.server_timestamp), str(getattr(e, "event_id", "")),
-                                              is_purr(e.body))][-max(self.history_n, 1):]
+                                              self._purr_in_timeline(e.sender, e.body))][-max(self.history_n, 1):]
         return len(texts[-self.history_n:])
 
     async def backfill(self, from_token: str) -> None:
@@ -273,7 +273,8 @@ class Agent:
                 # the context window sees every room message, own and the other agent's included
                 speaker = self.names.get(event.sender, event.sender)
                 self._add_context(speaker, event.body)
-                self.timeline = [*self.timeline, (speaker, now_ms, event_id, is_purr(event.body))
+                self.timeline = [*self.timeline, (speaker, now_ms, event_id,
+                                                  self._purr_in_timeline(event.sender, event.body))
                                  ][-max(self.history_n, 1):]
                 if event.sender == self.cfg.owner:
                     self.last_owner = (event_id, event.body)
@@ -346,6 +347,10 @@ class Agent:
             reply_delay_s=self.reply_delay_s,
             rng=self.rng,
         )
+
+    def _purr_in_timeline(self, sender: str, text: str) -> bool:
+        """Only an agent's line is a purr — the owner's «Мур!» is a message like any other (review #2)."""
+        return sender != self.cfg.owner and is_purr(text)
 
     @staticmethod
     def _repeat_purr(lines: list[tuple[str, str]], speaker: str, text: str) -> bool:

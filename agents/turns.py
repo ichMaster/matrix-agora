@@ -264,8 +264,8 @@ def _ambient(sender: str, text: str, event_id: str, wave: int, cfg: AgentConfig,
         return ReplyDecision(True, 0.0, "owner-mentioned-me", purr=False)
     if draw is None:
         return ReplyDecision(False, reason="ambient-quiet")
-    if is_purr(text):
-        return ReplyDecision(False, reason="purr")  # never purrs at a purr
+    if not from_owner and is_purr(text):
+        return ReplyDecision(False, reason="purr")  # never purrs at a purr; the owner's «мур» is a message
     purr = draw == "purr"
     if not purr and not from_owner and wave >= max_bot_turns:
         return ReplyDecision(False, reason="ambient-wave-limit")
