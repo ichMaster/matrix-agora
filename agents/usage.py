@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
-KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today")
+KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood")
 
 
 def _count(usage: Any, field: str) -> int | None:

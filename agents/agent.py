@@ -58,6 +58,17 @@ from agents.logic import (
     should_join_invite,
 )
 from agents.memory import build_summary_request, cap_words, load_memory, save_memory, session_ended
+from agents.mood import (
+    MOOD_MAX_TOKENS,
+    MoodState,
+    biorhythms,
+    format_biorhythms,
+    log_block,
+    mood_request,
+    parse_birth_date,
+    reading_from_log,
+    split_resolution,
+)
 from agents.plans import (
     HORIZONS,
     parse_items,
@@ -158,6 +169,9 @@ class Agent:
         self._pending_trigger: str | None = None  # what the pending reply answers: an agent message, or None
         self._last_sent = ""
         self._tasks: set[asyncio.Task] = set()  # strong refs: pending tasks are only weakly referenced
+        self.mood: MoodState | None = None  # v4.2: the day's horoscope (a `mood` agent)
+        self._mood_lock = asyncio.Lock()
+        self._mood_retry_ms = 0
 
     async def login(self) -> None:
         stored = load_session(self.cfg.state_file)
@@ -404,6 +418,7 @@ class Agent:
             memories=self.memories_section(now) if can("chronicle") else None,
             plans=self.plans_section(now) if can("plans") else None,
             today=self.today_section(now) if can("today") else None,
+            mood=self.mood_section(now) if can("mood") else None,
         )
 
     # --- v2.2: files under state/ -------------------------------------------------
@@ -709,6 +724,48 @@ class Agent:
             return None  # reset at midnight
         return "Сьогодні:\n" + text.split("-->", 1)[1].strip()
 
+    # --- v4.2: the mood of the day (Lumi's horoscope service) ----------------------------------------------------
+    @property
+    def mood_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.mood.log"
+
+    def mood_section(self, now) -> str | None:
+        if self.mood is None or self.mood.date != now.date().isoformat():
+            return None
+        return f"Настрій дня: {self.mood.resolution}"
+
+    async def ensure_mood(self, now) -> None:
+        """Once per local day: reuse the day's logged reading, else one model call; a failure means no mood and a
+        retry after 10 minutes — never a blocked reply."""
+        day = now.date().isoformat()
+        if self.mood is not None and self.mood.date == day:
+            return
+        if self._mood_lock.locked() or self.clock() < self._mood_retry_ms:
+            return
+        async with self._mood_lock:
+            logged = reading_from_log(self._read_raw(self.mood_file) or "", day)
+            if logged:
+                self.mood = MoodState(day, split_resolution(logged), logged)
+                return
+            birth = parse_birth_date(self.cfg.natal)
+            rhythms = format_biorhythms(biorhythms(birth, now.date())) if birth else None
+            system, contents = mood_request(self.cfg.name, self.cfg.natal, day, rhythms)
+            reading = await self.llm.generate(contents, system, max_output_tokens=MOOD_MAX_TOKENS, kind="mood")
+            if not reading:
+                log.error("mood of the day failed — none today until a retry")
+                self._mood_retry_ms = self.clock() + 600_000
+                return
+            self.mood_file.parent.mkdir(parents=True, exist_ok=True)
+            with self.mood_file.open("a", encoding="utf-8") as f:
+                f.write(log_block(day, reading))
+            self.mood = MoodState(day, split_resolution(reading), reading)
+
+    def _read_raw(self, path: Path) -> str | None:
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError:
+            return None
+
     async def reply_later(self, room_id: str, delay_s: float) -> None:
         try:
             if delay_s > 0:
@@ -738,6 +795,11 @@ class Agent:
                     await self.ensure_today(local_now(self.clock(), self.tz))
                 except Exception:
                     log.exception("today block refresh failed (reply continues)")
+            if self.cfg.can("mood"):
+                try:
+                    await self.ensure_mood(local_now(self.clock(), self.tz))
+                except Exception:
+                    log.exception("mood of the day failed (reply continues)")
             reply = await self.responder.respond(
                 Turn(list(self.history), self.build_prompt(), self.reply_max_tokens, "reply"))
             if reply is None:
@@ -849,6 +911,8 @@ class Agent:
         self.started = True
         await self.join_pending_invites()
         self._spawn(self.world_tick(force=True))  # startup kick: catch up memories and today's plans
+        if self.cfg.can("mood"):
+            self._spawn(self.ensure_mood(local_now(self.clock(), self.tz)))  # the day's horoscope, early
         self.client.add_event_callback(self.on_message, RoomMessageText)
         self.client.add_event_callback(self.on_invite, InviteMemberEvent)
         log.info("%s: entering sync_forever", self.cfg.localpart)

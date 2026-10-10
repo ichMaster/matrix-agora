@@ -32,7 +32,7 @@ def test_missing_metadata_gives_nulls():
 
 
 def test_kind_list_is_the_contract():
-    assert KINDS == ("reply", "summary", "plan", "day_memory", "digest", "today")
+    assert KINDS == ("reply", "summary", "plan", "day_memory", "digest", "today", "mood")
 
 
 # --- the seam reports every call ---

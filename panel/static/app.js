@@ -4,7 +4,7 @@
 "use strict";
 
 const POLL_MS = 10000;  // one tick for everything — the dashboard, an open log, an open agent's memory (owner)
-const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today"];
+const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood"];
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
               ["today", "Today"], ["tokens", "Tokens"]];
 // v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
