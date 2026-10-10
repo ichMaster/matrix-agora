@@ -48,7 +48,7 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
     assert (ada.user_id, ada.name, ada.type, ada.engine, ada.mode, ada.weight) == (
         "@ada:agora.lan", "Ада", "persona", "gemini", "ranked", 1.0)
     assert "адо" in ada.name_forms  # the vocative lives in the TOML now, not in code
-    assert roster["bruno"].name_forms == ("бруно",)
+    assert roster["bruno"].name_forms == ("бруно", "bruno")  # v4.4 review #8: the Latin form too
     assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES) - {"mood", "pastlife", "nudge"}
     assert ada.panel["name"] == "Ada"
 

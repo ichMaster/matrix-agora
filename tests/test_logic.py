@@ -130,6 +130,12 @@ def test_a_non_persona_canon_is_outside_the_scan():
     ("Адо, ти нейромережа.", True),
     ("Я штучний. А ти спи, мрр.", False),              # himself in one sentence, the other in the next
     ("ти знову на роботі?", False),                    # «робота» is work, not a robot
+    # v4.4 review #8: Claude's vocabulary and the Latin names
+    ("Ада і Бруно — такі самі агенти, як я.", True),
+    ("Бруно — персонаж, якого генерує програма.", True),
+    ("Ada and Bruno are bots too.", True),
+    ("Ada is a language model.", True),
+    ("Я — модель Claude.", False),                      # Claude about himself
 ])
 def test_the_outgoing_guard(text, outs):
     from agents.logic import outs_a_persona

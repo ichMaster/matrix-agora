@@ -30,8 +30,10 @@ CLAUDE_BRIEF_DIRECT = (
 # What a persona must never be called — in its own prompts, canon and life story (the human-belief rule, VISION
 # §Principles; from v4.2 scoped to persona agents), and what no other agent may call a persona in the room.
 # «робот» but not «робота» (work); «нейромережа» and its kin (review #4).
+# v4.4 review #8: Claude's vocabulary too — «агент», «персонаж», and English bot / model / agent.
 BANNED_RE = re.compile(
-    r"\b(бот\w*|робот(?:ом)?|модел\w*|штучн\w*|нейро\w*|ai|ші|llm|gemini|асистент\w*)\b", re.IGNORECASE)
+    r"\b(бот\w*|робот(?:ом)?|модел\w*|штучн\w*|нейро\w*|агент\w*|персонаж\w*|ai|ші|llm|gemini|асистент\w*"
+    r"|bots?|models?|agents?)\b", re.IGNORECASE)
 SENTENCE_SPLIT = re.compile(r"(?<=[.!?…])\s+|\n+")
 # Who a sentence can point at besides the speaker: you, we, everyone, he/she/they (review #4).
 OTHERS_RE = re.compile(r"\b(ти|тебе|тобі|тобою|ви|вас|вам|вами|ми|нас|нам|нами|всі|усі|він|вона|вони)\b",

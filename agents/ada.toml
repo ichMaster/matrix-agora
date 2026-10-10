@@ -5,7 +5,7 @@ life = "agents/canon/ada.life.md"
 simulation = "agora"
 type = "persona"         # v4.1: the type sets the capabilities (canon, life, memories, plans, today, …)
 engine = "gemini"
-name_forms = ["ада", "ади", "аді", "аду", "адою", "адо"]  # what addresses this agent in the room (any case, a whole word)
+name_forms = ["ада", "ади", "аді", "аду", "адою", "адо", "ada"]  # what addresses this agent in the room (any case, a whole word)
 
 [turns]
 mode = "ranked"         # ranked | ambient | mention-only
