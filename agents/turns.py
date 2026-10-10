@@ -18,8 +18,11 @@ from agents.roster import Member
 
 PASS_RE = re.compile(r"^\W*PASS\W*$")
 TRAILING_PASS_RE = re.compile(r"\s*\bPASS\W*$")
-# the owner addressing the whole room («всі», «ви всі», «кожен», «всім привіт») → every member answers
-GROUP_RE = re.compile(r"(?<!\w)(всі|усі|всім|усім|кожен|кожна|кожному|кожного)(?!\w)", re.IGNORECASE)
+# the owner addressing the whole room → every member answers. Only in an addressing position — the start of the
+# message, right before , ! ? or its end, or after «ви»/«вам» — so «я кожен день гуляю» is no address (review #4)
+_GROUP = r"(?:всі|усі|всім|усім|кожен|кожна|кожному)"
+GROUP_RE = re.compile(
+    rf"^\W*{_GROUP}(?!\w)|(?<!\w){_GROUP}\s*(?:[,!?]|$)|(?<!\w)(?:ви|вам)\s+{_GROUP}(?!\w)", re.IGNORECASE)
 
 # a timeline entry: (speaker name, server_ts_ms, event_id) — the same for every agent in the room
 Entry = tuple[str, int, str]

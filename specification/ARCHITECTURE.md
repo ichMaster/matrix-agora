@@ -108,7 +108,7 @@ The agents see each other, so without rules they would reply to each other endle
 
 1. **R1 — the owner's message:**
    - names one or more agents (any of their `name_forms`, whole words, or their Matrix id) — **exactly the named agents** reply; the named one replies immediately;
-   - addresses everyone («всі», «усі», «всім», «усім», «кожен», «кожна», «кожному», «ви всі») — **every ranked and mention-only member** replies;
+   - addresses everyone («всі», «усі», «всім», «усім», «кожен», «кожна», «кожному» in an addressing position: the start of the message, right before `,` `!` `?` or its end, or after «ви»/«вам») — **every ranked and mention-only member** replies;
    - names no one — the top `OWNER_REPLIERS` (default 2) of `rank(event_id, ranked members)` reply, each after a random delay of 1–`REPLY_DELAY_S` s (default 4), so they don't speak at once and the second sees the first's line in history;
    - answers to the owner are never stopped by the limit, but they count toward it.
 2. **R2 — an agent's message M:** at most **one** candidate: among the members M names (ranked or mention-only, never its sender), otherwise among the ranked members other than its sender — the top of `rank(M.event_id, …)`. The candidate replies if the wave is below `MAX_BOT_TURNS` (default 3) and a roll passes `BOT_REPLY_P` (e.g. 0.5) — **naming decides who, not whether**: the roll applies to a named candidate too.

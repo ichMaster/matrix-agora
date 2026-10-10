@@ -98,7 +98,11 @@ def test_rank_first_places_follow_the_weights():
 # --- R1: the owner's message ------------------------------------------------------------------------------------
 @pytest.mark.parametrize("text,expect", [
     ("всі сюди", True), ("Всім привіт!", True), ("ви всі мовчите", True), ("кожен скаже", True),
-    ("усі тут?", True), ("всіх обійняв", False), ("кожний день", False), ("привіт", False),
+    ("усі тут?", True), ("привіт усім!", True), ("ну що, всі?", True), ("доброго ранку, вам усім", True),
+    ("всіх обійняв", False), ("кожний день", False), ("привіт", False),
+    # code review #4: ordinary sentences are no address
+    ("я кожен день гуляю, а ти?", False), ("прочитав всі новини, що думаєш?", False),
+    ("кожного дня одне й те саме", False), ("всі новини сьогодні погані", True),  # sentence-initial still counts
 ])
 def test_group_address(text, expect):
     assert addresses_everyone(text) is expect
