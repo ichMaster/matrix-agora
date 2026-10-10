@@ -283,6 +283,7 @@ def test_a_telegram_names_claude_and_may_run_longer(tmp_path):
     assert TELEGRAM_MATERIAL.format(name="Клод", upper="КЛОД") in llm.prompts[0] and NUDGE_RULE in llm.prompts[0]
     assert "«CQ CQ КЛОД DE КІТ»" in llm.prompts[0] and "73 SK" in llm.prompts[0]
     assert "звичайним текстом українською" in llm.prompts[0]                  # the joke itself in plain Ukrainian
+    assert "до 40 слів" in llm.prompts[0]                                    # review #17: a budget, not a cut
     body = sent_body(agent)
     assert body.startswith("CQ CQ КЛОД DE КІТ") and len(body.split()) == TELEGRAM_MAX_WORDS
     from agents.roster import load_roster

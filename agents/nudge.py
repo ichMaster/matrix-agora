@@ -25,8 +25,8 @@ HOROSCOPE_MATERIAL = "Перекажи свій сьогоднішній гор�
 TELEGRAM_MATERIAL = ("Надішли {name}у радіограму, як радіоаматор: почни телеграфом — «CQ CQ {upper} DE КІТ» "
                      "(з Q-кодами й скороченнями зі свого словника: QSL, QRZ?, TNX, FB, OM, HW?, PSE), далі звичайним "
                      "текстом українською — короткий анекдот про сисадмінів, що пасує до розмови (окремі слова можна "
-                     "замінити скороченнями), — і закінчи телеграфом: «73 SK», «CUL ES 73» або «EE».")
-TELEGRAM_MAX_WORDS = 45  # the frame plus a joke in plain words — more than his usual few
+                     "замінити скороченнями), — і закінчи телеграфом: «73 SK», «CUL ES 73» або «EE». Усе разом — до 40 слів.")
+TELEGRAM_MAX_WORDS = 45  # a safety net over the material's «до 40 слів» (review #17): never a cut punchline
 
 
 @dataclass
