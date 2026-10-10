@@ -152,7 +152,8 @@ def test_claudes_env_example_holds_his_settings_and_nothing_of_the_others():
 
 def test_deploy_syncs_claudes_env_file_privately_and_it_never_enters_an_image():
     deploy = (ROOT / "server" / "deploy.sh").read_text()
-    assert 'CLAUDE_ENV="$REPO_DIR/server/claude.env"' in deploy and "--chmod=F600" in deploy
+    assert 'CLAUDE_ENV="$REPO_DIR/server/claude.env"' in deploy and 'chmod 600 ~/$REMOTE_DIR/claude.env' in deploy
+    assert "--chmod" not in deploy                                  # the Mac's rsync has no --chmod
     assert "server/claude.env" in (ROOT / ".dockerignore").read_text().splitlines()
     assert "server/claude.env" in (ROOT / ".gitignore").read_text().splitlines()
     dockerfile = (ROOT / "agents" / "Dockerfile").read_text()

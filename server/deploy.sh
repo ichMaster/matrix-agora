@@ -48,7 +48,9 @@ else
   say "deploy: no local server/.env — leaving the host's .env untouched"
 fi
 if [ -f "$CLAUDE_ENV" ]; then   # never printed: rsync -i lists the file name only
-  CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" --chmod=F600 "$CLAUDE_ENV" "$TARGET:$REMOTE_DIR/claude.env")"
+  CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$CLAUDE_ENV" "$TARGET:$REMOTE_DIR/claude.env")"
+  # private on the host too (the Mac's rsync cannot set modes): the subscription's token, Claude's password
+  [ "$DRY_RUN" = 1 ] || ssh "$TARGET" "chmod 600 ~/$REMOTE_DIR/claude.env"
 fi
 if [ -n "${CHANGES//[[:space:]]/}" ]; then say "deploy: changed:"; say "$CHANGES"; else say "deploy: nothing to sync"; fi
 
