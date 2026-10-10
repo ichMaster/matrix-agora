@@ -31,22 +31,27 @@ class NudgeState:
 
 
 def parse_hours(spec: str) -> tuple[int, int]:
-    """`"09-22"` → (9, 22): the local hours a nudge may go out, start inclusive, end exclusive."""
+    """`"09-22"` → (9, 22): the local hours a nudge may go out, start inclusive, end exclusive; a start after the
+    end wraps past midnight (`"09-03"`: from 09:00 to 03:00 the next night)."""
     try:
         start, end = (int(x) for x in str(spec).split("-", 1))
     except ValueError as exc:
         raise ValueError(f"CAT_NUDGE_HOURS must look like 09-22, got {spec!r}") from exc
-    if not 0 <= start < end <= 24:
-        raise ValueError(f"CAT_NUDGE_HOURS must be 0 <= start < end <= 24, got {spec!r}")
+    if not (0 <= start <= 23 and 0 <= end <= 24 and start != end):
+        raise ValueError(f"CAT_NUDGE_HOURS must be two different hours, 0-23 and 0-24, got {spec!r}")
     return start, end
+
+
+def in_hours(hour: int, hours: tuple[int, int]) -> bool:
+    start, end = hours
+    return start <= hour < end if start < end else hour >= start or hour < end
 
 
 def nudge_due(now_ms: int, local_now: datetime, last_room_ms: int | None, last_nudge_ms: int | None,
               nudges_today: int, idle_ms: int, per_day: int, hours: tuple[int, int]) -> bool:
     """All of: daytime (`hours`, local), under the day's cap, the room quiet for `idle_ms` (its last message, purrs
     included — an empty room counts as quiet), and the last attempt at least `idle_ms` ago."""
-    start, end = hours
-    if not start <= local_now.hour < end:
+    if not in_hours(local_now.hour, hours):
         return False
     if nudges_today >= per_day:
         return False

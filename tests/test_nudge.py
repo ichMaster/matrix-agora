@@ -65,10 +65,18 @@ def test_only_inside_the_hours(hhmm, due):
 
 
 def test_hours_parse():
-    assert parse_hours("09-22") == (9, 22) and parse_hours("0-24") == (0, 24)
-    for bad in ("22-09", "9", "a-b", "10-25"):
+    assert parse_hours("09-22") == (9, 22) and parse_hours("0-24") == (0, 24) and parse_hours("09-03") == (9, 3)
+    for bad in ("9", "a-b", "10-25", "24-03", "09-09"):
         with pytest.raises(ValueError):
             parse_hours(bad)
+
+
+@pytest.mark.parametrize("hhmm,due", [("08:59", False), ("09:00", True), ("23:59", True), ("00:30", True),
+                                      ("02:59", True), ("03:00", False), ("05:00", False)])
+def test_hours_may_wrap_past_midnight(hhmm, due):
+    """«з 9 до 3 ночі» (owner, 2026-10-11): 09-03 runs from 09:00 to 03:00 the next night."""
+    now_ms, now = at(hhmm)
+    assert nudge_due(now_ms, now, None, None, 0, IDLE, 6, parse_hours("09-03")) is due
 
 
 def test_the_kind_is_deterministic_and_all_three_occur():
@@ -240,7 +248,7 @@ def test_a_nudge_after_silence_opens_a_fresh_wave_with_one_next_speaker():
 def test_a_cat_only_typo_never_takes_down_the_others(tmp_path, monkeypatch):
     """Review #7: every agent parsed CAT_NUDGE_HOURS, so «22-09» crash-looped Ada and Bruno too."""
     from tests.test_first_sync import FakeLLM, make_agent
-    monkeypatch.setenv("CAT_NUDGE_HOURS", "22-09")
+    monkeypatch.setenv("CAT_NUDGE_HOURS", "09:00-22:00")
     monkeypatch.setenv("CAT_NUDGE_IDLE_S", "not a number")
     make_agent(FakeLLM())                                                               # Ada starts
     with pytest.raises(ValueError):
