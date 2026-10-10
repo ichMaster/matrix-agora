@@ -15,6 +15,7 @@ The SDK's message classes are matched by name, so the tests need no SDK installe
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -74,6 +75,7 @@ def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config
         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
         "CLAUDE_CONFIG_DIR": config_dir,
         "MAX_THINKING_TOKENS": "0",
+        "CLAUDE_CODE_MAX_RETRIES": "2",  # its own retries stay short; the reply is bounded anyway (review #11)
     }
     if max_output_tokens > 0:
         env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(max_output_tokens)
@@ -141,7 +143,8 @@ class ClaudeSdkResponder:
 
     def __init__(self, *, model: str, max_output_tokens: int, config_dir: str, status_file: Path,
                  usage_sink: Callable[[str, str, dict | None, bool, float | None], None],
-                 clock: Callable[[], int] = lambda: int(time.time() * 1000), query=None, options=None) -> None:
+                 clock: Callable[[], int] = lambda: int(time.time() * 1000), query=None, options=None,
+                 timeout_s: float = 90.0) -> None:
         self.model = model
         self.max_output_tokens = max_output_tokens
         self.config_dir = config_dir
@@ -150,6 +153,7 @@ class ClaudeSdkResponder:
         self.clock = clock
         self._query = query
         self._options = options
+        self.timeout_s = timeout_s
         self.status = ClaudeStatus(model=model)
         self.blocked: str | None = None
 
@@ -211,7 +215,9 @@ class ClaudeSdkResponder:
         parts: list[str] = []
         result = None
         saw_init = over_limit = False
-        try:
+
+        async def consume() -> None:
+            nonlocal result, saw_init, over_limit
             async with contextlib.aclosing(query(prompt=build_transcript(turn.lines), options=options)) as stream:
                 async for msg in stream:
                     kind = type(msg).__name__
@@ -228,10 +234,17 @@ class ClaudeSdkResponder:
                         over_limit = over_limit or getattr(info, "status", None) == "rejected" or bool(
                             isinstance(raw, Mapping) and raw.get("isUsingOverage"))
                     elif kind == "AssistantMessage" and not getattr(msg, "error", None):  # never the CLI's error text
-                        parts += [b.text for b in getattr(msg, "content", []) if isinstance(getattr(b, "text", None),
-                                                                                             str)]
+                        parts.extend(b.text for b in getattr(msg, "content", [])
+                                     if isinstance(getattr(b, "text", None), str))
                     elif kind == "ResultMessage":
                         result = msg
+
+        try:  # bounded: the CLI's own retries must never hold a reply for minutes (review #11)
+            await asyncio.wait_for(consume(), timeout=self.timeout_s)
+        except TimeoutError:
+            log.error("claude query timed out after %.0fs — silent", self.timeout_s)
+            self.usage_sink(turn.kind, self.model, None, False, None)
+            return None
         except Exception as exc:  # noqa: BLE001 — any SDK or CLI failure means silence
             log.error("claude query failed: %s", type(exc).__name__)
             self.usage_sink(turn.kind, self.model, None, False, None)

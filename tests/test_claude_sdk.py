@@ -116,7 +116,7 @@ def test_the_options_turn_off_tools_settings_and_memory():
     assert o["system_prompt"] == "BRIEF" and o["model"] == "opus" and o["cwd"] == "/tmp/claude"
     assert o["env"] == {"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "300", "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
                         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "CLAUDE_CONFIG_DIR": "/tmp/claude",
-                        "MAX_THINKING_TOKENS": "0"}
+                        "MAX_THINKING_TOKENS": "0", "CLAUDE_CODE_MAX_RETRIES": "2"}
     assert o["thinking"] == {"type": "disabled"}                     # review #1: thinking ate the cap
     uncapped = sdk_options("B", model="opus", max_output_tokens=0, config_dir="/c")
     assert "CLAUDE_CODE_MAX_OUTPUT_TOKENS" not in uncapped["env"]    # 0 = no cap (the owner, 2026-10-11)
@@ -298,3 +298,26 @@ def test_a_reply_billed_as_extra_usage_is_never_sent(tmp_path, info):
 def test_a_429_result_mutes_him(tmp_path):
     r, _ = responder(tmp_path, FakeSDK(INIT_OK, result(is_error=True, result=None, api_error_status=429)))
     assert run(r) is None and r.muted()
+
+
+
+def test_a_hung_query_is_bounded_and_closed(tmp_path):
+    """Review #11: the CLI's retries could hold a reply (and typing) for minutes."""
+    closed = []
+
+    class HangingSDK(FakeSDK):
+        def query(self, *, prompt, options):
+            self.calls.append((prompt, options))
+
+            async def gen():
+                try:
+                    yield INIT_OK
+                    await asyncio.sleep(3600)
+                    yield result()
+                finally:
+                    closed.append(True)
+            return gen()
+
+    r, usage = responder(tmp_path, HangingSDK())
+    r.timeout_s = 0.05
+    assert run(r) is None and usage == [("reply", "opus", None, False, None)] and closed == [True]
