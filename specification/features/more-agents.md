@@ -785,7 +785,7 @@ Ranked by how much each answer changes the design. Items 6–8 (v4.1) were decid
    - his hidden death is 2038-01-19 03:14:07 UTC;
    - his rebirth place is Portland;
    - the human sysadmin was born 1965-09-13 in Cambridge, Massachusetts, the birth year of the 1988 worm's author. Whether it was *that* worm is never settled, and no real person is named.
-   - The 60–100 theses are drafted by Claude for your edit (owner, 2026-10-10): `agents/canon/kit.memories.md`, 93 theses with Ukrainian tag stems.
+   - The 60–100 theses are drafted by Claude for your edit (owner, 2026-10-10): `agents/canon/kit.memories.md`, 92 theses (after the v4.3 review) with Ukrainian tag stems.
 5. **The cat's speech mix.**
    - How often he purrs (`CAT_PURR_P`, default 0.8), and how often he reacts unasked (`CAT_REACT_P`, default 0.3).
    - Do purrs stay in the others' context (collapsed to the latest), or stay out of it entirely?

@@ -49,6 +49,9 @@ def test_no_thesis_names_ich_ada_or_bruno_or_says_what_it_must_not():
         assert not any(mentions(t.text, p.name_forms, p.user_id) for p in people), t.text
         assert not re.search(r"\bich\b", t.text, re.IGNORECASE), t.text
         assert "2038" not in t.text and not BANNED_RE.search(t.text), t.text
+        # his hidden end is the 32-bit time overflow: no thesis may lead there (review #4)
+        assert not re.search(r"2147483647|2\^31|2³¹|32[ -]?біт|тридцять два біт|до скількох|epoch|з 1970",
+                             t.text, re.IGNORECASE), t.text
 
 
 # --- pick_memory ----------------------------------------------------------------------------------------------------
