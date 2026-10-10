@@ -270,3 +270,30 @@ def test_after_a_restart_the_silence_counts_from_the_start(tmp_path):
     assert asyncio.run(agent.maybe_nudge()) is False
     agent.started_ms = agent.clock() - IDLE
     assert asyncio.run(agent.maybe_nudge()) is True
+
+
+def test_a_telegram_names_claude_and_may_run_longer(tmp_path):
+    """The owner, 2026-10-11: a sysadmin joke for Claude in telegraph style — named, so he may answer."""
+    from agents.nudge import TELEGRAM_MATERIAL, TELEGRAM_MAX_WORDS
+    long_joke = "CQ CQ КЛОД DE КІТ " + " ".join(f"слово{i}" for i in range(60)) + " 73 SK"
+    llm = SeqLLM(long_joke)
+    agent = cat(tmp_path, llm)
+    day = kind_day("telegram")
+    assert asyncio.run(agent.nudge(datetime.fromisoformat(day + "T14:00").replace(tzinfo=KYIV), 1)) == ("telegram", True)
+    assert TELEGRAM_MATERIAL.format(name="Клод", upper="КЛОД") in llm.prompts[0] and NUDGE_RULE in llm.prompts[0]
+    assert "«CQ CQ КЛОД DE КІТ»" in llm.prompts[0] and "73 SK" in llm.prompts[0]
+    assert "звичайним текстом українською" in llm.prompts[0]                  # the joke itself in plain Ukrainian
+    body = sent_body(agent)
+    assert body.startswith("CQ CQ КЛОД DE КІТ") and len(body.split()) == TELEGRAM_MAX_WORDS
+    from agents.roster import load_roster
+    from agents.turns import mentions
+    claude = load_roster("agora")["claude"]
+    assert mentions(body, claude.name_forms, claude.user_id)                    # the call sign names him
+
+
+def test_without_an_assistant_a_telegram_becomes_a_memory(tmp_path):
+    llm = SeqLLM("Копії. Щоночі.")
+    agent = cat(tmp_path, llm)
+    agent.others = {uid: m for uid, m in agent.others.items() if m.type != "assistant"}
+    day = kind_day("telegram")
+    assert asyncio.run(agent.nudge(datetime.fromisoformat(day + "T14:00").replace(tzinfo=KYIV), 1)) == ("memory", True)

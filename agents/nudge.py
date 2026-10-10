@@ -14,12 +14,18 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-NUDGE_KINDS = ("memory", "command", "horoscope")
+NUDGE_KINDS = ("memory", "command", "horoscope", "telegram")
 # the rule and the material of a nudge (the prompt; never a claim about anyone in the room)
 NUDGE_RULE = ("Ти сам починаєш розмову: один короткий рядок, що пов'язує це з тим, про що недавно говорили. "
               "Не вітайся і не питай, чи є хтось.")
 COMMAND_MATERIAL = "Кинь один рядок команди Linux чи скрипту — лише як текст, — що пасує до розмови."
 HOROSCOPE_MATERIAL = "Перекажи свій сьогоднішній гороскоп метафорою про останню розмову."
+# the owner, 2026-10-11: a sysadmin joke for the assistant (Claude), framed like a ham-radio telegraph message —
+# «CQ CQ … DE …» first and «73 SK» last, the joke itself in plain Ukrainian; his name opens the line, so he may answer
+TELEGRAM_MATERIAL = ("Надішли {name}у радіограму, як радіоаматор: почни телеграфом — «CQ CQ {upper} DE КІТ» "
+                     "(можна з Q-кодами й скороченнями: QSL, TNX, FB, OM), далі звичайним текстом українською — "
+                     "короткий анекдот про сисадмінів, що пасує до розмови, — і закінчи телеграфом: «73 SK» або «EE».")
+TELEGRAM_MAX_WORDS = 45  # the frame plus a joke in plain words — more than his usual few
 
 
 @dataclass
@@ -61,7 +67,8 @@ def nudge_due(now_ms: int, local_now: datetime, last_room_ms: int | None, last_n
 
 
 def nudge_kind(day: str, n: int) -> str:
-    """The day's n-th nudge: memory, command or horoscope — a deterministic draw over the day and the number."""
+    """The day's n-th nudge: memory, command, horoscope or telegram — a deterministic draw over the day and the
+    number."""
     from agents.turns import uniform  # local: turns imports config, which imports the roster
 
     return NUDGE_KINDS[min(int(uniform(f"{day}:{n}", "nudge") * len(NUDGE_KINDS)), len(NUDGE_KINDS) - 1)]

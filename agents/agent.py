@@ -83,6 +83,8 @@ from agents.nudge import (
     COMMAND_MATERIAL,
     HOROSCOPE_MATERIAL,
     NUDGE_RULE,
+    TELEGRAM_MATERIAL,
+    TELEGRAM_MAX_WORDS,
     load_nudge_state,
     nudge_due,
     nudge_kind,
@@ -965,9 +967,9 @@ class Agent:
         finally:
             await self.client.room_typing(room_id, False)
 
-    async def _compose(self, prompt: str) -> str | None:
+    async def _compose(self, prompt: str, max_words: int | None = None) -> str | None:
         """One model call → the line as it would be sent, or None (logged): never half a sentence, never another's
-        words, PASS honoured, the creature's word cap applied."""
+        words, PASS honoured, the creature's word cap applied (`max_words` overrides it: a telegram's joke)."""
         reply = await self.responder.respond(Turn(list(self.history), prompt, self.reply_max_tokens, "reply"))
         if reply is None:
             return None  # already logged
@@ -987,7 +989,7 @@ class Agent:
             log.info("silent: model passed")
             return None
         if self.cfg.type == "creature":  # v4.2: a small vocabulary, enforced
-            text = cap_words(text, self.cat_max_words)
+            text = cap_words(text, max_words or self.cat_max_words)
         return text
 
     def _pick_thesis(self) -> int | None:
@@ -1046,13 +1048,20 @@ class Agent:
         kind = nudge_kind(day, n)
         if kind == "horoscope" and self.mood_section(now) is None:
             kind = "memory"  # no horoscope today: a memory instead
+        assistant = next((m for m in self.others.values() if m.type == "assistant"), None)
+        if kind == "telegram" and assistant is None:
+            kind = "memory"  # nobody to send a telegram to
         if kind == "memory" and not (self.cfg.can("pastlife") and self.cfg.theses):
             kind = "command"
-        memory = None
+        memory, max_words = None, None
         if kind == "memory":
             recent = " ".join(text for _, text in self.history[-5:])
             memory = self._choose_thesis(f"nudge:{day}:{n}", recent)
             prompt = self.build_prompt(pastlife_section(self.cfg.theses[memory]), NUDGE_RULE)
+        elif kind == "telegram":
+            material = TELEGRAM_MATERIAL.format(name=assistant.name, upper=assistant.name.upper())
+            prompt = self.build_prompt(nudge=f"{material} {NUDGE_RULE}")
+            max_words = TELEGRAM_MAX_WORDS
         else:
             material = COMMAND_MATERIAL if kind == "command" else HOROSCOPE_MATERIAL
             prompt = self.build_prompt(nudge=f"{material} {NUDGE_RULE}")
@@ -1060,7 +1069,7 @@ class Agent:
         room_id = self.cfg.room_id
         try:
             await self.client.room_typing(room_id, True)
-            text = await self._compose(prompt)
+            text = await self._compose(prompt, max_words)
             if text is not None and memory is not None and self._verbatim(text, memory):
                 text = await self._compose(prompt)  # his own words, never the thesis
                 if text is not None and self._verbatim(text, memory):
