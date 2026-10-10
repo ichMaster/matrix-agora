@@ -111,3 +111,14 @@ def test_another_days_nudge_shows_its_date():
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert 'last.toDateString() !== new Date().toDateString()' in js
     assert '`${last.toLocaleDateString("en-US", {month: "short", day: "numeric"})}, ${time}`' in js
+
+
+def test_claudes_card_and_the_billing_column():
+    """v4.4: the subscription lines on Claude's card; the token table shows billing and never formats a missing
+    cost (a subscription row has none)."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert '${a.engine === "claude-sdk" ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Subscription</div>${claudeLines(mem)}' in js
+    assert "function claudeLines(mem)" in js and "OAuth ✓ (no API key)" in js
+    assert '(muted && r.status === "rejected") ? "err" : muted ? "warn" : r.status ? "ok" : "unknown"' in js
+    assert "<th>billing</th>" in js and 'r.cost == null ? "—" : r.cost.toFixed(4)' in js
+    assert "r.cost.toFixed(4)}</td>` : \"\"}</tr>`;" not in js.replace('r.cost == null ? "—" : r.cost.toFixed(4)', "")

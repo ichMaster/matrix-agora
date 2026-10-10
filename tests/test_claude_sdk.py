@@ -169,7 +169,7 @@ def test_a_limit_mutes_him_until_it_resets(tmp_path, status):
     run(r)
     saved = json.loads((tmp_path / "claude.ratelimit.json").read_text())
     assert (saved["status"], saved["muted_until"], saved["rate_limit_type"]) == (status, 1_000_600, "seven_day_opus")
-    assert set(saved) == {"status", "utilization", "resets_at", "rate_limit_type", "muted_until", "auth",
+    assert set(saved) == {"status", "utilization", "resets_at", "rate_limit_type", "muted_until", "auth", "model",
                           "updated_at"}                         # no text, no token
     assert stat.S_IMODE(os.stat(tmp_path / "claude.ratelimit.json").st_mode) == 0o600
     assert run(r) is None and len(sdk.calls) == 1               # muted: no call before the reset

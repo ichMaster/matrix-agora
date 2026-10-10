@@ -97,6 +97,7 @@ class ClaudeStatus:
     rate_limit_type: str | None = None
     muted_until: int | None = None     # epoch seconds
     auth: str | None = None            # "oauth" once the init check passed; "blocked: …" / "refused: …"
+    model: str | None = None           # the model asked for (the panel's card shows it)
     updated_at: int | None = None
 
 
@@ -142,7 +143,7 @@ class ClaudeSdkResponder:
         self.clock = clock
         self._query = query
         self._options = options
-        self.status = ClaudeStatus()
+        self.status = ClaudeStatus(model=model)
         self.blocked: str | None = None
 
     def _now(self) -> int:

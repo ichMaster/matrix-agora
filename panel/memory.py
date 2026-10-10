@@ -101,8 +101,25 @@ def nudge_view(state_dir: Path, name: str, today: date, tz: str | None = None) -
     return {"last": last, "today": count}
 
 
+RATELIMIT_FIELDS = ("status", "utilization", "resets_at", "rate_limit_type", "muted_until", "auth", "model",
+                    "updated_at")
+
+
+def ratelimit_view(state_dir: Path, name: str) -> dict | None:
+    """v4.4 — Claude's last limit event and auth check from `<name>.ratelimit.json` (times and words, no texts, no
+    token). Missing or unreadable → None, never a 500."""
+    try:
+        data = json.loads((state_dir / f"{name}.ratelimit.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return {k: data.get(k) if isinstance(data.get(k), str | int | float) or data.get(k) is None else None
+            for k in RATELIMIT_FIELDS}
+
+
 def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = None, with_mood: bool = False,
-                memories: Path | None = None, with_nudge: bool = False) -> dict:
+                memories: Path | None = None, with_nudge: bool = False, with_ratelimit: bool = False) -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -141,6 +158,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "mood": mood_view(state_dir, name, today, natal) if with_mood else None,
         "pastlife": pastlife_view(memories),
         "nudge": nudge_view(state_dir, name, today) if with_nudge else None,
+        "ratelimit": ratelimit_view(state_dir, name) if with_ratelimit else None,
     }
 
 

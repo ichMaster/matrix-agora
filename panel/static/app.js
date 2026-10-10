@@ -356,6 +356,7 @@ function agentCardHtml(a) {
     ${can(a, "today") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Today</div>${today}</div>` : ""}
     ${!can(a, "today") && can(a, "mood") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Mood of the day</div>${moodLine(mem)}</div>` : ""}
     ${can(a, "pastlife") || can(a, "nudge") ? `<div class="muted" style="font-size:12px">${pastLifeLine(mem)}</div>` : ""}
+    ${a.engine === "claude-sdk" ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Subscription</div>${claudeLines(mem)}</div>` : ""}
     <div class="card-foot rule-t"><div class="meta">${tokens == null ? `${icon("database", 13)} Memory unavailable` : `7 days · ${esc(tokens)}`}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${actionButtons({kind: "agent", id: a.name, state: d.health.docker ? c.state : "unknown", big: true})}</div>
       <button class="btn btn-primary" data-act="agent" data-id="${esc(a.name)}">Details${icon("arrow-right", 14)}</button></div>
@@ -410,16 +411,16 @@ function usageCardHtml() {
   const body = sorted.map((r) => {
     const day = r.day === prevDay ? "" : r.day; prevDay = r.day;
     return `<tr><td class="day">${esc(day)}</td><td>${esc(r.agent)}</td><td class="kind">${esc(r.kind)}</td><td class="r">${fmtInt(r.calls)}</td>
-      <td class="r">${fmtInt(r.input)}</td><td class="r">${fmtInt(r.output)}</td>${u.priced ? `<td class="r">${r.cost.toFixed(4)}</td>` : ""}</tr>`;
+      <td class="r">${fmtInt(r.input)}</td><td class="r">${fmtInt(r.output)}</td><td class="muted">${esc(r.billing || "api")}</td>${u.priced ? `<td class="r">${r.cost == null ? "—" : r.cost.toFixed(4)}</td>` : ""}</tr>`;
   }).join("");
   const foot = [...(filter === "all" ? names : [filter]).filter((n) => u.per_agent[n]).map((n) => [`total · ${n}`, u.per_agent[n], ""]), ["total", tot, "grand"]]
     .map(([lbl, t, cls]) => `<tr class="${cls}"><td colspan="3">${esc(lbl)}</td><td class="r">${fmtInt(t.calls)}</td><td class="r">${fmtInt(t.input)}</td>
-      <td class="r">${fmtInt(t.output)}</td>${u.priced ? `<td class="r">${fmtUsd(t.cost)}</td>` : ""}</tr>`).join("");
+      <td class="r">${fmtInt(t.output)}</td><td class="muted">${esc(t.billing || "")}</td>${u.priced ? `<td class="r">${t.cost == null ? "—" : fmtUsd(t.cost)}</td>` : ""}</tr>`).join("");
   return `<section class="card usage-card" id="usage-card">${headHtml}
     <div class="usage-sum"><div><div class="big-num">${fmtM(tot.total)} tokens</div>
       <div class="muted num" style="font-size:12px">${fmtInt(tot.calls)} calls · ${fmtInt(tot.input)} in · ${fmtInt(tot.output)} out${u.priced ? ` · ${fmtUsd(tot.cost)}` : ""}</div></div>
       <div style="display:flex;gap:14px;align-items:flex-end"><div>${bars}</div>${filter === "all" ? legend : ""}</div></div>
-    <div class="table-scroll"><table class="table"><thead><tr><th>day</th><th>agent</th><th>kind</th><th class="r">calls</th><th class="r">input</th><th class="r">output</th>${u.priced ? `<th class="r">cost $</th>` : ""}</tr></thead>
+    <div class="table-scroll"><table class="table"><thead><tr><th>day</th><th>agent</th><th>kind</th><th class="r">calls</th><th class="r">input</th><th class="r">output</th><th>billing</th>${u.priced ? `<th class="r">cost $</th>` : ""}</tr></thead>
       <tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
     ${u.priced ? "" : `<div class="muted" style="font-size:12px">Prices are not configured — cost is not calculated.</div>`}
   </section>`;
@@ -481,6 +482,22 @@ function moodLine(mem) {
   if (!mem.available) return `<div class="muted" style="font-size:13px">Memory unavailable</div>`;
   return mem.mood ? `<div class="today-line" lang="uk">${esc(mem.mood.resolution.split("\n")[0])}</div>`
     : `<div class="muted" style="font-size:13px">No horoscope yet — it is cast once a day</div>`;
+}
+
+// v4.4 — Claude on the subscription: model and billing, the rate-limit status, the startup auth check
+function claudeLines(mem) {
+  if (!mem.available) return `<div class="muted" style="font-size:13px">Memory unavailable</div>`;
+  const r = mem.ratelimit || {};
+  const at = (s) => s ? new Date(s * 1000).toLocaleString("en-GB", {weekday: "short", hour: "2-digit", minute: "2-digit"}) : "";
+  const muted = r.muted_until && r.muted_until * 1000 > Date.now();
+  const limit = muted ? (r.status === "rejected" ? `limit reached until ${at(r.muted_until)}` : `muted until ${at(r.muted_until)}`)
+    : r.status ? `${r.status}${r.utilization != null ? ` · ${Math.round(r.utilization * 100)} %` : ""}${r.resets_at ? ` · resets ${at(r.resets_at)}` : ""}`
+    : "no limit event yet";
+  const auth = !r.auth ? "auth not checked yet" : r.auth === "oauth" ? "OAuth ✓ (no API key)" : r.auth;
+  // the design's pill: ok / warn when muted / err when rejected or the auth check failed
+  const cls = (r.auth && r.auth !== "oauth") || (muted && r.status === "rejected") ? "err" : muted ? "warn" : r.status ? "ok" : "unknown";
+  return `<div class="today-line">${esc(`claude-sdk · ${r.model || "opus"} · subscription`)}</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${pill(cls, limit)}<span class="muted" style="font-size:12px">${esc(auth)}</span></div>`;
 }
 
 // v4.3 — the cat's past life and initiative: «93 theses · last nudge 14:05 · 2 today»
