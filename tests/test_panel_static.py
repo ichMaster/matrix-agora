@@ -122,3 +122,14 @@ def test_claudes_card_and_the_billing_column():
     assert '|| r.last_error || (muted && r.status === "rejected") ? "err"' in js and "last call failed:" in js
     assert "<th>billing</th>" in js and 'r.cost == null ? "—" : r.cost.toFixed(4)' in js
     assert "r.cost.toFixed(4)}</td>` : \"\"}</tr>`;" not in js.replace('r.cost == null ? "—" : r.cost.toFixed(4)', "")
+
+
+
+def test_a_subscription_cost_is_never_shown_as_zero():
+    """v4.4 review #13: the Tokens tab summed `r.cost || 0` and printed 0.0000 for Claude's rows, and a missing cost
+    left a dangling « · »."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert "r.cost || 0" not in js and "if (r.cost != null) k.cost = (k.cost ?? 0) + r.cost;" in js
+    assert 'byKind[k].cost == null ? "—" : byKind[k].cost.toFixed(4)' in js
+    assert "const costSuffix = (n) => n == null ? \"\" : ` · ${fmtUsd(n)}`;" in js
+    assert "` · ${fmtUsd(" not in js.replace("const costSuffix = (n) => n == null ? \"\" : ` · ${fmtUsd(n)}`;", "")

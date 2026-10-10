@@ -37,6 +37,7 @@ const $ = (sel) => document.querySelector(sel);
 const fmtInt = (n) => (n ?? 0).toLocaleString("en-US");
 const fmtM = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n ?? 0);
 const fmtUsd = (n, digits = 2) => n == null ? "" : `$${n.toFixed(digits)}`;
+const costSuffix = (n) => n == null ? "" : ` · ${fmtUsd(n)}`;  // v4.4 review #13: no dangling « · » for a subscription
 const fmtGB = (b) => `${(b / 1024 ** 3).toFixed(1)}`;
 function fmtDur(s) {
   if (s == null) return "—";
@@ -336,7 +337,7 @@ function tokensLine(name) {
   if (!u.available) return null;
   const t = u.per_agent[name];
   if (!t || !t.calls) return "No data yet";
-  return `${fmtInt(t.calls)} calls · ${fmtM(t.total)} tokens${u.priced ? ` · ${fmtUsd(t.cost)}` : ""}`;
+  return `${fmtInt(t.calls)} calls · ${fmtM(t.total)} tokens${u.priced ? costSuffix(t.cost) : ""}`;
 }
 
 function agentCardHtml(a) {
@@ -418,7 +419,7 @@ function usageCardHtml() {
       <td class="r">${fmtInt(t.output)}</td><td class="muted">${esc(t.billing || "")}</td>${u.priced ? `<td class="r">${t.cost == null ? "—" : fmtUsd(t.cost)}</td>` : ""}</tr>`).join("");
   return `<section class="card usage-card" id="usage-card">${headHtml}
     <div class="usage-sum"><div><div class="big-num">${fmtM(tot.total)} tokens</div>
-      <div class="muted num" style="font-size:12px">${fmtInt(tot.calls)} calls · ${fmtInt(tot.input)} in · ${fmtInt(tot.output)} out${u.priced ? ` · ${fmtUsd(tot.cost)}` : ""}</div></div>
+      <div class="muted num" style="font-size:12px">${fmtInt(tot.calls)} calls · ${fmtInt(tot.input)} in · ${fmtInt(tot.output)} out${u.priced ? costSuffix(tot.cost) : ""}</div></div>
       <div style="display:flex;gap:14px;align-items:flex-end"><div>${bars}</div>${filter === "all" ? legend : ""}</div></div>
     <div class="table-scroll"><table class="table"><thead><tr><th>day</th><th>agent</th><th>kind</th><th class="r">calls</th><th class="r">input</th><th class="r">output</th><th>billing</th>${u.priced ? `<th class="r">cost $</th>` : ""}</tr></thead>
       <tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
@@ -578,14 +579,14 @@ function agentTabHtml(a, mem, tab) {
     const t = u.per_agent[a.name];
     if (!t || !t.calls) return `<p class="muted">No data yet</p>`;
     const byKind = {};
-    rows.forEach((r) => { const k = byKind[r.kind] ||= {calls: 0, input: 0, output: 0, cost: 0}; k.calls += r.calls; k.input += r.input; k.output += r.output; k.cost += r.cost || 0; });
+    rows.forEach((r) => { const k = byKind[r.kind] ||= {calls: 0, input: 0, output: 0, cost: null}; k.calls += r.calls; k.input += r.input; k.output += r.output; if (r.cost != null) k.cost = (k.cost ?? 0) + r.cost; });
     const max = Math.max(1, ...u.per_day.map((d) => d.agents[a.name] || 0));
-    return `<div class="usage-sum" style="margin-bottom:14px"><div><div class="big-num">${fmtM(t.total)} tokens</div><div class="muted num" style="font-size:12px">${fmtInt(t.calls)} calls${u.priced ? ` · ${fmtUsd(t.cost)}` : ""}</div></div>
+    return `<div class="usage-sum" style="margin-bottom:14px"><div><div class="big-num">${fmtM(t.total)} tokens</div><div class="muted num" style="font-size:12px">${fmtInt(t.calls)} calls${u.priced ? costSuffix(t.cost) : ""}</div></div>
       <div><div class="bars">${u.per_day.map((d) => `<div><span class="a" style="height:${((d.agents[a.name] || 0) / max) * 100}%"></span></div>`).join("")}</div>
       <div class="bar-labels">${u.per_day.map((d) => `<span class="${d.day === u.until ? "today" : ""}">${esc(shortDay(d.day))}</span>`).join("")}</div></div></div>
       <table class="table" style="min-width:0"><thead><tr><th>kind</th><th class="r">calls</th><th class="r">input</th><th class="r">output</th>${u.priced ? `<th class="r">cost $</th>` : ""}</tr></thead>
-      <tbody>${KIND_ORDER.filter((k) => byKind[k]).map((k) => `<tr><td class="kind">${k}</td><td class="r">${fmtInt(byKind[k].calls)}</td><td class="r">${fmtInt(byKind[k].input)}</td><td class="r">${fmtInt(byKind[k].output)}</td>${u.priced ? `<td class="r">${byKind[k].cost.toFixed(4)}</td>` : ""}</tr>`).join("")}</tbody>
-      <tfoot><tr class="grand"><td>total</td><td class="r">${fmtInt(t.calls)}</td><td class="r">${fmtInt(t.input)}</td><td class="r">${fmtInt(t.output)}</td>${u.priced ? `<td class="r">${fmtUsd(t.cost)}</td>` : ""}</tr></tfoot></table>`;
+      <tbody>${KIND_ORDER.filter((k) => byKind[k]).map((k) => `<tr><td class="kind">${k}</td><td class="r">${fmtInt(byKind[k].calls)}</td><td class="r">${fmtInt(byKind[k].input)}</td><td class="r">${fmtInt(byKind[k].output)}</td>${u.priced ? `<td class="r">${byKind[k].cost == null ? "—" : byKind[k].cost.toFixed(4)}</td>` : ""}</tr>`).join("")}</tbody>
+      <tfoot><tr class="grand"><td>total</td><td class="r">${fmtInt(t.calls)}</td><td class="r">${fmtInt(t.input)}</td><td class="r">${fmtInt(t.output)}</td>${u.priced ? `<td class="r">${t.cost == null ? "—" : fmtUsd(t.cost)}</td>` : ""}</tr></tfoot></table>`;
   }
   return "";
 }
