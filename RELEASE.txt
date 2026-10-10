@@ -1,3 +1,35 @@
+Version 4.4.0 (2026-10-11)
+---------------------------
+- Phase v4.4 - Claude on the subscription: answering when asked
+  (AGORA-059...064)
+- Claude joins Agora as «Клод» - an assistant with no canon or memory,
+  mention-only, answering in Ukrainian through the Claude Agent SDK on the
+  owner's Max subscription only (AGORA-059, AGORA-061)
+- No API key, ever, in layers: his own env file, a startup refusal on any
+  forbidden variable or a missing OAuth token, the environment scrubbed, no
+  settings, no tools, no MCP servers or connectors, the CLI's init must report
+  apiKeySource none for every reply, no session transcript, a bounded reply,
+  silence at a limit and never on extra usage, every usage line subscription
+- Usage line v2: engine, billing, cache tokens, a reported cost
+- only api rows are priced (AGORA-060)
+- The Claude image target, its compose service (the turn settings interpolated
+  from the shared file) and deploy sync (AGORA-062)
+- The panel: Claude's card with the rate-limit pill, the auth check and the
+  last failure
+- a billing column
+- a subscription never shown as $0 (AGORA-063)
+- The cat (the owner, during the phase): hours may wrap past midnight
+- a ham-radio telegram with a sysadmin joke for Claude
+- a telegraph vocabulary he may use instead of Ukrainian words
+- Review fixes #1-#17 (thinking off and no output cap at the owner's request,
+  the init check required, no CLI error text in the room, no overage reply,
+  shared turn settings, a refreshed card, no transcripts, the guard widened,
+  an hour's mute on a warning, the forbidden list's gaps, a timeout, cached
+  input counted, panel costs, a dead token shown, ignore patterns, docs, the
+  telegram's budget)
+- Owner waiver: the live subscription limit and the container's tmpfs were not
+  exercised (covered by the unit tests and the configuration)
+
 Version 4.3.0 (2026-10-10)
 ---------------------------
 - Phase v4.3 - the cat: his past life and his initiative (AGORA-055...058)
