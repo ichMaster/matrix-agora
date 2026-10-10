@@ -768,9 +768,7 @@ Each step is shippable on its own; they are ROADMAP v4.1–v4.7, and the last it
 
 Ranked by how much each answer changes the design. Items 6–8 (v4.1) were decided on 2026-10-10.
 
-1. **Ada and Bruno, and VISION** (decided: no descriptions of the newcomers; they figure it out themselves):
-   - Do Ada and Bruno keep believing they are human (recommended)?
-   - If yes: do you accept the VISION changes above (the rule scoped to personas, the Lili wording)?
+1. **Ada and Bruno, and VISION**: decided (2026-10-10). No descriptions of the newcomers, they figure it out themselves. Ada and Bruno keep believing they are human, and the VISION rule is scoped to personas.
 2. **Claude** (decided: the Max subscription only, an API key ruled out and blocked; the model is Opus):
    - Is Claude `ranked` like the others (as you asked), or `mention-only`?
    - Does it reply in the room's language (Ukrainian)?
@@ -782,11 +780,12 @@ Ranked by how much each answer changes the design. Items 6–8 (v4.1) were decid
    - weight 1;
    - v4.6 only when named, v4.7 under the full rules;
    - reactive only, never the initiator.
-4. **The cat** (decided: his name is «Кіт»):
-   - His hidden death: 2038-01-19 03:14:07 UTC (the 32-bit time overflow)?
-   - His birthplace: Portland, Oregon (as computed)?
-   - The human birth year for the life header.
-   - Who writes the 60–100 theses: drafted by Claude for your edit (recommended), or by you?
+4. **The cat**: decided (2026-10-10):
+   - his name is «Кіт»;
+   - his hidden death is 2038-01-19 03:14:07 UTC;
+   - his rebirth place is Portland;
+   - the human sysadmin was born 1965-09-13 in Cambridge, Massachusetts, the birth year of the 1988 worm's author. Whether it was *that* worm is never settled, and no real person is named.
+   - Still open, for v4.3: who writes the 60–100 theses (drafted by Claude for your edit, recommended, or by you).
 5. **The cat's speech mix.**
    - How often he purrs (`CAT_PURR_P`, default 0.8), and how often he reacts unasked (`CAT_REACT_P`, default 0.3).
    - Do purrs stay in the others' context (collapsed to the latest), or stay out of it entirely?
