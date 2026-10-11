@@ -65,8 +65,10 @@ def mentions(text: str, forms: Iterable[str], user_id: str) -> bool:
 
 def claude_mode(answered_text: str, name_forms: Iterable[str], user_id: str) -> str:
     """v4.5 — Claude's reply mode from the message he answers: `direct` when it names him (any name form or his
-    Matrix id), `philosopher` when the turn-taking brought him in unasked."""
-    return "direct" if mentions(answered_text or "", name_forms, user_id) else "philosopher"
+    Matrix id) or addresses everyone (review #5 — «всім…» asks him too, as in v4.4), `philosopher` when the
+    turn-taking brought him in unasked."""
+    text = answered_text or ""
+    return "direct" if mentions(text, name_forms, user_id) or addresses_everyone(text) else "philosopher"
 
 
 def addresses_everyone(text: str) -> bool:
