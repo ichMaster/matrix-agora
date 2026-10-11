@@ -48,6 +48,7 @@ FILE_TOOLS = {"Read", "Write", "Edit", "Glob", "Grep"}
 # belt and braces beside `tools=ALLOWED_TOOLS`: these never run in the chat container
 DISALLOWED_TOOLS = ["Bash", "BashOutput", "KillShell", "Agent", "Task", "Skill", "NotebookEdit", "TodoWrite"]
 MAX_TURNS = 8  # a few tool rounds — a search, a page, a note — then the answer
+MCP_RESOURCE_TOOLS = ("ListMcpResourcesTool", "ReadMcpResourceTool", "ReadMcpResourceDirTool")
 WARN_MUTE_S = 3600  # a warning mutes him for an hour, then the next call re-checks (review #9)
 
 
@@ -303,26 +304,37 @@ class ClaudeSdkResponder:
         self.status.updated_at = self._now()
         write_status(self.status_file, self.status)
 
-    def _check_init(self, data: Mapping[str, Any], toolset: str | None = None) -> None:
+    def _check_init(self, data: Mapping[str, Any], toolset: str | None = None) -> str | None:
         """Layer 5: the CLI must say no API key is in use and only his tools are available — no MCP server but the
-        Guardian's own, in-process, on a news call."""
+        Guardian's own, in-process, on a news call. A wrong auth source blocks him until restarted; a wrong tool list
+        on a news call refuses that call only (returned), so the news can never silence his replies."""
         source = data.get("apiKeySource") if isinstance(data, Mapping) else None
         tools = data.get("tools") if isinstance(data, Mapping) else None
         servers = data.get("mcp_servers") if isinstance(data, Mapping) else None
-        allowed = guardian.TOOLS if toolset == "news" else ALLOWED_TOOLS if self.workspace else []
+        # with an MCP server the CLI may list its resource tools too; the guard refuses them all the same
+        allowed = ([*guardian.TOOLS, *MCP_RESOURCE_TOOLS] if toolset == "news"
+                   else ALLOWED_TOOLS if self.workspace else [])
         names = [s.get("name") if isinstance(s, Mapping) else s for s in (servers or [])]
+        why = None
         if source != "none":
             self.blocked = f"apiKeySource={source!r}"
         elif extra := [t for t in (tools or []) if t not in allowed]:
-            self.blocked = f"tools={', '.join(map(str, extra))}"
+            why = f"tools={', '.join(map(str, extra))}"
         elif [n for n in names if not (toolset == "news" and n == guardian.SERVER)]:
-            self.blocked = f"mcp_servers={len(names)}"
+            why = f"mcp_servers={len(names)}"
+        if why and toolset == "news":
+            log.error("claude news call refused: %s", why)
+            self.status.auth = "oauth"
+            self._save()
+            return why
+        self.blocked = self.blocked or why
         if self.blocked:
             log.error("claude blocked: %s — no reply until restarted", self.blocked)
             self.status.auth = f"blocked: {self.blocked}"
         else:
             self.status.auth = "oauth"
         self._save()
+        return self.blocked
 
     def _rate_limit(self, info: Any) -> None:
         """Layer 7: a warning mutes him for an hour before the owner's own work hits the wall — the CLI's warnings
@@ -374,17 +386,18 @@ class ClaudeSdkResponder:
         parts: list[str] = []
         result = None
         saw_init = over_limit = False
+        refused: str | None = None
 
         async def consume() -> None:
-            nonlocal result, saw_init, over_limit
+            nonlocal result, saw_init, over_limit, refused
             async with contextlib.aclosing(query(prompt=build_transcript(turn.lines), options=options)) as stream:
                 async for msg in stream:
                     kind = type(msg).__name__
                     if getattr(msg, "subtype", None) == "init" and isinstance(getattr(msg, "data", None), Mapping):
                         saw_init = True  # any SystemMessage subclass: matched by its subtype, not its class name
-                        self._check_init(msg.data, turn.toolset)
-                        if self.blocked:
-                            break  # stop reading a stream that is not on the subscription
+                        refused = self._check_init(msg.data, turn.toolset)
+                        if refused:
+                            break  # stop reading: not on the subscription, or not his tools
                     elif kind == "RateLimitEvent":
                         info = getattr(msg, "rate_limit_info", None)
                         self._rate_limit(info)
@@ -412,9 +425,9 @@ class ClaudeSdkResponder:
             return None
         # one usage line per call, ok only for a checked, successful one
         ok = (result is not None and not getattr(result, "is_error", True) and self.blocked is None and saw_init
-              and not over_limit)
+              and not over_limit and refused is None)
         self.usage_sink(turn.kind, self.model, getattr(result, "usage", None), ok, getattr(result, "total_cost_usd", None))
-        if self.blocked:
+        if self.blocked or refused:
             return None
         if over_limit:
             log.warning("silent: claude is over the subscription's limit — no extra usage, ever")

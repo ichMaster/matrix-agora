@@ -663,20 +663,32 @@ def test_a_news_call_gets_only_the_guardian_and_the_guard_refuses_the_rest():
     assert asyncio.run(guard({"tool_name": "WebSearch", "tool_input": {"query": "x"}}, "t", None))
 
 
-@pytest.mark.parametrize("toolset,tools,servers,blocked", [
-    ("news", ["mcp__guardian__search", "mcp__guardian__read"], [{"name": "guardian", "status": "connected"}], None),
-    ("news", ["mcp__guardian__search", "WebSearch"], [{"name": "guardian"}], "tools=WebSearch"),
-    ("news", ["mcp__guardian__search"], [{"name": "guardian"}, {"name": "drive"}], "mcp_servers=2"),
-    (None, ["Read"], [{"name": "guardian"}], "mcp_servers=1"),                  # never outside the news call
+@pytest.mark.parametrize("toolset,tools,servers,blocked,silent", [
+    ("news", ["mcp__guardian__search", "mcp__guardian__read"], [{"name": "guardian", "status": "connected"}], None,
+     False),
+    ("news", ["mcp__guardian__search", "ListMcpResourcesTool", "ReadMcpResourceTool"], [{"name": "guardian"}], None,
+     False),                                                                    # the CLI's resource tools: the guard
+    ("news", ["mcp__guardian__search", "WebSearch"], [{"name": "guardian"}], None, True),      # this call only
+    ("news", ["mcp__guardian__search"], [{"name": "guardian"}, {"name": "drive"}], None, True),
+    (None, ["Read"], [{"name": "guardian"}], "mcp_servers=1", True),             # never outside the news call
 ])
-def test_the_init_check_on_a_news_call(tmp_path, toolset, tools, servers, blocked):
+def test_the_init_check_on_a_news_call(tmp_path, toolset, tools, servers, blocked, silent):
     sdk = FakeSDK(SystemMessage(subtype="init", data={"apiKeySource": "none", "tools": tools, "mcp_servers": servers}),
                   result())
-    r, _ = responder(tmp_path, sdk)
+    r, usage = responder(tmp_path, sdk)
     r.workspace = "/workspace"
     r.news_source = object()
-    run(r, Turn([("Ich", "x")], "B", 200, toolset=toolset))
-    assert r.blocked == blocked
+    out = run(r, Turn([("Ich", "x")], "B", 200, toolset=toolset))
+    assert r.blocked == blocked and (out is None) is silent
+    assert usage[-1][3] is not silent                                            # a refused call is never ok
+
+
+def test_a_wrong_auth_source_on_a_news_call_still_blocks_him(tmp_path):
+    sdk = FakeSDK(SystemMessage(subtype="init", data={"apiKeySource": "ANTHROPIC_API_KEY", "tools": []}), result())
+    r, _ = responder(tmp_path, sdk)
+    r.news_source = object()
+    assert run(r, Turn([("Ich", "x")], "B", 200, toolset="news")) is None
+    assert r.blocked == "apiKeySource='ANTHROPIC_API_KEY'"
 
 
 def test_a_news_call_without_a_source_makes_no_call(tmp_path):
