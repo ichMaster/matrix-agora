@@ -94,3 +94,13 @@ def test_only_claude_has_a_folder_and_the_token_is_needed(box):
     assert client.put("/api/agents/claude/files/x.md", content=b"x").status_code == 401
     r = client.delete("/api/agents/claude/files/notes/day.md", headers={**AUTH, "origin": "http://evil.example"})
     assert r.status_code == 403
+
+
+def test_a_failed_upload_is_a_400_and_leaves_nothing_behind(box):
+    """v4.7 review #6: a long name, a file where a folder should be — a 500 and a stray `.name.upload`."""
+    client, folder = box
+    long_name = "n" * 250 + ".md"
+    r1 = client.put(f"/api/agents/claude/files/{long_name}", headers=AUTH, content=b"x")
+    r2 = client.put("/api/agents/claude/files/blob.bin/inside.md", headers=AUTH, content=b"x")  # blob.bin is a file
+    assert r1.status_code in (200, 400) and r2.status_code == 400
+    assert not [p for p in folder.rglob(".upload-*")]

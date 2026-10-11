@@ -9,8 +9,10 @@ names the action and the path, never a file's content.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
+import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -101,11 +103,21 @@ def write_file(root: Path, rel: str, data: bytes, overwrite: bool) -> dict:
     existed = path.exists()
     if existed and not overwrite:
         raise FilesError(409, "exists — replace it?")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    safe_path(root, rel)  # the folders just made are real folders inside — check again before writing
-    tmp = path.with_name(f".{path.name}.upload")
-    tmp.write_bytes(data)
-    os.replace(tmp, path)
+    tmp = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        safe_path(root, rel)  # the folders just made are real folders inside — check again before writing
+        # a short hidden name (never listed): a long file name stays under the name limit (v4.7 review #6)
+        tmp = path.parent / f".upload-{secrets.token_hex(6)}"
+        tmp.write_bytes(data)
+        os.replace(tmp, path)
+        tmp = None
+    except OSError as exc:
+        raise FilesError(400, f"cannot write it ({type(exc).__name__})") from None
+    finally:
+        if tmp is not None:
+            with contextlib.suppress(OSError):
+                tmp.unlink()
     log.info("files: %s %s (%d bytes)", "replaced" if existed else "uploaded", rel, len(data))
     return {"path": rel, "size": len(data), "replaced": existed}
 
