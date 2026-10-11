@@ -25,6 +25,7 @@ from panel.health import Prober
 from panel.host import host_metrics
 from panel.memory import local_today, memory_view, usage_view
 from panel.registry import Registry
+from panel.settings import SettingsError, save_settings, settings_view
 
 MIN_TOKEN_LEN = 24
 LOG_FORMAT = "%(asctime)s %(name)s %(levelname)s %(message)s"
@@ -237,6 +238,25 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
         if svc is None or action not in ("start", "stop", "restart"):
             raise HTTPException(404, "not found")
         return run(sup.act, svc, action)
+
+    # ── settings (v4.7): the schema's non-secret settings, overrides in state/settings.json, a save restarts ──
+    @app.get("/api/settings")
+    def settings_get() -> dict:
+        return settings_view(state_dir, reg.agents.values())
+
+    @app.put("/api/settings")
+    async def settings_put(request: Request) -> dict:
+        try:
+            body = await request.json()
+        except ValueError as exc:
+            raise HTTPException(422, "a JSON object is expected") from exc
+        try:
+            return await asyncio.to_thread(
+                save_settings, state_dir, list(reg.agents.values()), body,
+                lambda c: dock.container(c).state in ("running", "restarting"),
+                lambda c: sup.act(c, "restart"))
+        except SettingsError as exc:
+            raise HTTPException(exc.status, exc.detail) from exc
 
     # the page: served without the token (it holds no data); everything it shows comes from /api/*
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

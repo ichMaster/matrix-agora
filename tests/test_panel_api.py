@@ -41,12 +41,13 @@ def test_unknown_names_are_404(client, path):
     assert client.get(path, headers=AUTH).status_code == 404
 
 
-def test_the_only_mutating_routes_are_the_v34_actions(client):
+def test_the_only_mutating_routes_are_the_v34_actions_and_the_v47_settings(client):
     mutating = {(route.path, frozenset(route.methods)) for route in client.app.routes
                 if isinstance(route, APIRoute) and not route.methods <= {"GET", "HEAD"}}
     assert mutating == {("/api/agents/{name}/forget", frozenset({"POST"})),
                         ("/api/agents/{name}/{action}", frozenset({"POST"})),
-                        ("/api/simulations/{sim_id}/services/{service}/{action}", frozenset({"POST"}))}
+                        ("/api/simulations/{sim_id}/services/{service}/{action}", frozenset({"POST"})),
+                        ("/api/settings", frozenset({"PUT"}))}
     assert client.put("/api/agents/ada/stop", headers=AUTH).status_code == 405
     assert client.get("/docs").status_code == 404 and client.get("/openapi.json").status_code == 404
 
