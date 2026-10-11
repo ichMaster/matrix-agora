@@ -451,7 +451,7 @@ def rank(event_id: str, members: Iterable[Member]) -> list[str]:
   - the named ones, top by rank;
   - otherwise the top of `rank(M.event_id, ranked − sender)`.
 - **The candidate's checks:** it replies if `wave_count(M) < MAX_BOT_TURNS` and a roll passes `BOT_REPLY_P`.
-- **Naming decides who, not whether.** Being named settles **who** speaks; the probability gate still applies.
+- **Naming decides who, not whether.** Being named settles **who** speaks; the probability gate still applies. *(Changed 2026-10-11 by the owner: an address is always answered inside a burst — a named candidate skips the gate; a resumed (R4) decision still rolls it, so an exchange ends. See ARCHITECTURE §Turn-taking R2/R4.)*
 
 **R3. Re-check at fire time** (agent-to-agent replies only).
 - **Before the model call:** M must still be the latest message, and `wave_count` must still be below the limit. If not, drop the reply.
@@ -699,7 +699,7 @@ Each step is shippable on its own; they are ROADMAP v4.1–v4.7, and the last it
   - unaffected by roster order.
 - **R1–R4 and modes:**
   - named and unnamed owner messages;
-  - one R2 candidate, never the sender; the probability gate applies when named;
+  - one R2 candidate, never the sender; the probability gate applies when unnamed or resumed (from 2026-10-11 a named candidate skips it inside a burst);
   - R3 on Gemini, on Claude, and the pre-call-only rule for Lumi;
   - the fallback after `FALLBACK_S`;
   - the cat's ambient roll; purrs excluded from `wave_count` and from producing a candidate; consecutive purrs collapse in the context.

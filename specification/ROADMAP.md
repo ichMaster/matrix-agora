@@ -510,11 +510,17 @@ Owner decisions (2026-10-11): Claude's weight is 1, as designed; the outgoing gu
 
 **Tasks:**
 - `agents/claude.toml`: `[turns] mode = "ranked"`, weight 1 — Claude joins R1 and R2.
-- **Two reply modes** (`claude_mode`): **direct** when addressed by name (v4.4); **philosopher** when the turn-taking brings him in unasked — over a wider window (`CLAUDE_HISTORY_N`, a RAM buffer seeded from the room) he reflects in 2–4 sentences on the philosophy of the metaphorical image running through the talk, or answers `PASS`; a higher reasoning effort than the direct mode.
+- **Two reply modes** (`claude_mode`): **direct** when addressed by name or a group address (v4.4); **philosopher** when the turn-taking brings him in unasked — over a wider window (`CLAUDE_HISTORY_N`, a RAM buffer seeded from the room, paged back past the homeserver's 100-event page) he reflects in 1–3 sentences (the owner, 2026-10-11; designed 2–4) on the philosophy of the metaphorical image running through the talk, or answers `PASS`; a higher reasoning effort than the direct mode; both modes think (adaptive).
+- **Added during the phase (the owner, 2026-10-11):**
+  - **His tools** (AGORA-068): the web (`WebSearch`, `WebFetch`, public hosts only) and his own folder `/workspace` (`Read`, `Write`, `Edit`, `Glob`, `Grep`), behind a PreToolUse guard; up to 8 turns and 180 s per reply.
+  - **His news** (AGORA-069, review #6): every hour, once the room has been quiet for a few minutes, 09–01, one fresh item from **The Guardian** (its Open Platform API, two in-process tools; the key never reaches the model) bearing on the last 40 messages, or `PASS`.
+  - **An address is always answered** inside a burst (a named R2 candidate skips `BOT_REPLY_P`; a resumed decision still rolls it); a message naming only the cat has no R2 candidate.
+  - **The cat's real sky**: his horoscope and talk name only the computed positions of the Sun, the Moon and the planets (`agents/sky.py`, PyEphem).
 
 **DoD:**
 - (Manual, owner) Asked by name, Claude still answers the question; joining unasked, he speaks as a philosopher about the image the talk has been circling.
 - (Manual, owner) The rate-limit status in the panel shows the philosopher's quota use stays within the plan.
+- (Manual, owner) Asked to look something up or to keep a note, he uses the web and his folder — and nothing else; an hourly Guardian item arrives in a quiet room.
 
 **Tests:** unit — `claude_mode` for every name form, the Matrix id and the unnamed case; the window and the brief per mode; Claude in the ranking and the multi-agent simulation.
 
