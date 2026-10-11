@@ -85,11 +85,11 @@ def pastlife_view(theses: Path | None) -> dict | None:
         return None
 
 
-def nudge_view(state_dir: Path, name: str, today: date, tz: str | None = None) -> dict | None:
+def nudge_view(state_dir: Path, name: str, today: date, tz: str | None = None, kind: str = "nudge") -> dict | None:
     """v4.3 — the cat's initiative from `<name>.nudge.json` (times and a count, no texts): the last nudge sent and
     today's count. No file yet → none sent; an unreadable file → None, never a 500."""
     try:
-        data = json.loads((state_dir / f"{name}.nudge.json").read_text(encoding="utf-8"))
+        data = json.loads((state_dir / f"{name}.{kind}.json").read_text(encoding="utf-8"))  # v4.5: or .news
         sent = data.get("sent_ms")
         last = (datetime.fromtimestamp(int(sent) / 1000, ZoneInfo(tz or os.environ.get("TIMEZONE", "Europe/Kyiv")))
                 .isoformat(timespec="seconds") if sent is not None else None)
@@ -119,7 +119,8 @@ def ratelimit_view(state_dir: Path, name: str) -> dict | None:
 
 
 def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = None, with_mood: bool = False,
-                memories: Path | None = None, with_nudge: bool = False, with_ratelimit: bool = False) -> dict:
+                memories: Path | None = None, with_nudge: bool = False, with_ratelimit: bool = False,
+                with_news: bool = False) -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -159,6 +160,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "pastlife": pastlife_view(memories),
         "nudge": nudge_view(state_dir, name, today) if with_nudge else None,
         "ratelimit": ratelimit_view(state_dir, name) if with_ratelimit else None,
+        "news": nudge_view(state_dir, name, today, kind="news") if with_news else None,  # v4.5: Claude's news
     }
 
 

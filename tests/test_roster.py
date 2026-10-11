@@ -49,7 +49,7 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
         "@ada:agora.lan", "Ада", "persona", "gemini", "ranked", 1.0)
     assert "адо" in ada.name_forms  # the vocative lives in the TOML now, not in code
     assert roster["bruno"].name_forms == ("бруно", "bruno")  # v4.4 review #8: the Latin form too
-    assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES) - {"mood", "pastlife", "nudge"}
+    assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES) - {"mood", "pastlife", "nudge", "news"}
     assert ada.panel["name"] == "Ada"
 
 
@@ -284,7 +284,7 @@ def test_a_room_has_at_most_one_initiator(tmp_path):
     assert [n for n, m in load_roster("sim", reg, agents).items() if m.can("nudge")] == ["kit"]
 
 
-def test_claude_is_a_ranked_assistant_with_no_capabilities():
+def test_claude_is_a_ranked_assistant_who_only_brings_news():
     """v4.4: Claude as itself — the `assistant` type, the `claude-sdk` engine; v4.5: ranked, weight 1."""
     from pathlib import Path
 
@@ -292,6 +292,16 @@ def test_claude_is_a_ranked_assistant_with_no_capabilities():
     claude = load_member(Path("agents/claude.toml"))
     assert (claude.type, claude.engine, claude.mode, claude.name) == ("assistant", "claude-sdk", "ranked", "Клод")
     assert claude.weight == 1.0
-    assert claude.capabilities == TYPES["assistant"] == frozenset()
+    assert claude.capabilities == TYPES["assistant"] == frozenset({"news"})          # v4.5: his news
     assert all(mentions(t, claude.name_forms, claude.user_id) for t in ("Клоде, як ти?", "спитай Клода", "claude?"))
     assert claude.panel == {"name": "Claude", "role": "assistant · Opus · Max subscription", "pronoun": "it"}
+
+
+
+def test_news_belongs_to_the_assistant_and_one_member_per_initiative(tmp_path):
+    """v4.5: Claude brings news; the cat nudges; a persona does neither; one member per initiative."""
+    with pytest.raises(RosterError, match="'news' belongs to the assistant type only"):
+        parse_member("ada", {"name": "Ада", "user_id": "@ada:agora.lan", "capabilities": {"news": True}})
+    roster = load_roster("agora")
+    assert [n for n, m in roster.items() if m.can("news")] == ["claude"]
+    assert [n for n, m in roster.items() if m.can("nudge")] == ["kit"]

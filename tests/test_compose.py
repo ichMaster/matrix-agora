@@ -173,7 +173,7 @@ def test_claude_takes_the_room_and_the_turn_settings_from_the_shared_file():
     env = SERVICES["claude"]["environment"]
     for key in ("ROOM_ID", "OWNER", "TIMEZONE", "HISTORY_N", "REPLY_MAX_TOKENS", "MAX_BOT_TURNS", "OWNER_REPLIERS",
                 "FALLBACK_S", "BOT_REPLY_P", "REPLY_DELAY_S", "BOT_WINDOW_S", "CAT_REACT_P", "CAT_PURR_P",
-                "CLAUDE_HISTORY_N"):
+                "CLAUDE_HISTORY_N", "CLAUDE_NEWS_IDLE_S", "CLAUDE_NEWS_PER_DAY", "CLAUDE_NEWS_HOURS"):
         assert str(env[key]).startswith("${" + key + ":-"), key
     assert env_keys(ROOT / "server" / "claude.env.example") == {"CLAUDE_PASSWORD", "CLAUDE_CODE_OAUTH_TOKEN",
                                                                   "CLAUDE_MODEL", "CLAUDE_CODE_MAX_OUTPUT_TOKENS",

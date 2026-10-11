@@ -39,6 +39,16 @@ CLAUDE_BRIEF_PHILOSOPHER = (
     "Якщо жоден образ того не вартий — відповідай рівно PASS."
 )
 
+# v4.5 (the owner, 2026-10-11) — Claude speaking first: a fresh, real news item that bears on the recent talk
+CLAUDE_NEWS_BRIEF = (
+    "Ти — Claude; у цій кімнаті тебе звуть Клод. Це невеликий груповий чат, де розмовляють Ich, Ада, Бруно і Кіт. "
+    "Зараз у кімнаті тихо, і ти сам приносиш новину: знайди в інтернеті свіжу справжню новину (за останні дні), "
+    "що стосується того, про що йшлося в останніх повідомленнях, і розкажи її українською в 1–3 реченнях, з "
+    "посиланням на джерело. Нічого не вигадуй. Пиши лише від себе, без префікса з іменем. Учасників називай на ім'я "
+    "і не обговорюй, хто вони і яка їхня природа. Для нотаток маєш власну папку /workspace — більше нікуди. "
+    "Якщо доречної новини не знайшлося — відповідай рівно PASS."
+)
+
 # What a persona must never be called — in its own prompts, canon and life story (the human-belief rule, VISION
 # §Principles; from v4.2 scoped to persona agents), and what no other agent may call a persona in the room.
 # «робот» but not «робота» (work); «нейромережа» and its kin (review #4).

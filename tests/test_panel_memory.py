@@ -212,3 +212,17 @@ def test_claudes_card_reads_his_rate_limit_and_auth_check(state, monkeypatch):
     (state / "claude.ratelimit.json").write_text("{torn", encoding="utf-8")
     r = c.get("/api/agents/claude/memory", headers=AUTH)
     assert r.status_code == 200 and r.json()["ratelimit"] is None
+
+
+def test_claudes_card_reads_his_news(state, monkeypatch):
+    """v4.5: the memory view carries `news` for an agent with the capability (Claude), null for the others."""
+    monkeypatch.setattr(app_mod, "local_today", lambda: TODAY)
+    monkeypatch.setenv("TIMEZONE", "Europe/Kyiv")
+    (state / "claude.news.json").write_text(json.dumps({"last_ms": 1, "day": "2026-10-04", "count": 2,
+                                                       "sent_ms": 1_791_111_900_000}), encoding="utf-8")
+    reg = Registry()
+    c = TestClient(create_app(token=TOKEN, registry=reg, docker_reader=DockerReader(client_factory=lambda: None),
+                              prober=Prober(reg), state_dir=state, background=False))
+    assert c.get("/api/agents/claude/memory", headers=AUTH).json()["news"] == {"last": "2026-10-04T14:05:00+03:00",
+                                                                                "today": 2}
+    assert c.get("/api/agents/kit/memory", headers=AUTH).json()["news"] is None

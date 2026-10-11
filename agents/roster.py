@@ -21,17 +21,21 @@ AGENTS_DIR = Path("agents")
 log = logging.getLogger("agent.roster")
 
 # the type sets the default capabilities; a later phase adds the bridge
-CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood", "pastlife", "nudge")
+CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood", "pastlife", "nudge",
+                "news")
 TYPES: dict[str, frozenset[str]] = {
     # a human persona: the full memory stack, no horoscope
     "persona": frozenset({"canon", "life", "summary", "chronicle", "plans", "today", "world"}),
     # v4.2 — a creature (the cat): canon, a life story and the world, a daily horoscope; no memories, no plans;
     # v4.3 — his fixed past-life theses (`pastlife`) and the only initiative in the room (`nudge`)
     "creature": frozenset({"canon", "life", "world", "mood", "pastlife", "nudge"}),
-    # v4.4 — an assistant (Claude, as itself): no canon, no life, no memory — a short brief in code
-    "assistant": frozenset(),
+    # v4.4 — an assistant (Claude, as itself): no canon, no life, no memory — a short brief in code;
+    # v4.5 — news he brings himself after a quiet stretch (`news`)
+    "assistant": frozenset({"news"}),
 }
 CREATURE_ONLY = frozenset({"pastlife", "nudge"})  # v4.3: no persona remembers a past life or speaks first
+ASSISTANT_ONLY = frozenset({"news"})               # v4.5: only Claude brings news unasked
+INITIATIVES = ("nudge", "news")                    # who may speak first: one member per initiative
 ENGINES = ("gemini", "claude-sdk")  # v4.4: Claude through the Agent SDK, on the subscription only
 MODES = ("ranked", "ambient", "mention-only")
 
@@ -81,6 +85,9 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
     for cap in sorted(caps & CREATURE_ONLY):
         if kind != "creature":  # the past life and the initiative are the cat's alone (v4.3 review #6)
             raise RosterError(f"{source}: '{cap}' belongs to the creature type only")
+    for cap in sorted(caps & ASSISTANT_ONLY):
+        if kind != "assistant":
+            raise RosterError(f"{source}: '{cap}' belongs to the assistant type only")
     turns = data.get("turns", {})
     if not isinstance(turns, dict):
         raise RosterError(f"{source}: [turns] must be a table")
@@ -137,9 +144,11 @@ def load_roster(sim_id: str, registry_path: Path = REGISTRY_PATH, agents_dir: Pa
             if strict_for is None or name == strict_for:
                 raise
             log.error("roster: skipping %s — %s", name, exc)
-    initiators = [n for n, m in roster.items() if m.can("nudge")]
-    if len(initiators) > 1:  # the only initiator (v4.3): two would race on the same silence (review #6)
-        raise RosterError(f"{sim_id}: only one member may start conversations, got {', '.join(initiators)}")
+    for initiative in INITIATIVES:  # one member per initiative: two would race on the same silence (v4.3 review #6)
+        initiators = [n for n, m in roster.items() if m.can(initiative)]
+        if len(initiators) > 1:
+            raise RosterError(f"{sim_id}: only one member may start conversations with '{initiative}', "
+                              f"got {', '.join(initiators)}")
     return roster
 
 

@@ -499,7 +499,11 @@ function claudeLines(mem) {
   // the design's pill: ok / warn when muted / err when rejected, blocked or failing (a dead token — review #14)
   const cls = (r.auth && r.auth !== "oauth") || r.last_error || (muted && r.status === "rejected") ? "err"
     : muted ? "warn" : r.status ? "ok" : "unknown";
+  // v4.5: his news — the last one he brought and today's count
+  const n = mem.news, nAt = n?.last ? new Date(n.last) : null;
+  const news = n ? (nAt ? `news ${nAt.toDateString() === new Date().toDateString() ? "" : `${nAt.toLocaleDateString("en-US", {month: "short", day: "numeric"})}, `}${nAt.toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"})} · ${Number(n.today)} today` : `no news yet · ${Number(n.today)} today`) : "";
   return `<div class="today-line">${esc(`claude-sdk · ${r.model || "opus"} · subscription`)}</div>
+    ${news ? `<div class="muted" style="font-size:12px">${esc(news)}</div>` : ""}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${pill(cls, limit)}<span class="muted" style="font-size:12px">${esc(auth)}</span></div>`;
 }
 

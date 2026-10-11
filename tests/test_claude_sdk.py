@@ -529,3 +529,63 @@ def test_the_init_check_accepts_exactly_his_tools(tmp_path, tools, blocked):
     r.workspace = "/workspace"
     run(r)
     assert r.blocked == blocked
+
+
+# --- v4.5 (AGORA-069): Claude's news ------------------------------------------------------------------------------------
+def news_agent(monkeypatch, tmp_path, reply="Свіжа новина про вечірнє небо: https://example.com/a"):
+    from dataclasses import replace
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from agents.agent import Agent
+    from agents.roster import TYPES
+    agent = claude_agent(monkeypatch)
+    agent = Agent(replace(agent.cfg, capabilities=TYPES["assistant"]))
+    agent.client = claude_agent(monkeypatch).client
+    agent.responder = RecordingResponder(reply)
+    agent.memory_file = tmp_path / "claude.memory.md"
+    agent.started = True
+    now = datetime(2026, 10, 12, 14, 0, tzinfo=ZoneInfo("Europe/Kyiv"))
+    now_ms = int(now.timestamp() * 1000)
+    agent.clock = lambda: now_ms
+    agent.timeline = [("Ich", now_ms - 3_600_000 - 1, "$old", False)]
+    agent.history = [("Ich", "говорили про зорі")]
+    return agent
+
+
+def test_after_a_quiet_hour_claude_brings_news_with_the_news_brief(monkeypatch, tmp_path):
+    from agents.logic import CLAUDE_NEWS_BRIEF
+    agent = news_agent(monkeypatch, tmp_path)
+    assert asyncio.run(agent.maybe_news()) is True
+    turn = agent.responder.turns[0]
+    assert turn.instruction == CLAUDE_NEWS_BRIEF and turn.lines == [("Ich", "говорили про зорі")]
+    assert "https://example.com/a" in agent.client.room_send.await_args.kwargs["content"]["body"]
+    state = json.loads(agent.news_file.read_text())
+    assert state["count"] == 1 and set(state) == {"last_ms", "day", "count", "sent_ms"}       # no text
+    assert stat.S_IMODE(os.stat(agent.news_file).st_mode) == 0o600
+    assert asyncio.run(agent.maybe_news()) is False                                           # the gap holds
+
+
+def test_no_news_while_the_room_talks_or_at_night(monkeypatch, tmp_path):
+    agent = news_agent(monkeypatch, tmp_path)
+    agent.timeline = [("Ich", agent.clock() - 60_000, "$recent", False)]
+    assert asyncio.run(agent.maybe_news()) is False
+    agent.timeline = [("Ich", agent.clock() - 3_600_001, "$old", False)]
+    agent.news_hours = (9, 10)                                                                # outside the hours
+    assert asyncio.run(agent.maybe_news()) is False and agent.responder.turns == []
+
+
+def test_a_pass_or_the_room_speaking_meanwhile_sends_nothing(monkeypatch, tmp_path):
+    agent = news_agent(monkeypatch, tmp_path, reply="PASS")
+    assert asyncio.run(agent.maybe_news()) is False
+    agent.client.room_send.assert_not_awaited()
+
+    class Interrupting(RecordingResponder):
+        async def respond(self, turn):
+            agent2.timeline.append(("Ich", agent2.clock(), "$new", False))
+            return await super().respond(turn)
+
+    agent2 = news_agent(monkeypatch, tmp_path / "b")
+    agent2.responder = Interrupting("Новина: https://example.com/b")
+    assert asyncio.run(agent2.maybe_news()) is False
+    agent2.client.room_send.assert_not_awaited()

@@ -59,6 +59,7 @@ from agents.llm import GeminiClient
 from agents.logic import (
     CLAUDE_BRIEF_DIRECT,
     CLAUDE_BRIEF_PHILOSOPHER,
+    CLAUDE_NEWS_BRIEF,
     CREATURE_RULES,
     append_history,
     build_instruction,
@@ -192,6 +193,13 @@ class Agent:
             if self.nudge_idle_ms < self.bot_window_ms:  # the silence must empty the wave window
                 log.warning("CAT_NUDGE_IDLE_S below BOT_WINDOW_S — using %d s", self.bot_window_ms // 1000)
                 self.nudge_idle_ms = self.bot_window_ms
+        # v4.5 — Claude's news: the same rule with his own settings (read only by an agent with `news`)
+        self.news_idle_ms, self.news_per_day, self.news_hours = 0, 0, (0, 0)
+        if cfg.can("news"):
+            self.news_hours = parse_hours(os.environ.get("CLAUDE_NEWS_HOURS", "09-01"))
+            self.news_per_day = int(os.environ.get("CLAUDE_NEWS_PER_DAY", "6"))
+            self.news_idle_ms = max(int(float(os.environ.get("CLAUDE_NEWS_IDLE_S", "3600")) * 1000),
+                                    self.bot_window_ms)
         self.timeline: list[tuple[str, int, str]] = []  # (name, server_ts_ms, event_id), parallel to history
         self.last_owner: tuple[str, str] | None = None  # (event_id, text) of the owner's latest message
         self.rng = random.random  # injectable in tests
@@ -1075,6 +1083,64 @@ class Agent:
         finally:
             self._nudging = False
 
+    @property
+    def news_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.news.json"
+
+    async def maybe_news(self) -> bool:
+        """v4.5 — after a quiet stretch, Claude brings one fresh news item that bears on the recent talk (the same
+        `nudge_due` with his settings, his own state file); never while a reply of his is on its way."""
+        if not (self.started and self.cfg.can("news")) or self._nudging or self._reply_pending:
+            return False
+        now_ms = self.clock()
+        now = local_now(now_ms, self.tz)
+        state = load_nudge_state(self.news_file, now.date().isoformat())
+        marks = [int(self.timeline[-1][1])] if self.timeline else []
+        last_room_ms = max([*marks, *([self.started_ms] if self.started_ms is not None else [])], default=None)
+        if not nudge_due(now_ms, now, last_room_ms, state.last_ms, state.count, self.news_idle_ms,
+                         self.news_per_day, self.news_hours):
+            return False
+        self._nudging = True
+        try:
+            state.last_ms = now_ms
+            save_nudge_state(self.news_file, state)
+            sent = await self.news()
+            if sent:
+                state.count += 1
+                state.sent_ms = now_ms
+                save_nudge_state(self.news_file, state)
+            return sent
+        finally:
+            self._nudging = False
+
+    async def news(self) -> bool:
+        """One news item: the news brief over the last `HISTORY_N` lines, his tools, the reply's checks and a
+        pre-send check that the room is still quiet. Logs the outcome — never the text."""
+        marker = self.timeline[-1][2] if self.timeline else None
+        room_id = self.cfg.room_id
+        try:
+            await self.client.room_typing(room_id, True)
+            text = await self._compose(CLAUDE_NEWS_BRIEF)
+            if text is None:
+                log.info("news silent")
+                return False
+            if same_message(text, self._last_sent):
+                log.info("news silent: duplicate of my previous message")
+                return False
+            if outs_a_persona(text, self.personas):
+                log.info("news silent: would out a persona")
+                return False
+            if (self.timeline[-1][2] if self.timeline else None) != marker:
+                log.info("news silent: the room spoke meanwhile")
+                return False
+            self._last_sent = text
+            await self.client.room_send(room_id=room_id, message_type="m.room.message",
+                                        content={"msgtype": "m.text", "body": text})
+            log.info("news sent")
+            return True
+        finally:
+            await self.client.room_typing(room_id, False)
+
     async def nudge(self, now, n: int) -> tuple[str, bool]:
         """The day's n-th nudge: its material by kind, the reply's checks, and a pre-send check that the room is
         still quiet. Logs the kind and the outcome — never the text."""
@@ -1177,11 +1243,16 @@ class Agent:
                     await self.ensure_mood(local_now(self.clock(), self.tz))
                 except Exception:
                     log.exception("mood of the day failed (bot keeps running)")
-            if self.cfg.can("nudge"):  # v4.3: the only agent that ever speaks first
+            if self.cfg.can("nudge"):  # v4.3: the cat speaks first
                 try:
                     await self.maybe_nudge()
                 except Exception:
                     log.exception("nudge failed (bot keeps running)")
+            if self.cfg.can("news"):  # v4.5: Claude brings news
+                try:
+                    await self.maybe_news()
+                except Exception:
+                    log.exception("news failed (bot keeps running)")
             now = self.clock()
             if (
                 self.cfg.can("summary")

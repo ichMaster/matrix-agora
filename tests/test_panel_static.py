@@ -124,6 +124,14 @@ def test_claudes_card_and_the_billing_column():
     assert "r.cost.toFixed(4)}</td>` : \"\"}</tr>`;" not in js.replace('r.cost == null ? "—" : r.cost.toFixed(4)', "")
 
 
+def test_claudes_card_shows_his_news():
+    """v4.5: the last news he brought (dated when not today) and today's count; nothing when `news` is null."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert "const n = mem.news, nAt = n?.last ? new Date(n.last) : null;" in js
+    assert "`no news yet · ${Number(n.today)} today`" in js
+    assert '${news ? `<div class="muted" style="font-size:12px">${esc(news)}</div>` : ""}' in js
+
+
 
 def test_a_subscription_cost_is_never_shown_as_zero():
     """v4.4 review #13: the Tokens tab summed `r.cost || 0` and printed 0.0000 for Claude's rows, and a missing cost
