@@ -231,3 +231,14 @@ def test_an_assistants_instruction_is_its_brief():
     cfg = AgentConfig(**{**CFG.__dict__, "name": "Клод", "user_id": "@claude:agora.lan", "type": "assistant",
                          "capabilities": frozenset(), "canon": ""})
     assert Agent(cfg, llm=FakeLLM()).build_prompt() == CLAUDE_BRIEF_DIRECT
+
+
+def test_a_personas_move_comes_after_the_summary_and_before_the_rules():
+    """v4.6 contract: the move line is the freshest instruction — after the last-session memory, before the rules."""
+    from agents.logic import build_instruction
+    out = build_instruction("Ада", "КАНОН", "підсумок", plans="Твої плани: x", today="Сьогодні: y",
+                            move="Цього разу: заперечи")
+    order = ["КАНОН", "Твої плани", "Сьогодні", "Що ти пам'ятаєш з минулої розмови", "Цього разу", "Ти — Ада."]
+    idx = [out.index(x) for x in order]
+    assert idx == sorted(idx)
+    assert "Цього разу" not in build_instruction("Ада", "КАНОН", "підсумок")

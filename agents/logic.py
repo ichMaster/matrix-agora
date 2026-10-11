@@ -161,15 +161,19 @@ def build_instruction(
     pastlife: str | None = None,
     nudge: str | None = None,
     rules_extra: str | None = None,
+    move: str | None = None,
 ) -> str:
     """The system instruction, in contract order (ARCHITECTURE §Prompt assembly):
     canon → life so far → place and time → memories → plans → today →
     (v4.2) the mood of the day → (v4.3) a past-life memory → (v4.3) a nudge's material and rule →
-    last-session memory → rules. Empty sections are skipped. Nothing here may say a persona is a model or a bot."""
+    last-session memory → (v4.6) the persona's move → rules. Empty sections are skipped. Nothing here may say a
+    persona is a model or a bot."""
     parts = [canon]
     parts += [s for s in (life, world, memories, plans, today, mood, pastlife, nudge) if s]  # «Настрій дня», …
     if summary:
         parts.append(f"Що ти пам'ятаєш з минулої розмови: {summary}")
+    if move:
+        parts.append(move)  # the freshest instruction: how to reply this time (v4.6)
     rules = (
         f"Ти — {name}. Відповідай лише від себе, коротко, без префікса з іменем. "
         "Якщо тобі нема чого додати — відповідай рівно PASS."

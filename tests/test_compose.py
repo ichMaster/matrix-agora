@@ -97,6 +97,16 @@ def test_the_cats_settings_are_in_both_env_examples():
     assert cat <= env_keys(ROOT / ".env.example") and cat <= env_keys(ROOT / "server" / ".env.example")
 
 
+def test_the_persona_move_weights_are_in_both_env_examples_with_the_code_defaults():
+    """v4.6: the persona's move weights (ARCHITECTURE §Configuration)."""
+    from agents.moves import DEFAULT_WEIGHTS, WEIGHT_VARS
+    for path in (ROOT / ".env.example", ROOT / "server" / ".env.example"):
+        assert set(WEIGHT_VARS.values()) <= env_keys(path)
+        values = dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines()
+                      if line.startswith("PERSONA_"))
+        assert {k: float(values[v]) for k, v in WEIGHT_VARS.items()} == DEFAULT_WEIGHTS
+
+
 def test_the_cats_example_values_are_the_agents_defaults(monkeypatch):
     """v4.3 review #11: an example value that drifts from the code default (2700 vs 1200) would silently override
     it once copied into an .env."""

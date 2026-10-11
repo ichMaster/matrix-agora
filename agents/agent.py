@@ -85,6 +85,7 @@ from agents.mood import (
     reading_from_log,
     split_resolution,
 )
+from agents.moves import move_line, persona_move, weights_from
 from agents.nudge import (
     COMMAND_MATERIAL,
     HOROSCOPE_MATERIAL,
@@ -206,6 +207,12 @@ class Agent:
             if self.nudge_idle_ms < self.bot_window_ms:  # the silence must empty the wave window
                 log.warning("CAT_NUDGE_IDLE_S below BOT_WINDOW_S — using %d s", self.bot_window_ms // 1000)
                 self.nudge_idle_ms = self.bot_window_ms
+        # v4.6 — a persona's move weights (read only by a persona)
+        self.move_weights: dict[str, float] = {}
+        if cfg.type == "persona":
+            self.move_weights, bad = weights_from(os.environ)
+            for var in bad:
+                log.warning("%s is not a number in 0..1 — using its default", var)
         # v4.5 — Claude's news (read only by an agent with `news`): every CLAUDE_NEWS_EVERY_S, once the room has been
         # quiet for CLAUDE_NEWS_IDLE_S — never less than the wave window (the owner, 2026-10-11: every hour, not
         # after an hour of silence; review #6)
@@ -566,9 +573,10 @@ class Agent:
         return still_current(self.timeline, trigger, "Ich", now, self.bot_window_ms, self.max_bot_turns,
                              self.reserved(now))
 
-    def build_prompt(self, pastlife: str | None = None, nudge: str | None = None) -> str:
+    def build_prompt(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None) -> str:
         """The full system instruction for a reply, in contract order; `pastlife` is a chosen thesis, `nudge` a
-        nudge's material and rule (v4.3). An assistant (v4.4, Claude) has no canon: its brief is the instruction."""
+        nudge's material and rule (v4.3), `move` a persona's move line (v4.6). An assistant (v4.4, Claude) has no
+        canon: its brief is the instruction."""
         if self.cfg.type == "assistant":
             return CLAUDE_BRIEF_DIRECT
         can = self.cfg.can
@@ -589,7 +597,18 @@ class Agent:
             pastlife=pastlife if can("pastlife") else None,
             nudge=nudge if can("nudge") else None,
             rules_extra=CREATURE_RULES if self.cfg.type == "creature" else None,
+            move=move if self.cfg.type == "persona" else None,
         )
+
+    def draw_move(self, event_id: str, now) -> str | None:
+        """v4.6 — a persona's move for the event it answers: the kind is logged, the line goes into the prompt."""
+        if self.cfg.type != "persona" or not event_id:
+            return None
+        move = persona_move(event_id, self.me, self.roster, "Ich", self.move_weights,
+                            has_plans=self.cfg.can("plans") and bool(self.plans_section(now)),
+                            has_life=self.cfg.can("life") and bool(self.cfg.life))
+        log.info("move: %s", move.kind)
+        return move_line(move)
 
     # --- v2.2: files under state/ -------------------------------------------------
     def _dir(self, kind: str) -> Path:
@@ -1044,7 +1063,10 @@ class Agent:
                 except Exception:
                     log.exception("mood of the day failed (reply continues)")
             memory = self._pick_thesis()
-            prompt = self.build_prompt(pastlife_section(self.cfg.theses[memory]) if memory is not None else None)
+            answered = trigger or (self.last_owner[0] if self.last_owner else "")
+            move = self.draw_move(answered, local_now(self.clock(), self.tz))
+            prompt = self.build_prompt(pastlife_section(self.cfg.theses[memory]) if memory is not None else None,
+                                       move=move)
             lines, effort = None, None
             if self.cfg.type == "assistant":  # v4.5: direct when named, otherwise the philosopher
                 answered = (self._texts.get(trigger, "") if trigger
