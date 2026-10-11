@@ -68,6 +68,28 @@ class GeminiClient:
         return text, finish_of(resp)
 
 
+    async def search(self, question: str, max_output_tokens: int = 800, kind: str = "sky") -> str | None:
+        """A grounded answer — Gemini with Google Search, as Lumi's web lookup (core/weblookup.py): the question is
+        asked of the live internet; the sources stay out of the answer. None on failure (logged by type)."""
+        try:
+            resp = await self._client.aio.models.generate_content(
+                model=MODEL,
+                contents=question,
+                config=types.GenerateContentConfig(
+                    max_output_tokens=max_output_tokens,
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.error("gemini search failed: %s", type(exc).__name__)
+            self._report(kind, None, False)
+            return None
+        text = (resp.text or "").strip() if resp is not None else ""
+        self._report(kind, getattr(resp, "usage_metadata", None), bool(text))
+        return text or None
+
+
 def finish_of(resp: Any) -> str:
     """The candidate's finish reason, mapped to the responder's vocabulary."""
     candidates = getattr(resp, "candidates", None) or []

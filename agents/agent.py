@@ -74,6 +74,8 @@ from agents.logic import (
 from agents.memory import build_summary_request, cap_words, load_memory, save_memory, session_ended
 from agents.mood import (
     MOOD_MAX_TOKENS,
+    NO_SKY_SECTION,
+    SKY_SECTION,
     MoodState,
     biorhythms,
     format_biorhythms,
@@ -109,7 +111,7 @@ from agents.responder import Turn, responder_for, trim_to_sentence
 from agents.roster import Member, load_roster
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.session import load_session, save_session
-from agents.sky import sky_line
+from agents.sky import SKY_MAX_TOKENS, clean_sky, load_sky, save_sky, sky_query
 from agents.turns import (
     claude_mode,
     decide_reply,
@@ -254,7 +256,9 @@ class Agent:
         self._last_sent = ""
         self._tasks: set[asyncio.Task] = set()  # strong refs: pending tasks are only weakly referenced
         self.mood: MoodState | None = None  # v4.2: the day's horoscope (a `mood` agent)
-        self._sky: tuple[date, str] | None = None  # the day's real sky (the owner, 2026-10-11)
+        self._sky: tuple[str, str] | None = None  # (day, line): the day's astrological sky (the owner, 2026-10-11)
+        self._sky_lock = asyncio.Lock()
+        self._sky_retry_ms = 0
         self._mood_lock = asyncio.Lock()
         self._mood_retry_ms = 0
         self.told: set[int] = set()  # v4.3: the theses retold this run — RAM only, like the context window
@@ -903,27 +907,50 @@ class Agent:
         return self.memory_file.parent / f"{self.cfg.localpart}.mood.log"
 
     def mood_section(self, now) -> str | None:
-        """«Настрій дня» and — the owner, 2026-10-11 — the day's real sky, so whatever he says of the stars is true."""
+        """«Настрій дня» and — the owner, 2026-10-11 — the day's astrological sky, so whatever he says of the stars
+        is real; without it, he is told he does not know the positions today."""
         if self.mood is None or self.mood.date != now.date().isoformat():
             return None
-        sky = self.sky(now.date())
+        sky = self.sky_today(now)
         return f"Настрій дня: {self.mood.resolution}" + (
-            f"\n\nНебо сьогодні (справжнє, обчислене): {sky}. Про зорі й планети кажи лише це." if sky else "")
+            f"\n\n{SKY_SECTION.format(sky=sky)}" if sky else f"\n\n{NO_SKY_SECTION}")
 
-    def sky(self, day) -> str | None:
-        """The day's sky line, computed once per day; None if the computation fails (never a blocked reply)."""
-        if self._sky is None or self._sky[0] != day:
-            try:
-                self._sky = (day, sky_line(day, self.tz))
-            except Exception as exc:  # noqa: BLE001 — the sky colors the day, it never stops a reply
-                log.error("sky not computed (%s)", type(exc).__name__)
+    @property
+    def sky_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.sky.json"
+
+    def sky_today(self, now) -> str | None:
+        day = now.date().isoformat()
+        return self._sky[1] if self._sky is not None and self._sky[0] == day else None
+
+    async def ensure_sky(self, now) -> str | None:
+        """Once per local day: the day's file, else one grounded Gemini question (as Lumi's web lookup); a failure
+        means no sky and a retry after 10 minutes — never a blocked reply or a blocked mood."""
+        day = now.date().isoformat()
+        if (line := self.sky_today(now)) is not None:
+            return line
+        if self._sky_lock.locked() or self.clock() < self._sky_retry_ms:
+            return None
+        async with self._sky_lock:
+            if (line := load_sky(self.sky_file, day)) is not None:
+                self._sky = (day, line)
+                return line
+            search = getattr(self.llm, "search", None)
+            line = clean_sky(await search(sky_query(now.date()), SKY_MAX_TOKENS, "sky")) if search else None
+            if line is None:
+                log.error("sky lookup failed — none until a retry")
+                self._sky_retry_ms = self.clock() + 600_000
                 return None
-        return self._sky[1]
+            self._sky = (day, line)
+            save_sky(self.sky_file, day, line)
+            log.info("sky looked up")
+            return line
 
     async def ensure_mood(self, now) -> None:
         """Once per local day: reuse the day's logged reading, else one model call; a failure means no mood and a
         retry after 10 minutes — never a blocked reply."""
         day = now.date().isoformat()
+        sky = await self.ensure_sky(now)  # the day's sky first: the reading is built on it (the owner, 2026-10-11)
         if self.mood is not None and self.mood.date == day:
             return
         if self._mood_lock.locked() or self.clock() < self._mood_retry_ms:
@@ -935,7 +962,7 @@ class Agent:
                 return
             birth = parse_birth_date(self.cfg.natal)
             rhythms = format_biorhythms(biorhythms(birth, now.date())) if birth else None
-            system, contents = mood_request(self.cfg.name, self.cfg.natal, day, rhythms, self.sky(now.date()))
+            system, contents = mood_request(self.cfg.name, self.cfg.natal, day, rhythms, sky)
             reading = await self._mood_reading(contents, system)
             if not reading:
                 log.error("mood of the day failed — none today until a retry")

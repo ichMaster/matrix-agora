@@ -1,96 +1,79 @@
-"""Today's sky (the owner, 2026-10-11) — the real positions of the Sun, the Moon and the planets in the tropical
-zodiac, for the cat's horoscope: his reading and his talk name only these, never invented transits.
+"""Today's sky (the owner, 2026-10-11) — the astrological positions of the Sun, the Moon and the planets and the
+day's aspects between them (conjunctions, oppositions, trines, squares, sextiles), asked of Gemini with Google
+Search once a day, for the cat's horoscope: his reading and his talk name only these, never invented transits.
 
-Computed by PyEphem (analytic theories, no data files, no network) for a given moment; the agent passes local noon
-of the day. A planet is retrograde when its ecliptic longitude decreases over the next day. Pure.
+As Lumi's web lookup (core/weblookup.py): one grounded, date-anchored call on the same `GEMINI_API_KEY`. Astrology,
+not astronomy — the signs of the tropical zodiac as horoscopes give them (the owner: the astronomical and the
+astrological positions need not coincide). The day's line is kept in `state/<name>.sky.json` (the day and the
+line — world data, no room text), so a restart makes no second call. Pure but for the file I/O.
 """
 
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, tzinfo
-from zoneinfo import ZoneInfo
+import json
+import logging
+import os
+import re
+from datetime import date
+from pathlib import Path
 
-import ephem
+log = logging.getLogger("agent.sky")
 
-SIGNS = ("Овен", "Телець", "Близнюки", "Рак", "Лев", "Діва", "Терези", "Скорпіон", "Стрілець", "Козеріг",
-         "Водолій", "Риби")
-SIGNS_IN = ("в Овні", "в Тельці", "в Близнюках", "в Раку", "в Леві", "в Діві", "в Терезах", "у Скорпіоні",
-            "у Стрільці", "в Козерозі", "у Водолії", "в Рибах")
-BODIES = (("Сонце", "Sun"), ("Місяць", "Moon"), ("Меркурій", "Mercury"), ("Венера", "Venus"), ("Марс", "Mars"),
-          ("Юпітер", "Jupiter"), ("Сатурн", "Saturn"), ("Уран", "Uranus"), ("Нептун", "Neptune"),
-          ("Плутон", "Pluto"))
-# the Moon's phase by its elongation from the Sun (degrees, the start of each eighth)
-PHASES = ((0, "молодик"), (22.5, "молодий місяць росте"), (67.5, "перша чверть"), (112.5, "місяць росте до повні"),
-          (157.5, "повня"), (202.5, "місяць спадає після повні"), (247.5, "остання чверть"),
-          (292.5, "старий місяць спадає"), (337.5, "молодик"))
+SKY_MAX_TOKENS = 800
+SKY_MAX_CHARS = 1500
+WEEKDAYS = ("понеділок", "вівторок", "середа", "четвер", "п'ятниця", "субота", "неділя")
+MONTHS_GEN = ("січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня",
+              "листопада", "грудня")
+BODIES = ("Сонце", "Місяць", "Меркурій", "Венера", "Марс", "Юпітер", "Сатурн", "Уран", "Нептун", "Плутон")
 
 
-@dataclass(frozen=True)
-class Placement:
-    body: str        # Ukrainian name, «Венера»
-    longitude: float  # tropical ecliptic longitude of date, 0–360
-    retrograde: bool
-
-    @property
-    def sign(self) -> str:
-        return SIGNS[int(self.longitude // 30) % 12]
-
-    @property
-    def degree(self) -> int:
-        return int(self.longitude % 30)
-
-
-def _longitude(attr: str, when: ephem.Date) -> float:
-    body = getattr(ephem, attr)()
-    body.compute(when, epoch=when)  # the equinox of date: the tropical zodiac
-    return math.degrees(float(ephem.Ecliptic(body, epoch=when).lon)) % 360
+def sky_query(day: date) -> str:
+    """The date-anchored question: the day's astrological positions and aspects (the owner: trines, oppositions
+    and the rest), as two short lines."""
+    when = f"{day.day} {MONTHS_GEN[day.month - 1]} {day.year} ({WEEKDAYS[day.weekday()]}, {day.isoformat()})"
+    return (
+        f"Сьогодні {when}. Які сьогодні астрологічні положення планет у знаках зодіаку (тропічний зодіак, як у "
+        f"гороскопах, не астрономічні сузір'я): {', '.join(BODIES)} — знак і градус кожного; які з них "
+        "ретроградні; фаза Місяця? І які головні аспекти дня між ними — з'єднання, опозиції, тригони, квадрати, "
+        "секстилі (точні або з невеликим орбісом)? Перевір за ефемеридами й астрологічними календарями в інтернеті. "
+        "Відповідай українською, без вступу й пояснень, двома рядками у форматі: «Положення: Сонце — Терези 18°; "
+        "Місяць — Скорпіон 2° (молодик); Венера — Скорпіон 7° ℞; …» і «Аспекти: Сонце тригон Юпітер; Марс "
+        "опозиція Сатурн; …». Нічого не вигадуй."
+    )
 
 
-def _ephem_date(moment: datetime) -> ephem.Date:
-    return ephem.Date(moment.astimezone(UTC).replace(tzinfo=None))
+def clean_sky(text: str | None) -> str | None:
+    """The answer as one bounded line (positions, then aspects), or None when it does not read like the day's sky
+    (no Sun, no Moon)."""
+    line = re.sub(r"\s+", " ", (text or "").replace("**", "")).strip().strip("«»\"")
+    if "Сонце" not in line or "Місяць" not in line:
+        return None
+    if len(line) > SKY_MAX_CHARS:
+        line = line[:SKY_MAX_CHARS].rsplit(";", 1)[0]
+    return line
 
 
-def placements(moment: datetime) -> list[Placement]:
-    """Every body's sign and degree at `moment` (an aware datetime), with retrograde motion for the planets."""
-    when = _ephem_date(moment)
-    out = []
-    for name, attr in BODIES:
-        lon = _longitude(attr, when)
-        retro = False
-        if attr not in ("Sun", "Moon"):
-            step = (_longitude(attr, ephem.Date(when + 1)) - lon + 540) % 360 - 180
-            retro = step < 0
-        out.append(Placement(name, lon, retro))
-    return out
+def load_sky(path: Path, day: str) -> str | None:
+    """The day's line from the file, or None (another day, missing, corrupt)."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get("day") != day or not isinstance(data.get("sky"), str):
+        return None
+    return data["sky"] or None
 
 
-def moon_phase(sky: list[Placement]) -> str:
-    sun = next(p for p in sky if p.body == "Сонце")
-    moon = next(p for p in sky if p.body == "Місяць")
-    elongation = (moon.longitude - sun.longitude) % 360
-    return [label for start, label in PHASES if elongation >= start][-1]
-
-
-def format_sky(sky: list[Placement]) -> str:
-    """«Сонце в Терезах 18°; Місяць в Терезах 26° (молодик); …; Венера у Скорпіоні 7° (ретроградна); …»."""
-    parts = []
-    for p in sky:
-        text = f"{p.body} {SIGNS_IN[SIGNS.index(p.sign)]} {p.degree}°"
-        if p.body == "Місяць":
-            text += f" ({moon_phase(sky)})"
-        if p.retrograde:
-            text += " (ретроградна)" if p.body == "Венера" else " (ретроградний)"
-        parts.append(text)
-    return "; ".join(parts)
-
-
-def noon(day: date, tz: tzinfo) -> datetime:
-    """Local noon of `day` — the moment a day's sky is read at."""
-    return datetime.combine(day, time(12, 0), tzinfo=tz)
-
-
-def sky_line(day: date, tz: str | tzinfo) -> str:
-    """The day's sky at local noon in `tz` (a zone name, as `TIMEZONE`, or a tzinfo)."""
-    return format_sky(placements(noon(day, ZoneInfo(tz) if isinstance(tz, str) else tz)))
+def save_sky(path: Path, day: str, line: str) -> None:
+    """Atomic, private from birth (0600); a failure is logged by its type — the line is kept in memory anyway."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, json.dumps({"day": day, "sky": line}, ensure_ascii=False).encode("utf-8"))
+        finally:
+            os.close(fd)
+        os.replace(tmp, path)
+    except OSError as exc:
+        log.error("sky not saved (%s)", type(exc).__name__)

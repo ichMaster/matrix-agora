@@ -3,9 +3,9 @@
 Once per local day the agent asks the model for a vivid, honest reading from its fixed **natal chart** + today's
 date + the day's computed **biorhythms**, ending in a short **resolution** (mood, energy, what it is drawn to, what
 it avoids, tone). The full reading is appended to `state/<name>.mood.log`; only the resolution enters the prompt as
-«Настрій дня». Unlike Lumi, the transits are real (the owner, 2026-10-11): the day's sky — every body's sign and
-degree and the retrograde planets, computed by `agents/sky.py` — goes into the call, and the reading may name only
-those positions. Not ported: the hormonal cycle, the face themes, recent thoughts.
+«Настрій дня». Unlike Lumi, the transits are real (the owner, 2026-10-11): the day's astrological sky — every
+body's sign and degree, the retrograde planets, the Moon's phase and the day's aspects, asked of Gemini with Google
+Search (`agents/sky.py`) — goes into the call, and the reading may name only those; without it, none at all. Not ported: the hormonal cycle, the face themes, recent thoughts.
 Everything here is pure; the agent owns the clock, the call and the file.
 """
 
@@ -30,9 +30,14 @@ MOOD_SYSTEM = (
     "(хай навіть складний чи тьмяний), а не підбадьорювати. Лише про настрій і тон — не про знання чи вміння."
 )
 # the owner, 2026-10-11: the transits are real — the reading names only the computed positions
-SKY_RULE = ("Небо на цю дату (ТОЧНО обчислено за ефемеридами, тропічний зодіак): {sky}. Транзити бери ЛИШЕ з "
-            "цього переліку й натальної карти — не вигадуй інших положень планет, знаків, аспектів до них чи "
+SKY_RULE = ("Небо на цю дату (з астрологічних ефемерид в інтернеті, тропічний зодіак): {sky}. Транзити й аспекти "
+            "бери ЛИШЕ звідси й з натальної карти — не вигадуй інших положень планет, знаків, аспектів чи "
             "ретроградності.")
+NO_SKY_RULE = ("Положень планет на цю дату немає — не називай знаків, градусів, аспектів чи ретроградності планет; "
+               "пиши про настрій дня, його енергію й тон без конкретних транзитів.")
+# the cat's prompt, after «Настрій дня»
+SKY_SECTION = "Небо сьогодні (з астрологічних ефемерид): {sky}. Про зорі, планети й аспекти кажи лише це."
+NO_SKY_SECTION = "Положень планет на сьогодні ти не знаєш — не називай їх і не вигадуй."
 MOOD_MAX_TOKENS = 2000  # several paragraphs, then the resolution — a reading cut by the cap is not kept (review #8)
 
 # The mood log's per-reading header: "===== 2026-10-10 =====" on its own line.
@@ -53,8 +58,7 @@ def mood_request(name: str, natal: str, date_str: str, biorhythms: str | None = 
     """(system, contents) for the daily mood call — the natal chart, the date, the day's real sky and the computed
     biorhythms."""
     content = f"Натальна карта:\n{natal}\n\nДата: {date_str}."
-    if sky:
-        content += f"\n\n{SKY_RULE.format(sky=sky)}"
+    content += f"\n\n{SKY_RULE.format(sky=sky)}" if sky else f"\n\n{NO_SKY_RULE}"
     if biorhythms:
         content += (
             f"\n\nБіоритми (ТОЧНО обчислені цикли): {biorhythms}."

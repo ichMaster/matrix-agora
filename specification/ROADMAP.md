@@ -516,7 +516,7 @@ Owner decisions (2026-10-11): Claude's weight is 1, as designed; the outgoing gu
   - **His tools** (AGORA-068): the web (`WebSearch`, `WebFetch`, public hosts only) and his own folder `/workspace` (`Read`, `Write`, `Edit`, `Glob`, `Grep`), behind a PreToolUse guard; up to 8 turns and 180 s per reply.
   - **His news** (AGORA-069, review #6): every hour, once the room has been quiet for a few minutes, 09–01, one fresh item from **The Guardian** (its Open Platform API, two in-process tools; the key never reaches the model) bearing on the last 40 messages, or `PASS`.
   - **An address is always answered** inside a burst (a named R2 candidate skips `BOT_REPLY_P`; a resumed decision still rolls it); a message naming only the cat has no R2 candidate.
-  - **The cat's real sky**: his horoscope and talk name only the computed positions of the Sun, the Moon and the planets (`agents/sky.py`, PyEphem).
+  - **The cat's real sky**: his horoscope and talk name only the day's astrological positions and aspects, asked once a day of Gemini with Google Search (as Lumi's web lookup) — never invented.
 
 **DoD:**
 - (Manual, owner) Asked by name, Claude still answers the question; joining unasked, he speaks as a philosopher about the image the talk has been circling.
