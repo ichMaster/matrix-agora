@@ -836,7 +836,6 @@ function filesTabHtml(a) {
   if (F.list === null) return `<div class="muted">Loading…</div>`;
   const upload = `<div class="card" style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <input class="input" style="flex:1;min-width:140px;letter-spacing:0" type="text" placeholder="folder (optional), e.g. for-claude" value="${esc(F.prefix)}" data-files-prefix aria-label="Folder for the upload">
-    <input id="file-pick" type="file" hidden>
     <button class="btn btn-secondary" data-act="file-pick" ${F.busy ? "disabled" : ""}>${icon("upload", 14)}${F.busy ? "Uploading…" : "Upload a file"}</button>
     <span class="muted" style="font-size:12px;width:100%">Up to 5 MB. Claude reads it with his tools in /workspace.</span></div>`;
   const opened = F.open ? `<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -851,11 +850,24 @@ function filesTabHtml(a) {
   return `${upload}${opened}<div>${rows}</div>`;
 }
 document.addEventListener("input", (e) => { if (e.target?.dataset && "filesPrefix" in e.target.dataset) S.files.prefix = e.target.value.trim().replace(/^\/+|\/+$/g, ""); });
-document.addEventListener("change", (e) => {
-  if (e.target?.id !== "file-pick" || !e.target.files?.length || S.drawer?.kind !== "agent") return;
-  const file = e.target.files[0], path = S.files.prefix ? `${S.files.prefix}/${file.name}` : file.name;
-  uploadFile(S.drawer.id, file, path);
-});
+// the file picker lives outside #app: the 10 s redraw replaced an input inside it while the owner was choosing a
+// file, and the choice landed on a detached element — nothing was ever uploaded (the owner, 2026-10-11)
+let pickerEl = null;
+function filePicker() {
+  if (pickerEl) return pickerEl;
+  pickerEl = document.createElement("input");
+  pickerEl.type = "file"; pickerEl.hidden = true; pickerEl.id = "file-pick";
+  pickerEl.addEventListener("change", () => {
+    const file = pickerEl.files?.[0];
+    if (file && S.drawer?.kind === "agent") {
+      const path = S.files.prefix ? `${S.files.prefix}/${file.name}` : file.name;
+      uploadFile(S.drawer.id, file, path);
+    }
+    pickerEl.value = "";  // the same file can be chosen again
+  });
+  document.body.appendChild(pickerEl);
+  return pickerEl;
+}
 
 function afterDrawerRender() {
   const log = $("#log");
@@ -950,7 +962,7 @@ document.addEventListener("click", (e) => {
   else if (act === "file-close") { S.files.open = null; render(); }
   else if (act === "file-download") downloadFile(S.drawer.id, id);
   else if (act === "file-delete") { S.dialog = {action: "delete", kind: "file", id, fresh: true}; render(); }
-  else if (act === "file-pick") $("#file-pick")?.click();
+  else if (act === "file-pick") filePicker().click();
   else if (act === "follow") { S.log.follow = !S.log.follow; render(); if (S.log.follow) loadLog(); }
   else if (act === "ufilter") { S.usageFilter = id; render(); }
   else if (act === "day") { S.expandedDays[id] = el.dataset.open !== "true"; render(); }

@@ -216,3 +216,11 @@ def test_the_cards_stay_live_behind_the_settings_and_no_load_lands_in_the_wrong_
     assert "const untouched = S.settings === st && !st.busy" in js
     assert "if (settingsPath() !== path) return false;" in js
     assert 'data-act="settings-retry"' in js and "Settings unavailable: ${esc(st.error)}" in js
+
+
+def test_the_file_picker_survives_the_redraw():
+    """The owner, 2026-10-11: download worked, upload never sent a request — the 10 s redraw replaced the picker
+    inside #app while a file was being chosen. It now lives on <body>, outside the redraw."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert "document.body.appendChild(pickerEl);" in js and 'act === "file-pick") filePicker().click();' in js
+    assert '<input id="file-pick" type="file" hidden>' not in js
