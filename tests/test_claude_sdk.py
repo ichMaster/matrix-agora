@@ -119,9 +119,8 @@ def test_the_options_turn_off_tools_settings_and_memory():
     assert o["system_prompt"] == "BRIEF" and o["model"] == "opus" and o["cwd"] == "/tmp/claude"
     assert o["env"] == {"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "300", "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
                         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "CLAUDE_CONFIG_DIR": "/tmp/claude",
-                        "MAX_THINKING_TOKENS": "0", "CLAUDE_CODE_MAX_RETRIES": "2",
-                        "ENABLE_CLAUDEAI_MCP_SERVERS": "false"}
-    assert o["thinking"] == {"type": "disabled"}                     # review #1: thinking ate the cap
+                        "CLAUDE_CODE_MAX_RETRIES": "2", "ENABLE_CLAUDEAI_MCP_SERVERS": "false"}
+    assert o["thinking"] == {"type": "adaptive"}                     # he thinks (the owner, 2026-10-11)
     assert o["extra_args"] == {"no-session-persistence": None}       # review #7: no session transcript
     uncapped = sdk_options("B", model="opus", max_output_tokens=0, config_dir="/c")
     assert "CLAUDE_CODE_MAX_OUTPUT_TOKENS" not in uncapped["env"]    # 0 = no cap (the owner, 2026-10-11)
@@ -387,20 +386,19 @@ def test_claude_mode_for_every_name_form_the_id_and_the_unnamed_case(text, mode)
     assert claude_mode(text, claude.name_forms, claude.user_id) == mode
 
 
-def test_the_philosophers_options_think_and_the_direct_ones_do_not():
+def test_both_modes_think_and_the_philosopher_harder():
     direct = sdk_options("B", model="opus", max_output_tokens=0, config_dir="/c")
     wise = sdk_options("B", model="opus", max_output_tokens=0, config_dir="/c", effort="high")
-    assert direct["thinking"] == {"type": "disabled"} and direct["env"]["MAX_THINKING_TOKENS"] == "0"
-    assert "effort" not in direct
-    assert wise["thinking"] == {"type": "adaptive"} and wise["effort"] == "high"
-    assert "MAX_THINKING_TOKENS" not in wise["env"]
+    assert direct["thinking"] == wise["thinking"] == {"type": "adaptive"}   # the owner, 2026-10-11
+    assert "effort" not in direct and wise["effort"] == "high"
+    assert "MAX_THINKING_TOKENS" not in direct["env"] and "MAX_THINKING_TOKENS" not in wise["env"]
 
 
 def test_the_philosophers_brief_names_the_members_and_no_ones_nature():
     from agents.logic import BANNED_RE, CLAUDE_BRIEF_PHILOSOPHER, outs_a_persona
     from agents.roster import load_roster
     personas = [m for m in load_roster("agora").values() if m.type == "persona"]
-    assert "2–4 речення" in CLAUDE_BRIEF_PHILOSOPHER and "PASS" in CLAUDE_BRIEF_PHILOSOPHER
+    assert "1–3 речення" in CLAUDE_BRIEF_PHILOSOPHER and "PASS" in CLAUDE_BRIEF_PHILOSOPHER
     assert "метафоричний образ" in CLAUDE_BRIEF_PHILOSOPHER and "українською" in CLAUDE_BRIEF_PHILOSOPHER
     assert not BANNED_RE.search(CLAUDE_BRIEF_PHILOSOPHER) and not outs_a_persona(CLAUDE_BRIEF_PHILOSOPHER, personas)
 

@@ -73,9 +73,9 @@ def scrub(env: MutableMapping[str, str]) -> list[str]:
 
 def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config_dir: str,
                 effort: str | None = None) -> dict[str, Any]:
-    """The `ClaudeAgentOptions` keyword arguments: a chat turn, nothing else. Thinking is off — the CLI thinks by
-    default and its thinking counts against the output cap (v4.4 review #1); `max_output_tokens` 0 means no cap (the
-    owner, 2026-10-11) — the brief keeps replies chat-sized."""
+    """The `ClaudeAgentOptions` keyword arguments: a chat turn, nothing else. He thinks (adaptive — the owner,
+    2026-10-11); `max_output_tokens` 0 means no cap (the owner), so thinking never eats the reply (v4.4 review #1);
+    the brief keeps replies chat-sized."""
     env = {
         "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
@@ -96,16 +96,14 @@ def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config
         "max_turns": 1,
         "model": model,
         "cwd": config_dir,
-        # thinking off for a chat answer (review #1); the philosopher thinks (v4.5) — there is no cap to eat into
-        "thinking": {"type": "adaptive"} if effort else {"type": "disabled"},
+        # he thinks (the owner, 2026-10-11) — with no output cap there is nothing for thinking to eat into (review #1)
+        "thinking": {"type": "adaptive"},
         # no session transcript anywhere (review #7): accepted by the bundled CLI in the SDK's stream-json mode
         "extra_args": {"no-session-persistence": None},
         "env": env,
     }
     if effort:
         opts["effort"] = effort
-    else:
-        env["MAX_THINKING_TOKENS"] = "0"
     return opts
 
 
