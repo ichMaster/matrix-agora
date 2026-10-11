@@ -157,3 +157,20 @@ def test_an_hours_value_the_agent_cannot_use_is_refused(raw):
     assert validate("CAT_NUDGE_HOURS", raw)[0] is None and validate("CLAUDE_NEWS_HOURS", raw)[0] is None
     for ok in ("09-01", "09-22", "0-24"):
         assert validate("CAT_NUDGE_HOURS", ok)[0] == ok and parse_hours(ok)
+
+
+def test_a_shared_setting_is_always_a_service_setting():
+    """AGORA-078 review #5: a shared setting in the agent scope would let Ada and Bruno run different turns."""
+    assert all(s.service for s in SCHEMA if s.scope == "shared")
+
+
+def test_a_flat_or_hand_edited_file_is_named_not_applied(tmp_path, caplog):
+    """AGORA-078 review #4: the v4.7-before-078 flat shape is read as no overrides — and now said by name."""
+    import logging
+
+    from tests.test_first_sync import CFG
+    save_json(tmp_path / "settings.json", {"MAX_BOT_TURNS": "8", "services": {}, "agents": {}})
+    caplog.set_level(logging.WARNING)
+    env = {}
+    assert start(env, tmp_path, CFG) == [] and "MAX_BOT_TURNS" not in env
+    assert "settings: MAX_BOT_TURNS ignored — not under services/agents" in caplog.text

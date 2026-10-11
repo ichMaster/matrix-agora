@@ -236,6 +236,14 @@ def effective(env: Mapping[str, str], member: Member, applied: list[str]) -> dic
     return out
 
 
+def _stray_keys(path: Path) -> list[str]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return sorted(str(k) for k in data if k not in ("services", "agents")) if isinstance(data, dict) else []
+
+
 def start(env: MutableMapping[str, str], state_dir: Path, member: Member,
           registry_path: Path | None = None) -> list[str]:
     """At an agent's start: apply its simulation's and its own overrides and write `state/<name>.settings.json`.
@@ -247,6 +255,9 @@ def start(env: MutableMapping[str, str], state_dir: Path, member: Member,
     except (RegistryError, OSError) as exc:
         log.warning("settings: no simulation registry (%s) — only the agent's own overrides", type(exc).__name__)
         simulation = None
+    stray = _stray_keys(state_dir / OVERRIDES_FILE)
+    if stray:  # an older flat file, or a hand edit: said by name, never applied (078 review #4)
+        log.warning("settings: %s ignored — not under services/agents", ", ".join(stray))
     applied, ignored = apply_overrides(env, load_overrides(state_dir / OVERRIDES_FILE), member, simulation)
     if applied:
         log.info("settings: overridden %s", ", ".join(applied))
