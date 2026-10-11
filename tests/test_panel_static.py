@@ -178,3 +178,10 @@ def test_a_setting_field_starts_from_what_the_agents_run_with():
     assert "const currentValue = (r) => r.override ?? serverValue(r);" in js
     assert 'e.source !== "panel"' in js and "reset → server value" in js
     assert "!== String(currentValue(rows[n]))" in js
+
+
+def test_typing_updates_only_the_save_bar():
+    """v4.7 review #4: a re-render on blur rebuilt the DOM under the click — the first Save after typing was lost."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert "bar.innerHTML = saveBarHtml(pendingSettings(), S.settings.busy);" in js
+    assert 'document.addEventListener("change", (e) => { if (e.target?.dataset?.setting' not in js

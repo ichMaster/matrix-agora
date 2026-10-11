@@ -697,9 +697,11 @@ function settingsHtml() {
     return `<details class="card" data-keep="${key}" ${S.openDetails[key] === false ? "" : "open"} style="margin-bottom:12px">
       <summary class="card-title" style="cursor:pointer">${esc(g.title)}</summary><div style="margin-top:12px">${rows.map(settingField).join("")}</div></details>`;
   }).join("");
-  return `${groups}<div style="position:sticky;bottom:0;padding:12px 0;background:var(--color-bg);display:flex;gap:8px;align-items:center">
-    <button class="btn btn-primary" data-act="set-save" ${pending.names.length && !st.busy ? "" : "disabled"}>${icon("check-circle", 14)}${st.busy ? "Saving…" : `Save${pending.names.length ? ` (${pending.names.length})` : ""}`}</button>
-    <span class="muted" style="font-size:12px">${pending.names.length ? `restarts ${esc(pending.agents.map((n) => S.data.agents.find((a) => a.name === n)?.display || n).join(", ") || "nobody")}` : "No changes"}</span></div>`;
+  return `${groups}<div style="position:sticky;bottom:0;padding:12px 0;background:var(--color-bg);display:flex;gap:8px;align-items:center">${saveBarHtml(pending, st.busy)}</div>`;
+}
+function saveBarHtml(pending, busy) {
+  return `<button class="btn btn-primary" data-act="set-save" ${pending.names.length && !busy ? "" : "disabled"}>${icon("check-circle", 14)}${busy ? "Saving…" : `Save${pending.names.length ? ` (${pending.names.length})` : ""}`}</button>
+    <span class="muted" style="font-size:12px">${pending.names.length ? `restarts ${esc(pending.agents.map((n) => S.data.agents.find((a) => a.name === n)?.display || n).join(", ") || "nobody")}` : "No changes"}</span>`;
 }
 async function saveSettings() {
   const st = S.settings, {names} = pendingSettings();
@@ -718,12 +720,15 @@ async function saveSettings() {
   render();
   refresh(true);
 }
-// typed values live in S, so a render (a toast, a save) never loses them
+// typed values live in S, so a render (a toast, a save) never loses them; a keystroke updates only the Save bar in
+// place — a full redraw on blur ate the first click on Save (v4.7 review #4)
 document.addEventListener("input", (e) => {
   const name = e.target?.dataset?.setting;
-  if (name && S.settings) { S.settings.edits[name] = e.target.value; const btn = $('[data-act="set-save"]'); if (btn) { const p = pendingSettings(); btn.disabled = !p.names.length; } }
+  if (!name || !S.settings) return;
+  S.settings.edits[name] = e.target.value;
+  const bar = $('[data-act="set-save"]')?.parentElement;
+  if (bar) bar.innerHTML = saveBarHtml(pendingSettings(), S.settings.busy);
 });
-document.addEventListener("change", (e) => { if (e.target?.dataset?.setting && S.settings) render(); });
 
 // ── v4.7: Claude's files — his own folder: list, open, download, upload, delete ─────────────────────────────
 const filePath = (agent, path, q = "") => `/api/agents/${encodeURIComponent(agent)}/files/${path.split("/").map(encodeURIComponent).join("/")}${q}`;
