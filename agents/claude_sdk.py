@@ -387,6 +387,8 @@ class ClaudeSdkResponder:
         result = None
         saw_init = over_limit = False
         refused: str | None = None
+        tools_used: list[str] = []  # names only — what a slow call was doing (never an input or a text)
+        started = time.monotonic()
 
         async def consume() -> None:
             nonlocal result, saw_init, over_limit, refused
@@ -408,13 +410,16 @@ class ClaudeSdkResponder:
                     elif kind == "AssistantMessage" and not getattr(msg, "error", None):  # never the CLI's error text
                         parts.extend(b.text for b in getattr(msg, "content", [])
                                      if isinstance(getattr(b, "text", None), str))
+                        tools_used.extend(str(b.name) for b in getattr(msg, "content", [])
+                                          if type(b).__name__ == "ToolUseBlock" and getattr(b, "name", None))
                     elif kind == "ResultMessage":
                         result = msg
 
         try:  # bounded: the CLI's own retries must never hold a reply for minutes (review #11)
             await asyncio.wait_for(consume(), timeout=self.timeout_s)
         except TimeoutError:
-            log.error("claude query timed out after %.0fs — silent", self.timeout_s)
+            log.error("claude query timed out after %.0fs — silent (%d tool calls: %s)", self.timeout_s,
+                      len(tools_used), ", ".join(tools_used) or "none")
             self.usage_sink(turn.kind, self.model, None, False, None)
             self._failed("timeout")
             return None
@@ -449,6 +454,8 @@ class ClaudeSdkResponder:
         if not text:
             log.error("claude returned an empty reply")
             return None
+        log.info("claude answered in %.0fs (%s turns, %d tool calls: %s)", time.monotonic() - started,
+                 getattr(result, "num_turns", "?"), len(tools_used), ", ".join(tools_used) or "none")
         if self.status.last_error:  # a good call clears the last failure from the card
             self.status.last_error = None
             self._save()

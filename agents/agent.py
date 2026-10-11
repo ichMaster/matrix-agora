@@ -171,7 +171,7 @@ class Agent:
                 config_dir=os.environ.get("CLAUDE_CONFIG_DIR", "/tmp/claude"),
                 status_file=cfg.memory_file.parent / f"{cfg.localpart}.ratelimit.json",
                 usage_sink=self.record_sdk_usage, clock=lambda: self.clock(),
-                timeout_s=float(os.environ.get("CLAUDE_TIMEOUT_S", "180")),
+                timeout_s=float(os.environ.get("CLAUDE_TIMEOUT_S", "300")),
                 workspace=os.environ.get("CLAUDE_WORKSPACE", "/workspace"),  # v4.5: his own folder, the web
                 news_source=Guardian(news_key) if cfg.can("news") and news_key else None)
         else:

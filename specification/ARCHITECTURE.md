@@ -270,7 +270,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `CLAUDE_HISTORY_N` | v4.5 | the philosopher's wider window — the last N room messages, RAM only (150); interpolated into Claude's service from the shared file |
 | `CLAUDE_NEWS_EVERY_S`, `CLAUDE_NEWS_IDLE_S`, `CLAUDE_NEWS_PER_DAY`, `CLAUDE_NEWS_HOURS` | v4.5 | read only by an agent with `news` — Claude brings a Guardian item: every this many seconds, once the room has been quiet this long (never less than `BOT_WINDOW_S`), at most so many a day, within these local hours (3600 / 300 / 24 / `09-01`); interpolated into Claude's service from the shared file |
 | `GUARDIAN_API_KEY` | v4.5 | Claude's news source, a Guardian Open Platform key — `server/claude.env` only; taken out of the environment at start, never in a prompt or a log; unset: no news |
-| `CLAUDE_WORKSPACE`, `CLAUDE_TIMEOUT_S` | v4.5 | his own folder (`/workspace`, set by compose) and the bound on a reply with tool rounds (180 s); up to 8 turns per reply |
+| `CLAUDE_WORKSPACE`, `CLAUDE_TIMEOUT_S` | v4.5 | his own folder (`/workspace`, set by compose) and the bound on a reply with tool rounds (300 s from v4.5.2 — 180 s cut his web answers; the direct brief asks for at most 2–3 searches or pages); up to 8 turns per reply; the log names the tools a call used and how long it took (names only) |
 | `REPLY_MAX_TOKENS` | v4.1 | the output cap of a reply (200); summaries, memories and plans keep their own caps |
 | `OWNER_REPLIERS`, `FALLBACK_S` | v4.1 | how many agents answer an owner message that names no one; seconds before the best-ranked unchosen agent answers an unanswered owner (2 / 30) |
 | `SESSION_IDLE_S`, `SESSION_MAX_MESSAGES`, `SUMMARY_MAX_WORDS` | v2.1 | session memory (900 / 200 / 200) |

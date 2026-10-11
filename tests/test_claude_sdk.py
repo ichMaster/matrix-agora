@@ -35,6 +35,10 @@ class TextBlock(SimpleNamespace):
     pass
 
 
+class ToolUseBlock(SimpleNamespace):
+    pass
+
+
 class RateLimitEvent(SimpleNamespace):
     pass
 
@@ -327,6 +331,39 @@ def test_a_hung_query_is_bounded_and_closed(tmp_path):
     r.timeout_s = 0.05
     assert run(r) is None and usage == [("reply", "opus", None, False, None)] and closed == [True]
 
+
+
+def test_a_slow_call_names_its_tools_in_the_log_never_their_inputs(tmp_path, caplog):
+    """v4.5.2: two replies timed out at 180 s with nothing in the log to say why; the log now names the tools a call
+    used (names only) and, for a good call, its time and turns."""
+    import logging
+
+    class SlowSDK:
+        def query(self, *, prompt, options):
+            async def gen():
+                yield INIT_OK
+                yield AssistantMessage(content=[ToolUseBlock(name="WebSearch", input={"query": "секрет"})], error=None)
+                yield AssistantMessage(content=[ToolUseBlock(name="WebFetch", input={"url": "https://x"})], error=None)
+                await asyncio.sleep(3600)
+            return gen()
+
+    caplog.set_level(logging.INFO)
+    r, _ = responder(tmp_path, SlowSDK())
+    r.timeout_s = 0.05
+    assert run(r) is None
+    assert "timed out after 0s — silent (2 tool calls: WebSearch, WebFetch)" in caplog.text
+    assert "секрет" not in caplog.text and "https://x" not in caplog.text
+    caplog.clear()
+    r2, _ = responder(tmp_path, FakeSDK(INIT_OK, result(num_turns=3)))
+    run(r2)
+    assert "claude answered in" in caplog.text and "(3 turns, 0 tool calls: none)" in caplog.text
+
+
+def test_the_default_timeout_leaves_room_for_a_few_web_rounds(monkeypatch):
+    from agents.agent import Agent
+    monkeypatch.delenv("CLAUDE_TIMEOUT_S", raising=False)
+    agent = Agent(claude_agent(monkeypatch).cfg)
+    assert agent.responder.timeout_s == 300
 
 
 def test_a_failing_call_is_on_the_card_until_one_succeeds(tmp_path):
