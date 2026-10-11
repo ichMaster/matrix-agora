@@ -107,6 +107,7 @@ from agents.responder import Turn, responder_for, trim_to_sentence
 from agents.roster import Member, load_roster
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.session import load_session, save_session
+from agents.sky import sky_line
 from agents.turns import (
     claude_mode,
     decide_reply,
@@ -242,6 +243,7 @@ class Agent:
         self._last_sent = ""
         self._tasks: set[asyncio.Task] = set()  # strong refs: pending tasks are only weakly referenced
         self.mood: MoodState | None = None  # v4.2: the day's horoscope (a `mood` agent)
+        self._sky: tuple[date, str] | None = None  # the day's real sky (the owner, 2026-10-11)
         self._mood_lock = asyncio.Lock()
         self._mood_retry_ms = 0
         self.told: set[int] = set()  # v4.3: the theses retold this run — RAM only, like the context window
@@ -887,9 +889,22 @@ class Agent:
         return self.memory_file.parent / f"{self.cfg.localpart}.mood.log"
 
     def mood_section(self, now) -> str | None:
+        """«Настрій дня» and — the owner, 2026-10-11 — the day's real sky, so whatever he says of the stars is true."""
         if self.mood is None or self.mood.date != now.date().isoformat():
             return None
-        return f"Настрій дня: {self.mood.resolution}"
+        sky = self.sky(now.date())
+        return f"Настрій дня: {self.mood.resolution}" + (
+            f"\n\nНебо сьогодні (справжнє, обчислене): {sky}. Про зорі й планети кажи лише це." if sky else "")
+
+    def sky(self, day) -> str | None:
+        """The day's sky line, computed once per day; None if the computation fails (never a blocked reply)."""
+        if self._sky is None or self._sky[0] != day:
+            try:
+                self._sky = (day, sky_line(day, self.tz))
+            except Exception as exc:  # noqa: BLE001 — the sky colors the day, it never stops a reply
+                log.error("sky not computed (%s)", type(exc).__name__)
+                return None
+        return self._sky[1]
 
     async def ensure_mood(self, now) -> None:
         """Once per local day: reuse the day's logged reading, else one model call; a failure means no mood and a
@@ -906,7 +921,7 @@ class Agent:
                 return
             birth = parse_birth_date(self.cfg.natal)
             rhythms = format_biorhythms(biorhythms(birth, now.date())) if birth else None
-            system, contents = mood_request(self.cfg.name, self.cfg.natal, day, rhythms)
+            system, contents = mood_request(self.cfg.name, self.cfg.natal, day, rhythms, self.sky(now.date()))
             reading = await self._mood_reading(contents, system)
             if not reading:
                 log.error("mood of the day failed — none today until a retry")

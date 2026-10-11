@@ -19,7 +19,8 @@ NUDGE_KINDS = ("memory", "command", "horoscope", "telegram")
 NUDGE_RULE = ("Ти сам починаєш розмову: один короткий рядок, що пов'язує це з тим, про що недавно говорили. "
               "Не вітайся і не питай, чи є хтось.")
 COMMAND_MATERIAL = "Кинь один рядок команди Linux чи скрипту — лише як текст, — що пасує до розмови."
-HOROSCOPE_MATERIAL = "Перекажи свій сьогоднішній гороскоп метафорою про останню розмову."
+HOROSCOPE_MATERIAL = ("Перекажи свій сьогоднішній гороскоп метафорою про останню розмову. Якщо згадуєш планети "
+                      "чи знаки — лише справжні, з «Небо сьогодні».")
 # the owner, 2026-10-11: a sysadmin joke for the assistant (Claude), framed like a ham-radio telegraph message —
 # «CQ CQ … DE …» first and «73 SK» last, the joke itself in plain Ukrainian; his name opens the line, so he may answer
 TELEGRAM_MATERIAL = ("Надішли {name}у радіограму, як радіоаматор: почни телеграфом — «CQ CQ {upper} DE КІТ» "

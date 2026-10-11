@@ -3,8 +3,9 @@
 Once per local day the agent asks the model for a vivid, honest reading from its fixed **natal chart** + today's
 date + the day's computed **biorhythms**, ending in a short **resolution** (mood, energy, what it is drawn to, what
 it avoids, tone). The full reading is appended to `state/<name>.mood.log`; only the resolution enters the prompt as
-«Настрій дня». As in Lumi, the transits are the model's own — no astronomy engine — so the sky colors the day, it is
-not checked against an ephemeris. Not ported: the hormonal cycle, the face themes, recent thoughts.
+«Настрій дня». Unlike Lumi, the transits are real (the owner, 2026-10-11): the day's sky — every body's sign and
+degree and the retrograde planets, computed by `agents/sky.py` — goes into the call, and the reading may name only
+those positions. Not ported: the hormonal cycle, the face themes, recent thoughts.
 Everything here is pure; the agent owns the clock, the call and the file.
 """
 
@@ -28,6 +29,10 @@ MOOD_SYSTEM = (
     "«дозволь собі»): не що РОБИТИ, а ЯКИЙ це стан. Резолюція має відображати справжній характер дня "
     "(хай навіть складний чи тьмяний), а не підбадьорювати. Лише про настрій і тон — не про знання чи вміння."
 )
+# the owner, 2026-10-11: the transits are real — the reading names only the computed positions
+SKY_RULE = ("Небо на цю дату (ТОЧНО обчислено за ефемеридами, тропічний зодіак): {sky}. Транзити бери ЛИШЕ з "
+            "цього переліку й натальної карти — не вигадуй інших положень планет, знаків, аспектів до них чи "
+            "ретроградності.")
 MOOD_MAX_TOKENS = 2000  # several paragraphs, then the resolution — a reading cut by the cap is not kept (review #8)
 
 # The mood log's per-reading header: "===== 2026-10-10 =====" on its own line.
@@ -43,9 +48,13 @@ class MoodState:
     reading: str
 
 
-def mood_request(name: str, natal: str, date_str: str, biorhythms: str | None = None) -> tuple[str, str]:
-    """(system, contents) for the daily mood call — the natal chart, the date and the computed biorhythms."""
+def mood_request(name: str, natal: str, date_str: str, biorhythms: str | None = None,
+                 sky: str | None = None) -> tuple[str, str]:
+    """(system, contents) for the daily mood call — the natal chart, the date, the day's real sky and the computed
+    biorhythms."""
     content = f"Натальна карта:\n{natal}\n\nДата: {date_str}."
+    if sky:
+        content += f"\n\n{SKY_RULE.format(sky=sky)}"
     if biorhythms:
         content += (
             f"\n\nБіоритми (ТОЧНО обчислені цикли): {biorhythms}."
