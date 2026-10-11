@@ -235,20 +235,19 @@ def decide_reply(
             return ReplyDecision(False, reason="not-next-speaker")
         if wave >= max_bot_turns:
             return ReplyDecision(False, reason="wave-limit")
-        if rng() >= bot_reply_p:  # naming decides who, not whether
+        # an address is always answered (the owner, 2026-10-11); only an unnamed candidate rolls the coin
+        if not mentions(text, me.name_forms, me.user_id) and rng() >= bot_reply_p:
             return ReplyDecision(False, reason="probability")
         return ReplyDecision(True, delay(), "next-speaker")
     return ReplyDecision(False, reason="not-allowlisted")
 
 
-def ambient_draw(event_id: str, text: str, m: Member, react_p: float, purr_p: float,
-                 from_owner: bool) -> str | None:
+def ambient_draw(event_id: str, text: str, m: Member, react_p: float, purr_p: float) -> str | None:
     """An ambient member's deterministic reaction to one message: "speak", "purr" or None. Every agent computes the
     same answer from the event id and the shared settings — so the owner's pending answers can include the cat's."""
-    named = mentions(text, m.name_forms, m.user_id)
-    if from_owner and named:
+    if mentions(text, m.name_forms, m.user_id):  # named by anyone, it speaks (the owner, 2026-10-11)
         return "speak"
-    if uniform(event_id, "react:" + m.localpart) >= min(1.0, react_p * (2 if named else 1)):
+    if uniform(event_id, "react:" + m.localpart) >= react_p:
         return None
     return "purr" if uniform(event_id, "purr:" + m.localpart) < purr_p else "speak"
 
@@ -259,17 +258,17 @@ def owner_speakers(event_id: str, text: str, roster: Mapping[str, Member], k: in
     reaction — the answers reserved in the wave while they are on their way."""
     out = owner_repliers(event_id, text, roster, k)
     out += [m.localpart for m in roster.values()
-            if m.mode == "ambient" and ambient_draw(event_id, text, m, react_p, purr_p, True) == "speak"]
+            if m.mode == "ambient" and ambient_draw(event_id, text, m, react_p, purr_p) == "speak"]
     return out
 
 
 def _ambient(sender: str, text: str, event_id: str, wave: int, cfg: AgentConfig, me: Member, max_bot_turns: int,
              react_p: float, purr_p: float, delay: Callable[[], float]) -> ReplyDecision:
-    """v4.2 — an ambient member (the cat): named by the owner, it always answers; otherwise it reacts on its own
-    deterministic draw (`react_p`, doubled when an agent names it — raised, not forced), and a reaction is a purr
-    with `purr_p`. A purr is free and never limited; a spoken reaction to an agent obeys the wave limit."""
+    """v4.2 — an ambient member (the cat): named, it always answers (by an agent from 2026-10-11, the owner's
+    choice — under the wave limit); otherwise it reacts on its own deterministic draw (`react_p`), and a reaction
+    is a purr with `purr_p`. A purr is free and never limited; a spoken reaction to an agent obeys the wave limit."""
     from_owner = sender == cfg.owner
-    draw = ambient_draw(event_id, text, me, react_p, purr_p, from_owner)
+    draw = ambient_draw(event_id, text, me, react_p, purr_p)
     if from_owner and mentions(text, me.name_forms, me.user_id):
         return ReplyDecision(True, 0.0, "owner-mentioned-me", purr=False)
     if draw is None:

@@ -168,8 +168,8 @@ def test_r2_wave_limit_and_probability_also_when_named():
     assert decide(BRUNO.user_id, "думка", ME, wave=3).reason == "wave-limit"
     assert not decide(BRUNO.user_id, "думка", ME, r=0.6).reply
     assert decide(BRUNO.user_id, "думка", ME, r=0.4).reply
-    # naming decides who, not whether: the coin still applies
-    assert not decide(BRUNO.user_id, "Адо, а ти?", ME, r=0.99).reply
+    # an address is always answered (the owner, 2026-10-11): no coin for a named candidate — the wave still binds
+    assert decide(BRUNO.user_id, "Адо, а ти?", ME, r=0.99).reason == "next-speaker"
     assert decide(BRUNO.user_id, "Адо, а ти?", ME, wave=3).reason == "wave-limit"
 
 
@@ -372,7 +372,8 @@ def test_the_cat_answers_the_owner_when_named_and_reacts_on_his_own_draws_otherw
     assert 0.27 < reacts / 3000 < 0.33          # CAT_REACT_P
     assert 0.76 < purrs / reacts < 0.84         # CAT_PURR_P of the reactions
     named = sum(decide(ME.user_id, "а кіт що?", KIT, WITH_CAT, eid=f"$n{i}").reply for i in range(3000))
-    assert 0.55 < named / 3000 < 0.65           # an agent naming him doubles the chance — raised, not forced
+    assert named == 3000                        # an agent naming him: he always answers (the owner, 2026-10-11)
+    assert decide(ME.user_id, "а кіт що?", KIT, WITH_CAT, eid="$w", wave=99).reason == "ambient-wave-limit"
 
 
 def test_a_spoken_reaction_obeys_the_wave_but_a_purr_never_does():
@@ -441,3 +442,13 @@ def test_simulated_waves_with_claude_ranked_never_exceed_the_limit(text):
         n_owner, sent, followers = simulate(roster, text, seed, purr_p=0.8)
         assert len(sent) <= max(3, n_owner), (seed, sent)
         assert all(f <= 2 for f in followers)
+
+
+def test_the_cats_address_is_always_answered_too():
+    """The owner, 2026-10-11: the cat's telegram named Claude, Claude lost the coin and the room stayed quiet. A named
+    member answers whoever names it — under the wave limit."""
+    named = next(m for m in WITH_CAT.values() if m.mode == "ranked")
+    text = f"{named.name_forms[-1].capitalize()}, CQ CQ"
+    d = decide(KIT.user_id, text, named, WITH_CAT, r=0.99)
+    assert d.reply and d.reason == "next-speaker"
+    assert decide(KIT.user_id, text, named, WITH_CAT, r=0.99, wave=99).reason == "wave-limit"

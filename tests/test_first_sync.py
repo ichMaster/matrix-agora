@@ -507,7 +507,7 @@ def _draw_event(kind):
     from agents.roster import load_roster
     from agents.turns import ambient_draw
     kit = load_roster("agora")["kit"]
-    return next(f"$c{i}" for i in range(2000) if ambient_draw(f"$c{i}", "як справи?", kit, 0.3, 0.8, True) == kind)
+    return next(f"$c{i}" for i in range(2000) if ambient_draw(f"$c{i}", "як справи?", kit, 0.3, 0.8) == kind)
 
 
 def test_a_purr_is_sent_at_zero_tokens(monkeypatch):
