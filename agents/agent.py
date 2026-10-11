@@ -112,6 +112,7 @@ from agents.responder import Turn, responder_for, trim_to_sentence
 from agents.roster import Member, load_roster
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.session import load_session, save_session
+from agents.settings import start as settings_start
 from agents.sky import SKY_MAX_TOKENS, clean_sky, load_sky, save_sky, sky_query
 from agents.turns import (
     claude_mode,
@@ -1423,6 +1424,7 @@ def main() -> None:
     if lock is None:
         log.error("%s: another instance is running (pid %s) — exiting", cfg.localpart, lock_holder(cfg.lock_file))
         raise SystemExit(1)
+    settings_start(os.environ, cfg.memory_file.parent, cfg)  # v4.7: the panel's overrides, before anything reads them
     try:
         agent = Agent(cfg)
     except AuthRefused as exc:  # v4.4: the names of what tripped it, never a value

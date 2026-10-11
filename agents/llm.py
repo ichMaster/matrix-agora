@@ -8,6 +8,7 @@ Every call — ok, empty or failed — is reported to the usage sink (v3.1).
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -16,7 +17,7 @@ from google.genai import types
 
 log = logging.getLogger("agent.llm")
 
-MODEL = "gemini-2.5-flash"
+MODEL = "gemini-2.5-flash"  # the default; `GEMINI_MODEL` overrides it (v4.7: tunable in the panel)
 
 UsageSink = Callable[[str, str, Any, bool], None]  # (kind, model, usage_metadata | None, ok)
 
@@ -25,12 +26,13 @@ class GeminiClient:
     def __init__(self, sink: UsageSink | None = None) -> None:
         self._client = genai.Client()  # reads GEMINI_API_KEY from the environment
         self._sink = sink
+        self.model = os.environ.get("GEMINI_MODEL", MODEL).strip() or MODEL
 
     def _report(self, kind: str, usage: Any, ok: bool) -> None:
         if self._sink is None:
             return
         try:
-            self._sink(kind, MODEL, usage, ok)
+            self._sink(kind, self.model, usage, ok)
         except Exception:
             log.exception("usage accounting failed")
 
@@ -46,7 +48,7 @@ class GeminiClient:
         """(text, finish) — finish is "max_tokens" when the cap cut the reply, else "stop"; None on failure."""
         try:
             resp = await self._client.aio.models.generate_content(
-                model=MODEL,
+                model=self.model,
                 contents=transcript,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
@@ -73,7 +75,7 @@ class GeminiClient:
         asked of the live internet; the sources stay out of the answer. None on failure (logged by type)."""
         try:
             resp = await self._client.aio.models.generate_content(
-                model=MODEL,
+                model=self.model,
                 contents=question,
                 config=types.GenerateContentConfig(
                     max_output_tokens=max_output_tokens,

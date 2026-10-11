@@ -203,7 +203,7 @@ The panel is the point of the whole project (VISION §The direction). One FastAP
 - **Actions (v3.4):** `POST /api/agents/{name}/start|stop|restart|forget` and `POST /api/simulations/{id}/services/{service}/start|stop|restart` — token-gated, **same-origin** (a foreign `Origin` → 403), names only through the registry (unknown → 404), one action at a time per target (busy → 409), docker unreachable → 503. Start = `docker compose -p server -f <stack>/server/docker-compose.yml up -d --no-deps <service>` (a fixed argv; creates a missing container) — only for a stopped, missing or crashed target (running → 409: the panel's compose would recreate it); stop = `stop(timeout=30)`; restart = stop + start. Each action is logged as an event (what, target, result, duration). Docker's `restarting` is its own state (warn), not "running".
 - **Confirmations:** every stop/restart and forget is confirmed in the UI; start runs without one; mutating actions are `POST` + token + same-origin.
 - **Degrade by card:** docker trouble greys the container cards, an unreadable `state/` greys the memory views; a stopped homeserver never crashes the agents (nio retries until it is back).
-- **Views stay safe:** there is no settings view — the panel never shows or edits `.env` or canons; log views are safe because logs never contain tokens or texts.
+- **Views stay safe:** the panel never shows or edits `.env` or canons; log views are safe because logs never contain tokens or texts. **From v4.7** it shows and changes the **non-secret** settings listed by the schema `agents/settings.py` (`SCHEMA`: every tunable the agents read — kind, bounds, the code default, a unit, a description, a group and a scope: `shared` or a type / capability / engine); secrets, the room and owner ids, `TIMEZONE`, paths and the forbidden Claude names are never in it (pinned). The panel's overrides live in `state/settings.json`; at its start an agent applies those that concern it over its environment — **code default < env < panel**, an unknown or invalid one ignored and logged by name — logs `settings: overridden <names>`, and writes what it runs with to `state/<name>.settings.json` (`{name: {value, source}}`, source `default` / `env` / `panel`).
 - **Single instance:** an agent takes `flock` on `state/<name>.lock` (PID inside) at startup, so a second instance on the same host refuses to start. The panel manages containers only and does not detect agents started outside it.
 - **Only what is recorded:** the cards show container state (docker), the `state/` files and the logs; nothing is added to the agents just to feed the panel.
 
@@ -248,6 +248,8 @@ There is no database, and nothing the agents lived is ever deleted: all durable 
 | `state/<name>.mood.log` | the day's first mood call (v4.2, an agent with `mood`) | the daily horoscope readings, `===== YYYY-MM-DD =====` blocks; append-only, 0600 |
 | `state/<name>.nudge.json` | every nudge attempt (v4.3, an agent with `nudge`) | `last_ms` (the last attempt), `day`, `count` (nudges sent that day), `sent_ms` (the last nudge sent, for the panel) — no texts; atomic, 0600 |
 | `state/<name>.news.json` | every news attempt (v4.5, an agent with `news`) | the nudge state's fields: `last_ms`, `day`, `count`, `sent_ms` — no texts; atomic, 0600 |
+| `state/settings.json` | the panel, on a save (v4.7) | the owner's overrides `{name: value}`, only the schema's names; atomic, 0600; never touched by `server/deploy.sh` |
+| `state/<name>.settings.json` | every agent start (v4.7) | what the agent runs with: `{name: {value, source}}` for the schema's settings that concern it — no secret can be in it; atomic, 0600 |
 | `state/<name>.sky.json` | the day's first sky lookup (v4.5, an agent with `mood`) | `day`, `sky` (the looked-up astrological line — world data, no room text); atomic, 0600 |
 | `state/<name>.ratelimit.json` | every SDK limit event and the init check (v4.4, the `claude-sdk` engine) | `status`, `utilization`, `resets_at`, `rate_limit_type`, `muted_until`, `auth` (`oauth` / `blocked: …` / `refused: <variable names>`), `model`, `last_error` (a subtype and http status, a timeout, an exception's type), `updated_at` — no texts, no token; atomic, 0600; refreshed at the agent's start, a running mute kept (v4.4 review #6) |
 | `state/<name>.lock` | startup (`flock`) | the PID of the running instance |
@@ -257,6 +259,8 @@ The agent TOML (`agents/<name>.toml`, committed) holds `name`, `user_id`, `canon
 
 ## Configuration and secrets
 
+From v4.7 the non-secret settings below that the schema (`agents/settings.py`) lists are **tunable in the panel**: the env holds the base value, the panel's override (`state/settings.json`) wins at an agent's next start.
+
 All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hardcoded:
 
 | Variable | Phase | Meaning (example default) |
@@ -264,6 +268,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `HOMESERVER`, `ROOM_ID`, `OWNER` | v0.4 | where and with whom the agents talk |
 | `ADA_PASSWORD`, `BRUNO_PASSWORD`, `KIT_PASSWORD` | v0.4, v4.2 | first-login passwords (the cat's account is created in the admin room, since registration is closed) |
 | `GEMINI_API_KEY` | v1.1 | read by `google-genai` from the environment |
+| `GEMINI_MODEL` | v4.7 | the Gemini agents' model (`gemini-2.5-flash`; choices in the schema); the usage line names the model called |
 | `HISTORY_N`, `REPLY_DELAY_S`, `MAX_BOT_TURNS`, `BOT_REPLY_P`, `BOT_WINDOW_S` | v1.1–v1.2 | context size and turn-taking (40 from v4.1 / 4 / 3 / 0.5 / 600); from v4.1 `MAX_BOT_TURNS` counts the message being answered (v1.2's value + 1) |
 | `CAT_REACT_P`, `CAT_PURR_P`, `CAT_MAX_WORDS` | v4.2 | the cat: how often he reacts unasked, how often a reaction is a purr, his word cap (0.3 / 0.8 / 12) |
 | `CAT_MEMORY_P` | v4.3 | how often one of the cat's spoken lines retells a past-life thesis (0.25) |
@@ -299,7 +304,7 @@ From v3.2 the production values live in `server/.env` on the Ubuntu box (synced 
 | Agents burn credits chatting with each other | at most `MAX_BOT_TURNS` agent turns per `BOT_WINDOW_S`, `BOT_REPLY_P`, `PASS`, `max_output_tokens`; one summary per session; one memory per day; one plan per day and per week; the today block at most once per hour; the usage report shows the spend |
 | Conversation leak | Summaries, journals and day memories live only in `state/`; their texts are never logged |
 | Private data in the public repo | Canons are committed — no secrets, no private data about the owner |
-| Someone on the LAN opens the panel | Bearer `PANEL_TOKEN` required on every API call; :8090 published on the LAN address only (docker bypasses ufw); no view shows a secret (no settings view, logs carry no tokens) |
+| Someone on the LAN opens the panel | Bearer `PANEL_TOKEN` required on every API call; :8090 published on the LAN address only (docker bypasses ufw); no view shows a secret (the v4.7 settings view lists only the schema's non-secret names, logs carry no tokens) |
 | A compromised panel container | it holds the host's docker socket (root-equivalent) and, from v3.4, reads `server/.env` and, from v4.4, `server/claude.env` with the subscription's OAuth token (compose needs them to create a missing container) — an accepted PoC trade-off: token-gated, same-origin actions, LAN-only, never internet-exposed. A socket proxy was considered and declined (v3.4): compose needs create / network / volume calls a narrow proxy would have to allow anyway |
 | The deploy password leaks | Key auth after a one-time `ssh-copy-id`; `server_con.yaml` gitignored; the password never in argv, logs or output |
 | Secrets in CI or in the image | CI uses mocks and `GITHUB_TOKEN` only; `.env` and `state/` stay on the host, never in the image |

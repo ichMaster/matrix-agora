@@ -182,3 +182,19 @@ def test_only_api_rows_are_priced_and_a_v1_line_is_gemini():
     out = render(rows, 0.30, 2.50, markdown=True)
     assert "| subscription | — |" in out and "billing" in out
     assert parse_lines([json.dumps({**v1, "billing": "free"})])[1] == 1       # an unknown billing is corrupt
+
+
+def test_the_gemini_model_is_a_setting(monkeypatch):
+    """v4.7: GEMINI_MODEL picks the model (the panel can tune it); the usage line names the model called."""
+    seen = {}
+
+    class Capture(FakeModels):
+        async def generate_content(self, **kw):
+            seen.update(kw)
+            return await super().generate_content(**kw)
+
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-pro")
+    monkeypatch.setattr(llm_mod.genai, "Client", lambda: SimpleNamespace(aio=SimpleNamespace(models=Capture("ok"))))
+    usage = []
+    asyncio.run(llm_mod.GeminiClient(sink=lambda *a: usage.append(a)).generate("c", "s"))
+    assert seen["model"] == "gemini-2.5-pro" and usage[0][1] == "gemini-2.5-pro"
