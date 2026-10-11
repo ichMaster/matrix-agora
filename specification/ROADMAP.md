@@ -35,7 +35,7 @@ are generated. Other further work (the deferred backlog items in the code-review
 | v4.4 | Claude on the subscription: answering when asked | ✅ completed | `v4.4.0` (2026-10-11) |
 | v4.5 | Claude the philosopher | ✅ completed | `v4.5.0` (2026-10-11) |
 | v4.6 | Ada and Bruno: curiosity, plans and stories | ✅ completed | `v4.6.0` (2026-10-11) |
-| v4.7 | Agent settings and Claude's files in the panel | ⏳ planned | — |
+| v4.7 | Agent settings and Claude's files in the panel | ✅ completed | `v4.7.0` (2026-10-11) |
 | v4.8 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v4.9 | Лілі under the full rules | ⏳ planned | — |
 
@@ -574,7 +574,7 @@ Design: the canon gives each of them something to be curious about; the code giv
 
 ### v4.7 — Agent settings and Claude's files in the panel
 
-**Status:** ⏳ planned (the owner, 2026-10-11: «винести всі налаштування агентів на панель адміністрування»).
+**Status:** ✅ completed — released `v4.7.0` on 2026-10-11.
 
 **Goal:** every agent's tunable setting is seen and changed in the panel, not in `server/.env`; a change takes effect by restarting the agents it concerns, survives a deploy, and no secret ever appears. And the owner reaches Claude's own folder from the panel (the owner, 2026-10-11: «дай ще доступ до сховища файлів Клода»).
 
