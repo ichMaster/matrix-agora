@@ -53,10 +53,8 @@ existing tokens, so both themes follow.
 The screens reuse the handoff's drawer, card, field, pill, dialog and toast components and the Nocturne tokens. They
 add no new token; there are four new icons drawn in the same grid (sliders, folder, upload, trash).
 
-**Settings: a drawer, opened from the rail's System group, or from the top bar on narrow screens.**
-- **Header:** «Settings», with the subtitle «Non-secret agent settings · a save restarts the agents it concerns».
-- **Groups:** one collapsible card per group, in this order: Room & turns · Personas · Memory · Кіт · Клод · Gemini.
-  A card's open state survives the 10 s poll.
+**Settings, under their service (AGORA-078 — the owner, 2026-10-11).** A service's settings open from a **Settings** button on its simulation card, in a drawer titled «Settings · Agora» with the subtitle «matrix-chat · the service's settings · a save restarts the agents it concerns». The groups are Room & turns · Ада і Бруно: ходи · Кіт у кімнаті · Клод у кімнаті · Сесії розмови. An agent's own settings sit in a **Settings** tab on its drawer, with the groups Пам'ять · Плани · Життя · Модель. There is no global entry, so a future portal adds its own card. Everything below holds in both places.
+- **Groups:** one collapsible card per group, in the order above; a card's open state survives the 10 s poll.
 - **Each field:**
   - a label: the schema's Ukrainian description, then the variable name in mono;
   - an input: a number with its bounds, `HH-HH` text, a select for the choices, or text;

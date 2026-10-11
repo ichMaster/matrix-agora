@@ -47,7 +47,8 @@ def test_the_only_mutating_routes_are_the_v34_actions_and_the_v47_settings_and_f
     assert mutating == {("/api/agents/{name}/forget", frozenset({"POST"})),
                         ("/api/agents/{name}/{action}", frozenset({"POST"})),
                         ("/api/simulations/{sim_id}/services/{service}/{action}", frozenset({"POST"})),
-                        ("/api/settings", frozenset({"PUT"})),
+                        ("/api/simulations/{sim_id}/settings", frozenset({"PUT"})),
+                        ("/api/agents/{name}/settings", frozenset({"PUT"})),
                         ("/api/agents/{name}/files/{path:path}", frozenset({"PUT"})),
                         ("/api/agents/{name}/files/{path:path}", frozenset({"DELETE"}))}
     assert client.put("/api/agents/ada/stop", headers=AUTH).status_code == 405

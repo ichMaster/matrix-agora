@@ -148,11 +148,15 @@ def test_a_subscription_cost_is_never_shown_as_zero():
 def test_the_settings_drawer_confirms_a_save_and_never_redraws_under_typing():
     """v4.7: the Settings drawer — fields from /api/settings, Save asks which agents restart, the poll leaves it."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert 'data-act="settings"' in js and "async function openSettings()" in js and 'api("/api/settings")' in js
-    assert 'await put("/api/settings", {set, reset})' in js
+    assert 'data-act="sim-settings"' in js and "async function openSimSettings(simId)" in js
+    assert "`/api/simulations/${encodeURIComponent(simId)}/settings`" in js
+    assert "`/api/agents/${encodeURIComponent(name)}/settings`" in js and '["settings", "Settings"]' in js
+    assert "await put(st.path, {set, reset})" in js
+    assert 'data-act="settings"' not in js                     # no global entry: settings live under their service
     assert "`Restarts: ${who.join(\", \")} — each writes its session summary first.`" in js
     assert 'save: "Save and restart"' in js
-    assert 'if (S.drawer?.kind === "settings" && !manual) {' in js
+    assert "if (settingsOpen() && !manual) {" in js
+    assert 'S.drawer?.kind === "agent" && S.drawer.tab === "settings"' in js
     assert 'value="${esc(value)}"' in js and "${esc(r.description)}" in js            # escaped, never raw
     icons = (STATIC_DIR / "icons.js").read_text(encoding="utf-8")
     assert '"sliders":' in icons

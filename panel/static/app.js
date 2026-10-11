@@ -6,7 +6,7 @@
 const POLL_MS = 10000;  // one tick for everything — the dashboard, an open log, an open agent's memory (owner)
 const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood"];
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
-              ["today", "Today"], ["mood", "Mood"], ["tokens", "Tokens"], ["files", "Files"]];
+              ["today", "Today"], ["mood", "Mood"], ["tokens", "Tokens"], ["files", "Files"], ["settings", "Settings"]];
 // v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
 const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood"};
 const SERIES = ["a", "b", "c", "d", "e"];  // stacked token bars: one tint of the accent per agent (v4.2: N agents)
@@ -116,11 +116,11 @@ async function refresh(manual = false) {
     S.loading = false;
     const [logMoved, memMoved] = S.drawer ? await Promise.all([
       S.log.follow ? loadLog(false) : false, S.drawer.kind === "agent" ? refreshMemory(false) : false]) : [false, false];
-    if (S.drawer?.kind === "settings" && !manual) {           // v4.7: never redraw under the owner's typing…
+    if (settingsOpen() && !manual) {                           // v4.7: never redraw under the owner's typing…
       const st = S.settings;                                   // …but with nothing pending, follow the agents (review #8)
       if (st && !st.busy && !pendingSettings().names.length) {
-        const view = await api("/api/settings").catch(() => null);
-        if (view && JSON.stringify(view) !== JSON.stringify(st.view)) { S.settings = {view, edits: {}, reset: {}, busy: false}; render(); }
+        const view = await api(st.path).catch(() => null);
+        if (view && JSON.stringify(view) !== JSON.stringify(st.view)) { S.settings = {path: st.path, view, edits: {}, reset: {}, busy: false}; render(); }
       }
       return;
     }
@@ -290,7 +290,6 @@ function topbarHtml() {
     <div class="brand"><div class="brand-mark">A</div>Agora · panel<span class="wide-only" style="margin-left:6px">${pill(cls, label)}</span></div>
     <span class="refreshed wide-only" id="refreshed">${esc(refreshed)}</span>
     <button class="btn btn-ghost btn-icon lg" data-act="refresh" title="Refresh now" aria-label="Refresh now">${icon("arrow-clockwise", 17, S.data ? "" : "spinning")}</button>
-    <button class="btn btn-ghost btn-icon lg narrow-only" data-act="settings" title="Settings" aria-label="Settings">${icon("sliders", 17)}</button>
     <button class="btn btn-ghost btn-icon lg" data-act="theme" title="${theme === "dark" ? "Light theme" : "Dark theme"}" aria-label="Toggle theme">${icon(theme === "dark" ? "sun" : "moon", 17)}</button>
     <button class="btn btn-secondary wide-only" data-act="signout" style="height:32px;padding:0 12px">Sign out</button>
     <button class="btn btn-ghost btn-icon lg narrow-only" data-act="signout" title="Sign out" aria-label="Sign out">${icon("sign-out", 17)}</button>
@@ -309,7 +308,6 @@ function railHtml() {
     <div class="rail-group"><div class="section-label">System</div>
       <button class="rail-item" data-act="scroll" data-id="host-card">${icon("hard-drives", 16)}Server</button>
       <button class="rail-item" data-act="scroll" data-id="usage-card">${icon("coins", 16)}Tokens</button>
-      <button class="rail-item" data-act="settings">${icon("sliders", 16)}Settings</button>
     </div>
     <div class="rail-phase">v4.7 · settings</div>
   </nav>`;
@@ -348,7 +346,8 @@ function simCardHtml(sim) {
   return `<article class="card">
     <div class="sim-head"><div class="sim-title"><h3 style="font-size:18px">${esc(sim.title)}</h3><span class="kind-tag">${esc(sim.kind)}</span>
       <span class="muted" style="font-size:13px">${esc(sim.description)}</span></div>
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${pill(h.cls, h.label)}<span class="muted num" style="font-size:12px">${esc(latency)} · ${esc(checked)}</span></div></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${pill(h.cls, h.label)}<span class="muted num" style="font-size:12px">${esc(latency)} · ${esc(checked)}</span>
+        <button class="btn btn-secondary" data-act="sim-settings" data-id="${esc(sim.id)}" title="The service's settings">${icon("sliders", 14)}Settings</button></div></div>
     ${sim.health.status === "unreachable" ? `<div class="notice err" role="status">${icon("plugs", 16)}Matrix server unreachable — agents are waiting</div>` : ""}
     <div class="cols"><div class="col-services"><div class="section-label">Services</div>
       ${d.health.docker ? "" : `<div class="notice unknown">${icon("cube", 16)}Docker unreachable — container state unknown</div>`}
@@ -467,8 +466,9 @@ function drawerHtml() {
   const dr = S.drawer;
   let head, tabs = "", body;
   if (dr.kind === "settings") {
-    head = `<div class="avatar">${icon("sliders", 20)}</div><div style="flex:1;min-width:0"><div class="drawer-title">Settings</div>
-      <div class="drawer-sub">Non-secret agent settings · a save restarts the agents it concerns</div></div>`;
+    const sim = S.data.sims.find((x) => x.id === dr.id);
+    head = `<div class="avatar">${icon("sliders", 20)}</div><div style="flex:1;min-width:0"><div class="drawer-title">Settings · ${esc(sim?.title || dr.id)}</div>
+      <div class="drawer-sub">${esc(sim?.kind || "")} · the service's settings · a save restarts the agents it concerns</div></div>`;
     body = `<div class="drawer-body">${settingsHtml()}</div>`;
   } else if (dr.kind === "agent") {
     const a = S.data.agents.find((x) => x.name === dr.id);
@@ -478,7 +478,7 @@ function drawerHtml() {
     const shown = agentTabs(a);
     if (!shown.some(([k]) => k === dr.tab)) dr.tab = "log";  // a tab the agent cannot have falls back to its log
     tabs = `<div class="tabs rule-b" role="tablist">${shown.map(([k, lbl]) => {
-      const dim = k !== "log" && !mem.available;
+      const dim = !["log", "files", "settings"].includes(k) && !mem.available;  // the folder and settings need no memory
       return `<button class="tab ${dim ? "dim" : ""}" role="tab" aria-selected="${dr.tab === k}" data-act="tab" data-id="${k}">${dim ? icon("database", 13) : ""}${esc(lbl)}</button>`;
     }).join("")}</div>`;
     body = dr.tab === "log" ? logHtml(`last 200 lines · docker logs ${a.container}`) : `<div class="drawer-body">${agentTabHtml(a, mem, dr.tab)}</div>`;
@@ -574,6 +574,7 @@ function moodTabHtml(mem) {
 
 function agentTabHtml(a, mem, tab) {
   if (tab === "files") return filesTabHtml(a);
+  if (tab === "settings") return `<div class="muted" style="font-size:12.5px;margin-bottom:12px">${esc(a.display)}'s own settings, whatever the service · a save restarts ${esc(a.display)}</div>${settingsHtml()}`;
   if (!mem.available) return unavailableBox();
   if (tab === "mood") return moodTabHtml(mem);
   if (tab === "session") {
@@ -636,18 +637,27 @@ function agentTabHtml(a, mem, tab) {
 
 // ── v4.7: settings — the schema's non-secret settings; a save restarts the agents they concern ─────────────
 const SOURCE_LABEL = {default: "default", env: "server .env", panel: "panel"};
-async function openSettings() {
-  S.drawer = {kind: "settings"};
+// AGORA-078 (the owner, 2026-10-11): settings under their service — a simulation's on its card, an agent's own in
+// its drawer (a future portal brings its own card)
+async function loadSettings(path) {
   try {
-    const view = await api("/api/settings");
-    S.settings = {view, edits: {}, reset: {}, busy: false};
+    S.settings = {path, view: await api(path), edits: {}, reset: {}, busy: false};
+    return true;
   } catch (err) {
-    if (err instanceof Unauthorized) return signOut(true);
-    S.drawer = null; showToast("err", `Settings unavailable: ${err.message}`); return;
+    if (err instanceof Unauthorized) { signOut(true); return false; }
+    S.settings = null; showToast("err", `Settings unavailable: ${err.message}`); return false;
   }
+}
+async function openSimSettings(simId) {
+  S.drawer = {kind: "settings", id: simId};
+  if (!await loadSettings(`/api/simulations/${encodeURIComponent(simId)}/settings`)) { S.drawer = null; return render(); }
   S.drawerFresh = true;
   render();
 }
+async function openAgentSettings(name) {
+  if (await loadSettings(`/api/agents/${encodeURIComponent(name)}/settings`)) render();
+}
+const settingsOpen = () => S.drawer?.kind === "settings" || (S.drawer?.kind === "agent" && S.drawer.tab === "settings");
 // v4.7 review #3: what the agents run with when the panel overrides nothing — the server's .env, else the default
 function serverValue(r) {
   const vals = Object.values(r.effective).filter((e) => e && e.source !== "panel").map((e) => e.value);
@@ -716,10 +726,10 @@ async function saveSettings() {
   for (const n of names) { if (st.reset[n]) reset.push(n); else set[n] = st.edits[n]; }
   st.busy = true; render();
   try {
-    const res = await put("/api/settings", {set, reset});
+    const res = await put(st.path, {set, reset});
     const skipped = res.skipped.map((x) => `${x.agent} (${x.why})`);
     showToast("ok", `Saved ${res.saved.join(", ") || "nothing"}${res.restarted.length ? ` · restarted ${res.restarted.join(", ")}` : ""}${skipped.length ? ` · skipped ${skipped.join(", ")}` : ""}`);
-    S.settings = {view: await api("/api/settings"), edits: {}, reset: {}, busy: false};
+    S.settings = {path: st.path, view: await api(st.path), edits: {}, reset: {}, busy: false};
   } catch (err) {
     if (err instanceof Unauthorized) return signOut(true);
     st.busy = false; showToast("err", `Not saved: ${err.message}`);
@@ -861,6 +871,7 @@ async function openDrawer(dr) {
   // fetch first, then one render: the slide-in plays once, uninterrupted by the data arriving
   S.drawer = dr; S.log = {lines: [], available: true, follow: true, seen: 0};
   S.files = {list: null, open: null, prefix: "", busy: false};  // v4.7: a fresh folder view per drawer
+  S.settings = null;
   await Promise.all([loadLog(false), refreshMemory(false)]);
   if (S.drawer !== dr) return;
   S.drawerFresh = true;
@@ -899,12 +910,12 @@ document.addEventListener("click", (e) => {
   else if (act === "signout") signOut();
   else if (act === "agent") openDrawer({kind: "agent", id, tab: "log"});
   else if (act === "svclog") openDrawer({kind: "service", id, sim: el.dataset.sim});
-  else if (act === "settings") openSettings();
+  else if (act === "sim-settings") openSimSettings(id);
   else if (act === "set-reset") { S.settings.reset[id] = true; delete S.settings.edits[id]; render(); }
   else if (act === "set-undo") { delete S.settings.reset[id]; delete S.settings.edits[id]; render(); }
   else if (act === "set-save") { if (pendingSettings().names.length) { S.dialog = {action: "save", kind: "settings", fresh: true}; render(); } }
   else if (act === "close") { S.drawer = null; render(); }
-  else if (act === "tab") { S.drawer.tab = id; S.log = {lines: [], available: true, follow: true, seen: 0}; render(); if (id === "log") loadLog(); if (id === "files") loadFiles(S.drawer.id); }
+  else if (act === "tab") { S.drawer.tab = id; S.log = {lines: [], available: true, follow: true, seen: 0}; render(); if (id === "log") loadLog(); if (id === "files") loadFiles(S.drawer.id); if (id === "settings") openAgentSettings(S.drawer.id); }
   else if (act === "file-open") openFile(S.drawer.id, id);
   else if (act === "file-close") { S.files.open = null; render(); }
   else if (act === "file-download") downloadFile(S.drawer.id, id);

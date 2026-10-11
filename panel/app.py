@@ -248,24 +248,46 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
             raise HTTPException(404, "not found")
         return run(sup.act, svc, action)
 
-    # ── settings (v4.7): the schema's non-secret settings, overrides in state/settings.json, a save restarts ──
-    @app.get("/api/settings")
-    def settings_get() -> dict:
-        return settings_view(state_dir, reg.agents.values())
+    # ── settings (v4.7), under their service: a simulation's on its card, an agent's own in its drawer ──
+    def sim_scope(sim_id: str):
+        sim = reg.simulation(sim_id)
+        if sim is None:
+            raise HTTPException(404, "not found")
+        return "services", sim.id, sim.kind, [reg.agents[n] for n in sim.agents if n in reg.agents]
 
-    @app.put("/api/settings")
-    async def settings_put(request: Request) -> dict:
+    def agent_scope(name: str):
+        found = reg.agent(name)
+        if found is None:
+            raise HTTPException(404, "not found")
+        return "agents", found.name, None, [found]
+
+    async def settings_save(request: Request, scope) -> dict:
         try:
             body = await request.json()
         except ValueError as exc:
             raise HTTPException(422, "a JSON object is expected") from exc
+        part, owner, kind, agents = scope
         try:
-            return await asyncio.to_thread(
-                save_settings, state_dir, list(reg.agents.values()), body,
-                lambda c: dock.container(c).state,
-                lambda c: sup.act(c, "restart"))
+            return await asyncio.to_thread(save_settings, state_dir, part, owner, kind, agents, body,
+                                           lambda c: dock.container(c).state, lambda c: sup.act(c, "restart"))
         except SettingsError as exc:
             raise HTTPException(exc.status, exc.detail) from exc
+
+    @app.get("/api/simulations/{sim_id}/settings")
+    def sim_settings_get(sim_id: str) -> dict:
+        return settings_view(state_dir, *sim_scope(sim_id))
+
+    @app.put("/api/simulations/{sim_id}/settings")
+    async def sim_settings_put(sim_id: str, request: Request) -> dict:
+        return await settings_save(request, sim_scope(sim_id))
+
+    @app.get("/api/agents/{name}/settings")
+    def agent_settings_get(name: str) -> dict:
+        return settings_view(state_dir, *agent_scope(name))
+
+    @app.put("/api/agents/{name}/settings")
+    async def agent_settings_put(name: str, request: Request) -> dict:
+        return await settings_save(request, agent_scope(name))
 
     # ── Claude's files (v4.7): his folder only, every path through files.safe_path ──
     def files_root(name: str) -> Path:

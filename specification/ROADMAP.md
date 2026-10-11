@@ -607,6 +607,7 @@ Design: a settings schema in code is the single list of what may be tuned; the p
   - ARCHITECTURE: the panel's settings view (non-secret only), `state/settings.json`, the resolution order, and the env table's «tunable in the panel» column;
   - the tests that pin them.
 - **The owner's live values** (`server/.env` today) carried over: the panel shows them as `env` and can override them.
+- **Settings under their service** (the owner, 2026-10-11, AGORA-078): a service setting belongs to a simulation kind and its value to one simulation (on its card); an agent setting is the agent's own (in its drawer) — so a future portal (a diary, a gallery, news) brings its own settings.
 - **Claude's files** (the owner, 2026-10-11): a Files tab on Claude's card over his folder (`claude-workspace` on the host, `/workspace` for him), mounted into the panel:
   - list the folder (names, sizes, times), read a text file, download any file;
   - upload a file into it and delete one, each after a confirmation;

@@ -6,6 +6,7 @@ import os
 import re
 import stat
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -78,26 +79,48 @@ def test_a_setting_concerns_exactly_the_agents_it_changes(name, who):
     assert {k for k, m in ROOM.items() if concerns(BY_NAME[name], m)} == who
 
 
-def test_the_panel_overrides_the_env_which_overrides_the_default_only_where_it_concerns():
-    env = {"MAX_BOT_TURNS": "3", "HISTORY_N": "40"}
-    applied, ignored = apply_overrides(env, {"MAX_BOT_TURNS": "8", "CAT_NUDGE_IDLE_S": "900", "BOT_REPLY_P": "9",
-                                             "GEMINI_API_KEY": "x"}, ROOM["ada"])
-    assert applied == ["MAX_BOT_TURNS"] and ignored == ["BOT_REPLY_P", "GEMINI_API_KEY"]
-    assert env == {"MAX_BOT_TURNS": "8", "HISTORY_N": "40"}                         # not the cat's, not a key
+AGORA = SimpleNamespace(id="agora", kind="matrix-chat")
+
+
+def test_every_setting_is_a_service_setting_or_an_agent_setting():
+    """AGORA-078 (the owner, 2026-10-11): settings live under their service — the room's bound to matrix-chat — or
+    are the agent's own."""
+    service = {s.name for s in SCHEMA if s.service == "matrix-chat"}
+    agent = {s.name for s in SCHEMA if s.service is None}
+    assert service | agent == set(BY_NAME) and not service & agent
+    assert {"MAX_BOT_TURNS", "CAT_NUDGE_IDLE_S", "PERSONA_ASK_P", "CLAUDE_NEWS_EVERY_S", "SESSION_IDLE_S"} <= service
+    assert {"MEMORY_DAYS", "PLAN_MAX_WORDS", "LOCATION", "GEMINI_MODEL", "CLAUDE_MODEL", "CLAUDE_TIMEOUT_S"} <= agent
+
+
+def test_the_simulations_then_the_agents_own_overrides_win_over_the_env_only_where_they_concern():
+    env = {"MAX_BOT_TURNS": "3", "HISTORY_N": "40", "MEMORY_DAYS": "7"}
+    overrides = {"services": {"agora": {"MAX_BOT_TURNS": "8", "CAT_NUDGE_IDLE_S": "900", "BOT_REPLY_P": "9",
+                                        "MEMORY_DAYS": "3"},                       # an agent setting: out of scope
+                              "portal": {"HISTORY_N": "99"}},                     # another simulation: not hers
+                 "agents": {"ada": {"MEMORY_DAYS": "10", "MAX_BOT_TURNS": "1"},   # a service setting: out of scope
+                            "bruno": {"MEMORY_DAYS": "2"}}}
+    applied, ignored = apply_overrides(env, overrides, ROOM["ada"], AGORA)
+    assert applied == ["MAX_BOT_TURNS", "MEMORY_DAYS"]
+    assert sorted(ignored) == ["BOT_REPLY_P", "MAX_BOT_TURNS", "MEMORY_DAYS"]           # invalid / out of scope
+    assert env == {"MAX_BOT_TURNS": "8", "HISTORY_N": "40", "MEMORY_DAYS": "10"}
     out = effective(env, ROOM["ada"], applied)
     assert out["MAX_BOT_TURNS"] == {"value": "8", "source": "panel"}
     assert out["HISTORY_N"] == {"value": "40", "source": "env"}
     assert out["REPLY_DELAY_S"] == {"value": "4", "source": "default"} and "CAT_NUDGE_IDLE_S" not in out
+    env2 = {}
+    assert apply_overrides(env2, overrides, ROOM["ada"], None)[0] == ["MEMORY_DAYS"]      # no registry: own only
 
 
 def test_the_files_are_private_atomic_and_a_corrupt_one_means_none(tmp_path):
     path = tmp_path / "settings.json"
-    save_json(path, {"MAX_BOT_TURNS": "8"})
-    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600 and load_overrides(path) == {"MAX_BOT_TURNS": "8"}
+    save_json(path, {"services": {"agora": {"MAX_BOT_TURNS": "8"}}, "agents": {}})
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+    assert load_overrides(path) == {"services": {"agora": {"MAX_BOT_TURNS": "8"}}, "agents": {}}
+    empty = {"services": {}, "agents": {}}
     path.write_text("{torn", encoding="utf-8")
-    assert load_overrides(path) == {} and load_overrides(tmp_path / "none.json") == {}
-    path.write_text("[1, 2]", encoding="utf-8")
-    assert load_overrides(path) == {}
+    assert load_overrides(path) == empty and load_overrides(tmp_path / "none.json") == empty
+    path.write_text('{"MAX_BOT_TURNS": "8"}', encoding="utf-8")                          # the flat shape: none
+    assert load_overrides(path) == empty
 
 
 def test_an_agent_started_with_an_override_runs_with_it_and_says_so(tmp_path, monkeypatch, caplog):
@@ -106,12 +129,14 @@ def test_an_agent_started_with_an_override_runs_with_it_and_says_so(tmp_path, mo
     from agents.agent import Agent
     from tests.test_first_sync import CFG, FakeLLM
     monkeypatch.setenv("MAX_BOT_TURNS", "3")
-    monkeypatch.setenv("CAT_NUDGE_IDLE_S", "1200")
-    save_json(tmp_path / "settings.json", {"MAX_BOT_TURNS": "7", "CAT_NUDGE_IDLE_S": "900"})
+    monkeypatch.setenv("MEMORY_DAYS", "7")
+    save_json(tmp_path / "settings.json", {"services": {"agora": {"MAX_BOT_TURNS": "7", "CAT_NUDGE_IDLE_S": "900"}},
+                                           "agents": {"ada": {"MEMORY_DAYS": "3"}, "bruno": {"MEMORY_DAYS": "1"}}})
     caplog.set_level(logging.INFO)
-    assert start(os.environ, tmp_path, CFG) == ["MAX_BOT_TURNS"]                      # Ada: not the cat's setting
-    assert "settings: overridden MAX_BOT_TURNS" in caplog.text and "7" not in caplog.text.split("overridden")[1][:20]
-    assert Agent(CFG, llm=FakeLLM()).max_bot_turns == 7
+    assert start(os.environ, tmp_path, CFG) == ["MAX_BOT_TURNS", "MEMORY_DAYS"]           # Ada: not the cat's
+    assert "settings: overridden MAX_BOT_TURNS, MEMORY_DAYS" in caplog.text
+    agent = Agent(CFG, llm=FakeLLM())
+    assert agent.max_bot_turns == 7 and agent.memory_days == 3
     written = json.loads((tmp_path / "ada.settings.json").read_text(encoding="utf-8"))
     assert written["MAX_BOT_TURNS"] == {"value": "7", "source": "panel"} and "CAT_NUDGE_IDLE_S" not in written
     assert stat.S_IMODE(os.stat(tmp_path / "ada.settings.json").st_mode) == 0o600
