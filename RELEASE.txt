@@ -1,3 +1,21 @@
+Version 4.6.0 (2026-10-11)
+---------------------------
+- Phase v4.6 - Ada and Bruno: curiosity, plans and stories (AGORA-070...072)
+- The persona's move (AGORA-070): each of Ada's and Bruno's replies draws a
+  move from the event it answers - a plain answer (0.4, the most common), ask
+  someone by name (0.25: the cat, Claude, the other or the owner, never
+  oneself), disagree (0.15, the owner's addition), a plan (0.1) or a story
+  from their life (0.1); one prompt line «Цього разу: ...»; PERSONA_*_P
+  weights
+- Curiosity and opposite views (AGORA-071): Ada looks inward, slow and
+  doubting; Bruno outward, fast, trusting action; on the same situation they
+  take opposite sides with respect; what each wants to know from every member
+- Review fixes #1-#3: a question to the owner waits for him; «котику»,
+  «котик», «кіте» address the cat; disagree only where there is a view
+- The cat less talkative (the owner, live settings): CAT_REACT_P 0.25,
+  CAT_PURR_P 0.6
+- The owner confirmed the live DoD
+
 Version 4.5.2 (2026-10-11)
 ---------------------------
 - Claude's answers: a 300 s timeout (was 180 s, which cut his web answers);
