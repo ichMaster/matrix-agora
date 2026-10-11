@@ -1,3 +1,33 @@
+Version 4.7.0 (2026-10-11)
+---------------------------
+- Phase v4.7 - Agent settings and Claude's files in the panel
+  (AGORA-073...078)
+- The settings schema (AGORA-073): 37 non-secret settings with kind, bounds,
+  code default, unit and description; no secret, id, path or forbidden name;
+  the panel's overrides in state/settings.json applied at an agent's start
+  over its env (default < env < panel); what each agent runs with in
+  state/<name>.settings.json; GEMINI_MODEL becomes a setting
+- Settings under their service (AGORA-078, the owner): service settings
+  (the Matrix room: turns, moves, the cat and Claude in the room, sessions)
+  on the simulation's card, per simulation; an agent's own (memory, plans,
+  location, models, Claude's timeout) in a Settings tab on its card; a save
+  restarts exactly the running agents it concerns, one save at a time
+- The Settings view (AGORA-075): grouped fields with the server value, the
+  default and what each agent runs with; Reset; a confirmation naming the
+  agents that restart; no redraw under typing; the cards stay live
+- Claude's files (AGORA-076): his folder from his card - list, read,
+  download, upload (5 MB), delete - every path guarded inside the folder
+- Review fixes #1-#8 and the AGORA-078 review #10-#15 (Gemini models that
+  run without thinking, hours checked by the agents' parser, fields from the
+  server value, the first click after typing, serialised saves, failed
+  uploads, the listing cap, stale drawers, races, a stray-key warning)
+- The owner's live findings: a stale «stopped» card after a save, frozen
+  uptimes, an upload that never sent - fixed
+- Owner waiver: released at the owner's request; the shared-setting restart
+  and the download confirmed, the rest not reported item by item
+- Also on this day: the iPhone guide (docs/iphone-matrix.md) - Matrix over
+  Tailscale HTTPS, no router port opened
+
 Version 4.6.0 (2026-10-11)
 ---------------------------
 - Phase v4.6 - Ada and Bruno: curiosity, plans and stories (AGORA-070...072)
