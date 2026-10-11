@@ -90,3 +90,35 @@ def test_a_cross_origin_save_is_refused(room):
     client, *_ = room
     r = client.put("/api/settings", headers={**AUTH, "origin": "http://evil.example"}, json={"set": {}})
     assert r.status_code == 403
+
+
+def test_saves_run_one_at_a_time_and_docker_down_is_named(tmp_path):
+    """v4.7 review #5: two saves at once could lose an update; docker unreachable read as «not running»."""
+    import threading
+
+    from panel.registry import Registry
+    from panel.settings import save_settings
+    agents = list(Registry().agents.values())
+    inside, gate = threading.Event(), threading.Event()
+
+    def slow_restart(container):
+        inside.set()
+        gate.wait(2)
+        return {"ok": True}
+
+    first = threading.Thread(target=save_settings, args=(tmp_path, agents, {"set": {"CAT_NUDGE_IDLE_S": 900}},
+                                                          lambda c: "running", slow_restart))
+    first.start()
+    inside.wait(2)
+    second = threading.Thread(target=save_settings, args=(tmp_path, agents, {"set": {"CLAUDE_TIMEOUT_S": 600}},
+                                                           lambda c: "running", lambda c: {"ok": True}))
+    second.start()
+    second.join(0.3)
+    assert second.is_alive()                                      # waits for the first save
+    gate.set()
+    first.join(2)
+    second.join(2)
+    saved = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    assert saved == {"CAT_NUDGE_IDLE_S": "900", "CLAUDE_TIMEOUT_S": "600"}          # no lost update
+    out = save_settings(tmp_path, agents, {"set": {"MAX_BOT_TURNS": 8}}, lambda c: "unknown", lambda c: {})
+    assert {x["why"] for x in out["skipped"]} == {"docker unreachable"} and out["restarted"] == []

@@ -262,7 +262,7 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
         try:
             return await asyncio.to_thread(
                 save_settings, state_dir, list(reg.agents.values()), body,
-                lambda c: dock.container(c).state in ("running", "restarting"),
+                lambda c: dock.container(c).state,
                 lambda c: sup.act(c, "restart"))
         except SettingsError as exc:
             raise HTTPException(exc.status, exc.detail) from exc

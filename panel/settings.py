@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ from typing import Any
 from agents.settings import BY_NAME, OVERRIDES_FILE, SCHEMA, concerns, load_overrides, save_json, validate
 
 log = logging.getLogger("panel.settings")
+_SAVE_LOCK = threading.Lock()  # one save at a time: no lost update, no shared temp file (v4.7 review #5)
 
 GROUPS = (("turns", "Room & turns"), ("personas", "Personas"), ("memory", "Memory"), ("cat", "Кіт"),
           ("claude", "Клод"), ("gemini", "Gemini"))
@@ -57,10 +59,17 @@ def settings_view(state_dir: Path, agents: Iterable[Any]) -> dict:
     return {"groups": [{"id": g, "title": t} for g, t in GROUPS], "settings": rows}
 
 
-def save_settings(state_dir: Path, agents: Iterable[Any], body: Any, running: Callable[[str], bool],
+def save_settings(state_dir: Path, agents: Iterable[Any], body: Any, state_of: Callable[[str], str],
                   restart: Callable[[str], dict]) -> dict:
     """Validate `{"set": {name: value}, "reset": [names]}`, write the overrides, restart the concerned agents that
-    run (a stopped one is skipped, never started). Nothing is written when anything is invalid."""
+    run (a stopped one is skipped, never started). Nothing is written when anything is invalid; saves run one at a
+    time."""
+    with _SAVE_LOCK:
+        return _save(state_dir, agents, body, state_of, restart)
+
+
+def _save(state_dir: Path, agents: Iterable[Any], body: Any, state_of: Callable[[str], str],
+          restart: Callable[[str], dict]) -> dict:
     if not isinstance(body, dict):
         raise SettingsError(422, "a JSON object is expected")
     to_set, to_reset = body.get("set") or {}, body.get("reset") or []
@@ -96,8 +105,9 @@ def save_settings(state_dir: Path, agents: Iterable[Any], body: Any, running: Ca
     concerned = [a for a in agents if any(concerns(BY_NAME[n], a) for n in changed)]
     restarted, skipped = [], []
     for a in concerned:
-        if not running(a.container):
-            skipped.append({"agent": a.name, "why": "not running"})
+        state = state_of(a.container)
+        if state not in ("running", "restarting"):
+            skipped.append({"agent": a.name, "why": "docker unreachable" if state == "unknown" else "not running"})
             continue
         try:
             restart(a.container)
