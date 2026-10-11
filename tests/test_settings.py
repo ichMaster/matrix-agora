@@ -116,3 +116,10 @@ def test_an_agent_started_with_an_override_runs_with_it_and_says_so(tmp_path, mo
     assert written["MAX_BOT_TURNS"] == {"value": "7", "source": "panel"} and "CAT_NUDGE_IDLE_S" not in written
     assert stat.S_IMODE(os.stat(tmp_path / "ada.settings.json").st_mode) == 0o600
     assert not any(k.endswith(("_PASSWORD", "_KEY")) for k in written)
+
+
+def test_only_gemini_models_that_run_with_thinking_off():
+    """v4.7 review #1: every Gemini call sends thinking_budget=0; 2.5 Pro cannot, so choosing it would silence Ada,
+    Bruno and Кіт."""
+    assert BY_NAME["GEMINI_MODEL"].choices == ("gemini-2.5-flash", "gemini-2.5-flash-lite")
+    assert validate("GEMINI_MODEL", "gemini-2.5-pro")[0] is None

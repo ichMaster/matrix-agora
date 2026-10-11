@@ -89,8 +89,9 @@ SCHEMA: tuple[Setting, ...] = (
     _s("CLAUDE_NEWS_PER_DAY", "int", "24", "claude", "cap:news", "Найбільше новин на день", "", 0, 200),
     _s("CLAUDE_NEWS_HOURS", "hours", "09-01", "claude", "cap:news", "Години новин (HH-HH)"),
     # Gemini
+    # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "gemini", "engine:gemini", "Модель Gemini",
-       choices=("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro")),
+       choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),
 )
 BY_NAME: dict[str, Setting] = {s.name: s for s in SCHEMA}
 
