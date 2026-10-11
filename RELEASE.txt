@@ -1,3 +1,14 @@
+Version 4.5.1 (2026-10-11)
+---------------------------
+- The cat's sky is asked, not computed (the owner): once a day Gemini with
+  Google Search, as Lumi's web lookup, gives the day's astrological
+  positions (tropical signs and degrees, retrogrades, the Moon's phase) and
+  aspects (conjunctions, oppositions, trines, squares, sextiles); kept in
+  state/<name>.sky.json; his reading and his talk name only these, and with
+  no answer none at all; PyEphem removed
+- Docs: v4.5 completed in ROADMAP; the v4.4 review's last open item closed by
+  the owner's decision
+
 Version 4.5.0 (2026-10-11)
 ---------------------------
 - Phase v4.5 - Claude the philosopher (AGORA-065...069)
