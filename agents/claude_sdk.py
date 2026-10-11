@@ -277,6 +277,7 @@ class ClaudeSdkResponder:
         self.workspace = workspace
         self.news_source = news_source  # the Guardian's tools (agents/guardian.py), for the news call only
         self._news_server: Any = None
+        self._offered: dict[str | None, str] = {}
         self.status = ClaudeStatus(model=model)
         self.blocked: str | None = None
 
@@ -316,6 +317,10 @@ class ClaudeSdkResponder:
                    else ALLOWED_TOOLS if self.workspace else [])
         names = [s.get("name") if isinstance(s, Mapping) else s for s in (servers or [])]
         why = None
+        offered = ", ".join(sorted(map(str, tools or []))) or "none"
+        if offered != self._offered.get(toolset):  # what the CLI gives him, once per call kind — names only
+            self._offered[toolset] = offered
+            log.info("claude tools offered%s: %s", " (news)" if toolset == "news" else "", offered)
         if source != "none":
             self.blocked = f"apiKeySource={source!r}"
         elif extra := [t for t in (tools or []) if t not in allowed]:

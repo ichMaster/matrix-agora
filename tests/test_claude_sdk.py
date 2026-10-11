@@ -732,3 +732,22 @@ def test_a_news_call_without_a_source_makes_no_call(tmp_path):
     sdk = FakeSDK(result())
     r, _ = responder(tmp_path, sdk)
     assert run(r, Turn([("Ich", "x")], "B", 200, toolset="news")) is None and sdk.calls == []
+
+
+def test_the_direct_brief_opens_the_whole_web_and_the_guardian_is_only_for_the_news():
+    """The owner, 2026-10-11: Claude said he could reach only The Guardian — his own hourly items in the history; the
+    Guardian is his news source, never a limit on his answers."""
+    from agents.logic import CLAUDE_BRIEF_DIRECT
+    assert "увесь інтернет" in CLAUDE_BRIEF_DIRECT and "WebSearch" in CLAUDE_BRIEF_DIRECT
+    assert "The Guardian — лише джерело твоїх щогодинних новин, а не межа" in CLAUDE_BRIEF_DIRECT
+
+
+def test_the_tools_the_cli_offers_are_logged_once_by_name(tmp_path, caplog):
+    import logging
+    caplog.set_level(logging.INFO)
+    init = SystemMessage(subtype="init", data={"apiKeySource": "none", "tools": ["WebSearch", "Read"]})
+    r, _ = responder(tmp_path, FakeSDK(init, result()))
+    r.workspace = "/workspace"
+    run(r)
+    run(r)
+    assert caplog.text.count("claude tools offered: Read, WebSearch") == 1
