@@ -20,6 +20,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 import time
 from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import asdict, dataclass
@@ -75,9 +76,28 @@ def scrub(env: MutableMapping[str, str]) -> list[str]:
 
 
 def _inside(path: str, root: str) -> bool:
-    full = os.path.normpath(path if os.path.isabs(path) else os.path.join(root, path))
-    root = os.path.normpath(root)
+    """A path the CLI resolves inside `root`. The CLI trims Glob/Grep paths and expands `~` before use, so a path
+    with surrounding whitespace, a `~` or a variable is refused outright (v4.5 review #1); the rest is compared by
+    `realpath`, symlinks included."""
+    if not path or path != path.strip() or path.startswith("~") or "$" in path or "\x00" in path:
+        return False
+    full = os.path.realpath(path if os.path.isabs(path) else os.path.join(root, path))
+    root = os.path.realpath(root)
     return full == root or full.startswith(root + os.sep)
+
+
+_GLOB_ESCAPE_RE = re.compile(r"(^|[{,])\s*[/~]")  # an absolute or home alternative: «/app/*», «{/app/state,x}/*»
+
+
+def _glob_escapes(pattern: str, root: str) -> bool:
+    """A Glob `pattern` or Grep `glob` that reaches outside `root`: `..`, a `~` or `$`, an absolute alternative
+    inside braces, or an absolute pattern whose fixed head is not inside."""
+    if pattern != pattern.strip() or ".." in pattern or "~" in pattern or "$" in pattern:
+        return True
+    if os.path.isabs(pattern):
+        head = re.split(r"[*?\[{]", pattern, maxsplit=1)[0].rsplit("/", 1)[0] or "/"
+        return not _inside(head, root) or bool(_GLOB_ESCAPE_RE.search(pattern[1:]))
+    return bool(_GLOB_ESCAPE_RE.search(pattern))
 
 
 def _private_host(url: str) -> bool:
@@ -104,14 +124,12 @@ def tool_denial(tool: str, tool_input: Mapping[str, Any], workspace: str) -> str
     if tool in FILE_TOOLS:
         for key in ("file_path", "path", "notebook_path"):
             value = tool_input.get(key)
-            if isinstance(value, str) and value and not _inside(value, workspace):
+            if value is not None and not (isinstance(value, str) and _inside(value, workspace)):
                 return f"only {workspace} is his"
-        for key in ("pattern", "glob"):
-            value = tool_input.get(key)
-            if tool == "Glob" and isinstance(value, str) and (os.path.isabs(value) or ".." in value) \
-                    and not _inside(value.split("*", 1)[0] or workspace, workspace):
-                return f"only {workspace} is his"
-            if isinstance(value, str) and ".." in value.split("/"):
+        patterns = [("glob", tool_input.get("glob"))] + ([("pattern", tool_input.get("pattern"))] if tool == "Glob"
+                                                        else [])
+        for _, value in patterns:
+            if value is not None and not (isinstance(value, str) and not _glob_escapes(value, workspace)):
                 return f"only {workspace} is his"
     if tool == "WebFetch" and _private_host(str(tool_input.get("url", ""))):
         return "not a private or local address"
@@ -122,7 +140,10 @@ def tool_guard(workspace: str):
     """The PreToolUse hook: our own, deterministic check of every tool call before it runs."""
     async def guard(hook_input: Mapping[str, Any], tool_use_id: str | None, context: Any) -> dict[str, Any]:
         tool = str(hook_input.get("tool_name", ""))
-        why = tool_denial(tool, hook_input.get("tool_input") or {}, workspace)
+        try:
+            why = tool_denial(tool, hook_input.get("tool_input") or {}, workspace)
+        except Exception as exc:  # noqa: BLE001 — fail closed (v4.5 review #1)
+            why = f"the guard could not judge it ({type(exc).__name__})"
         if why is None:
             return {}
         log.warning("claude tool denied: %s (%s)", tool, why)

@@ -500,6 +500,20 @@ def test_the_wider_window_is_seeded_and_bounded(monkeypatch):
     ("WebFetch", {"url": "http://127.0.0.1/"}, True),
     ("WebFetch", {"url": "http://agora.lan/"}, True),
     ("WebFetch", {"url": "http://[::1]/"}, True),
+    # v4.5 review #1: the CLI trims and expands Glob/Grep paths — whitespace, `~` and braces escaped the folder
+    ("Grep", {"pattern": "access_token", "path": " /app/state", "output_mode": "content"}, True),
+    ("Grep", {"pattern": "x", "path": "\t/app/agents/canon"}, True),
+    ("Grep", {"pattern": "x", "path": "~"}, True),
+    ("Glob", {"pattern": "*", "path": "~/.."}, True),
+    ("Glob", {"pattern": "{/app/state,x}/*"}, True),
+    ("Glob", {"pattern": " /app/state/*"}, True),
+    ("Glob", {"pattern": "/workspace/{a,/app/state}/*"}, True),
+    ("Grep", {"pattern": "x", "glob": "~/*"}, True),
+    ("Read", {"file_path": "$HOME/.claude/x"}, True),
+    ("Grep", {"pattern": "x", "path": 5}, True),                                 # not a string: refused
+    ("Glob", {"pattern": "/workspace/notes/*.md"}, False),
+    ("Glob", {"pattern": "{a,b}/*.md"}, False),
+    ("Grep", {"pattern": "x/../y", "path": "/workspace/notes"}, False),          # a regex, not a path
 ])
 def test_the_guard_keeps_him_in_his_folder_and_off_the_lan(tool, tool_input, denied):
     from agents.claude_sdk import tool_denial
@@ -512,6 +526,16 @@ def test_the_guard_hook_denies_with_a_reason():
     out = asyncio.run(guard({"tool_name": "Read", "tool_input": {"file_path": "/app/state/ada.json"}}, "t1", None))
     assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert asyncio.run(guard({"tool_name": "WebSearch", "tool_input": {"query": "x"}}, "t2", None)) == {}
+
+
+def test_the_guard_fails_closed(monkeypatch):
+    import agents.claude_sdk as sdk
+
+    def boom(*_):
+        raise ValueError("bad url")
+    monkeypatch.setattr(sdk, "tool_denial", boom)
+    out = asyncio.run(sdk.tool_guard("/workspace")({"tool_name": "WebFetch", "tool_input": {"url": "x"}}, "t", None))
+    assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 def test_with_a_folder_the_options_give_the_web_and_the_folder_behind_the_guard():
