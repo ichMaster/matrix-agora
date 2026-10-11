@@ -465,3 +465,13 @@ def test_a_message_naming_only_the_cat_has_no_r2_candidate():
             assert decide(ME.user_id, "а кіт що скаже?", m, WITH_CAT).reason == "not-next-speaker"
     assert decide(ME.user_id, "а кіт що скаже?", KIT, WITH_CAT, eid="$k").reply          # he answers himself
     assert next_speaker("$e", ME.user_id, "думка", WITH_CAT) is not None                    # unnamed: as before
+
+
+def test_a_question_to_the_owner_has_no_r2_candidate():
+    """v4.6 review #1: Ada's «Ich, а що ти зараз читаєш?» was taken over by Claude or Bruno before the owner could
+    answer. Naming only the owner leaves R2 without a candidate; naming him and a member keeps the member."""
+    from agents.turns import names_owner, next_speaker
+    assert names_owner("Ich, а що ти зараз читаєш?") and not names_owner("Ichtyosaur? ні, ріхтер")
+    assert next_speaker("$e", ME.user_id, "Ich, а що ти зараз читаєш?", WITH_CAT) is None
+    assert next_speaker("$e", ME.user_id, "Ich і Бруно, що скажете?", WITH_CAT) == "bruno"
+    assert next_speaker("$e", ME.user_id, "думка", WITH_CAT) is not None

@@ -63,6 +63,15 @@ def mentions(text: str, forms: Iterable[str], user_id: str) -> bool:
     return any(re.search(rf"(?<!\w){re.escape(f)}(?!\w)", low) for f in forms)
 
 
+OWNER_FORMS = ("ich",)  # how the room names the owner — the agents call him «Ich»
+
+
+def names_owner(text: str) -> bool:
+    """v4.6 review #1: an agent's message that asks the owner by name — no other agent takes it over."""
+    low = text.lower()
+    return any(re.search(rf"(?<!\w){re.escape(f)}(?!\w)", low) for f in OWNER_FORMS)
+
+
 def claude_mode(answered_text: str, name_forms: Iterable[str], user_id: str) -> str:
     """v4.5 — Claude's reply mode from the message he answers: `direct` when it names him (any name form or his
     Matrix id) or addresses everyone (review #5 — «всім…» asks him too, as in v4.4), `philosopher` when the
@@ -111,12 +120,13 @@ def owner_repliers(event_id: str, text: str, roster: Mapping[str, Member], k: in
 def next_speaker(event_id: str, sender_id: str, text: str, roster: Mapping[str, Member]) -> str | None:
     """R2 — the one candidate to follow an agent message: among the members it names (ranked or mention-only),
     otherwise among the ranked members — never its sender; top by `rank`. A message that names only an ambient
-    member (the cat) has no candidate: he answers it himself (v4.5 review #3 — two answers, one dropped by R3)."""
+    member (the cat) has no candidate: he answers it himself (v4.5 review #3 — two answers, one dropped by R3); nor
+    does one that names only the owner: it waits for him (v4.6 review #1)."""
     others = [m for m in roster.values() if m.user_id != sender_id]
     called = named(text, others)
     by_name = [m for m in called if m.mode in ("ranked", "mention-only")]
-    if not by_name and any(m.mode == "ambient" for m in called):
-        return None
+    if not by_name and (any(m.mode == "ambient" for m in called) or names_owner(text)):
+        return None  # the cat answers himself; a question to the owner waits for him (v4.6 review #1)
     pool = by_name or [m for m in others if m.mode == "ranked"]
     return rank(event_id, pool)[0] if pool else None
 
