@@ -158,7 +158,8 @@ class Agent:
                 config_dir=os.environ.get("CLAUDE_CONFIG_DIR", "/tmp/claude"),
                 status_file=cfg.memory_file.parent / f"{cfg.localpart}.ratelimit.json",
                 usage_sink=self.record_sdk_usage, clock=lambda: self.clock(),
-                timeout_s=float(os.environ.get("CLAUDE_TIMEOUT_S", "90")))
+                timeout_s=float(os.environ.get("CLAUDE_TIMEOUT_S", "180")),
+                workspace=os.environ.get("CLAUDE_WORKSPACE", "/workspace"))  # v4.5: his own folder, the web
         else:
             self.llm = llm or GeminiClient(sink=self.record_usage)
             self.responder = responder_for(cfg.engine, self.llm)  # the reply engine seam (v4.1)

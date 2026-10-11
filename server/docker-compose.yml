@@ -88,6 +88,7 @@ services:
       TZ: ${TIMEZONE:-Europe/Kyiv}
       HOME: /tmp/claude                          # the CLI's home and config: a tmpfs, nothing survives a restart
       CLAUDE_CONFIG_DIR: /tmp/claude
+      CLAUDE_WORKSPACE: /workspace
       # the room and the turn settings every agent computes from — interpolated from the shared .env, so Claude can
       # never drift from the others (v4.4 review #5); only these names, never a secret of the shared file
       ROOM_ID: ${ROOM_ID:-}
@@ -109,6 +110,7 @@ services:
     user: "1000:1000"
     volumes:
       - ../state:/app/state
+      - ../claude-workspace:/workspace           # v4.5: his own folder — the only place his tools may read or write
     stop_grace_period: 30s
 
   usage-report:

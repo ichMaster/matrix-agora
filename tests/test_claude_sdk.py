@@ -115,7 +115,7 @@ def test_the_options_turn_off_tools_settings_and_memory():
     o = sdk_options("BRIEF", model="opus", max_output_tokens=300, config_dir="/tmp/claude")
     assert (o["tools"], o["setting_sources"], o["mcp_servers"], o["max_turns"]) == ([], [], {}, 1)
     assert o["strict_mcp_config"] is True and o["env"]["ENABLE_CLAUDEAI_MCP_SERVERS"] == "false"  # review #10
-    assert o["permission_mode"] == "dontAsk" and {"Bash", "Read", "WebFetch", "Agent"} <= set(o["disallowed_tools"])
+    assert o["permission_mode"] == "dontAsk" and {"Bash", "Agent", "Skill"} <= set(o["disallowed_tools"])
     assert o["system_prompt"] == "BRIEF" and o["model"] == "opus" and o["cwd"] == "/tmp/claude"
     assert o["env"] == {"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "300", "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
                         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "CLAUDE_CONFIG_DIR": "/tmp/claude",
@@ -471,3 +471,61 @@ def test_the_wider_window_is_seeded_and_bounded(monkeypatch):
     assert agent.wide_history[-1] == ("Ich", "m199") and agent._texts["$e199"] == "m199"
     from tests.test_first_sync import FakeLLM, make_agent
     assert make_agent(FakeLLM()).wide_n == 0 and NS                        # a persona keeps no wide window
+
+
+
+# --- v4.5 (AGORA-068): the web and his own folder, guarded --------------------------------------------------------------
+@pytest.mark.parametrize("tool,tool_input,denied", [
+    ("Read", {"file_path": "/workspace/notes.md"}, False),
+    ("Read", {"file_path": "notes/today.md"}, False),                      # relative: inside his folder
+    ("Write", {"file_path": "/workspace/a/b.txt", "content": "x"}, False),
+    ("Edit", {"file_path": "/workspace/notes.md"}, False),
+    ("Glob", {"pattern": "**/*.md"}, False),
+    ("Grep", {"pattern": "cat", "path": "/workspace"}, False),
+    ("WebSearch", {"query": "новини"}, False),
+    ("WebFetch", {"url": "https://example.com/news"}, False),
+    ("Read", {"file_path": "/app/state/ada.json"}, True),                  # the other agents' sessions
+    ("Read", {"file_path": "/proc/self/environ"}, True),                   # his own environment: the token
+    ("Read", {"file_path": "../app/state/ada.memory.md"}, True),
+    ("Read", {"file_path": "/workspace/../app/state/x"}, True),
+    ("Write", {"file_path": "/tmp/claude/x"}, True),
+    ("Glob", {"pattern": "/app/**/*.json"}, True),
+    ("Grep", {"pattern": "x", "path": "/app/state"}, True),
+    ("Grep", {"pattern": "x", "glob": "../**"}, True),
+    ("Bash", {"command": "env"}, True),
+    ("Agent", {}, True),
+    ("WebFetch", {"url": "http://192.168.1.197:8090/api/agents"}, True),   # the panel
+    ("WebFetch", {"url": "http://homeserver:8008/_matrix/client/versions"}, True),
+    ("WebFetch", {"url": "http://localhost:8008/"}, True),
+    ("WebFetch", {"url": "http://127.0.0.1/"}, True),
+    ("WebFetch", {"url": "http://agora.lan/"}, True),
+    ("WebFetch", {"url": "http://[::1]/"}, True),
+])
+def test_the_guard_keeps_him_in_his_folder_and_off_the_lan(tool, tool_input, denied):
+    from agents.claude_sdk import tool_denial
+    assert (tool_denial(tool, tool_input, "/workspace") is not None) is denied
+
+
+def test_the_guard_hook_denies_with_a_reason():
+    from agents.claude_sdk import tool_guard
+    guard = tool_guard("/workspace")
+    out = asyncio.run(guard({"tool_name": "Read", "tool_input": {"file_path": "/app/state/ada.json"}}, "t1", None))
+    assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert asyncio.run(guard({"tool_name": "WebSearch", "tool_input": {"query": "x"}}, "t2", None)) == {}
+
+
+def test_with_a_folder_the_options_give_the_web_and_the_folder_behind_the_guard():
+    o = sdk_options("B", model="opus", max_output_tokens=0, config_dir="/tmp/claude", workspace="/workspace")
+    from agents.claude_sdk import ALLOWED_TOOLS
+    assert o["tools"] == o["allowed_tools"] == ALLOWED_TOOLS
+    assert o["cwd"] == "/workspace" and o["max_turns"] > 1 and len(o["hooks"]["PreToolUse"]) == 1
+    assert not set(o["disallowed_tools"]) & set(ALLOWED_TOOLS) and "Bash" in o["disallowed_tools"]
+
+
+@pytest.mark.parametrize("tools,blocked", [(["Read", "WebSearch", "WebFetch"], None), (["Read", "Bash"], "tools=Bash")])
+def test_the_init_check_accepts_exactly_his_tools(tmp_path, tools, blocked):
+    sdk = FakeSDK(SystemMessage(subtype="init", data={"apiKeySource": "none", "tools": tools}), result())
+    r, _ = responder(tmp_path, sdk)
+    r.workspace = "/workspace"
+    run(r)
+    assert r.blocked == blocked

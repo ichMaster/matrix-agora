@@ -40,7 +40,7 @@ RSYNC_FLAGS=(-ai --checksum)
 [ "$DRY_RUN" = 1 ] && RSYNC_FLAGS+=(-n)
 say "deploy: sync → $TARGET:~/$REMOTE_DIR/"
 # state/ and reports/ exist as the host user before compose bind-mounts them (else docker makes them root's)
-ssh "$TARGET" "mkdir -p ~/$REMOTE_DIR ~/matrix-agora/state ~/matrix-agora/reports"
+ssh "$TARGET" "mkdir -p ~/$REMOTE_DIR ~/matrix-agora/state ~/matrix-agora/reports ~/matrix-agora/claude-workspace"
 CHANGES=$(rsync "${RSYNC_FLAGS[@]}" "$COMPOSE" "$TARGET:$REMOTE_DIR/docker-compose.yml")
 if [ -f "$LOCAL_ENV" ]; then
   CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$LOCAL_ENV" "$TARGET:$REMOTE_DIR/.env")"

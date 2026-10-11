@@ -40,9 +40,12 @@ FORBIDDEN_NAMES = (
     "CLAUDE_CODE_API_BASE_URL",             # another endpoint
     "CLAUDE_CODE_HOST_CREDS_FILE",          # host credentials
 )  # v4.4 review #10
-# belt and braces beside `tools=[]`: no built-in tool may ever run in the chat container
-DISALLOWED_TOOLS = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebFetch", "WebSearch", "Agent", "Skill",
-                    "NotebookEdit", "TodoWrite", "Task"]
+# v4.5 (the owner, 2026-10-11): the web, and his own folder — nothing else; the guard below enforces both
+ALLOWED_TOOLS = ["Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch"]
+FILE_TOOLS = {"Read", "Write", "Edit", "Glob", "Grep"}
+# belt and braces beside `tools=ALLOWED_TOOLS`: these never run in the chat container
+DISALLOWED_TOOLS = ["Bash", "BashOutput", "KillShell", "Agent", "Task", "Skill", "NotebookEdit", "TodoWrite"]
+MAX_TURNS = 8  # a few tool rounds — a search, a page, a note — then the answer
 WARN_MUTE_S = 3600  # a warning mutes him for an hour, then the next call re-checks (review #9)
 
 
@@ -71,8 +74,65 @@ def scrub(env: MutableMapping[str, str]) -> list[str]:
     return gone
 
 
+def _inside(path: str, root: str) -> bool:
+    full = os.path.normpath(path if os.path.isabs(path) else os.path.join(root, path))
+    root = os.path.normpath(root)
+    return full == root or full.startswith(root + os.sep)
+
+
+def _private_host(url: str) -> bool:
+    """A loopback, private, link-local or local-network address: the homeserver, the panel, the LAN."""
+    import ipaddress
+    from urllib.parse import urlparse
+    host = (urlparse(url).hostname or "").lower().rstrip(".")
+    if not host or host in ("localhost", "homeserver", "panel") or host.endswith((".lan", ".local", ".internal")):
+        return True
+    if "." not in host and ":" not in host:
+        return True  # a bare name: a compose service or a LAN host
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified
+
+
+def tool_denial(tool: str, tool_input: Mapping[str, Any], workspace: str) -> str | None:
+    """Why a tool call is refused, or None: only the allowed tools; files only inside his folder; the web only at
+    public addresses (pure — the PreToolUse guard's decision)."""
+    if tool not in ALLOWED_TOOLS:
+        return f"{tool} is not available"
+    if tool in FILE_TOOLS:
+        for key in ("file_path", "path", "notebook_path"):
+            value = tool_input.get(key)
+            if isinstance(value, str) and value and not _inside(value, workspace):
+                return f"only {workspace} is his"
+        for key in ("pattern", "glob"):
+            value = tool_input.get(key)
+            if tool == "Glob" and isinstance(value, str) and (os.path.isabs(value) or ".." in value) \
+                    and not _inside(value.split("*", 1)[0] or workspace, workspace):
+                return f"only {workspace} is his"
+            if isinstance(value, str) and ".." in value.split("/"):
+                return f"only {workspace} is his"
+    if tool == "WebFetch" and _private_host(str(tool_input.get("url", ""))):
+        return "not a private or local address"
+    return None
+
+
+def tool_guard(workspace: str):
+    """The PreToolUse hook: our own, deterministic check of every tool call before it runs."""
+    async def guard(hook_input: Mapping[str, Any], tool_use_id: str | None, context: Any) -> dict[str, Any]:
+        tool = str(hook_input.get("tool_name", ""))
+        why = tool_denial(tool, hook_input.get("tool_input") or {}, workspace)
+        if why is None:
+            return {}
+        log.warning("claude tool denied: %s (%s)", tool, why)
+        return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                       "permissionDecisionReason": why}}
+    return guard
+
+
 def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config_dir: str,
-                effort: str | None = None) -> dict[str, Any]:
+                effort: str | None = None, workspace: str | None = None) -> dict[str, Any]:
     """The `ClaudeAgentOptions` keyword arguments: a chat turn, nothing else. He thinks (adaptive — the owner,
     2026-10-11); `max_output_tokens` 0 means no cap (the owner), so thinking never eats the reply (v4.4 review #1);
     the brief keeps replies chat-sized."""
@@ -87,15 +147,17 @@ def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config
         env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(max_output_tokens)
     opts: dict[str, Any] = {
         "system_prompt": brief or "",
-        "tools": [],
+        # v4.5: the web and his folder (the guard checks every call); without a folder, no tool at all
+        "tools": list(ALLOWED_TOOLS) if workspace else [],
+        "allowed_tools": list(ALLOWED_TOOLS) if workspace else [],
         "disallowed_tools": list(DISALLOWED_TOOLS),
         "permission_mode": "dontAsk",
         "setting_sources": [],
         "mcp_servers": {},
         "strict_mcp_config": True,
-        "max_turns": 1,
+        "max_turns": MAX_TURNS if workspace else 1,
         "model": model,
-        "cwd": config_dir,
+        "cwd": workspace or config_dir,
         # he thinks (the owner, 2026-10-11) — with no output cap there is nothing for thinking to eat into (review #1)
         "thinking": {"type": "adaptive"},
         # no session transcript anywhere (review #7): accepted by the bundled CLI in the SDK's stream-json mode
@@ -104,6 +166,8 @@ def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config
     }
     if effort:
         opts["effort"] = effort
+    if workspace:
+        opts["hooks"] = {"PreToolUse": [tool_guard(workspace)]}
     return opts
 
 
@@ -149,13 +213,19 @@ def _default_options():
     return ClaudeAgentOptions
 
 
+def _hook_matchers(hooks: Mapping[str, list]) -> dict[str, list]:
+    from claude_agent_sdk import HookMatcher
+
+    return {event: [HookMatcher(matcher=None, hooks=list(fns))] for event, fns in hooks.items()}
+
+
 class ClaudeSdkResponder:
     """One stateless `query()` per reply on the subscription; silent when blocked, muted or failed."""
 
     def __init__(self, *, model: str, max_output_tokens: int, config_dir: str, status_file: Path,
                  usage_sink: Callable[[str, str, dict | None, bool, float | None], None],
                  clock: Callable[[], int] = lambda: int(time.time() * 1000), query=None, options=None,
-                 timeout_s: float = 90.0) -> None:
+                 timeout_s: float = 90.0, workspace: str | None = None) -> None:
         self.model = model
         self.max_output_tokens = max_output_tokens
         self.config_dir = config_dir
@@ -165,6 +235,7 @@ class ClaudeSdkResponder:
         self._query = query
         self._options = options
         self.timeout_s = timeout_s
+        self.workspace = workspace
         self.status = ClaudeStatus(model=model)
         self.blocked: str | None = None
 
@@ -199,8 +270,8 @@ class ClaudeSdkResponder:
         servers = data.get("mcp_servers") if isinstance(data, Mapping) else None
         if source != "none":
             self.blocked = f"apiKeySource={source!r}"
-        elif tools:
-            self.blocked = f"tools={', '.join(map(str, tools))}"
+        elif extra := [t for t in (tools or []) if t not in (ALLOWED_TOOLS if self.workspace else [])]:
+            self.blocked = f"tools={', '.join(map(str, extra))}"
         elif servers:
             self.blocked = f"mcp_servers={len(servers)}"
         if self.blocked:
@@ -246,9 +317,11 @@ class ClaudeSdkResponder:
             log.info("silent: claude rate limit (until %s)", self.status.muted_until)
             return None
         query = self._query or _default_query()
-        options = (self._options or _default_options())(**sdk_options(
-            turn.instruction, model=self.model, max_output_tokens=self.max_output_tokens, config_dir=self.config_dir,
-            effort=turn.effort))
+        kwargs = sdk_options(turn.instruction, model=self.model, max_output_tokens=self.max_output_tokens,
+                             config_dir=self.config_dir, effort=turn.effort, workspace=self.workspace)
+        if self._options is None and "hooks" in kwargs:  # the real SDK wants its HookMatcher
+            kwargs["hooks"] = _hook_matchers(kwargs["hooks"])
+        options = (self._options or _default_options())(**kwargs)
         parts: list[str] = []
         result = None
         saw_init = over_limit = False

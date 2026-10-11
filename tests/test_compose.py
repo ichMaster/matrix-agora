@@ -131,7 +131,9 @@ def test_claude_runs_his_own_image_with_his_own_env_file_only():
     assert svc["env_file"] == [{"path": "claude.env", "required": False}]           # never the shared .env
     assert svc["environment"]["CLAUDE_CONFIG_DIR"] == svc["environment"]["HOME"] == "/tmp/claude"
     assert svc["tmpfs"] == ["/tmp/claude:uid=1000,gid=1000,mode=0700,size=64m"]     # bounded; nothing survives
-    assert svc["volumes"] == ["../state:/app/state"]
+    assert svc["volumes"] == ["../state:/app/state", "../claude-workspace:/workspace"]  # v4.5: his own folder
+    assert svc["environment"]["CLAUDE_WORKSPACE"] == "/workspace"
+    assert "~/matrix-agora/claude-workspace" in (ROOT / "server" / "deploy.sh").read_text()
 
 
 def test_no_service_and_no_env_example_names_a_forbidden_variable():
