@@ -169,6 +169,41 @@ def test_streak_limit_pauses_then_resumes_when_the_window_frees(monkeypatch):
     asyncio.run(run())
 
 
+def test_a_named_ping_pong_still_ends_at_the_resume(monkeypatch):
+    """v4.5 review #2: an address is always answered inside a burst, but a resumed (R4) decision rolls the coin — or
+    two agents naming each other would talk a full wave every window, day and night."""
+    real_sleep = asyncio.sleep
+
+    async def fast_sleep(_):
+        await real_sleep(0)
+
+    monkeypatch.setattr("agents.agent.asyncio.sleep", fast_sleep)
+    agent = make_agent()
+    agent.started = True
+    agent.rng = lambda: 0.99  # loses every coin
+    agent.max_bot_turns = 2
+    agent.bot_window_ms = 600_000
+
+    async def run():
+        for sender, body, ts in [("@ich:agora.lan", "тема", 0), ("@bruno:agora.lan", "Адо, б1", 1_000),
+                                 ("@ada:agora.lan", "Бруно, а1", 2_000)]:
+            room, event = _agent_msg(sender, body, ts)
+            await agent.on_message(room, event)
+        stale = list(agent._tasks)
+        for t in stale:
+            t.cancel()
+        await asyncio.gather(*stale, return_exceptions=True)
+        agent.client.room_send.reset_mock()
+        room, event = _agent_msg("@bruno:agora.lan", "Адо, б2", 3_000)       # named, at the limit → paused
+        await agent.on_message(room, event)
+        assert len(agent._tasks) == 1
+        for t in list(agent._tasks):
+            await t
+        agent.client.room_send.assert_not_awaited()                          # the resume rolled — and lost
+
+    asyncio.run(run())
+
+
 def test_resume_is_dropped_when_the_conversation_moved_on(monkeypatch):
     real_sleep = asyncio.sleep
     async def slow_then_fast(_):

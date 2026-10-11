@@ -170,6 +170,7 @@ def test_r2_wave_limit_and_probability_also_when_named():
     assert decide(BRUNO.user_id, "думка", ME, r=0.4).reply
     # an address is always answered (the owner, 2026-10-11): no coin for a named candidate — the wave still binds
     assert decide(BRUNO.user_id, "Адо, а ти?", ME, r=0.99).reason == "next-speaker"
+    assert decide(BRUNO.user_id, "Адо, а ти?", ME, r=0.99, resumed=True).reason == "probability"   # R4 rolls
     assert decide(BRUNO.user_id, "Адо, а ти?", ME, wave=3).reason == "wave-limit"
 
 

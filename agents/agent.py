@@ -421,7 +421,7 @@ class Agent:
         chosen.discard(self.cfg.name)
         return pending_answers(self.timeline, eid, chosen, "Ich", now_ms, int(self.fallback_s * 1000))
 
-    def decide(self, sender: str, text: str, event_id: str, now_ms: int):
+    def decide(self, sender: str, text: str, event_id: str, now_ms: int, resumed: bool = False):
         return decide_reply(
             sender, text, event_id,
             wave_count(self.timeline, "Ich", now_ms, self.bot_window_ms) + self.reserved(now_ms),
@@ -433,6 +433,7 @@ class Agent:
             bot_reply_p=self.bot_reply_p,
             reply_delay_s=self.reply_delay_s,
             rng=self.rng,
+            resumed=resumed,
         )
 
     def _purr_in_timeline(self, sender: str, text: str) -> bool:
@@ -507,7 +508,7 @@ class Agent:
             if not is_latest(self.timeline, event_id):  # a purr since the pause is no move (review #3)
                 log.info("resume dropped: the conversation moved on")
                 return
-            decision = self.decide(sender, text, event_id, at_ms)
+            decision = self.decide(sender, text, event_id, at_ms, resumed=True)
             if not decision.reply:
                 log.info("resume: silent (%s)", decision.reason)
                 return

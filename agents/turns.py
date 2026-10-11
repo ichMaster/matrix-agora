@@ -212,6 +212,7 @@ def decide_reply(
     rng: Callable[[], float],
     react_p: float = 0.3,
     purr_p: float = 0.8,
+    resumed: bool = False,
 ) -> ReplyDecision:
     """The who-replies rule for one incoming, already-allowlisted message. `wave` is `wave_count` with the message
     itself plus the owner's answers still on their way (`pending_answers`); answers to the owner never wait for
@@ -235,8 +236,9 @@ def decide_reply(
             return ReplyDecision(False, reason="not-next-speaker")
         if wave >= max_bot_turns:
             return ReplyDecision(False, reason="wave-limit")
-        # an address is always answered (the owner, 2026-10-11); only an unnamed candidate rolls the coin
-        if not mentions(text, me.name_forms, me.user_id) and rng() >= bot_reply_p:
+        # an address is always answered (the owner, 2026-10-11) inside a burst; an unnamed candidate rolls the coin,
+        # and so does a resumed one (R4) — or two agents naming each other would never stop (v4.5 review #2)
+        if (resumed or not mentions(text, me.name_forms, me.user_id)) and rng() >= bot_reply_p:
             return ReplyDecision(False, reason="probability")
         return ReplyDecision(True, delay(), "next-speaker")
     return ReplyDecision(False, reason="not-allowlisted")
