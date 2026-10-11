@@ -169,3 +169,12 @@ def test_claudes_files_tab_lists_opens_downloads_uploads_and_confirms_a_delete_o
     assert "Empty — nothing written yet" in js and "${esc(F.open.text)}" in js and "${esc(f.path)}" in js
     icons = (STATIC_DIR / "icons.js").read_text(encoding="utf-8")
     assert all(f'"{name}":' in icons for name in ("folder", "upload", "trash"))
+
+
+def test_a_setting_field_starts_from_what_the_agents_run_with():
+    """v4.7 review #3: the field showed `override ?? default`, never the server's .env value — the live
+    CAT_REACT_P=0.6 showed as 0.3, and typing 0.3 counted as no change."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert "const currentValue = (r) => r.override ?? serverValue(r);" in js
+    assert 'e.source !== "panel"' in js and "reset → server value" in js
+    assert "!== String(currentValue(rows[n]))" in js

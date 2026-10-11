@@ -641,11 +641,17 @@ async function openSettings() {
   S.drawerFresh = true;
   render();
 }
+// v4.7 review #3: what the agents run with when the panel overrides nothing — the server's .env, else the default
+function serverValue(r) {
+  const vals = Object.values(r.effective).filter((e) => e && e.source !== "panel").map((e) => e.value);
+  return vals.length && vals.every((v) => v === vals[0]) ? vals[0] : r.default;
+}
+const currentValue = (r) => r.override ?? serverValue(r);
 function pendingSettings() {
   const st = S.settings;
   if (!st) return {names: [], agents: []};
   const rows = Object.fromEntries(st.view.settings.map((r) => [r.name, r]));
-  const names = [...Object.keys(st.edits).filter((n) => !st.reset[n] && String(st.edits[n]).trim() !== String(rows[n].override ?? rows[n].default)),
+  const names = [...Object.keys(st.edits).filter((n) => !st.reset[n] && String(st.edits[n]).trim() !== String(currentValue(rows[n]))),
                  ...Object.keys(st.reset).filter((n) => rows[n].override != null)];
   const agents = [...new Set(names.flatMap((n) => rows[n].agents))];
   return {names: [...new Set(names)], agents};
@@ -663,7 +669,7 @@ function nowLine(r) {
 }
 function settingField(r) {
   const st = S.settings, resetting = st.reset[r.name];
-  const value = st.edits[r.name] ?? (resetting ? r.default : (r.override ?? r.default));
+  const value = st.edits[r.name] ?? (resetting ? serverValue(r) : currentValue(r));
   const attrs = `data-setting="${esc(r.name)}" aria-label="${esc(r.name)}" ${resetting ? "disabled" : ""}`;
   let input;
   if (r.kind === "choice") {
@@ -673,7 +679,7 @@ function settingField(r) {
   } else {
     input = `<input class="input" type="text" ${r.kind === "hours" ? 'placeholder="HH-HH"' : ""} value="${esc(value)}" ${attrs}>`;
   }
-  const mark = resetting ? `<span class="pill unknown">reset → ${esc(r.default)}</span><button class="btn btn-ghost" data-act="set-undo" data-id="${esc(r.name)}">Undo</button>`
+  const mark = resetting ? `<span class="pill unknown">reset → server value</span><button class="btn btn-ghost" data-act="set-undo" data-id="${esc(r.name)}">Undo</button>`
     : r.override != null ? `<span class="pill ok">panel</span><button class="btn btn-ghost" data-act="set-reset" data-id="${esc(r.name)}" title="Back to the server value">Reset</button>` : "";
   return `<div class="field" style="margin-bottom:14px">
     <label>${esc(r.description)} <span class="mono muted" style="font-size:11px">${esc(r.name)}</span></label>
