@@ -590,12 +590,12 @@ Design: a settings schema in code is the single list of what may be tuned; the p
   - every tunable name with its type, range or pattern, default, unit, a one-line description, and its scope: `shared` (every agent reads it), or the agents or capabilities it concerns;
   - secrets are never in it, and a test fails if a secret-looking name (`*_PASSWORD`, `*_TOKEN`, `*_KEY`) appears.
 - **The overrides file:**
-  - `state/settings.json` holds `{name: value}`, atomic and 0600;
+  - `state/settings.json` holds `{"services": {<sim>: {name: value}}, "agents": {<agent>: {name: value}}}` (AGORA-078), atomic and 0600;
   - the agents apply it at start, over the environment, through the schema: an unknown name or an invalid value is ignored and logged by name;
   - the code defaults, the env and the overrides resolve in that order, in one place.
 - **The panel API:**
-  - `GET /api/settings` returns the schema with each value's effective value and its source (`default` / `env` / `panel`);
-  - `PUT /api/settings` validates against the schema, writes the overrides and answers with the agents to restart;
+  - `GET /api/simulations/{sim_id}/settings` and `GET /api/agents/{name}/settings` (AGORA-078) return the scope's settings with each value's effective value and its source (`default` / `env` / `panel`);
+  - the matching `PUT` validates against the scope, writes the overrides and answers with the agents restarted;
   - reset to the default drops an override;
   - names resolve only through the schema, never into a path, an argv or the docker API;
   - Bearer auth as everywhere.

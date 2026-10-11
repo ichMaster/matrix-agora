@@ -146,7 +146,8 @@ def test_a_subscription_cost_is_never_shown_as_zero():
 
 
 def test_the_settings_drawer_confirms_a_save_and_never_redraws_under_typing():
-    """v4.7: the Settings drawer — fields from /api/settings, Save asks which agents restart, the poll leaves it."""
+    """v4.7: the settings under their service (AGORA-078) — a sim's on its card, an agent's in its tab; Save asks
+    which agents restart; the poll leaves typing alone."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert 'data-act="sim-settings"' in js and "async function openSimSettings(simId)" in js
     assert "`/api/simulations/${encodeURIComponent(simId)}/settings`" in js

@@ -62,7 +62,7 @@ add no new token; there are four new icons drawn in the same grid (sliders, fold
   - a 12 px muted line: `default <value> · runs: <value> · <source>`. When the agents differ, each value is listed
     with its agents;
   - an override shows an `ok` pill «panel» and a **Reset** button. Reset is pending until Save, shown as
-    «reset → <default>» with **Undo**.
+    «reset → server value» with **Undo**.
 - **Footer:** sticky, with **Save (n)** and «restarts Ada, Bruno, Кіт, Клод».
 - **The confirmation dialog:**
   - title: «Save n settings?»;
@@ -70,7 +70,7 @@ add no new token; there are four new icons drawn in the same grid (sliders, fold
   - button: **Save and restart**.
 - **The result toast:** «Saved … · restarted … · skipped kit (not running)». An invalid value comes back as «Not
   saved: NAME: why».
-- **No redraw while typing:** the poll never redraws the open drawer; typed values live in the page's state.
+- **No redraw while typing:** typed values live in the page's state; the poll redraws the open settings only when nothing is pending, and the cards behind a service's drawer stay live.
 
 **Claude's files: a Files tab on Claude's drawer (engine `claude-sdk` only).**
 - **The list:** relative path, size and time, newest first, with «Empty — nothing written yet» when there is none.
