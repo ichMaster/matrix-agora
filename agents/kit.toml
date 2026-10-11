@@ -7,7 +7,7 @@ memories = "agents/canon/kit.memories.md"  # v4.3: the past-life theses, `- [tag
 simulation = "agora"
 type = "creature"        # v4.2: canon, life, world, the daily horoscope; v4.3 the past-life theses — no plans
 engine = "gemini"
-name_forms = ["кіт", "кота", "коту", "котом", "коті", "коте"]  # an ordinary cat-word addresses him: he is the only cat here
+name_forms = ["кіт", "кота", "коту", "котом", "коті", "коте", "кіте", "котик", "котику"]  # an ordinary cat-word addresses him: he is the only cat here
 
 [turns]
 mode = "ambient"        # never one of the chosen repliers; he reacts on his own roll (v4.2)

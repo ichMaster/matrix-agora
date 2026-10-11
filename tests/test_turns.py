@@ -475,3 +475,14 @@ def test_a_question_to_the_owner_has_no_r2_candidate():
     assert next_speaker("$e", ME.user_id, "Ich, а що ти зараз читаєш?", WITH_CAT) is None
     assert next_speaker("$e", ME.user_id, "Ich і Бруно, що скажете?", WITH_CAT) == "bruno"
     assert next_speaker("$e", ME.user_id, "думка", WITH_CAT) is not None
+
+
+def test_the_cats_affectionate_names_address_him():
+    """v4.6 review #2: «Котику», «котик», «Кіте» — what the personas, now asking him, are likely to say."""
+    from pathlib import Path
+
+    from agents.roster import load_member
+    from agents.turns import mentions
+    kit = load_member(Path("agents/kit.toml"))
+    for text in ("Котику, як це?", "а котик що скаже?", "Кіте, розкажи"):
+        assert mentions(text, kit.name_forms, kit.user_id), text
