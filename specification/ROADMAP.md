@@ -34,7 +34,7 @@ are generated. Other further work (the deferred backlog items in the code-review
 | v4.3 | The cat: his past life and his initiative | ✅ completed | `v4.3.0` (2026-10-10) |
 | v4.4 | Claude on the subscription: answering when asked | ✅ completed | `v4.4.0` (2026-10-11) |
 | v4.5 | Claude the philosopher | ✅ completed | `v4.5.0` (2026-10-11) |
-| v4.6 | Ada and Bruno: curiosity, plans and stories | ⏳ planned | — |
+| v4.6 | Ada and Bruno: curiosity, plans and stories | ✅ completed | `v4.6.0` (2026-10-11) |
 | v4.7 | Agent settings and Claude's files in the panel | ⏳ planned | — |
 | v4.8 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v4.9 | Лілі under the full rules | ⏳ planned | — |
@@ -528,7 +528,7 @@ Owner decisions (2026-10-11): Claude's weight is 1, as designed; the outgoing gu
 
 ### v4.6 — Ada and Bruno: curiosity, plans and stories
 
-**Status:** ⏳ planned (the owner, 2026-10-11: «додамо Аді і Бруно цікавості … щоб вони питали і Кота і Клода і один одного і мене … хай також говорять про свої плани і якісь історії з життя»).
+**Status:** ✅ completed — released `v4.6.0` on 2026-10-11.
 
 **Goal:** Ada and Bruno do more than keep the conversation going. They ask questions of the cat, Claude, each other and the owner, share their plans, and tell stories from their lives.
 
