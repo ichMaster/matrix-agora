@@ -136,6 +136,9 @@ from agents.world import (
 )
 
 log = logging.getLogger("agent")
+BACKFILL_PAGE = 100  # the homeserver's cap on one /messages page
+BACKFILL_PAGES = 5  # at most this many pages on a start
+
 
 class Agent:
     def __init__(self, cfg: AgentConfig, llm: GeminiClient | None = None,
@@ -295,14 +298,28 @@ class Agent:
         return len(texts[-window:])
 
     async def backfill(self, from_token: str) -> None:
-        resp = await self.client.room_messages(
-            self.cfg.room_id, start=from_token, direction=MessageDirection.back,
-            limit=max(self.history_n, self.wide_n),
-        )
-        if isinstance(resp, RoomMessagesError):
-            log.error("context backfill failed: %s", resp.message)
-            return
-        n = self.seed_context(list(resp.chunk))
+        """Pages backwards until the window holds enough text messages: the homeserver gives at most
+        `BACKFILL_PAGE` events a page (v4.5 — Claude's 150-line window seeded only 100)."""
+        window = max(self.history_n, self.wide_n)
+        events: list = []
+        token = from_token
+        for _ in range(BACKFILL_PAGES):
+            resp = await self.client.room_messages(
+                self.cfg.room_id, start=token, direction=MessageDirection.back,
+                limit=min(window, BACKFILL_PAGE),
+            )
+            if isinstance(resp, RoomMessagesError):
+                log.error("context backfill failed: %s", resp.message)
+                if not events:
+                    return
+                break
+            events.extend(resp.chunk)
+            end = getattr(resp, "end", None)
+            if (not resp.chunk or not isinstance(end, str) or end == token
+                    or sum(isinstance(e, RoomMessageText) for e in events) >= window):
+                break
+            token = end
+        n = self.seed_context(events)
         log.info("%s: context seeded with %d room messages", self.cfg.localpart, n)
 
     async def join_pending_invites(self) -> None:

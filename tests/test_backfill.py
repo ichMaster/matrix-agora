@@ -40,3 +40,25 @@ def test_backfill_asks_the_room_backwards_from_the_first_sync():
     kwargs = agent.client.room_messages.await_args.kwargs
     assert agent.client.room_messages.await_args.args[0] == "!room"
     assert kwargs["start"] == "s123" and kwargs["limit"] == agent.history_n
+
+
+def test_backfill_pages_back_until_the_wide_window_is_full():
+    """v4.5: the homeserver caps a page at 100 events, so Claude's 150-line window seeded only 100."""
+    agent = Agent(CFG, llm=FakeLLM())
+    agent.wide_n = 150
+    page1 = SimpleNamespace(chunk=[ev("@ich:agora.lan", f"m{t}", t) for t in range(250, 150, -1)], end="t2")
+    page2 = SimpleNamespace(chunk=[ev("@ich:agora.lan", f"m{t}", t) for t in range(150, 50, -1)], end="t3")
+    agent.client = SimpleNamespace(room_messages=AsyncMock(side_effect=[page1, page2]))
+    asyncio.run(agent.backfill("s1"))
+    calls = agent.client.room_messages.await_args_list
+    assert [c.kwargs["start"] for c in calls] == ["s1", "t2"] and calls[0].kwargs["limit"] == 100
+    assert len(agent._texts) == 150 and agent.history[-1] == ("Ich", "m250")
+
+
+def test_backfill_stops_at_the_rooms_start():
+    agent = Agent(CFG, llm=FakeLLM())
+    agent.wide_n = 150
+    page = SimpleNamespace(chunk=[ev("@ich:agora.lan", "m1", 1)], end=None)
+    agent.client = SimpleNamespace(room_messages=AsyncMock(return_value=page))
+    asyncio.run(agent.backfill("s1"))
+    assert agent.client.room_messages.await_count == 1 and agent.history == [("Ich", "m1")]
