@@ -268,7 +268,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `HOMESERVER`, `ROOM_ID`, `OWNER` | v0.4 | where and with whom the agents talk |
 | `ADA_PASSWORD`, `BRUNO_PASSWORD`, `KIT_PASSWORD` | v0.4, v4.2 | first-login passwords (the cat's account is created in the admin room, since registration is closed) |
 | `GEMINI_API_KEY` | v1.1 | read by `google-genai` from the environment |
-| `GEMINI_MODEL` | v4.7 | the Gemini agents' model (`gemini-2.5-flash`; choices in the schema); the usage line names the model called |
+| `GEMINI_MODEL` | v4.7 | the Gemini agents' model (`gemini-2.5-flash` or `gemini-2.5-flash-lite` — models that run with thinking off; v4.7 review #1); the usage line names the model called |
 | `HISTORY_N`, `REPLY_DELAY_S`, `MAX_BOT_TURNS`, `BOT_REPLY_P`, `BOT_WINDOW_S` | v1.1–v1.2 | context size and turn-taking (40 from v4.1 / 4 / 3 / 0.5 / 600); from v4.1 `MAX_BOT_TURNS` counts the message being answered (v1.2's value + 1) |
 | `CAT_REACT_P`, `CAT_PURR_P`, `CAT_MAX_WORDS` | v4.2 | the cat: how often he reacts unasked, how often a reaction is a purr, his word cap (0.3 / 0.8 / 12) |
 | `CAT_MEMORY_P` | v4.3 | how often one of the cat's spoken lines retells a past-life thesis (0.25) |
