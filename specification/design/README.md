@@ -47,3 +47,36 @@ is built in v4.2; the other two are fixed here so later phases build to them.
 **The token chart for N agents (v4.2):** the stacked bars and the legend show every agent. The series take the
 accent at 100 % (`a`), 42 % (`b`), 70 % (`c`), 24 % (`d`), then the text colour at 35 % (`e`). These are tints of
 existing tokens, so both themes follow.
+
+## Addendum (v4.7): Settings and Claude's files
+
+The screens reuse the handoff's drawer, card, field, pill, dialog and toast components and the Nocturne tokens. They
+add no new token; there are four new icons drawn in the same grid (sliders, folder, upload, trash).
+
+**Settings: a drawer, opened from the rail's System group, or from the top bar on narrow screens.**
+- **Header:** «Settings», with the subtitle «Non-secret agent settings · a save restarts the agents it concerns».
+- **Groups:** one collapsible card per group, in this order: Room & turns · Personas · Memory · Кіт · Клод · Gemini.
+  A card's open state survives the 10 s poll.
+- **Each field:**
+  - a label: the schema's Ukrainian description, then the variable name in mono;
+  - an input: a number with its bounds, `HH-HH` text, a select for the choices, or text;
+  - the unit;
+  - a 12 px muted line: `default <value> · runs: <value> · <source>`. When the agents differ, each value is listed
+    with its agents;
+  - an override shows an `ok` pill «panel» and a **Reset** button. Reset is pending until Save, shown as
+    «reset → <default>» with **Undo**.
+- **Footer:** sticky, with **Save (n)** and «restarts Ada, Bruno, Кіт, Клод».
+- **The confirmation dialog:**
+  - title: «Save n settings?»;
+  - body: the names, then «Restarts: … — each writes its session summary first.» or «No agent needs a restart.»;
+  - button: **Save and restart**.
+- **The result toast:** «Saved … · restarted … · skipped kit (not running)». An invalid value comes back as «Not
+  saved: NAME: why».
+- **No redraw while typing:** the poll never redraws the open drawer; typed values live in the page's state.
+
+**Claude's files: a Files tab on Claude's drawer (engine `claude-sdk` only).**
+- **The list:** relative path, size and time, newest first, with «Empty — nothing written yet» when there is none.
+- **Each row:** **Open** (text files ≤ 256 KB, shown in a mono block), **Download** and **Delete**. Delete asks «Delete
+  <path>? Claude loses this note.»
+- **Upload:** a file picker with an optional folder path. Replacing an existing file asks «Replace <path>?» first.
+  The cap is 5 MB, and a refusal shows the server's reason.

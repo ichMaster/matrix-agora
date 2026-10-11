@@ -23,6 +23,7 @@ const S = {
   usageFilter: "all", expandedDays: {}, openDetails: {}, toast: null,
   busy: {},                // target → busy label while its action runs (v3.4)
   dialog: null,            // {action, kind: "agent"|"service", id, sim} awaiting confirmation
+  settings: null,          // v4.7: {view, edits: {name: value}, reset: {name: true}, busy}
 };
 
 // ── tiny helpers ─────────────────────────────────────────────────────────────
@@ -61,22 +62,31 @@ const pill = (cls, label) => `<span class="pill ${cls}">${esc(label)}</span>`;
 
 // ── API ──────────────────────────────────────────────────────────────────────
 class Unauthorized extends Error {}
-async function api(path) {
+async function api(path, as = "json") {
   const resp = await fetch(path, {headers: {Authorization: `Bearer ${S.token}`}, cache: "no-store"});
   if (resp.status === 401) throw new Unauthorized();
   if (resp.status === 404) throw new Error(`not found: ${path}`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
+  return as === "blob" ? resp.blob() : resp.json();
 }
 
-// The only call in the page that changes anything: POST + the owner token (same-origin by construction).
-async function post(path) {
-  const resp = await fetch(path, {method: "POST", headers: {Authorization: `Bearer ${S.token}`}, cache: "no-store"});
+// The only calls in the page that change anything: POST / PUT / DELETE + the owner token (same-origin by
+// construction). `raw` sends a file's bytes as they are (v4.7: an upload to Claude's folder).
+async function send(method, path, payload, raw = false) {
+  const headers = {Authorization: `Bearer ${S.token}`};
+  if (payload !== undefined && !raw) headers["Content-Type"] = "application/json";
+  const resp = await fetch(path, {method, headers, cache: "no-store",
+                                  body: payload === undefined ? undefined : raw ? payload : JSON.stringify(payload)});
   if (resp.status === 401) throw new Unauthorized();
   const body = await resp.json().catch(() => ({}));
-  if (!resp.ok) throw new Error(body.detail || `HTTP ${resp.status}`);
+  if (!resp.ok) {
+    const inv = body.detail && body.detail.invalid;
+    throw new Error(inv ? Object.entries(inv).map(([k, v]) => `${k}: ${v}`).join("; ") : (body.detail || `HTTP ${resp.status}`));
+  }
   return body;
 }
+const post = (path) => send("POST", path);
+const put = (path, payload) => send("PUT", path, payload);  // v4.7: the settings save
 
 async function loadDashboard() {
   const [health, sims, agents, usage] = await Promise.all([
@@ -103,6 +113,7 @@ async function refresh(manual = false) {
     const [logMoved, memMoved] = S.drawer ? await Promise.all([
       S.log.follow ? loadLog(false) : false, S.drawer.kind === "agent" ? refreshMemory(false) : false]) : [false, false];
     if (same && !logMoved && !memMoved && !manual) return;  // nothing new: the "updated N s ago" ticker says so
+    if (S.drawer?.kind === "settings" && !manual) return;     // v4.7: never redraw under the owner's typing
   } catch (err) {
     if (err instanceof Unauthorized) return signOut(true);
     if (S.data) showToast("err", `Refresh failed: ${err.message}`);
@@ -157,6 +168,12 @@ function actionButtons({kind, id, sim, state, big}) {
   }).join("");
 }
 function dialogText(d) {
+  if (d.kind === "settings") {
+    const {names, agents} = pendingSettings();
+    const who = agents.map((n) => S.data.agents.find((a) => a.name === n)?.display || n);
+    return [`Save ${names.length} setting${names.length === 1 ? "" : "s"}?`,
+      `${names.join(", ")}. ${who.length ? `Restarts: ${who.join(", ")} — each writes its session summary first.` : "No agent needs a restart."}`];
+  }
   if (d.kind === "service") {
     return d.action === "stop" ? [`Stop ${d.id}?`, "Agents will keep reconnecting until it is back."]
       : [`Restart ${d.id}?`, "Agents will reconnect briefly."];
@@ -173,8 +190,8 @@ function dialogHtml() {
   if (!d) return "";
   const [title, body] = dialogText(d);
   const danger = d.action === "forget";
-  const ic = {stop: "stop", restart: "arrow-clockwise", forget: "eraser"}[d.action];
-  const label = {stop: "Stop", restart: "Restart", forget: "Forget"}[d.action];
+  const ic = {stop: "stop", restart: "arrow-clockwise", forget: "eraser", save: "check-circle"}[d.action];
+  const label = {stop: "Stop", restart: "Restart", forget: "Forget", save: "Save and restart"}[d.action];
   return `<div class="dialog-backdrop ${d.fresh ? "" : "settled"}" data-act="dialog-cancel"><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title">
     <div class="dialog-title" id="dlg-title">${esc(title)}</div><div class="dialog-body">${esc(body)}</div>
     <div class="dialog-actions"><button class="btn btn-secondary" data-act="dialog-cancel">Cancel</button>
@@ -258,6 +275,7 @@ function topbarHtml() {
     <div class="brand"><div class="brand-mark">A</div>Agora · panel<span class="wide-only" style="margin-left:6px">${pill(cls, label)}</span></div>
     <span class="refreshed wide-only" id="refreshed">${esc(refreshed)}</span>
     <button class="btn btn-ghost btn-icon lg" data-act="refresh" title="Refresh now" aria-label="Refresh now">${icon("arrow-clockwise", 17, S.data ? "" : "spinning")}</button>
+    <button class="btn btn-ghost btn-icon lg narrow-only" data-act="settings" title="Settings" aria-label="Settings">${icon("sliders", 17)}</button>
     <button class="btn btn-ghost btn-icon lg" data-act="theme" title="${theme === "dark" ? "Light theme" : "Dark theme"}" aria-label="Toggle theme">${icon(theme === "dark" ? "sun" : "moon", 17)}</button>
     <button class="btn btn-secondary wide-only" data-act="signout" style="height:32px;padding:0 12px">Sign out</button>
     <button class="btn btn-ghost btn-icon lg narrow-only" data-act="signout" title="Sign out" aria-label="Sign out">${icon("sign-out", 17)}</button>
@@ -276,8 +294,9 @@ function railHtml() {
     <div class="rail-group"><div class="section-label">System</div>
       <button class="rail-item" data-act="scroll" data-id="host-card">${icon("hard-drives", 16)}Server</button>
       <button class="rail-item" data-act="scroll" data-id="usage-card">${icon("coins", 16)}Tokens</button>
+      <button class="rail-item" data-act="settings">${icon("sliders", 16)}Settings</button>
     </div>
-    <div class="rail-phase">v3.4 · control</div>
+    <div class="rail-phase">v4.7 · settings</div>
   </nav>`;
 }
 
@@ -432,7 +451,11 @@ function drawerHtml() {
   if (!S.drawer || !S.data) return "";
   const dr = S.drawer;
   let head, tabs = "", body;
-  if (dr.kind === "agent") {
+  if (dr.kind === "settings") {
+    head = `<div class="avatar">${icon("sliders", 20)}</div><div style="flex:1;min-width:0"><div class="drawer-title">Settings</div>
+      <div class="drawer-sub">Non-secret agent settings · a save restarts the agents it concerns</div></div>`;
+    body = `<div class="drawer-body">${settingsHtml()}</div>`;
+  } else if (dr.kind === "agent") {
     const a = S.data.agents.find((x) => x.name === dr.id);
     if (!a) return "";
     const [cls, label] = agentStatus(a), mem = S.data.mem[a.name];
@@ -595,6 +618,98 @@ function agentTabHtml(a, mem, tab) {
   return "";
 }
 
+// ── v4.7: settings — the schema's non-secret settings; a save restarts the agents they concern ─────────────
+const SOURCE_LABEL = {default: "default", env: "server .env", panel: "panel"};
+async function openSettings() {
+  S.drawer = {kind: "settings"};
+  try {
+    const view = await api("/api/settings");
+    S.settings = {view, edits: {}, reset: {}, busy: false};
+  } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    S.drawer = null; showToast("err", `Settings unavailable: ${err.message}`); return;
+  }
+  S.drawerFresh = true;
+  render();
+}
+function pendingSettings() {
+  const st = S.settings;
+  if (!st) return {names: [], agents: []};
+  const rows = Object.fromEntries(st.view.settings.map((r) => [r.name, r]));
+  const names = [...Object.keys(st.edits).filter((n) => !st.reset[n] && String(st.edits[n]).trim() !== String(rows[n].override ?? rows[n].default)),
+                 ...Object.keys(st.reset).filter((n) => rows[n].override != null)];
+  const agents = [...new Set(names.flatMap((n) => rows[n].agents))];
+  return {names: [...new Set(names)], agents};
+}
+function nowLine(r) {
+  const vals = Object.entries(r.effective);
+  if (!vals.length) return "";
+  const groups = {};
+  for (const [agent, e] of vals) {
+    const key = e ? `${e.value} · ${SOURCE_LABEL[e.source] || e.source}` : "unknown";
+    (groups[key] = groups[key] || []).push(S.data.agents.find((a) => a.name === agent)?.display || agent);
+  }
+  const keys = Object.keys(groups);
+  return keys.length === 1 && vals.length > 1 ? `runs: ${keys[0]}` : `runs: ${keys.map((k) => `${k} (${groups[k].join(", ")})`).join("; ")}`;
+}
+function settingField(r) {
+  const st = S.settings, resetting = st.reset[r.name];
+  const value = st.edits[r.name] ?? (resetting ? r.default : (r.override ?? r.default));
+  const attrs = `data-setting="${esc(r.name)}" aria-label="${esc(r.name)}" ${resetting ? "disabled" : ""}`;
+  let input;
+  if (r.kind === "choice") {
+    input = `<select class="input" ${attrs}>${r.choices.map((c) => `<option value="${esc(c)}" ${c === value ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>`;
+  } else if (r.kind === "int" || r.kind === "float") {
+    input = `<input class="input" type="number" inputmode="decimal" step="${r.kind === "int" ? 1 : 0.01}" ${r.low != null ? `min="${r.low}"` : ""} ${r.high != null ? `max="${r.high}"` : ""} value="${esc(value)}" ${attrs}>`;
+  } else {
+    input = `<input class="input" type="text" ${r.kind === "hours" ? 'placeholder="HH-HH"' : ""} value="${esc(value)}" ${attrs}>`;
+  }
+  const mark = resetting ? `<span class="pill unknown">reset → ${esc(r.default)}</span><button class="btn btn-ghost" data-act="set-undo" data-id="${esc(r.name)}">Undo</button>`
+    : r.override != null ? `<span class="pill ok">panel</span><button class="btn btn-ghost" data-act="set-reset" data-id="${esc(r.name)}" title="Back to the server value">Reset</button>` : "";
+  return `<div class="field" style="margin-bottom:14px">
+    <label>${esc(r.description)} <span class="mono muted" style="font-size:11px">${esc(r.name)}</span></label>
+    <div style="display:flex;gap:8px;align-items:center">${input}${r.unit ? `<span class="muted" style="font-size:12px">${esc(r.unit)}</span>` : ""}${mark}</div>
+    <div class="muted" style="font-size:12px;margin-top:4px">default ${esc(r.default)}${nowLine(r) ? ` · ${esc(nowLine(r))}` : ""}</div></div>`;
+}
+function settingsHtml() {
+  const st = S.settings;
+  if (!st) return `<div class="muted">Loading…</div>`;
+  const pending = pendingSettings();
+  const groups = st.view.groups.map((g) => {
+    const rows = st.view.settings.filter((r) => r.group === g.id);
+    if (!rows.length) return "";
+    const key = `set-${g.id}`;
+    return `<details class="card" data-keep="${key}" ${S.openDetails[key] === false ? "" : "open"} style="margin-bottom:12px">
+      <summary class="card-title" style="cursor:pointer">${esc(g.title)}</summary><div style="margin-top:12px">${rows.map(settingField).join("")}</div></details>`;
+  }).join("");
+  return `${groups}<div style="position:sticky;bottom:0;padding:12px 0;background:var(--color-bg);display:flex;gap:8px;align-items:center">
+    <button class="btn btn-primary" data-act="set-save" ${pending.names.length && !st.busy ? "" : "disabled"}>${icon("check-circle", 14)}${st.busy ? "Saving…" : `Save${pending.names.length ? ` (${pending.names.length})` : ""}`}</button>
+    <span class="muted" style="font-size:12px">${pending.names.length ? `restarts ${esc(pending.agents.map((n) => S.data.agents.find((a) => a.name === n)?.display || n).join(", ") || "nobody")}` : "No changes"}</span></div>`;
+}
+async function saveSettings() {
+  const st = S.settings, {names} = pendingSettings();
+  const set = {}, reset = [];
+  for (const n of names) { if (st.reset[n]) reset.push(n); else set[n] = st.edits[n]; }
+  st.busy = true; render();
+  try {
+    const res = await put("/api/settings", {set, reset});
+    const skipped = res.skipped.map((x) => `${x.agent} (${x.why})`);
+    showToast("ok", `Saved ${res.saved.join(", ") || "nothing"}${res.restarted.length ? ` · restarted ${res.restarted.join(", ")}` : ""}${skipped.length ? ` · skipped ${skipped.join(", ")}` : ""}`);
+    S.settings = {view: await api("/api/settings"), edits: {}, reset: {}, busy: false};
+  } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    st.busy = false; showToast("err", `Not saved: ${err.message}`);
+  }
+  render();
+  refresh(true);
+}
+// typed values live in S, so a render (a toast, a save) never loses them
+document.addEventListener("input", (e) => {
+  const name = e.target?.dataset?.setting;
+  if (name && S.settings) { S.settings.edits[name] = e.target.value; const btn = $('[data-act="set-save"]'); if (btn) { const p = pendingSettings(); btn.disabled = !p.names.length; } }
+});
+document.addEventListener("change", (e) => { if (e.target?.dataset?.setting && S.settings) render(); });
+
 function afterDrawerRender() {
   const log = $("#log");
   if (log && S.log.follow) log.scrollTop = log.scrollHeight;
@@ -675,6 +790,10 @@ document.addEventListener("click", (e) => {
   else if (act === "signout") signOut();
   else if (act === "agent") openDrawer({kind: "agent", id, tab: "log"});
   else if (act === "svclog") openDrawer({kind: "service", id, sim: el.dataset.sim});
+  else if (act === "settings") openSettings();
+  else if (act === "set-reset") { S.settings.reset[id] = true; delete S.settings.edits[id]; render(); }
+  else if (act === "set-undo") { delete S.settings.reset[id]; delete S.settings.edits[id]; render(); }
+  else if (act === "set-save") { if (pendingSettings().names.length) { S.dialog = {action: "save", kind: "settings", fresh: true}; render(); } }
   else if (act === "close") { S.drawer = null; render(); }
   else if (act === "tab") { S.drawer.tab = id; S.log = {lines: [], available: true, follow: true, seen: 0}; render(); if (id === "log") loadLog(); }
   else if (act === "follow") { S.log.follow = !S.log.follow; render(); if (S.log.follow) loadLog(); }
@@ -688,7 +807,7 @@ document.addEventListener("click", (e) => {
     if (action === "start") perform(action, kind, id, sim);       // start needs no confirmation
     else { S.dialog = {action, kind, id, sim, fresh: true}; render(); }
   } else if (act === "dialog-cancel" && e.target === el) { S.dialog = null; render(); }
-  else if (act === "dialog-ok") { const d = S.dialog; S.dialog = null; perform(d.action, d.kind, d.id, d.sim); }
+  else if (act === "dialog-ok") { const d = S.dialog; S.dialog = null; if (d.kind === "settings") saveSettings(); else perform(d.action, d.kind, d.id, d.sim); }
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;

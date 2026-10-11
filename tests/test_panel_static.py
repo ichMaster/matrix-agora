@@ -36,9 +36,10 @@ def test_no_outside_requests_and_a_strict_policy():
 
 def test_the_script_talks_only_to_the_panel_api():
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    targets = re.findall(r"\b(?:api|post)\(\s*[`\"']([^`\"']+)", js)
+    targets = re.findall(r"\b(?:api|post|put)\(\s*[`\"']([^`\"']+)", js)
+    targets += re.findall(r"\bsend\(\"\w+\",\s*[`\"']([^`\"']+)", js)
     assert targets and all(t.startswith("/api/") for t in targets)
-    assert js.count("fetch(") == 2  # api() reads, post() acts — both always with the token
+    assert js.count("fetch(") == 2  # api() reads, send() changes (v4.7: POST / PUT / DELETE) — both with the token
     assert js.count("Authorization: `Bearer ${S.token}`") == 2
 
 
@@ -50,12 +51,13 @@ def test_no_secret_is_baked_into_the_page():
 
 def test_the_only_state_change_is_post_and_the_dialogs_say_what_happens():
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert js.count('method: "POST"') == 1 and "async function post(path)" in js  # one helper changes state
-    assert not re.search(r"method:\s*[\"'](PUT|DELETE|PATCH)", js)
+    assert "async function send(method, path, payload, raw = false)" in js  # one helper changes state (v4.7)
+    assert set(re.findall(r'send\("(\w+)"', js)) <= {"POST", "PUT", "DELETE"} and "PATCH" not in js
+    assert 'const post = (path) => send("POST", path);' in js
     for text in ("will write a session summary — up to 30 seconds.", "The current session will end with a summary.",
                  "The summary will be deleted; day memories stay. Stopped agents only.",
                  "Agents will keep reconnecting until it is back.", "Agents will reconnect briefly.",
-                 "Creates the container and starts it", "creating container…", "v3.4 · control"):
+                 "Creates the container and starts it", "creating container…", "v4.7 · settings"):
         assert text in js, text
     assert 'if (action === "start") perform(' in js  # start runs without a confirmation; the rest ask first
 
@@ -141,3 +143,16 @@ def test_a_subscription_cost_is_never_shown_as_zero():
     assert 'byKind[k].cost == null ? "—" : byKind[k].cost.toFixed(4)' in js
     assert "const costSuffix = (n) => n == null ? \"\" : ` · ${fmtUsd(n)}`;" in js
     assert "` · ${fmtUsd(" not in js.replace("const costSuffix = (n) => n == null ? \"\" : ` · ${fmtUsd(n)}`;", "")
+
+
+def test_the_settings_drawer_confirms_a_save_and_never_redraws_under_typing():
+    """v4.7: the Settings drawer — fields from /api/settings, Save asks which agents restart, the poll leaves it."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert 'data-act="settings"' in js and "async function openSettings()" in js and 'api("/api/settings")' in js
+    assert 'await put("/api/settings", {set, reset})' in js
+    assert "`Restarts: ${who.join(\", \")} — each writes its session summary first.`" in js
+    assert 'save: "Save and restart"' in js
+    assert 'if (S.drawer?.kind === "settings" && !manual) return;' in js
+    assert 'value="${esc(value)}"' in js and "${esc(r.description)}" in js            # escaped, never raw
+    icons = (STATIC_DIR / "icons.js").read_text(encoding="utf-8")
+    assert '"sliders":' in icons
