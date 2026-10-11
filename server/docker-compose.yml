@@ -154,6 +154,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ../state:/app/state                      # v3.4: read-write for "forget" (state/<name>.memory.md only)
+      - ../claude-workspace:/claude-workspace    # v4.7: Claude's folder — list, read, download, upload, delete
       - /etc/os-release:/host/os-release:ro
       # the stack at its HOST path: compose resolves ../state etc. on this side, the daemon mounts them on the host
       - ${STACK_DIR:-/home/ich/matrix-agora}/server:${STACK_DIR:-/home/ich/matrix-agora}/server:ro

@@ -156,3 +156,16 @@ def test_the_settings_drawer_confirms_a_save_and_never_redraws_under_typing():
     assert 'value="${esc(value)}"' in js and "${esc(r.description)}" in js            # escaped, never raw
     icons = (STATIC_DIR / "icons.js").read_text(encoding="utf-8")
     assert '"sliders":' in icons
+
+
+def test_claudes_files_tab_lists_opens_downloads_uploads_and_confirms_a_delete_or_replace():
+    """v4.7 (the owner, 2026-10-11): Claude's folder from his card — the tab only for the claude-sdk engine."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert '["files", "Files"]' in js and '(k !== "files" || a.engine === "claude-sdk")' in js
+    assert 'send("PUT", filePath(agent, path, overwrite ? "?overwrite=1" : ""), file, true)' in js
+    assert 'await send("DELETE", filePath(agent, path));' in js and 'api(filePath(agent, path, "?download=1"), "blob")' in js
+    assert "Claude loses this note — it is not kept anywhere else." in js
+    assert "The file in Claude's folder is overwritten with the one you chose." in js
+    assert "Empty — nothing written yet" in js and "${esc(F.open.text)}" in js and "${esc(f.path)}" in js
+    icons = (STATIC_DIR / "icons.js").read_text(encoding="utf-8")
+    assert all(f'"{name}":' in icons for name in ("folder", "upload", "trash"))

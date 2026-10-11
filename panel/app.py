@@ -16,11 +16,20 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from panel.actions import ActionError, ComposeRunner, Supervisor
 from panel.docker_read import DockerReader
+from panel.files import (
+    MAX_UPLOAD,
+    FilesError,
+    delete_file,
+    file_for_download,
+    list_files,
+    read_text,
+    write_file,
+)
 from panel.health import Prober
 from panel.host import host_metrics
 from panel.memory import local_today, memory_view, usage_view
@@ -77,7 +86,7 @@ def _agent_view(agent) -> dict:
 def create_app(token: str | None = None, registry: Registry | None = None, docker_reader: DockerReader | None = None,
                prober: Prober | None = None, state_dir: Path = Path("state"), proc: Path = Path("/proc"),
                os_release: Path = Path("/host/os-release"), background: bool = True,
-               supervisor: Supervisor | None = None) -> FastAPI:
+               supervisor: Supervisor | None = None, files_dir: Path = Path("/claude-workspace")) -> FastAPI:
     token = token if token is not None else os.environ.get("PANEL_TOKEN", "")
     if len(token) < MIN_TOKEN_LEN:
         raise RuntimeError(f"PANEL_TOKEN must be set (at least {MIN_TOKEN_LEN} characters) — refusing to start")
@@ -257,6 +266,45 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
                 lambda c: sup.act(c, "restart"))
         except SettingsError as exc:
             raise HTTPException(exc.status, exc.detail) from exc
+
+    # ── Claude's files (v4.7): his folder only, every path through files.safe_path ──
+    def files_root(name: str) -> Path:
+        found = reg.agent(name)
+        if found is None or found.engine != "claude-sdk":
+            raise HTTPException(404, "not found")
+        return files_dir
+
+    def files_call(fn, *args):
+        try:
+            return fn(*args)
+        except FilesError as exc:
+            raise HTTPException(exc.status, exc.detail) from exc
+
+    @app.get("/api/agents/{name}/files")
+    def files_list(name: str) -> dict:
+        return {"files": list_files(files_root(name))}
+
+    @app.get("/api/agents/{name}/files/{path:path}")
+    def files_read(name: str, path: str, download: int = 0):
+        root = files_root(name)
+        if download:
+            target = files_call(file_for_download, root, path)
+            return FileResponse(target, filename=target.name, media_type="application/octet-stream")
+        return files_call(read_text, root, path)
+
+    @app.put("/api/agents/{name}/files/{path:path}")
+    async def files_upload(name: str, path: str, request: Request, overwrite: int = 0) -> dict:
+        root = files_root(name)
+        data = bytearray()
+        async for chunk in request.stream():
+            data += chunk
+            if len(data) > MAX_UPLOAD:
+                raise HTTPException(413, "larger than 5 MB")
+        return files_call(write_file, root, path, bytes(data), bool(overwrite))
+
+    @app.delete("/api/agents/{name}/files/{path:path}")
+    def files_delete(name: str, path: str) -> dict:
+        return files_call(delete_file, files_root(name), path)
 
     # the page: served without the token (it holds no data); everything it shows comes from /api/*
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

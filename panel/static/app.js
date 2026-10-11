@@ -6,13 +6,14 @@
 const POLL_MS = 10000;  // one tick for everything — the dashboard, an open log, an open agent's memory (owner)
 const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood"];
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
-              ["today", "Today"], ["mood", "Mood"], ["tokens", "Tokens"]];
+              ["today", "Today"], ["mood", "Mood"], ["tokens", "Tokens"], ["files", "Files"]];
 // v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
 const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood"};
 const SERIES = ["a", "b", "c", "d", "e"];  // stacked token bars: one tint of the accent per agent (v4.2: N agents)
 const PRONOUN = {she: "She", he: "He", it: "It"};
 function can(a, cap) { return !a.capabilities || a.capabilities.includes(cap); }
-function agentTabs(a) { return TABS.filter(([k]) => !TAB_CAP[k] || can(a, TAB_CAP[k])); }
+// v4.7: "Files" — Claude's own folder — only for the claude-sdk engine
+function agentTabs(a) { return TABS.filter(([k]) => (k !== "files" || a.engine === "claude-sdk") && (!TAB_CAP[k] || can(a, TAB_CAP[k]))); }
 
 const S = {
   token: store(sessionStorage, "agora-token"),
@@ -24,6 +25,7 @@ const S = {
   busy: {},                // target → busy label while its action runs (v3.4)
   dialog: null,            // {action, kind: "agent"|"service", id, sim} awaiting confirmation
   settings: null,          // v4.7: {view, edits: {name: value}, reset: {name: true}, busy}
+  files: {list: null, open: null, prefix: "", busy: false},  // v4.7: Claude's folder
 };
 
 // ── tiny helpers ─────────────────────────────────────────────────────────────
@@ -81,7 +83,9 @@ async function send(method, path, payload, raw = false) {
   const body = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     const inv = body.detail && body.detail.invalid;
-    throw new Error(inv ? Object.entries(inv).map(([k, v]) => `${k}: ${v}`).join("; ") : (body.detail || `HTTP ${resp.status}`));
+    const err = new Error(inv ? Object.entries(inv).map(([k, v]) => `${k}: ${v}`).join("; ") : (body.detail || `HTTP ${resp.status}`));
+    err.status = resp.status;
+    throw err;
   }
   return body;
 }
@@ -174,6 +178,10 @@ function dialogText(d) {
     return [`Save ${names.length} setting${names.length === 1 ? "" : "s"}?`,
       `${names.join(", ")}. ${who.length ? `Restarts: ${who.join(", ")} — each writes its session summary first.` : "No agent needs a restart."}`];
   }
+  if (d.kind === "file") {
+    return d.action === "delete" ? [`Delete ${d.id}?`, "Claude loses this note — it is not kept anywhere else."]
+      : [`Replace ${d.id}?`, "The file in Claude's folder is overwritten with the one you chose."];
+  }
   if (d.kind === "service") {
     return d.action === "stop" ? [`Stop ${d.id}?`, "Agents will keep reconnecting until it is back."]
       : [`Restart ${d.id}?`, "Agents will reconnect briefly."];
@@ -189,9 +197,9 @@ function dialogHtml() {
   const d = S.dialog;
   if (!d) return "";
   const [title, body] = dialogText(d);
-  const danger = d.action === "forget";
-  const ic = {stop: "stop", restart: "arrow-clockwise", forget: "eraser", save: "check-circle"}[d.action];
-  const label = {stop: "Stop", restart: "Restart", forget: "Forget", save: "Save and restart"}[d.action];
+  const danger = d.action === "forget" || d.action === "delete";
+  const ic = {stop: "stop", restart: "arrow-clockwise", forget: "eraser", save: "check-circle", delete: "trash", replace: "upload"}[d.action];
+  const label = {stop: "Stop", restart: "Restart", forget: "Forget", save: "Save and restart", delete: "Delete", replace: "Replace"}[d.action];
   return `<div class="dialog-backdrop ${d.fresh ? "" : "settled"}" data-act="dialog-cancel"><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dlg-title">
     <div class="dialog-title" id="dlg-title">${esc(title)}</div><div class="dialog-body">${esc(body)}</div>
     <div class="dialog-actions"><button class="btn btn-secondary" data-act="dialog-cancel">Cancel</button>
@@ -558,6 +566,7 @@ function moodTabHtml(mem) {
 }
 
 function agentTabHtml(a, mem, tab) {
+  if (tab === "files") return filesTabHtml(a);
   if (!mem.available) return unavailableBox();
   if (tab === "mood") return moodTabHtml(mem);
   if (tab === "session") {
@@ -710,6 +719,87 @@ document.addEventListener("input", (e) => {
 });
 document.addEventListener("change", (e) => { if (e.target?.dataset?.setting && S.settings) render(); });
 
+// ── v4.7: Claude's files — his own folder: list, open, download, upload, delete ─────────────────────────────
+const filePath = (agent, path, q = "") => `/api/agents/${encodeURIComponent(agent)}/files/${path.split("/").map(encodeURIComponent).join("/")}${q}`;
+const fmtSize = (n) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`;
+async function loadFiles(agent) {
+  try {
+    S.files.list = (await api(`/api/agents/${encodeURIComponent(agent)}/files`)).files;
+  } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    S.files.list = []; showToast("err", `Files unavailable: ${err.message}`);
+  }
+  render();
+}
+async function openFile(agent, path) {
+  try { S.files.open = await api(filePath(agent, path)); } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    return showToast("err", `${path}: ${err.message.includes("415") ? "not text — download it" : err.message.includes("413") ? "too large to show — download it" : err.message}`);
+  }
+  render();
+}
+async function downloadFile(agent, path) {
+  try {
+    const url = URL.createObjectURL(await api(filePath(agent, path, "?download=1"), "blob"));
+    const link = document.createElement("a");
+    link.href = url; link.download = path.split("/").pop();
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    showToast("err", `Download failed: ${err.message}`);
+  }
+}
+async function uploadFile(agent, file, path, overwrite = false) {
+  S.files.busy = true; render();
+  try {
+    await send("PUT", filePath(agent, path, overwrite ? "?overwrite=1" : ""), file, true);
+    showToast("ok", `${path} ${overwrite ? "replaced" : "uploaded"} — Claude can read it`);
+  } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    if (err.status === 409 && !overwrite && err.message.startsWith("exists")) { S.files.busy = false; S.dialog = {action: "replace", kind: "file", id: path, file, fresh: true}; return render(); }
+    showToast("err", `Upload failed: ${err.message}`);
+  }
+  S.files.busy = false;
+  await loadFiles(agent);
+}
+async function deleteFile(agent, path) {
+  try {
+    await send("DELETE", filePath(agent, path));
+    if (S.files.open?.path === path) S.files.open = null;
+    showToast("ok", `${path} deleted`);
+  } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    showToast("err", `Delete failed: ${err.message}`);
+  }
+  await loadFiles(agent);
+}
+function filesTabHtml(a) {
+  const F = S.files;
+  if (F.list === null) return `<div class="muted">Loading…</div>`;
+  const upload = `<div class="card" style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <input class="input" style="flex:1;min-width:140px;letter-spacing:0" type="text" placeholder="folder (optional), e.g. for-claude" value="${esc(F.prefix)}" data-files-prefix aria-label="Folder for the upload">
+    <input id="file-pick" type="file" hidden>
+    <button class="btn btn-secondary" data-act="file-pick" ${F.busy ? "disabled" : ""}>${icon("upload", 14)}${F.busy ? "Uploading…" : "Upload a file"}</button>
+    <span class="muted" style="font-size:12px;width:100%">Up to 5 MB. Claude reads it with his tools in /workspace.</span></div>`;
+  const opened = F.open ? `<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span class="mono" style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(F.open.path)}</span><button class="btn btn-ghost btn-icon" data-act="file-close" aria-label="Close">${icon("x", 14)}</button></div>
+      <pre class="mono" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12.5px;margin:0">${esc(F.open.text)}</pre></div>` : "";
+  const rows = F.list.length ? F.list.map((f) => `<div class="rule-b" style="display:flex;gap:8px;align-items:center;padding:8px 0">
+      <span style="flex:1;min-width:0"><span class="mono" style="overflow-wrap:anywhere">${esc(f.path)}</span><span class="muted" style="font-size:12px;display:block">${esc(fmtSize(f.size))} · ${esc(new Date(f.modified).toLocaleString("en-GB"))}</span></span>
+      <button class="btn btn-ghost" data-act="file-open" data-id="${esc(f.path)}">Open</button>
+      <button class="btn btn-ghost btn-icon" data-act="file-download" data-id="${esc(f.path)}" title="Download" aria-label="Download ${esc(f.path)}">${icon("arrow-line-down", 14)}</button>
+      <button class="btn btn-ghost btn-icon" data-act="file-delete" data-id="${esc(f.path)}" title="Delete" aria-label="Delete ${esc(f.path)}">${icon("trash", 14)}</button></div>`).join("")
+    : `<div class="muted" style="display:flex;align-items:center;gap:8px">${icon("folder", 16)}Empty — nothing written yet</div>`;
+  return `${upload}${opened}<div>${rows}</div>`;
+}
+document.addEventListener("input", (e) => { if (e.target?.dataset && "filesPrefix" in e.target.dataset) S.files.prefix = e.target.value.trim().replace(/^\/+|\/+$/g, ""); });
+document.addEventListener("change", (e) => {
+  if (e.target?.id !== "file-pick" || !e.target.files?.length || S.drawer?.kind !== "agent") return;
+  const file = e.target.files[0], path = S.files.prefix ? `${S.files.prefix}/${file.name}` : file.name;
+  uploadFile(S.drawer.id, file, path);
+});
+
 function afterDrawerRender() {
   const log = $("#log");
   if (log && S.log.follow) log.scrollTop = log.scrollHeight;
@@ -752,6 +842,7 @@ async function refreshMemory(redraw = true) {
 async function openDrawer(dr) {
   // fetch first, then one render: the slide-in plays once, uninterrupted by the data arriving
   S.drawer = dr; S.log = {lines: [], available: true, follow: true, seen: 0};
+  S.files = {list: null, open: null, prefix: "", busy: false};  // v4.7: a fresh folder view per drawer
   await Promise.all([loadLog(false), refreshMemory(false)]);
   if (S.drawer !== dr) return;
   S.drawerFresh = true;
@@ -795,7 +886,12 @@ document.addEventListener("click", (e) => {
   else if (act === "set-undo") { delete S.settings.reset[id]; delete S.settings.edits[id]; render(); }
   else if (act === "set-save") { if (pendingSettings().names.length) { S.dialog = {action: "save", kind: "settings", fresh: true}; render(); } }
   else if (act === "close") { S.drawer = null; render(); }
-  else if (act === "tab") { S.drawer.tab = id; S.log = {lines: [], available: true, follow: true, seen: 0}; render(); if (id === "log") loadLog(); }
+  else if (act === "tab") { S.drawer.tab = id; S.log = {lines: [], available: true, follow: true, seen: 0}; render(); if (id === "log") loadLog(); if (id === "files") loadFiles(S.drawer.id); }
+  else if (act === "file-open") openFile(S.drawer.id, id);
+  else if (act === "file-close") { S.files.open = null; render(); }
+  else if (act === "file-download") downloadFile(S.drawer.id, id);
+  else if (act === "file-delete") { S.dialog = {action: "delete", kind: "file", id, fresh: true}; render(); }
+  else if (act === "file-pick") $("#file-pick")?.click();
   else if (act === "follow") { S.log.follow = !S.log.follow; render(); if (S.log.follow) loadLog(); }
   else if (act === "ufilter") { S.usageFilter = id; render(); }
   else if (act === "day") { S.expandedDays[id] = el.dataset.open !== "true"; render(); }
@@ -807,7 +903,12 @@ document.addEventListener("click", (e) => {
     if (action === "start") perform(action, kind, id, sim);       // start needs no confirmation
     else { S.dialog = {action, kind, id, sim, fresh: true}; render(); }
   } else if (act === "dialog-cancel" && e.target === el) { S.dialog = null; render(); }
-  else if (act === "dialog-ok") { const d = S.dialog; S.dialog = null; if (d.kind === "settings") saveSettings(); else perform(d.action, d.kind, d.id, d.sim); }
+  else if (act === "dialog-ok") {
+    const d = S.dialog; S.dialog = null;
+    if (d.kind === "settings") saveSettings();
+    else if (d.kind === "file") (d.action === "delete" ? deleteFile(S.drawer.id, d.id) : uploadFile(S.drawer.id, d.file, d.id, true));
+    else perform(d.action, d.kind, d.id, d.sim);
+  }
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;

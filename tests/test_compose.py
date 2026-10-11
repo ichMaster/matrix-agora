@@ -75,6 +75,7 @@ def test_the_panel_gets_only_its_own_settings_and_the_stack_at_its_host_path():
     assert svc["user"] == "1000:1000" and svc["group_add"] == ["${DOCKER_GID:-999}"]
     assert svc["volumes"] == ["/var/run/docker.sock:/var/run/docker.sock",
                               "../state:/app/state",                       # v3.4: forget writes here
+                              "../claude-workspace:/claude-workspace",     # v4.7: Claude's files
                               "/etc/os-release:/host/os-release:ro",
                               f"{stack}:{stack}:ro"]                       # same path inside: compose resolves host paths
     assert "env_file" not in svc  # never the agents' keys or passwords in its environment
