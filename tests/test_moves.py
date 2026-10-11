@@ -94,3 +94,9 @@ def test_the_canon_gives_each_persona_curiosity_and_the_opposite_view(name, othe
     for who in ("Кота", "Клода", other, "Ich"):
         assert who in curiosity, who
     assert not BANNED_RE.search(text)
+
+
+def test_disagree_only_where_there_is_a_view_to_disagree_with():
+    """v4.6 review #3: drawn for a reply to the owner too, «заперечити» turned a greeting into an argument."""
+    line = move_line(Move("disagree"))
+    assert "якщо в тому, на що відповідаєш, є думка" in line and "відповідай як звичайно" in line
