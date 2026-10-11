@@ -68,9 +68,8 @@ def list_files(root: Path) -> list[dict]:
             st = path.stat()
             out.append({"path": path.relative_to(base).as_posix(), "size": st.st_size,
                         "modified": datetime.fromtimestamp(st.st_mtime, UTC).isoformat(timespec="seconds")})
-            if len(out) >= MAX_LIST:
-                break
-    return sorted(out, key=lambda f: f["modified"], reverse=True)
+    # newest first over everything, then the cap (v4.7 review #7: the old break left the outer walk running)
+    return sorted(out, key=lambda f: f["modified"], reverse=True)[:MAX_LIST]
 
 
 def read_text(root: Path, rel: str) -> dict:

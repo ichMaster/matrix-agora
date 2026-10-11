@@ -104,3 +104,17 @@ def test_a_failed_upload_is_a_400_and_leaves_nothing_behind(box):
     r2 = client.put("/api/agents/claude/files/blob.bin/inside.md", headers=AUTH, content=b"x")  # blob.bin is a file
     assert r1.status_code in (200, 400) and r2.status_code == 400
     assert not [p for p in folder.rglob(".upload-*")]
+
+
+def test_the_listing_is_newest_first_over_everything_then_capped(tmp_path, monkeypatch):
+    """v4.7 review #7: the cap broke only the inner loop — more than the cap, sorted over an arbitrary subset."""
+    from panel import files
+    for i in range(6):
+        d = tmp_path / f"d{i}"
+        d.mkdir()
+        f = d / "n.md"
+        f.write_text("x", encoding="utf-8")
+        os.utime(f, (1_700_000_000 + i * 100, 1_700_000_000 + i * 100))
+    monkeypatch.setattr(files, "MAX_LIST", 3)
+    listed = files.list_files(tmp_path)
+    assert [f["path"] for f in listed] == ["d5/n.md", "d4/n.md", "d3/n.md"]
