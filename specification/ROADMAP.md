@@ -33,7 +33,7 @@ are generated. Other further work (the deferred backlog items in the code-review
 | v4.2 | The cat in the room | ✅ completed | `v4.2.0` (2026-10-10) |
 | v4.3 | The cat: his past life and his initiative | ✅ completed | `v4.3.0` (2026-10-10) |
 | v4.4 | Claude on the subscription: answering when asked | ✅ completed | `v4.4.0` (2026-10-11) |
-| v4.5 | Claude the philosopher | ⏳ planned | — |
+| v4.5 | Claude the philosopher | ✅ completed | `v4.5.0` (2026-10-11) |
 | v4.6 | Agent settings in the panel | ⏳ planned | — |
 | v4.7 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v4.8 | Лілі under the full rules | ⏳ planned | — |
@@ -501,7 +501,7 @@ Design: more-agents.md §Claude, §7, §9, §10. Depends on: v4.1 (v4.2 for the 
 
 ### v4.5 — Claude the philosopher
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v4.5.0` on 2026-10-11.
 
 **Goal:** Claude joins the talk unasked, as a philosopher reflecting on the image the conversation keeps circling.
 
