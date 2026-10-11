@@ -19,6 +19,7 @@ from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agents.nudge import parse_hours
 from agents.roster import Member
 
 log = logging.getLogger("agent.settings")
@@ -112,7 +113,11 @@ def validate(name: str, raw: object) -> tuple[str | None, str | None]:
         if setting.low is not None and number < setting.low or setting.high is not None and number > setting.high:
             return None, f"outside {setting.low:g}..{setting.high:g}"
         return (str(int(number)) if setting.kind == "int" else f"{number:g}"), None
-    if setting.kind == "hours":
+    if setting.kind == "hours":  # the agents' own parser: a value it cannot use is refused (v4.7 review #2)
+        try:
+            parse_hours(text)
+        except ValueError:
+            return None, "not HH-HH with two different hours"
         return (text, None) if HOURS_RE.match(text) else (None, "not HH-HH")
     if setting.kind == "choice":
         return (text, None) if text in setting.choices else (None, "not one of " + ", ".join(setting.choices))

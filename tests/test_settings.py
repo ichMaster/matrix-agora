@@ -123,3 +123,12 @@ def test_only_gemini_models_that_run_with_thinking_off():
     Bruno and Кіт."""
     assert BY_NAME["GEMINI_MODEL"].choices == ("gemini-2.5-flash", "gemini-2.5-flash-lite")
     assert validate("GEMINI_MODEL", "gemini-2.5-pro")[0] is None
+
+
+@pytest.mark.parametrize("raw", ["09-09", "0-0", "23-23", "24-01", "25-03"])
+def test_an_hours_value_the_agent_cannot_use_is_refused(raw):
+    """v4.7 review #2: «09-09» passed the pattern, then parse_hours raised in Agent.__init__ — a crash loop."""
+    from agents.nudge import parse_hours
+    assert validate("CAT_NUDGE_HOURS", raw)[0] is None and validate("CLAUDE_NEWS_HOURS", raw)[0] is None
+    for ok in ("09-01", "09-22", "0-24"):
+        assert validate("CAT_NUDGE_HOURS", ok)[0] == ok and parse_hours(ok)
