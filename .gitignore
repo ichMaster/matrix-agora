@@ -16,3 +16,6 @@ server_con.yaml
 reports/
 .claude/session-aliases/registry.json
 tools/sessions-panel/*.vsix
+
+# a guide filled with private addresses (the tailnet name) — kept on the Mac only
+docs/*.local.md
