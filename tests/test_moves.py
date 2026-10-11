@@ -82,3 +82,15 @@ def test_a_personas_prompt_carries_the_move_for_the_answered_event_and_the_other
         cfg = SimpleNamespace(type=m.type, can=lambda c, m=m: c in m.capabilities)
         stub = SimpleNamespace(cfg=cfg, me=m, roster=ROOM, move_weights=DEFAULT_WEIGHTS)
         assert Agent.draw_move(stub, eid, None) is None
+
+
+@pytest.mark.parametrize("name,other,lens", [("ada", "Бруно", "зсередини"), ("bruno", "Ади", "назовні")])
+def test_the_canon_gives_each_persona_curiosity_and_the_opposite_view(name, other, lens):
+    """AGORA-071 (the owner, 2026-10-11): what each asks whom, and opposite views — the same situation, two sides."""
+    from pathlib import Path
+    text = Path(f"agents/canon/{name}.md").read_text(encoding="utf-8")
+    assert "Цікавість." in text and "Погляди." in text and lens in text and "на інший бік" in text
+    curiosity = text.split("Цікавість.", 1)[1].split("\n\n", 1)[0]
+    for who in ("Кота", "Клода", other, "Ich"):
+        assert who in curiosity, who
+    assert not BANNED_RE.search(text)
