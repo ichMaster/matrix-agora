@@ -34,8 +34,9 @@ are generated. Other further work (the deferred backlog items in the code-review
 | v4.3 | The cat: his past life and his initiative | ✅ completed | `v4.3.0` (2026-10-10) |
 | v4.4 | Claude on the subscription: answering when asked | ✅ completed | `v4.4.0` (2026-10-11) |
 | v4.5 | Claude the philosopher | ⏳ planned | — |
-| v4.6 | The Lumi bridge: Лілі when named | ⏳ planned | — |
-| v4.7 | Лілі under the full rules | ⏳ planned | — |
+| v4.6 | Agent settings in the panel | ⏳ planned | — |
+| v4.7 | The Lumi bridge: Лілі when named | ⏳ planned | — |
+| v4.8 | Лілі under the full rules | ⏳ planned | — |
 
 ## v0 — Platform: homeserver, server deploy, client, accounts, echo bot
 
@@ -397,9 +398,9 @@ Builds on the reviewed v3.3 panel. The docker socket now performs actions, so ev
 
 **Tests:** unit — the supervisor's actions against a fake docker client (start, stop, timeout → kill; container creation on first start), forget gating, confirmation gating, every mutating route `POST`-only and token-gated; the routes via FastAPI's `TestClient`. No real docker and no network in tests.
 
-## v4 — Ensemble: agent types, N-agent turn-taking, the cat, Claude and the Lumi bridge
+## v4 — Ensemble: agent types, N-agent turn-taking, the cat, Claude, the panel's settings and the Lumi bridge
 
-The room grows from two Gemini personas to five agents of four types: Ada and Bruno (`persona`), the cat Кіт (`creature`), Claude (`assistant`) and Lumi (`bridge`). The three newcomers are openly non-human; Ada and Bruno keep believing they are human. One owner message must stay a few short replies, not two pages. The full design, its decisions and its open questions live in [features/more-agents.md](features/more-agents.md) (draft); each phase lands its ARCHITECTURE and VISION changes and the tests that pin them, per that document's contract list. Depends on: v3 (the images, compose, the panel).
+The room grows from two Gemini personas to five agents of four types (and, from v4.6, their settings move into the panel): Ada and Bruno (`persona`), the cat Кіт (`creature`), Claude (`assistant`) and Lumi (`bridge`). The three newcomers are openly non-human; Ada and Bruno keep believing they are human. One owner message must stay a few short replies, not two pages. The full design, its decisions and its open questions live in [features/more-agents.md](features/more-agents.md) (draft); each phase lands its ARCHITECTURE and VISION changes and the tests that pin them, per that document's contract list. Depends on: v3 (the images, compose, the panel).
 
 ### v4.1 — Roster, agent types and N-agent turn-taking
 
@@ -524,7 +525,56 @@ Owner decisions (2026-10-11): Claude's weight is 1, as designed; the outgoing gu
 
 **Tests:** unit — `claude_mode` for every name form, the Matrix id and the unnamed case; the window and the brief per mode; Claude in the ranking and the multi-agent simulation.
 
-### v4.6 — The Lumi bridge: Лілі when named
+### v4.6 — Agent settings in the panel
+
+**Status:** ⏳ planned (the owner, 2026-10-11: «винести всі налаштування агентів на панель адміністрування»).
+
+**Goal:** every agent's tunable setting is seen and changed in the panel, not in `server/.env`; a change takes effect by restarting the agents it concerns, survives a deploy, and no secret ever appears.
+
+Design: a settings schema in code is the single list of what may be tuned; the panel owns a file of overrides in `state/`; the agents read it at start, over the environment. This reverses a v3.3 rule (ARCHITECTURE §The panel: «there is no settings view») for **non-secret settings only**. Depends on: v4.5 (the settings it covers), v3.4 (the panel's restart action).
+
+**Owner decisions** (proposed, to confirm when the phase starts):
+- **The overrides live in `state/settings.json`**, written only by the panel. `server/.env` and `server/claude.env` stay the base values and the secrets, and `server/deploy.sh` never touches the file, so a deploy keeps what the owner set. The alternative, the panel editing `server/.env` on the host, would fight `deploy.sh`, which syncs that file from the Mac.
+- **A change applies by restart**, not live. The panel restarts exactly the agents a setting concerns, after a confirmation. A shared turn-taking setting restarts every agent together, since all of them must compute the turns from the same values.
+- **Scope**: every non-secret agent setting. That covers the room and turn-taking (`HISTORY_N`, `REPLY_MAX_TOKENS`, `MAX_BOT_TURNS`, `BOT_REPLY_P`, `BOT_WINDOW_S`, `OWNER_REPLIERS`, `FALLBACK_S`, `REPLY_DELAY_S`), memory (`MEMORY_DAYS`, …, `SESSION_*`), the cat (`CAT_*`), Claude (`CLAUDE_MODEL`, `CLAUDE_HISTORY_N`, `CLAUDE_TIMEOUT_S`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, `CLAUDE_NEWS_*`) and the Gemini model. Out of scope are passwords, tokens and keys (Gemini, OAuth, Guardian, the panel's), the room and owner ids, and the canons.
+
+**Tasks:**
+- **The schema** (`agents/settings.py`, pure):
+  - every tunable name with its type, range or pattern, default, unit, a one-line description, and its scope: `shared` (every agent reads it), or the agents or capabilities it concerns;
+  - secrets are never in it, and a test fails if a secret-looking name (`*_PASSWORD`, `*_TOKEN`, `*_KEY`) appears.
+- **The overrides file:**
+  - `state/settings.json` holds `{name: value}`, atomic and 0600;
+  - the agents apply it at start, over the environment, through the schema: an unknown name or an invalid value is ignored and logged by name;
+  - the code defaults, the env and the overrides resolve in that order, in one place.
+- **The panel API:**
+  - `GET /api/settings` returns the schema with each value's effective value and its source (`default` / `env` / `panel`);
+  - `PUT /api/settings` validates against the schema, writes the overrides and answers with the agents to restart;
+  - reset to the default drops an override;
+  - names resolve only through the schema, never into a path, an argv or the docker API;
+  - Bearer auth as everywhere.
+- **The panel UI:**
+  - a Settings view grouped as Room & turns, Memory, Кіт and Клод, each field with its value, default, unit and description, and a mark for what the panel changed;
+  - Save shows the agents that will restart and asks for confirmation, then restarts them through the v3.4 action;
+  - the screen is designed first as an addendum to `specification/design/README.md`.
+- **The contracts:**
+  - ARCHITECTURE: the panel's settings view (non-secret only), `state/settings.json`, the resolution order, and the env table's «tunable in the panel» column;
+  - the tests that pin them.
+- **The owner's live values** (`server/.env` today) carried over: the panel shows them as `env` and can override them.
+
+**DoD:**
+- (Manual, owner) In the panel, the owner changes a cat setting (e.g. `CAT_NUDGE_IDLE_S`) and confirms. Only the cat restarts, and his behavior follows. A deploy leaves the value as set.
+- (Manual, owner) A shared turn-taking setting (e.g. `MAX_BOT_TURNS`) restarts every agent together, and each agent's start log names the overridden settings.
+- (Manual, owner) No password, token or key appears anywhere in the Settings view or its API responses.
+
+**Tests:** unit:
+- the schema: types, ranges, the hours pattern, no secret names;
+- the resolution order (default < env < panel), and an invalid or unknown override ignored;
+- the atomic 0600 write;
+- the API: auth, validation, unknown names, the restart set for `shared` vs one agent;
+- the agent applies the overrides at start;
+- static UI checks for the view and the confirmation.
+
+### v4.7 — The Lumi bridge: Лілі when named
 
 **Status:** ⏳ planned.
 
@@ -548,13 +598,13 @@ Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails t
 
 **Tests:** unit — the bridge against a fake Lumi server (turn payload with the lines since her last turn, `turn_id`, `409`, `5xx`, timeout, `thinking` never posted, no post-call filtering, no post without a trigger), mention detection for both names, the env-file isolation, `external` usage rows.
 
-### v4.7 — Лілі under the full rules
+### v4.8 — Лілі under the full rules
 
 **Status:** ⏳ planned.
 
 **Goal:** Лілі takes part in the room like Ada and Bruno — chosen by the turn-taking, not only when named.
 
-Design: more-agents.md §Lumi (the bridge), §4. Depends on: v4.6, proven in the room.
+Design: more-agents.md §Lumi (the bridge), §4. Depends on: v4.7, proven in the room.
 
 **Tasks:**
 - `agents/lumi.toml`: `[turns] mode = "ranked"`, weight 1 — she joins R1 (`OWNER_REPLIERS`) and R2 (the next speaker).
