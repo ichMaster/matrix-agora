@@ -378,7 +378,7 @@ def test_a_restart_refreshes_the_card_and_keeps_a_running_mute(tmp_path):
     ("Клод, а ти що скажеш?", "direct"), ("спитаю Клода", "direct"), ("дай Клоду слово", "direct"),
     ("з Клодом цікаво", "direct"), ("Клоде, поясни", "direct"), ("Claude, explain", "direct"),
     ("@claude:agora.lan ну?", "direct"), ("гарний вечір, правда?", "philosopher"), ("", "philosopher"),
-    ("Всім привіт, що скажете?", "direct"),                                    # v4.5 review #5
+    ("Всім привіт, що скажете?", "direct"), ("скажи Клодові", "direct"),       # v4.5 review #5, #7
 ])
 def test_claude_mode_for_every_name_form_the_id_and_the_unnamed_case(text, mode):
     from agents.roster import load_member
