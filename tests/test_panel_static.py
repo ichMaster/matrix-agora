@@ -194,7 +194,7 @@ def test_typing_updates_only_the_save_bar():
 def test_the_open_settings_follow_the_agents_when_nothing_is_pending_and_load_no_log():
     """v4.7 review #8: «runs:» stayed stale after a save, and the poll asked for /api/simulations/undefined/logs."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert "if (st && !st.busy && !pendingSettings().names.length) {" in js
+    assert "if (st && st.view && !st.busy && !pendingSettings().names.length) {" in js
     assert 'if (!dr || dr.kind === "settings" || (dr.kind === "agent" && dr.tab !== "log")) return;' in js
 
 
@@ -205,3 +205,13 @@ def test_a_settings_save_marks_its_agents_restarting_and_refreshes_after():
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert 'for (const c of marked) S.busy[c] = "restarting… applying settings";' in js
     assert "for (const c of marked) delete S.busy[c];" in js and "setTimeout(() => refresh(true), 5000);" in js
+
+
+def test_the_cards_stay_live_behind_the_settings_and_no_load_lands_in_the_wrong_drawer():
+    """The owner, 2026-10-11: uptimes froze behind the open settings after a restart. AGORA-078 review #1–#3: a poll
+    or a slow load could land in another drawer or over fresh typing; a failed load showed «Loading…» forever."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert 'if (stack && S.drawer?.kind === "settings") stack.innerHTML = dashboardHtml();' in js
+    assert "const untouched = S.settings === st && !st.busy" in js
+    assert "if (settingsPath() !== path) return false;" in js
+    assert 'data-act="settings-retry"' in js and "Settings unavailable: ${esc(st.error)}" in js

@@ -117,10 +117,18 @@ async function refresh(manual = false) {
     const [logMoved, memMoved] = S.drawer ? await Promise.all([
       S.log.follow ? loadLog(false) : false, S.drawer.kind === "agent" ? refreshMemory(false) : false]) : [false, false];
     if (settingsOpen() && !manual) {                           // v4.7: never redraw under the owner's typing…
-      const st = S.settings;                                   // …but with nothing pending, follow the agents (review #8)
-      if (st && !st.busy && !pendingSettings().names.length) {
+      // …but the cards behind stay live: the dashboard alone is redrawn in place (the owner: uptimes froze after a
+      // restart while the settings stayed open)
+      const stack = $(".main .stack");
+      if (stack && S.drawer?.kind === "settings") stack.innerHTML = dashboardHtml();
+      const st = S.settings;                                   // with nothing pending, follow the agents (review #8)
+      if (st && st.view && !st.busy && !pendingSettings().names.length) {
         const view = await api(st.path).catch(() => null);
-        if (view && JSON.stringify(view) !== JSON.stringify(st.view)) { S.settings = {path: st.path, view, edits: {}, reset: {}, busy: false}; render(); }
+        // the drawer may have changed or the owner typed meanwhile: only the same, untouched view is replaced
+        const untouched = S.settings === st && !st.busy && !Object.keys(st.edits).length && !Object.keys(st.reset).length;
+        if (view && untouched && settingsOpen() && JSON.stringify(view) !== JSON.stringify(st.view)) {
+          S.settings = {path: st.path, view, edits: {}, reset: {}, busy: false}; render();
+        }
       }
       return;
     }
@@ -639,23 +647,35 @@ function agentTabHtml(a, mem, tab) {
 const SOURCE_LABEL = {default: "default", env: "server .env", panel: "panel"};
 // AGORA-078 (the owner, 2026-10-11): settings under their service — a simulation's on its card, an agent's own in
 // its drawer (a future portal brings its own card)
+// the path the open drawer's settings come from — a slow load for another drawer is never shown here (078 review #2)
+function settingsPath() {
+  if (S.drawer?.kind === "settings") return `/api/simulations/${encodeURIComponent(S.drawer.id)}/settings`;
+  if (S.drawer?.kind === "agent" && S.drawer.tab === "settings") return `/api/agents/${encodeURIComponent(S.drawer.id)}/settings`;
+  return null;
+}
 async function loadSettings(path) {
   try {
-    S.settings = {path, view: await api(path), edits: {}, reset: {}, busy: false};
+    const view = await api(path);
+    if (settingsPath() !== path) return false;                 // the owner moved on meanwhile
+    S.settings = {path, view, edits: {}, reset: {}, busy: false};
     return true;
   } catch (err) {
     if (err instanceof Unauthorized) { signOut(true); return false; }
-    S.settings = null; showToast("err", `Settings unavailable: ${err.message}`); return false;
+    if (settingsPath() === path) S.settings = {path, view: null, error: err.message, edits: {}, reset: {}, busy: false};
+    return false;
   }
 }
 async function openSimSettings(simId) {
-  S.drawer = {kind: "settings", id: simId};
-  if (!await loadSettings(`/api/simulations/${encodeURIComponent(simId)}/settings`)) { S.drawer = null; return render(); }
+  S.drawer = {kind: "settings", id: simId}; S.settings = null;
+  await loadSettings(`/api/simulations/${encodeURIComponent(simId)}/settings`);
+  if (S.drawer?.kind !== "settings" || S.drawer.id !== simId) return;
   S.drawerFresh = true;
   render();
 }
 async function openAgentSettings(name) {
-  if (await loadSettings(`/api/agents/${encodeURIComponent(name)}/settings`)) render();
+  S.settings = null; render();
+  await loadSettings(`/api/agents/${encodeURIComponent(name)}/settings`);
+  render();
 }
 const settingsOpen = () => S.drawer?.kind === "settings" || (S.drawer?.kind === "agent" && S.drawer.tab === "settings");
 // v4.7 review #3: what the agents run with when the panel overrides nothing — the server's .env, else the default
@@ -706,6 +726,8 @@ function settingField(r) {
 function settingsHtml() {
   const st = S.settings;
   if (!st) return `<div class="muted">Loading…</div>`;
+  if (st.error) return `<div class="notice err" role="status">${icon("warning-circle", 16)}Settings unavailable: ${esc(st.error)}
+    <button class="btn btn-ghost" data-act="settings-retry">Retry</button></div>`;  // 078 review #3: never «Loading…» forever
   const pending = pendingSettings();
   const groups = st.view.groups.map((g) => {
     const rows = st.view.settings.filter((r) => r.group === g.id);
@@ -918,10 +940,11 @@ document.addEventListener("click", (e) => {
   else if (act === "agent") openDrawer({kind: "agent", id, tab: "log"});
   else if (act === "svclog") openDrawer({kind: "service", id, sim: el.dataset.sim});
   else if (act === "sim-settings") openSimSettings(id);
+  else if (act === "settings-retry") { const p = settingsPath(); if (p) loadSettings(p).then(render); }
   else if (act === "set-reset") { S.settings.reset[id] = true; delete S.settings.edits[id]; render(); }
   else if (act === "set-undo") { delete S.settings.reset[id]; delete S.settings.edits[id]; render(); }
   else if (act === "set-save") { if (pendingSettings().names.length) { S.dialog = {action: "save", kind: "settings", fresh: true}; render(); } }
-  else if (act === "close") { S.drawer = null; render(); }
+  else if (act === "close") { S.drawer = null; S.settings = null; render(); }
   else if (act === "tab") { S.drawer.tab = id; S.log = {lines: [], available: true, follow: true, seen: 0}; render(); if (id === "log") loadLog(); if (id === "files") loadFiles(S.drawer.id); if (id === "settings") openAgentSettings(S.drawer.id); }
   else if (act === "file-open") openFile(S.drawer.id, id);
   else if (act === "file-close") { S.files.open = null; render(); }
