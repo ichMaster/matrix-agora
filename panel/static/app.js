@@ -116,8 +116,15 @@ async function refresh(manual = false) {
     S.loading = false;
     const [logMoved, memMoved] = S.drawer ? await Promise.all([
       S.log.follow ? loadLog(false) : false, S.drawer.kind === "agent" ? refreshMemory(false) : false]) : [false, false];
+    if (S.drawer?.kind === "settings" && !manual) {           // v4.7: never redraw under the owner's typing…
+      const st = S.settings;                                   // …but with nothing pending, follow the agents (review #8)
+      if (st && !st.busy && !pendingSettings().names.length) {
+        const view = await api("/api/settings").catch(() => null);
+        if (view && JSON.stringify(view) !== JSON.stringify(st.view)) { S.settings = {view, edits: {}, reset: {}, busy: false}; render(); }
+      }
+      return;
+    }
     if (same && !logMoved && !memMoved && !manual) return;  // nothing new: the "updated N s ago" ticker says so
-    if (S.drawer?.kind === "settings" && !manual) return;     // v4.7: never redraw under the owner's typing
   } catch (err) {
     if (err instanceof Unauthorized) return signOut(true);
     if (S.data) showToast("err", `Refresh failed: ${err.message}`);
@@ -822,7 +829,7 @@ function afterDrawerRender() {
 
 async function loadLog(redraw = true) {
   const dr = S.drawer;
-  if (!dr || (dr.kind === "agent" && dr.tab !== "log")) return;
+  if (!dr || dr.kind === "settings" || (dr.kind === "agent" && dr.tab !== "log")) return;  // v4.7 review #8: no log there
   const path = dr.kind === "agent" ? `/api/agents/${encodeURIComponent(dr.id)}/logs?tail=200`
     : `/api/simulations/${encodeURIComponent(dr.sim)}/logs?service=${encodeURIComponent(dr.id)}&tail=200`;
   let changed = false;

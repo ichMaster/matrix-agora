@@ -152,7 +152,7 @@ def test_the_settings_drawer_confirms_a_save_and_never_redraws_under_typing():
     assert 'await put("/api/settings", {set, reset})' in js
     assert "`Restarts: ${who.join(\", \")} — each writes its session summary first.`" in js
     assert 'save: "Save and restart"' in js
-    assert 'if (S.drawer?.kind === "settings" && !manual) return;' in js
+    assert 'if (S.drawer?.kind === "settings" && !manual) {' in js
     assert 'value="${esc(value)}"' in js and "${esc(r.description)}" in js            # escaped, never raw
     icons = (STATIC_DIR / "icons.js").read_text(encoding="utf-8")
     assert '"sliders":' in icons
@@ -185,3 +185,10 @@ def test_typing_updates_only_the_save_bar():
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert "bar.innerHTML = saveBarHtml(pendingSettings(), S.settings.busy);" in js
     assert 'document.addEventListener("change", (e) => { if (e.target?.dataset?.setting' not in js
+
+
+def test_the_open_settings_follow_the_agents_when_nothing_is_pending_and_load_no_log():
+    """v4.7 review #8: «runs:» stayed stale after a save, and the poll asked for /api/simulations/undefined/logs."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert "if (st && !st.busy && !pendingSettings().names.length) {" in js
+    assert 'if (!dr || dr.kind === "settings" || (dr.kind === "agent" && dr.tab !== "log")) return;' in js
