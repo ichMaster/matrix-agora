@@ -196,3 +196,12 @@ def test_the_open_settings_follow_the_agents_when_nothing_is_pending_and_load_no
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert "if (st && !st.busy && !pendingSettings().names.length) {" in js
     assert 'if (!dr || dr.kind === "settings" || (dr.kind === "agent" && dr.tab !== "log")) return;' in js
+
+
+def test_a_settings_save_marks_its_agents_restarting_and_refreshes_after():
+    """The owner, 2026-10-11: after a shared save Claude's card read «stopped» mid-restart and invited a manual Start
+    (it was already running). The restarted agents show «restarting…», their buttons wait, and the page refreshes
+    again a few seconds later."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert 'for (const c of marked) S.busy[c] = "restarting… applying settings";' in js
+    assert "for (const c of marked) delete S.busy[c];" in js and "setTimeout(() => refresh(true), 5000);" in js

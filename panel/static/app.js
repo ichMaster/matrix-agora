@@ -721,9 +721,13 @@ function saveBarHtml(pending, busy) {
     <span class="muted" style="font-size:12px">${pending.names.length ? `restarts ${esc(pending.agents.map((n) => S.data.agents.find((a) => a.name === n)?.display || n).join(", ") || "nobody")}` : "No changes"}</span>`;
 }
 async function saveSettings() {
-  const st = S.settings, {names} = pendingSettings();
+  const st = S.settings, {names, agents} = pendingSettings();
   const set = {}, reset = [];
   for (const n of names) { if (st.reset[n]) reset.push(n); else set[n] = st.edits[n]; }
+  // the owner, 2026-10-11: a card caught mid-restart read «stopped» and invited a manual Start — while the save runs,
+  // the agents it restarts show «restarting…» and their buttons wait
+  const marked = agents.map((n) => S.data.agents.find((a) => a.name === n)?.container).filter(Boolean);
+  for (const c of marked) S.busy[c] = "restarting… applying settings";
   st.busy = true; render();
   try {
     const res = await put(st.path, {set, reset});
@@ -733,9 +737,12 @@ async function saveSettings() {
   } catch (err) {
     if (err instanceof Unauthorized) return signOut(true);
     st.busy = false; showToast("err", `Not saved: ${err.message}`);
+  } finally {
+    for (const c of marked) delete S.busy[c];
   }
   render();
-  refresh(true);
+  await refresh(true);
+  setTimeout(() => refresh(true), 5000);  // the last agent restarted may still be joining the room
 }
 // typed values live in S, so a render (a toast, a save) never loses them; a keystroke updates only the Save bar in
 // place — a full redraw on blur ate the first click on Save (v4.7 review #4)
