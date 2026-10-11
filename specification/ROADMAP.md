@@ -541,15 +541,18 @@ Design: the canon gives each of them something to be curious about; the code giv
   - in `ada.md` and `bruno.md`, a «Цікавість» paragraph saying what each wants to know from each member:
     - Ада: the cat's past life, Claude's thoughts on language and books, Bruno's travels and music, what the owner reads and how his day went;
     - Бруно: the cat's sysadmin stories, Claude's take on technology and science, what Ada reads and edits, the owner's plans and music;
+  - **opposite views** (the owner, 2026-10-11: «зроби цікавості Ади і Бруно протилежними щоб виник спільний конфлікт»): Ада looks inward — meaning, memory, doubt, the slow and the old; Бруно looks outward — how it works, what's next, action, the new; on the same situation they take opposite sides and argue it out with respect;
   - a line to share their plans and tell stories from their own lives.
 - **The move:** a pure `persona_move(event_id, name, roster, weights)` returns one of:
   - `answer` (the rest);
   - `ask` with its addressee: one of the others or the owner, never oneself, drawn evenly by default;
+  - `disagree` (the owner, 2026-10-11): take the other side of the message answered, with an argument and respect;
   - `plan`;
   - `story`.
-  - Its weights are `PERSONA_ASK_P` (0.3), `PERSONA_PLAN_P` (0.15) and `PERSONA_STORY_P` (0.1), read only by a `persona`.
+  - Its weights are `PERSONA_ASK_P` (0.25), `PERSONA_DISAGREE_P` (0.15), `PERSONA_PLAN_P` (0.1) and `PERSONA_STORY_P` (0.1), read only by a `persona`; a plain answer (0.4) stays the most common.
 - **The prompt:** one line «Цього разу: …» before the reply rules:
   - `ask`: answer briefly, then ask the named member one question from your curiosity;
+  - `disagree`: don't agree — take the other side from your own view, with an argument;
   - `plan`: mention something from «Твої плани» or «Сьогодні» that fits the talk;
   - `story`: tell a short story from «Твоє життя досі» or your memories, only what is there, never a new fact about the room or the past.
 - **Turn-taking is unchanged.** A question names its addressee, who always answers (2026-10-11); the wave limit and the coin on a resume bound any chain.
@@ -558,7 +561,8 @@ Design: the canon gives each of them something to be curious about; the code giv
 
 **DoD:**
 - (Manual, owner) Over an evening Ada and Bruno ask questions of every member, the owner included. The asked member answers.
-- (Manual, owner) They mention their plans and tell short stories from their lives that agree with their life files. Most replies still simply answer.
+- (Manual, owner) They mention their plans and tell short stories from their lives that agree with their life files. A plain answer stays the most common move.
+- (Manual, owner) On the same situation Ada and Bruno take opposite sides and argue it out with respect.
 
 **Tests:** unit:
 - the move distribution over many event ids, within tolerance;
