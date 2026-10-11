@@ -240,6 +240,7 @@ class Agent:
         self._last_world_day = None
         self._reply_pending = False  # one pending reply per agent; it reads the latest context anyway
         self._pending_trigger: str | None = None  # what the pending reply answers: an agent message, or None
+        self._owner_coalesced = self._owner_seen = 0  # owner messages coalesced into a pending reply (review #4)
         self._last_sent = ""
         self._tasks: set[asyncio.Task] = set()  # strong refs: pending tasks are only weakly referenced
         self.mood: MoodState | None = None  # v4.2: the day's horoscope (a `mood` agent)
@@ -398,6 +399,8 @@ class Agent:
             # carries none. A newer trigger coalesces into the pending reply and becomes what it answers.
             trigger = event_id if event.sender != self.cfg.owner else None
             if self._reply_pending:
+                if trigger is None:
+                    self._owner_coalesced += 1  # the owner wrote to him again while a reply is on its way
                 if self._pending_trigger is not None:
                     self._pending_trigger = trigger
                 log.info("reply: %s — coalesced into the pending reply", decision.reason)
@@ -973,7 +976,12 @@ class Agent:
                 if trigger and not self._current(trigger):
                     log.info("silent: moved on")
                     return
-                if await self.reply(room_id, trigger) or self._pending_trigger == trigger:
+                self._owner_seen = self._owner_coalesced
+                sent = await self.reply(room_id, trigger)
+                if self._owner_coalesced != self._owner_seen:  # v4.5 review #4: never swallowed by a slow reply
+                    log.info("reply: the owner wrote again while generating — answering it")
+                    continue
+                if sent or self._pending_trigger == trigger:
                     return
                 log.info("reply: a newer message arrived while generating — answering it")
         except Exception:
@@ -1007,6 +1015,7 @@ class Agent:
                 if claude_mode(answered, self.me.name_forms, self.cfg.user_id) == "philosopher":
                     prompt, lines, effort = CLAUDE_BRIEF_PHILOSOPHER, self.wide_history, "high"
                     log.info("claude mode: philosopher")
+            self._owner_seen = self._owner_coalesced  # the owner's messages so far are in this reply's context
             text = await self._compose(prompt, lines=lines, effort=effort)
             if text is not None and memory is not None and self._verbatim(text, memory):
                 log.info("verbatim memory: regenerating once")  # his own words, never the thesis (v4.3)

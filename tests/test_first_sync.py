@@ -406,6 +406,44 @@ def test_an_owner_message_during_an_agent_reply_is_answered_not_swallowed(monkey
     assert agent.client.room_send.await_args.kwargs["content"]["body"] == "відповідь власнику"
 
 
+def test_an_owner_question_during_a_reply_to_the_owner_gets_its_own_pass(monkeypatch):
+    """v4.5 review #4: Ada answers the owner's first message; while she generates, the owner names her again. The
+    first answer is sent — and the second message, coalesced into it, gets its own pass instead of being lost."""
+    _fast(monkeypatch)
+
+    class InterruptingLLM(FakeLLM):
+        def __init__(self, agent_ref):
+            super().__init__()
+            self.agent_ref = agent_ref
+            self.n = 0
+
+        async def generate(self, transcript, system_instruction, max_output_tokens=400, kind="reply"):
+            if kind != "reply":
+                return "день"
+            self.n += 1
+            if self.n == 1:  # mid-generation: the owner asks her by name
+                agent = self.agent_ref[0]
+                await agent.on_message(*_ev("@ich:agora.lan", "Адо, так чи ні?", 1_500, "$o2"))
+                return "перша відповідь"
+            return "так"
+
+    ref = []
+    agent = make_agent(InterruptingLLM(ref))
+    ref.append(agent)
+    agent.started = True
+    agent.rng = lambda: 0.0
+
+    async def run():
+        await agent.on_message(*_ev("@ich:agora.lan", "Адо, як день?", 1_000, "$o1"))
+        while agent._tasks:
+            for t in list(agent._tasks):
+                await t
+
+    asyncio.run(run())
+    bodies = [c.kwargs["content"]["body"] for c in agent.client.room_send.await_args_list]
+    assert bodies == ["перша відповідь", "так"]
+
+
 def _three():
     from agents.roster import Member
     return {**v44_room(), "cee": Member("cee", "@cee:agora.lan", "Сі", ("сі",))}
