@@ -1,3 +1,13 @@
+Version 4.5.2 (2026-10-11)
+---------------------------
+- Claude's answers: a 300 s timeout (was 180 s, which cut his web answers);
+  the direct brief asks for at most 2-3 searches or pages and says the whole
+  internet is his - The Guardian is only his hourly news source, not a limit
+- Claude's log names the tools the CLI offers, the tools a call used and how
+  long it took - names only, never an input or a text
+- ROADMAP: v4.6 Ada and Bruno - curiosity, plans and stories; v4.7 agent
+  settings and Claude's files in the panel; the Lumi bridge moves to v4.8-v4.9
+
 Version 4.5.1 (2026-10-11)
 ---------------------------
 - The cat's sky is asked, not computed (the owner): once a day Gemini with
