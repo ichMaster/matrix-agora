@@ -453,3 +453,15 @@ def test_the_cats_address_is_always_answered_too():
     d = decide(KIT.user_id, text, named, WITH_CAT, r=0.99)
     assert d.reply and d.reason == "next-speaker"
     assert decide(KIT.user_id, text, named, WITH_CAT, r=0.99, wave=99).reason == "wave-limit"
+
+
+def test_a_message_naming_only_the_cat_has_no_r2_candidate():
+    """v4.5 review #3: named, the cat always speaks; R2 picking an unnamed candidate too made two answers, one of
+    them dropped by R3 — usually Claude's slow one."""
+    from agents.turns import next_speaker
+    assert next_speaker("$e", ME.user_id, "а кіт що скаже?", WITH_CAT) is None
+    for m in WITH_CAT.values():
+        if m.mode == "ranked" and m.user_id != ME.user_id:
+            assert decide(ME.user_id, "а кіт що скаже?", m, WITH_CAT).reason == "not-next-speaker"
+    assert decide(ME.user_id, "а кіт що скаже?", KIT, WITH_CAT, eid="$k").reply          # he answers himself
+    assert next_speaker("$e", ME.user_id, "думка", WITH_CAT) is not None                    # unnamed: as before

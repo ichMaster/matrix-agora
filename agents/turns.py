@@ -108,9 +108,13 @@ def owner_repliers(event_id: str, text: str, roster: Mapping[str, Member], k: in
 
 def next_speaker(event_id: str, sender_id: str, text: str, roster: Mapping[str, Member]) -> str | None:
     """R2 — the one candidate to follow an agent message: among the members it names (ranked or mention-only),
-    otherwise among the ranked members — never its sender; top by `rank`."""
+    otherwise among the ranked members — never its sender; top by `rank`. A message that names only an ambient
+    member (the cat) has no candidate: he answers it himself (v4.5 review #3 — two answers, one dropped by R3)."""
     others = [m for m in roster.values() if m.user_id != sender_id]
-    by_name = [m for m in named(text, others) if m.mode in ("ranked", "mention-only")]
+    called = named(text, others)
+    by_name = [m for m in called if m.mode in ("ranked", "mention-only")]
+    if not by_name and any(m.mode == "ambient" for m in called):
+        return None
     pool = by_name or [m for m in others if m.mode == "ranked"]
     return rank(event_id, pool)[0] if pool else None
 
