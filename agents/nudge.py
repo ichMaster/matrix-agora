@@ -56,16 +56,17 @@ def in_hours(hour: int, hours: tuple[int, int]) -> bool:
 
 
 def nudge_due(now_ms: int, local_now: datetime, last_room_ms: int | None, last_nudge_ms: int | None,
-              nudges_today: int, idle_ms: int, per_day: int, hours: tuple[int, int]) -> bool:
+              nudges_today: int, idle_ms: int, per_day: int, hours: tuple[int, int], gap_ms: int | None = None) -> bool:
     """All of: daytime (`hours`, local), under the day's cap, the room quiet for `idle_ms` (its last message, purrs
-    included — an empty room counts as quiet), and the last attempt at least `idle_ms` ago."""
+    included — an empty room counts as quiet), and the last attempt at least `gap_ms` ago (`idle_ms` when not given:
+    the cat; Claude's news has its own hourly gap and a short quiet — v4.5 review #6)."""
     if not in_hours(local_now.hour, hours):
         return False
     if nudges_today >= per_day:
         return False
     if last_room_ms is not None and now_ms - last_room_ms < idle_ms:
         return False
-    return last_nudge_ms is None or now_ms - last_nudge_ms >= idle_ms
+    return last_nudge_ms is None or now_ms - last_nudge_ms >= (idle_ms if gap_ms is None else gap_ms)
 
 
 def nudge_kind(day: str, n: int) -> str:

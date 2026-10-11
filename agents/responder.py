@@ -23,6 +23,7 @@ class Turn:
     max_tokens: int
     kind: str = "reply"
     effort: str | None = None     # v4.5: a higher reasoning effort for an engine that has one (Claude the philosopher)
+    toolset: str | None = None    # v4.5: "news" — Claude's news call, with the Guardian's tools only
 
 
 @dataclass(frozen=True)

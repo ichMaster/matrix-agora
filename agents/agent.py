@@ -54,6 +54,8 @@ from agents.claude_sdk import (
     write_status,
 )
 from agents.config import AgentConfig, load_config
+from agents.guardian import KEY_VAR as GUARDIAN_KEY_VAR
+from agents.guardian import Guardian
 from agents.life import current_chapter, life_section, next_chapter
 from agents.llm import GeminiClient
 from agents.logic import (
@@ -157,6 +159,10 @@ class Agent:
             check_startup(os.environ)
             scrub(os.environ)
             self.llm = llm  # no Gemini client: Claude's container has no Gemini key
+            # v4.5: the Guardian's key stays in this process — out of the CLI's environment, never in a prompt
+            news_key = os.environ.pop(GUARDIAN_KEY_VAR, "").strip()
+            if cfg.can("news") and not news_key:
+                log.warning("news off: %s is not set", GUARDIAN_KEY_VAR)
             self.responder = ClaudeSdkResponder(
                 model=os.environ.get("CLAUDE_MODEL", "opus"),
                 max_output_tokens=int(os.environ.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS", "0")),  # 0: no cap
@@ -164,7 +170,8 @@ class Agent:
                 status_file=cfg.memory_file.parent / f"{cfg.localpart}.ratelimit.json",
                 usage_sink=self.record_sdk_usage, clock=lambda: self.clock(),
                 timeout_s=float(os.environ.get("CLAUDE_TIMEOUT_S", "180")),
-                workspace=os.environ.get("CLAUDE_WORKSPACE", "/workspace"))  # v4.5: his own folder, the web
+                workspace=os.environ.get("CLAUDE_WORKSPACE", "/workspace"),  # v4.5: his own folder, the web
+                news_source=Guardian(news_key) if cfg.can("news") and news_key else None)
         else:
             self.llm = llm or GeminiClient(sink=self.record_usage)
             self.responder = responder_for(cfg.engine, self.llm)  # the reply engine seam (v4.1)
@@ -197,12 +204,15 @@ class Agent:
             if self.nudge_idle_ms < self.bot_window_ms:  # the silence must empty the wave window
                 log.warning("CAT_NUDGE_IDLE_S below BOT_WINDOW_S — using %d s", self.bot_window_ms // 1000)
                 self.nudge_idle_ms = self.bot_window_ms
-        # v4.5 — Claude's news: the same rule with his own settings (read only by an agent with `news`)
-        self.news_idle_ms, self.news_per_day, self.news_hours = 0, 0, (0, 0)
+        # v4.5 — Claude's news (read only by an agent with `news`): every CLAUDE_NEWS_EVERY_S, once the room has been
+        # quiet for CLAUDE_NEWS_IDLE_S — never less than the wave window (the owner, 2026-10-11: every hour, not
+        # after an hour of silence; review #6)
+        self.news_idle_ms, self.news_every_ms, self.news_per_day, self.news_hours = 0, 0, 0, (0, 0)
         if cfg.can("news"):
             self.news_hours = parse_hours(os.environ.get("CLAUDE_NEWS_HOURS", "09-01"))
-            self.news_per_day = int(os.environ.get("CLAUDE_NEWS_PER_DAY", "6"))
-            self.news_idle_ms = max(int(float(os.environ.get("CLAUDE_NEWS_IDLE_S", "3600")) * 1000),
+            self.news_per_day = int(os.environ.get("CLAUDE_NEWS_PER_DAY", "24"))
+            self.news_every_ms = int(float(os.environ.get("CLAUDE_NEWS_EVERY_S", "3600")) * 1000)
+            self.news_idle_ms = max(int(float(os.environ.get("CLAUDE_NEWS_IDLE_S", "300")) * 1000),
                                     self.bot_window_ms)
         self.timeline: list[tuple[str, int, str]] = []  # (name, server_ts_ms, event_id), parallel to history
         self.last_owner: tuple[str, str] | None = None  # (event_id, text) of the owner's latest message
@@ -1050,11 +1060,11 @@ class Agent:
             await self.client.room_typing(room_id, False)
 
     async def _compose(self, prompt: str, max_words: int | None = None, lines: list | None = None,
-                       effort: str | None = None) -> str | None:
+                       effort: str | None = None, toolset: str | None = None) -> str | None:
         """One model call → the line as it would be sent, or None (logged): never half a sentence, never another's
         words, PASS honoured, the creature's word cap applied (`max_words` overrides it: a telegram's joke)."""
         reply = await self.responder.respond(Turn(list(self.history if lines is None else lines), prompt,
-                                                  self.reply_max_tokens, "reply", effort))
+                                                  self.reply_max_tokens, "reply", effort, toolset))
         if reply is None:
             return None  # already logged
         text = reply.text
@@ -1140,7 +1150,7 @@ class Agent:
         marks = [int(self.timeline[-1][1])] if self.timeline else []
         last_room_ms = max([*marks, *([self.started_ms] if self.started_ms is not None else [])], default=None)
         if not nudge_due(now_ms, now, last_room_ms, state.last_ms, state.count, self.news_idle_ms,
-                         self.news_per_day, self.news_hours):
+                         self.news_per_day, self.news_hours, gap_ms=self.news_every_ms):
             return False
         self._nudging = True
         try:
@@ -1162,7 +1172,7 @@ class Agent:
         room_id = self.cfg.room_id
         try:
             await self.client.room_typing(room_id, True)
-            text = await self._compose(CLAUDE_NEWS_BRIEF)
+            text = await self._compose(CLAUDE_NEWS_BRIEF, toolset="news")
             if text is None:
                 log.info("news silent")
                 return False

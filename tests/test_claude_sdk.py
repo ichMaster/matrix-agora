@@ -578,12 +578,13 @@ def news_agent(monkeypatch, tmp_path, reply="Свіжа новина про ве
     return agent
 
 
-def test_after_a_quiet_hour_claude_brings_news_with_the_news_brief(monkeypatch, tmp_path):
+def test_claude_brings_news_with_the_news_brief_and_the_guardians_tools(monkeypatch, tmp_path):
     from agents.logic import CLAUDE_NEWS_BRIEF
     agent = news_agent(monkeypatch, tmp_path)
     assert asyncio.run(agent.maybe_news()) is True
     turn = agent.responder.turns[0]
     assert turn.instruction == CLAUDE_NEWS_BRIEF and turn.lines == [("Ich", "говорили про зорі")]
+    assert turn.toolset == "news" and "The Guardian" in CLAUDE_NEWS_BRIEF
     assert "https://example.com/a" in agent.client.room_send.await_args.kwargs["content"]["body"]
     state = json.loads(agent.news_file.read_text())
     assert state["count"] == 1 and set(state) == {"last_ms", "day", "count", "sent_ms"}       # no text
@@ -614,3 +615,71 @@ def test_a_pass_or_the_room_speaking_meanwhile_sends_nothing(monkeypatch, tmp_pa
     agent2.responder = Interrupting("Новина: https://example.com/b")
     assert asyncio.run(agent2.maybe_news()) is False
     agent2.client.room_send.assert_not_awaited()
+
+
+def test_news_every_hour_after_a_short_quiet_not_after_an_hour_of_silence(monkeypatch, tmp_path):
+    """v4.5 review #6 (the owner, 2026-10-11): every hour — the cat's 20-minute nudges kept the room from ever being
+    silent for an hour. A short quiet (≥ the wave window) is enough; the hour is the gap between attempts."""
+    agent = news_agent(monkeypatch, tmp_path)
+    now = agent.clock()
+    agent.timeline = [("Кіт", now - agent.bot_window_ms - 1, "$cat", False)]               # the cat spoke 10 min ago
+    assert asyncio.run(agent.maybe_news()) is True
+    agent.clock = lambda: now + 3_600_000 - 1                                                 # within the hour
+    agent.timeline = [("Ich", now - 3_600_000, "$o", False)]
+    assert asyncio.run(agent.maybe_news()) is False
+    agent.clock = lambda: now + 3_600_000                                                     # the next hour
+    agent.responder.text = "Інша новина: https://www.theguardian.com/b"
+    assert asyncio.run(agent.maybe_news()) is True
+
+
+def test_the_news_settings_and_the_guardian_key_kept_out_of_the_clis_environment(monkeypatch):
+    from dataclasses import replace
+
+    from agents.agent import Agent
+    from agents.roster import TYPES
+    cfg = replace(claude_agent(monkeypatch).cfg, capabilities=TYPES["assistant"])
+    monkeypatch.setenv("GUARDIAN_API_KEY", "g-key")
+    monkeypatch.setenv("CLAUDE_NEWS_IDLE_S", "60")                                            # below the window
+    agent = Agent(cfg)
+    assert "GUARDIAN_API_KEY" not in os.environ                                                # never inherited
+    assert agent.responder.news_source is not None
+    assert agent.news_every_ms == 3_600_000 and agent.news_per_day == 24
+    assert agent.news_idle_ms == agent.bot_window_ms                                          # never below it
+    no_key = Agent(cfg)
+    assert no_key.responder.news_source is None                                               # news off, logged
+
+
+def test_a_news_call_gets_only_the_guardian_and_the_guard_refuses_the_rest():
+    from agents import guardian
+    from agents.claude_sdk import tool_denial
+    o = sdk_options("B", model="opus", max_output_tokens=0, config_dir="/tmp/claude", workspace="/workspace",
+                    toolset="news", news_server="SERVER")
+    assert o["tools"] == [] and o["allowed_tools"] == guardian.TOOLS
+    assert o["mcp_servers"] == {"guardian": "SERVER"} and o["cwd"] == "/tmp/claude"
+    assert tool_denial("mcp__guardian__search", {"query": "x"}, "/workspace", guardian.TOOLS) is None
+    for tool in ("WebSearch", "WebFetch", "Read", "Write", "mcp__other__x"):
+        assert tool_denial(tool, {}, "/workspace", guardian.TOOLS) is not None
+    guard = o["hooks"]["PreToolUse"][0]
+    assert asyncio.run(guard({"tool_name": "WebSearch", "tool_input": {"query": "x"}}, "t", None))
+
+
+@pytest.mark.parametrize("toolset,tools,servers,blocked", [
+    ("news", ["mcp__guardian__search", "mcp__guardian__read"], [{"name": "guardian", "status": "connected"}], None),
+    ("news", ["mcp__guardian__search", "WebSearch"], [{"name": "guardian"}], "tools=WebSearch"),
+    ("news", ["mcp__guardian__search"], [{"name": "guardian"}, {"name": "drive"}], "mcp_servers=2"),
+    (None, ["Read"], [{"name": "guardian"}], "mcp_servers=1"),                  # never outside the news call
+])
+def test_the_init_check_on_a_news_call(tmp_path, toolset, tools, servers, blocked):
+    sdk = FakeSDK(SystemMessage(subtype="init", data={"apiKeySource": "none", "tools": tools, "mcp_servers": servers}),
+                  result())
+    r, _ = responder(tmp_path, sdk)
+    r.workspace = "/workspace"
+    r.news_source = object()
+    run(r, Turn([("Ich", "x")], "B", 200, toolset=toolset))
+    assert r.blocked == blocked
+
+
+def test_a_news_call_without_a_source_makes_no_call(tmp_path):
+    sdk = FakeSDK(result())
+    r, _ = responder(tmp_path, sdk)
+    assert run(r, Turn([("Ich", "x")], "B", 200, toolset="news")) is None and sdk.calls == []

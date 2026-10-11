@@ -27,6 +27,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from agents import guardian
 from agents.logic import build_transcript
 from agents.responder import Reply, Turn
 
@@ -116,10 +117,11 @@ def _private_host(url: str) -> bool:
     return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified
 
 
-def tool_denial(tool: str, tool_input: Mapping[str, Any], workspace: str) -> str | None:
-    """Why a tool call is refused, or None: only the allowed tools; files only inside his folder; the web only at
-    public addresses (pure — the PreToolUse guard's decision)."""
-    if tool not in ALLOWED_TOOLS:
+def tool_denial(tool: str, tool_input: Mapping[str, Any], workspace: str,
+                allowed: list[str] = ALLOWED_TOOLS) -> str | None:
+    """Why a tool call is refused, or None: only the allowed tools (the news call: the Guardian's only); files only
+    inside his folder; the web only at public addresses (pure — the PreToolUse guard's decision)."""
+    if tool not in allowed:
         return f"{tool} is not available"
     if tool in FILE_TOOLS:
         for key in ("file_path", "path", "notebook_path"):
@@ -136,12 +138,12 @@ def tool_denial(tool: str, tool_input: Mapping[str, Any], workspace: str) -> str
     return None
 
 
-def tool_guard(workspace: str):
+def tool_guard(workspace: str, allowed: list[str] = ALLOWED_TOOLS):
     """The PreToolUse hook: our own, deterministic check of every tool call before it runs."""
     async def guard(hook_input: Mapping[str, Any], tool_use_id: str | None, context: Any) -> dict[str, Any]:
         tool = str(hook_input.get("tool_name", ""))
         try:
-            why = tool_denial(tool, hook_input.get("tool_input") or {}, workspace)
+            why = tool_denial(tool, hook_input.get("tool_input") or {}, workspace, allowed)
         except Exception as exc:  # noqa: BLE001 — fail closed (v4.5 review #1)
             why = f"the guard could not judge it ({type(exc).__name__})"
         if why is None:
@@ -153,7 +155,8 @@ def tool_guard(workspace: str):
 
 
 def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config_dir: str,
-                effort: str | None = None, workspace: str | None = None) -> dict[str, Any]:
+                effort: str | None = None, workspace: str | None = None, toolset: str | None = None,
+                news_server: Any = None) -> dict[str, Any]:
     """The `ClaudeAgentOptions` keyword arguments: a chat turn, nothing else. He thinks (adaptive — the owner,
     2026-10-11); `max_output_tokens` 0 means no cap (the owner), so thinking never eats the reply (v4.4 review #1);
     the brief keeps replies chat-sized."""
@@ -189,6 +192,10 @@ def sdk_options(brief: str | None, *, model: str, max_output_tokens: int, config
         opts["effort"] = effort
     if workspace:
         opts["hooks"] = {"PreToolUse": [tool_guard(workspace)]}
+    if toolset == "news":  # the owner, 2026-10-11: the news comes from The Guardian, and only from it
+        opts.update({"tools": [], "allowed_tools": list(guardian.TOOLS), "mcp_servers": {guardian.SERVER: news_server},
+                     "max_turns": MAX_TURNS, "cwd": config_dir,
+                     "hooks": {"PreToolUse": [tool_guard(workspace or config_dir, guardian.TOOLS)]}})
     return opts
 
 
@@ -234,6 +241,15 @@ def _default_options():
     return ClaudeAgentOptions
 
 
+def guardian_server(source: guardian.Guardian):
+    """The in-process SDK server `guardian` with `search` and `read` (the key stays in this process)."""
+    from claude_agent_sdk import create_sdk_mcp_server, tool
+
+    search = tool("search", "The newest Guardian articles for an English query.", guardian.SEARCH_SCHEMA)(source.search)
+    read = tool("read", "One Guardian article's text by its result id.", guardian.READ_SCHEMA)(source.read)
+    return create_sdk_mcp_server(name=guardian.SERVER, version="1.0.0", tools=[search, read])
+
+
 def _hook_matchers(hooks: Mapping[str, list]) -> dict[str, list]:
     from claude_agent_sdk import HookMatcher
 
@@ -246,7 +262,8 @@ class ClaudeSdkResponder:
     def __init__(self, *, model: str, max_output_tokens: int, config_dir: str, status_file: Path,
                  usage_sink: Callable[[str, str, dict | None, bool, float | None], None],
                  clock: Callable[[], int] = lambda: int(time.time() * 1000), query=None, options=None,
-                 timeout_s: float = 90.0, workspace: str | None = None) -> None:
+                 timeout_s: float = 90.0, workspace: str | None = None,
+                 news_source: guardian.Guardian | None = None) -> None:
         self.model = model
         self.max_output_tokens = max_output_tokens
         self.config_dir = config_dir
@@ -257,6 +274,8 @@ class ClaudeSdkResponder:
         self._options = options
         self.timeout_s = timeout_s
         self.workspace = workspace
+        self.news_source = news_source  # the Guardian's tools (agents/guardian.py), for the news call only
+        self._news_server: Any = None
         self.status = ClaudeStatus(model=model)
         self.blocked: str | None = None
 
@@ -284,17 +303,20 @@ class ClaudeSdkResponder:
         self.status.updated_at = self._now()
         write_status(self.status_file, self.status)
 
-    def _check_init(self, data: Mapping[str, Any]) -> None:
-        """Layer 5: the CLI must say no API key is in use and no tool or MCP server is available."""
+    def _check_init(self, data: Mapping[str, Any], toolset: str | None = None) -> None:
+        """Layer 5: the CLI must say no API key is in use and only his tools are available — no MCP server but the
+        Guardian's own, in-process, on a news call."""
         source = data.get("apiKeySource") if isinstance(data, Mapping) else None
         tools = data.get("tools") if isinstance(data, Mapping) else None
         servers = data.get("mcp_servers") if isinstance(data, Mapping) else None
+        allowed = guardian.TOOLS if toolset == "news" else ALLOWED_TOOLS if self.workspace else []
+        names = [s.get("name") if isinstance(s, Mapping) else s for s in (servers or [])]
         if source != "none":
             self.blocked = f"apiKeySource={source!r}"
-        elif extra := [t for t in (tools or []) if t not in (ALLOWED_TOOLS if self.workspace else [])]:
+        elif extra := [t for t in (tools or []) if t not in allowed]:
             self.blocked = f"tools={', '.join(map(str, extra))}"
-        elif servers:
-            self.blocked = f"mcp_servers={len(servers)}"
+        elif [n for n in names if not (toolset == "news" and n == guardian.SERVER)]:
+            self.blocked = f"mcp_servers={len(names)}"
         if self.blocked:
             log.error("claude blocked: %s — no reply until restarted", self.blocked)
             self.status.auth = f"blocked: {self.blocked}"
@@ -337,9 +359,15 @@ class ClaudeSdkResponder:
         if self.muted():
             log.info("silent: claude rate limit (until %s)", self.status.muted_until)
             return None
+        if turn.toolset == "news" and self.news_source is None:
+            log.info("silent: no news source")
+            return None
+        if turn.toolset == "news" and self._news_server is None:  # built once; a fake SDK in tests takes the source
+            self._news_server = guardian_server(self.news_source) if self._options is None else self.news_source
         query = self._query or _default_query()
         kwargs = sdk_options(turn.instruction, model=self.model, max_output_tokens=self.max_output_tokens,
-                             config_dir=self.config_dir, effort=turn.effort, workspace=self.workspace)
+                             config_dir=self.config_dir, effort=turn.effort, workspace=self.workspace,
+                             toolset=turn.toolset, news_server=self._news_server)
         if self._options is None and "hooks" in kwargs:  # the real SDK wants its HookMatcher
             kwargs["hooks"] = _hook_matchers(kwargs["hooks"])
         options = (self._options or _default_options())(**kwargs)
@@ -354,7 +382,7 @@ class ClaudeSdkResponder:
                     kind = type(msg).__name__
                     if getattr(msg, "subtype", None) == "init" and isinstance(getattr(msg, "data", None), Mapping):
                         saw_init = True  # any SystemMessage subclass: matched by its subtype, not its class name
-                        self._check_init(msg.data)
+                        self._check_init(msg.data, turn.toolset)
                         if self.blocked:
                             break  # stop reading a stream that is not on the subscription
                     elif kind == "RateLimitEvent":
