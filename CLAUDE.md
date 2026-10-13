@@ -27,7 +27,7 @@ Latest release: v4.7.0 (phase v4.7 — agent settings and Claude's files in the 
 | `v2` Persona & memory | v2.1 canons + session memory · v2.2 a life story, world awareness, plans (with mutations) + day memories + the hourly today block | code + canon files |
 | `v3` Operations | v3.1 token accounting · v3.2 agent images + CI/CD + server deployment · v3.3 the panel: viewing (read-only) · v3.4 the panel: control | code |
 | `v4` Ensemble | v4.1 roster, agent types, N-agent turn-taking · v4.2 the cat in the room · v4.3 the cat's past life and initiative · v4.4 Claude on the subscription, when asked · v4.5 Claude the philosopher · v4.6 Ada and Bruno: curiosity, plans, stories · v4.7 agent settings and Claude's files in the panel |
-| `v5` Voice (planned) | v5.1 the agents hear voice messages · v5.2 the agents answer in voice | code |
+| `v5` Voice (planned) | v5.1 Hermes: voice digests for the owner · v5.2 the agents hear voice messages · v5.3 the agents answer in voice | code + canon files |
 | `v6` Лілі (planned) | v6.1 the Lumi bridge, when named · v6.2 Лілі under the full rules | code + canon files | code + canon files |
 
 ## Layout and commands

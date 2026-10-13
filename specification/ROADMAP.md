@@ -1,6 +1,6 @@
 # Roadmap — matrix-agora
 
-Seven self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (the agents hear voice messages, then answer in voice) → **v6** Лілі (the Lumi bridge: when named, then under the full rules). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Seven self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice) → **v6** Лілі (the Lumi bridge: when named, then under the full rules). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
 **Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v6→6), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
@@ -36,8 +36,9 @@ are generated. Other further work (the deferred backlog items in the code-review
 | v4.5 | Claude the philosopher | ✅ completed | `v4.5.0` (2026-10-11) |
 | v4.6 | Ada and Bruno: curiosity, plans and stories | ✅ completed | `v4.6.0` (2026-10-11) |
 | v4.7 | Agent settings and Claude's files in the panel | ✅ completed | `v4.7.0` (2026-10-11) |
-| v5.1 | The agents hear voice messages | ⏳ planned | — |
-| v5.2 | The agents answer in voice | ⏳ planned | — |
+| v5.1 | Hermes: voice digests for the owner | ⏳ planned | — |
+| v5.2 | The agents hear voice messages | ⏳ planned | — |
+| v5.3 | The agents answer in voice | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
 
@@ -631,85 +632,141 @@ Design: a settings schema in code is the single list of what may be tuned; the p
 - Claude's files: listing, reading, download, upload and delete inside the folder; `..`, absolute paths and a symlink out refused; the size caps;
 - static UI checks for the views and the confirmations.
 
-## v5 — Voice: the agents hear and speak
+## v5 — Voice: Hermes, the agents hear and speak
 
-The owner, 2026-10-13: voice messages in the room. Element on the iPhone and the Mac already sends them — an audio
-file in the homeserver's media store, an `m.audio` event marked as voice (MSC3245) — but every agent answers text
-only and logs a voice message as `ignored`. v5 lets the agents understand the owner's voice and, later, answer in a
-voice of their own. Gemini takes audio directly (speech to text) and speaks (text to speech), on the same
+The owner, 2026-10-13: voice messages in the room, and a standing digest of the room sent to him as a voice
+message. Element on the iPhone and the Mac already sends voice messages: each is an audio file in the homeserver's
+media store and an `m.audio` event marked as voice (MSC3245). Every agent, though, answers text only and logs a
+voice message as `ignored`. Gemini takes audio directly (speech to text) and speaks (text to speech), on the same
 `GEMINI_API_KEY`; Claude stays on his subscription, in text. Depends on: v4 (the roster, the turn rules, the panel's
 settings under their service).
 
-### v5.1 — The agents hear voice messages
+**Hermes** (the owner's choice of name and character) is a new member of the room. He is the messenger god and the
+patron of the agora itself: quick, witty, a little vain, telling the day like news from Olympus, gently ironic about
+the mortals. He speaks Ukrainian. He is openly not human, but **he never takes part in the room's talk**: he is not
+in the turn-taking, he says nothing of his own in Agora, and the personas never discuss what he is. He reads the room
+word for word from the homeserver and speaks to the owner in a private room.
+
+### v5.1 — Hermes: voice digests for the owner
 
 **Status:** ⏳ planned.
 
-**Goal:** a voice message from the owner is understood by the agents as if it were typed, and the room sees the
-words.
+**Goal:** a standing digest of the room — what was talked about, who thought what, where they argued, what they
+asked the owner, what was settled — reaches the owner as a voice message in Hermes's colour, on a schedule and on
+request.
 
-Design: **one transcript, shared by every agent.** Each agent transcribing on its own would cost N calls and could
-yield N slightly different texts, and the turn rules depend on the text (mentions, R1); so one member transcribes and
-posts the transcript into the room, and the agents answer **the transcript** as the owner's message.
+**Owner decisions** (2026-10-13):
+- **One member does the digests:** Hermes, a new non-persona member with a character. He also transcribes in v5.2.
+- **The digest goes to the owner's private room with Hermes**, not into Agora. It carries the text too, for reading.
+- **Hermes stays silent in Agora.** He answers the owner's questions about the history in the private room.
 
-**Owner decisions** (proposed, to confirm when the phase starts):
-- **Who transcribes:** a small `scribe` member with its own Matrix account, no persona and no turns. It only
-  transcribes and posts «🎙 Ich: …» as a reply to the voice event. The alternative is one of the existing agents
-  holding a `transcribe` capability; a persona doing it would break the human-belief immersion, and the cat or
-  Claude would blur their characters.
-- **Which voices:** only the owner's. Agents' voice messages, from v5.2, carry their own text.
-- **The settings:** the transcription model and a length cap as service settings of the Matrix chat (v4.7).
+Still to confirm when the phase starts:
+- the schedule (proposed: 08:00 for the night and 21:00 for the day, only after at least N new messages);
+- the digest's length (about two to three minutes of listening);
+- Hermes's voice.
 
 **Tasks:**
-- **The filter:** `RoomMessageAudio` from the owner in `ROOM_ID` reaches the scribe only. Every other agent still
-  logs it as `ignored`.
-- **The scribe:**
-  - it downloads the audio through the authenticated media API, within a size cap;
-  - one Gemini call transcribes it (usage kind `stt`);
-  - it posts the transcript as `m.text`, replying to the voice event;
-  - a failed or empty transcript is logged and stays silent;
-  - no audio and no transcript text ever reaches a log.
-- **The agents:** a scribe's transcript of an owner's voice event counts as the owner's message: R1, the fallback,
-  the session, the journal and the memories. The event id is the transcript's.
-- **The panel:** the scribe's card (log, tokens) and its settings under the Matrix chat.
-- **ARCHITECTURE:** the filter, the transcript rule in the turn-taking, the `scribe` type, the env and the state.
+- **The member:**
+  - a `herald` type: no turns, its own capabilities `digest` (and `transcribe` from v5.2);
+  - `agents/hermes.toml` and his canon `agents/canon/hermes.md`, with his character and how he tells a digest;
+  - his Matrix account (owner step) and the private room with the owner, created and invited by Hermes;
+  - the allowlist: in Agora he only reads; in the private room he answers only the owner.
+- **The digest:**
+  - on schedule or on the owner's «підсумок», collect the Agora messages since the last digest, word for word,
+    through the room's `/messages`;
+  - one Gemini call writes the digest in his character (usage kind `digest_voice`);
+  - text to speech (usage kind `tts`): one Gemini voice, encoded to OGG/Opus (ffmpeg in the image), uploaded to the
+    media store, sent as `m.audio` with the voice flag, with the text in `body`;
+  - the last digest's point is kept in `state/hermes.digest.json`; no digest when nothing new;
+  - no message text, audio or digest text ever reaches a log.
+- **Questions about the history:** in the private room the owner asks («що Бруно казав учора про подорож?»).
+  Hermes searches the room's words and answers in text, or in voice when asked in voice (v5.2).
+- **The panel:** Hermes's card (log, tokens) and his settings: the schedule, the minimum of new messages, the
+  length, the voice. They are service settings of the Matrix chat (v4.7).
+- **ARCHITECTURE:** the `herald` type, the private room and its allowlist, the digest flow, the state file and the
+  env.
+- **The human-belief rule:** Hermes's prompts and digests name Ada and Bruno by name and never call them a model, a
+  bot or an agent (the outgoing guard applies).
 
 **DoD:**
-- (Manual, owner) A voice message from the iPhone gets its transcript in the room within seconds, and the agents
-  answer it as they would the typed words, with the same turn rules, named or not.
-- (Manual, owner) A voice message the scribe cannot hear (silence, noise) gets no transcript and no answer, never an
-  error in the room.
+- (Manual, owner) At the scheduled hour, with enough new talk, a voice message from Hermes arrives in the private
+  room. It is a digest of the room in his character, with its text.
+- (Manual, owner) «підсумок» in the private room brings one at once. With nothing new he says so, briefly.
+- (Manual, owner) Asked about something said yesterday, he answers from the room's words.
+- (Manual, owner) In Agora he says nothing.
 
 **Tests:** unit:
-- the filter for audio (scribe only);
-- the download within its cap;
+- the schedule and the minimum of new messages;
+- the collection since the last digest;
+- the digest and TTS calls with Gemini mocked;
+- the encode and upload with the media API mocked;
+- the `m.audio` content (the voice flag, the duration, the body);
+- the private room's allowlist;
+- silence in Agora;
+- no text in the logs;
+- the human-belief guard on digests.
+
+### v5.2 — The agents hear voice messages
+
+**Status:** ⏳ planned.
+
+**Goal:** a voice message from the owner in Agora is understood by the agents as if it were typed, and the room
+sees the words.
+
+Design: **one transcript, shared by every agent.** If each agent transcribed for itself, there would be N calls and
+possibly N slightly different texts, and the turn rules depend on the text (mentions, R1). So Hermes transcribes and
+posts «🎙 Ich: …» as a reply to the voice event. The agents answer **the owner**: in their history the line reads
+«Ich: …», R1 and the fallback apply as to a typed message, and their replies relate to the owner's voice event.
+
+**Tasks:**
+- **The filter:** `RoomMessageAudio` from the owner in `ROOM_ID` reaches Hermes only. Every other agent still logs it
+  as `ignored`.
+- **Hermes:**
+  - he downloads the audio through the authenticated media API, within a size cap;
+  - one Gemini call transcribes it (usage kind `stt`);
+  - he posts the transcript as `m.text`, replying to the voice event;
+  - a failed or empty transcript is logged and stays silent;
+  - no audio or transcript text ever reaches a log.
+- **The agents:**
+  - a Hermes transcript of an owner's voice event counts as the owner's message: R1, the fallback, the session, the
+    journal and the memories;
+  - the event id is the transcript's, and the line's speaker is Ich.
+- **ARCHITECTURE:** the audio filter, the transcript rule in the turn-taking, the `transcribe` capability.
+
+**DoD:**
+- (Manual, owner) A voice message from the iPhone gets its transcript within seconds, and the agents answer it as
+  they would the typed words, with the same turn rules, named or not.
+- (Manual, owner) A voice message that cannot be heard (silence, noise) gets no transcript and no answer, never an
+  error.
+
+**Tests:** unit:
+- the audio filter (Hermes only);
+- the download cap;
 - the transcript post and its reply relation;
-- the agents' treatment of a transcript as the owner's message (R1, the fallback);
+- a transcript as the owner's message (R1, the fallback, the speaker «Ich»);
 - a failed transcription stays silent;
 - no text in the logs.
 
-Gemini and nio are mocked.
-
-### v5.2 — The agents answer in voice
+### v5.3 — The agents answer in voice
 
 **Status:** ⏳ planned.
 
-**Goal:** an agent sometimes answers in its own voice: to a voice message in voice, and otherwise when a setting
-says so.
+**Goal:** an agent answers in its own voice: to the owner's voice message in voice, otherwise by a setting. It uses
+Hermes's text-to-speech pipeline from v5.1.
 
 **Owner decisions** (proposed, to confirm when the phase starts):
-- **When:** an answer to the owner's voice message comes in voice; any other reply comes in voice by a per-agent
-  share (`VOICE_REPLY_P`, 0 by default).
+- **When:**
+  - an answer to the owner's voice message comes in voice;
+  - any other reply comes in voice by a per-agent share (`VOICE_REPLY_P`, 0 by default).
 - **Voices:** one Gemini voice per agent, set in its TOML (Ада, Бруно and Кіт each their own); the cat may purr
   aloud.
-- **Claude:** stays in text, since he runs on the subscription and voicing him would be a Gemini call on his words.
+- **Claude:** stays in text, since he runs on the subscription.
 
 **Tasks:**
-- **Text to speech:** a Gemini call (usage kind `tts`); the audio is encoded to OGG/Opus (ffmpeg in the agent
-  image), uploaded to the media store, and sent as `m.audio` with the voice flag. The text stays in `body`, so the
-  room, the journal and the turn rules see the same words.
-- **The checks:** the reply's checks run on the text before it is voiced (PASS, the persona guard, the word cap).
-  The audio is never logged, and the temp files are removed.
-- **The panel:** each agent's voice and `VOICE_REPLY_P` as settings (v4.7), and the TTS rows in the token table.
+- **The voiced reply:** the reply's checks run on the text first (PASS, the persona guard, the word cap); then the
+  shared TTS pipeline; then `m.audio` with the voice flag, related to the owner's voice event, with the text in
+  `body`.
+- **The panel:** each agent's voice and `VOICE_REPLY_P` as settings, and the TTS rows in the token table.
 
 **DoD:**
 - (Manual, owner) Spoken to in voice, Ada, Bruno and Кіт answer in their own distinct voices.
@@ -718,9 +775,8 @@ says so.
 
 **Tests:** unit:
 - when to voice;
-- the TTS call and the upload with the media API mocked;
-- the `m.audio` content (the voice flag, the duration, the body text);
-- the checks run before voicing;
+- the checks before voicing;
+- the `m.audio` content and its relation;
 - no audio in the logs.
 
 ## v6 — Лілі: the Lumi bridge
