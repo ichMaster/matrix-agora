@@ -1,6 +1,6 @@
 # Feature: more agents in the room
 
-> **Status: draft, 2026-10-10.** A proposal, not a contract. It is the design of ROADMAP **v4** (phases v4.1–v4.9 — v4.6 (Ada and Bruno: curiosity, plans, stories) and v4.7 (agent settings and Claude's files in the panel) were added by the owner on 2026-10-11 and are designed in ROADMAP — matching [Phasing](#phasing)); CLAUDE.md and ARCHITECTURE.md do not link here yet. The ARCHITECTURE and VISION changes listed in [VISION and contract changes](#vision-and-contract-changes) land with those phases.
+> **Status: draft, 2026-10-10.** A proposal, not a contract. It is the design of ROADMAP **v4** (phases v4.1–v4.7 and v6.1–v6.2 — v4.6 (Ada and Bruno: curiosity, plans, stories) and v4.7 (agent settings and Claude's files in the panel) were added by the owner on 2026-10-11, and the Lumi bridge moved to v6 (after v5, voice) on 2026-10-13; all are designed in ROADMAP — matching [Phasing](#phasing)); CLAUDE.md and ARCHITECTURE.md do not link here yet. The ARCHITECTURE and VISION changes listed in [VISION and contract changes](#vision-and-contract-changes) land with those phases.
 >
 > Sources: the research pass of 2026-10-10 read the matrix-agora code, the Lumi repo (`~/development/lumi`), the Claude Agent SDK docs, and computed the cat's chart with two independent ephemeris engines. Facts from outside this repo are cited. Anything not verified is marked **unverified**.
 
@@ -287,8 +287,8 @@ It is static text, written once from the verified chart above. Lumi's file lists
 - **Inherent to prod.** The room and the owner's private chat share one history; she will mention one in the other. That is accepted.
 
 **Two versions:**
-1. **v4.8 — only when named.** `[turns] mode = "mention-only"`: the bridge calls her only when a message names her («Лілі», «Стхіро»…), forwarding the chat updates since her last turn.
-2. **v4.9 — under the full rules.** `mode = "ranked"`, weight 1: she takes part in R1 and R2 like Ada and Bruno, and each time she is chosen, the bridge forwards the chat updates since her last turn.
+1. **v6.1 — only when named.** `[turns] mode = "mention-only"`: the bridge calls her only when a message names her («Лілі», «Стхіро»…), forwarding the chat updates since her last turn.
+2. **v6.2 — under the full rules.** `mode = "ranked"`, weight 1: she takes part in R1 and R2 like Ada and Bruno, and each time she is chosen, the bridge forwards the chat updates since her last turn.
 
 **Prerequisites on Lumi's side** (owner, 2026-10-10: wait):
 - **Lumi ≥ v2.5.** Prod runs her server, and Telegram, her thoughts and the scheduler run inside it, so nothing of the owner's prod is lost. Today prod runs v2.1.1, which has no server.
@@ -438,7 +438,7 @@ def rank(event_id: str, members: Iterable[Member]) -> list[str]:
 - **`ambient`** (the cat): never one of the `OWNER_REPLIERS` and never an R2 candidate. He alone also **initiates** (see the cat's nudges).
   - Instead it reacts to any allowlisted message when `hash(event_id, "cat") < CAT_REACT_P`.
   - Named by the owner, it always answers (R1). Named by an agent, its `p` is raised, not forced, because his name «Кіт» is also an ordinary word.
-- **`mention-only`**: answers only when named. Claude starts here in v4.4 and Лілі in v4.8; both become `ranked` a phase later (v4.5, v4.9).
+- **`mention-only`**: answers only when named. Claude starts here in v4.4 and Лілі in v6.1; both become `ranked` a phase later (v4.5, v6.2).
 
 **R1. The owner's message.**
 - **Names agents:** exactly the named ones answer.
@@ -532,7 +532,7 @@ def rank(event_id: str, members: Iterable[Member]) -> list[str]:
 - **Mitigations:**
   1. **Prompts that say less.** Claude's brief names the members without stating what they are and forbids discussing their nature. A matching rule is asked of Lumi on her side.
   2. **A deterministic outgoing guard for Claude and the cat.** A pure function drops a reply (or regenerates it once) when a persona's name form and a banned term share a sentence. It is testable and costs nothing.
-  3. **Lumi cannot be filtered after the call** (history divergence). In v4.8 she speaks only when named; from v4.9 the risk is accepted, unless her side gains a rule or a retract call.
+  3. **Lumi cannot be filtered after the call** (history divergence). In v6.1 she speaks only when named; from v6.2 the risk is accepted, unless her side gains a rule or a retract call.
 - **The cat's own self-concept.** He knows he is an artificial cat, and his canon may say «штучний» ("artificial"). That is allowed once the scan is scoped to personas.
 
 ### 9. Token accounting
@@ -619,7 +619,7 @@ def rank(event_id: str, members: Iterable[Member]) -> list[str]:
 
 ## Walkthrough
 
-Five agents with the recommended settings, as from v4.9. All weights are 1; Claude and Лілі are `ranked` (before v4.5 and v4.9 they answer only when named).
+Five agents with the recommended settings, as from v6.2. All weights are 1; Claude and Лілі are `ranked` (before v4.5 and v6.2 they answer only when named).
 
 | Time | Event | Decision |
 |---|---|---|
@@ -667,7 +667,7 @@ The owner sees 3 messages and a purr. On a day like 2026-10-10 the cat could ins
 
 ## Phasing
 
-Each step is shippable on its own; they are ROADMAP v4.1–v4.9 (less v4.6 and v4.7, added later), and the last item is Lumi's own work:
+Each step is shippable on its own; they are ROADMAP v4.1–v4.5 and v6.1–v6.2 (v4.6, v4.7 and v5 were added later), and the last item is Lumi's own work:
 1. **Foundation** (v4.1), with Ada and Bruno only:
    - the roster, types and capabilities, the `Responder` interface;
    - turn-taking R1–R4 with ranking and the new `MAX_BOT_TURNS`;
@@ -686,8 +686,8 @@ Each step is shippable on its own; they are ROADMAP v4.1–v4.9 (less v4.6 and v
    - the second image target, `ClaudeSdkResponder`, the no-API-key enforcement, the rate-limit breaker;
    - usage line v2 and its panel card.
 5. **Claude the philosopher** (v4.5): `ranked`, weight 1, the philosopher mode and the wider window.
-6. **Лілі, when named** (v4.8): the bridge to Lumi's prod brain. Prerequisite: Lumi ≥ v2.5 (v2.6 puts her on 192.168.1.197).
-7. **Лілі under the full rules** (v4.9): `ranked`, weight 1.
+6. **Лілі, when named** (v6.1): the bridge to Lumi's prod brain. Prerequisite: Lumi ≥ v2.5 (v2.6 puts her on 192.168.1.197).
+7. **Лілі under the full rules** (v6.2): `ranked`, weight 1.
 8. **Lumi's own improvements** (in the Lumi repo, optional): the voice register, speaker, silence, retract or observe.
 
 ## Tests
@@ -778,7 +778,7 @@ Ranked by how much each answer changes the design. Items 6–8 (v4.1) were decid
    - wait for Lumi ≥ v2.5; her server moves to 192.168.1.197 in v2.6;
    - the bridge is our agent with all the rules, forwarding chat updates, and she decides whom to answer;
    - weight 1;
-   - v4.8 only when named, v4.9 under the full rules;
+   - v6.1 only when named, v6.2 under the full rules;
    - reactive only, never the initiator.
 4. **The cat**: decided (2026-10-10):
    - his name is «Кіт»;

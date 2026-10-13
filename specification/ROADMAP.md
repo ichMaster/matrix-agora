@@ -1,8 +1,8 @@
 # Roadmap — matrix-agora
 
-Five self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat, Claude and the Lumi bridge, each in two steps). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Seven self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (the agents hear voice messages, then answer in voice) → **v6** Лілі (the Lumi bridge: when named, then under the full rules). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
-**Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v4→4), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
+**Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v6→6), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
 Many DoD items need the live homeserver, Element or a real Gemini key — those are **Manual (owner)** checks: the owner performs or confirms them, and only then do they count as passed. Everything automated runs with `matrix-nio` and `google-genai` mocked and the clock injected (no network, no paid calls).
 
@@ -36,8 +36,10 @@ are generated. Other further work (the deferred backlog items in the code-review
 | v4.5 | Claude the philosopher | ✅ completed | `v4.5.0` (2026-10-11) |
 | v4.6 | Ada and Bruno: curiosity, plans and stories | ✅ completed | `v4.6.0` (2026-10-11) |
 | v4.7 | Agent settings and Claude's files in the panel | ✅ completed | `v4.7.0` (2026-10-11) |
-| v4.8 | The Lumi bridge: Лілі when named | ⏳ planned | — |
-| v4.9 | Лілі under the full rules | ⏳ planned | — |
+| v5.1 | The agents hear voice messages | ⏳ planned | — |
+| v5.2 | The agents answer in voice | ⏳ planned | — |
+| v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
+| v6.2 | Лілі under the full rules | ⏳ planned | — |
 
 ## v0 — Platform: homeserver, server deploy, client, accounts, echo bot
 
@@ -399,9 +401,9 @@ Builds on the reviewed v3.3 panel. The docker socket now performs actions, so ev
 
 **Tests:** unit — the supervisor's actions against a fake docker client (start, stop, timeout → kill; container creation on first start), forget gating, confirmation gating, every mutating route `POST`-only and token-gated; the routes via FastAPI's `TestClient`. No real docker and no network in tests.
 
-## v4 — Ensemble: agent types, N-agent turn-taking, the cat, Claude, the panel's settings and the Lumi bridge
+## v4 — Ensemble: agent types, N-agent turn-taking, the cat, Claude and the panel's settings
 
-The room grows from two Gemini personas to five agents of four types (from v4.6 the personas grow curious; from v4.7 the agents' settings move into the panel): Ada and Bruno (`persona`), the cat Кіт (`creature`), Claude (`assistant`) and Lumi (`bridge`). The three newcomers are openly non-human; Ada and Bruno keep believing they are human. One owner message must stay a few short replies, not two pages. The full design, its decisions and its open questions live in [features/more-agents.md](features/more-agents.md) (draft); each phase lands its ARCHITECTURE and VISION changes and the tests that pin them, per that document's contract list. Depends on: v3 (the images, compose, the panel).
+The room grows from two Gemini personas to four agents of three types (from v4.6 the personas grow curious; from v4.7 the agents' settings move into the panel): Ada and Bruno (`persona`), the cat Кіт (`creature`) and Claude (`assistant`); Lumi (`bridge`) joins in v6. The newcomers are openly non-human; Ada and Bruno keep believing they are human. One owner message must stay a few short replies, not two pages. The full design, its decisions and its open questions live in [features/more-agents.md](features/more-agents.md) (draft); each phase lands its ARCHITECTURE and VISION changes and the tests that pin them, per that document's contract list. Depends on: v3 (the images, compose, the panel).
 
 ### v4.1 — Roster, agent types and N-agent turn-taking
 
@@ -629,13 +631,111 @@ Design: a settings schema in code is the single list of what may be tuned; the p
 - Claude's files: listing, reading, download, upload and delete inside the folder; `..`, absolute paths and a symlink out refused; the size caps;
 - static UI checks for the views and the confirmations.
 
-### v4.8 — The Lumi bridge: Лілі when named
+## v5 — Voice: the agents hear and speak
+
+The owner, 2026-10-13: voice messages in the room. Element on the iPhone and the Mac already sends them — an audio
+file in the homeserver's media store, an `m.audio` event marked as voice (MSC3245) — but every agent answers text
+only and logs a voice message as `ignored`. v5 lets the agents understand the owner's voice and, later, answer in a
+voice of their own. Gemini takes audio directly (speech to text) and speaks (text to speech), on the same
+`GEMINI_API_KEY`; Claude stays on his subscription, in text. Depends on: v4 (the roster, the turn rules, the panel's
+settings under their service).
+
+### v5.1 — The agents hear voice messages
+
+**Status:** ⏳ planned.
+
+**Goal:** a voice message from the owner is understood by the agents as if it were typed, and the room sees the
+words.
+
+Design: **one transcript, shared by every agent.** Each agent transcribing on its own would cost N calls and could
+yield N slightly different texts, and the turn rules depend on the text (mentions, R1); so one member transcribes and
+posts the transcript into the room, and the agents answer **the transcript** as the owner's message.
+
+**Owner decisions** (proposed, to confirm when the phase starts):
+- **Who transcribes:** a small `scribe` member with its own Matrix account, no persona and no turns. It only
+  transcribes and posts «🎙 Ich: …» as a reply to the voice event. The alternative is one of the existing agents
+  holding a `transcribe` capability; a persona doing it would break the human-belief immersion, and the cat or
+  Claude would blur their characters.
+- **Which voices:** only the owner's. Agents' voice messages, from v5.2, carry their own text.
+- **The settings:** the transcription model and a length cap as service settings of the Matrix chat (v4.7).
+
+**Tasks:**
+- **The filter:** `RoomMessageAudio` from the owner in `ROOM_ID` reaches the scribe only. Every other agent still
+  logs it as `ignored`.
+- **The scribe:**
+  - it downloads the audio through the authenticated media API, within a size cap;
+  - one Gemini call transcribes it (usage kind `stt`);
+  - it posts the transcript as `m.text`, replying to the voice event;
+  - a failed or empty transcript is logged and stays silent;
+  - no audio and no transcript text ever reaches a log.
+- **The agents:** a scribe's transcript of an owner's voice event counts as the owner's message: R1, the fallback,
+  the session, the journal and the memories. The event id is the transcript's.
+- **The panel:** the scribe's card (log, tokens) and its settings under the Matrix chat.
+- **ARCHITECTURE:** the filter, the transcript rule in the turn-taking, the `scribe` type, the env and the state.
+
+**DoD:**
+- (Manual, owner) A voice message from the iPhone gets its transcript in the room within seconds, and the agents
+  answer it as they would the typed words, with the same turn rules, named or not.
+- (Manual, owner) A voice message the scribe cannot hear (silence, noise) gets no transcript and no answer, never an
+  error in the room.
+
+**Tests:** unit:
+- the filter for audio (scribe only);
+- the download within its cap;
+- the transcript post and its reply relation;
+- the agents' treatment of a transcript as the owner's message (R1, the fallback);
+- a failed transcription stays silent;
+- no text in the logs.
+
+Gemini and nio are mocked.
+
+### v5.2 — The agents answer in voice
+
+**Status:** ⏳ planned.
+
+**Goal:** an agent sometimes answers in its own voice: to a voice message in voice, and otherwise when a setting
+says so.
+
+**Owner decisions** (proposed, to confirm when the phase starts):
+- **When:** an answer to the owner's voice message comes in voice; any other reply comes in voice by a per-agent
+  share (`VOICE_REPLY_P`, 0 by default).
+- **Voices:** one Gemini voice per agent, set in its TOML (Ада, Бруно and Кіт each their own); the cat may purr
+  aloud.
+- **Claude:** stays in text, since he runs on the subscription and voicing him would be a Gemini call on his words.
+
+**Tasks:**
+- **Text to speech:** a Gemini call (usage kind `tts`); the audio is encoded to OGG/Opus (ffmpeg in the agent
+  image), uploaded to the media store, and sent as `m.audio` with the voice flag. The text stays in `body`, so the
+  room, the journal and the turn rules see the same words.
+- **The checks:** the reply's checks run on the text before it is voiced (PASS, the persona guard, the word cap).
+  The audio is never logged, and the temp files are removed.
+- **The panel:** each agent's voice and `VOICE_REPLY_P` as settings (v4.7), and the TTS rows in the token table.
+
+**DoD:**
+- (Manual, owner) Spoken to in voice, Ada, Bruno and Кіт answer in their own distinct voices.
+- (Manual, owner) The text of a voiced reply reads the same in the room.
+- (Manual, owner) Claude stays in text.
+
+**Tests:** unit:
+- when to voice;
+- the TTS call and the upload with the media API mocked;
+- the `m.audio` content (the voice flag, the duration, the body text);
+- the checks run before voicing;
+- no audio in the logs.
+
+## v6 — Лілі: the Lumi bridge
+
+Лілі — Lumi's prod brain — joins the room through a bridge that is one of our agents: first when named, then under
+the full turn rules. Moved from v4.8–v4.9 by the owner on 2026-10-13, after the voice of v5. Depends on: Lumi ≥ v2.5
+in prod (v2.6 puts her server on 192.168.1.197), and v4.
+
+### v6.1 — The Lumi bridge: Лілі when named
 
 **Status:** ⏳ planned.
 
 **Goal:** Лілі — Lumi's prod brain — answers in the room when someone names her, through a bridge that is one of our agents.
 
-Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails the room and forwards the changes to Лілі's server; she answers, deciding herself whom and what. It behaves like our agents, with all the room's rules. Лілі is reactive: she only answers and never starts a conversation. **Depends on Lumi ≥ v2.5** (prod runs her server with Telegram, thoughts and the scheduler inside it); from Lumi v2.6 her server runs on 192.168.1.197 itself. Depends on: v4.1 (v4.2 for the scoped human-belief rule).
+Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails the room and forwards the changes to Лілі's server; she answers, deciding herself whom and what. It behaves like our agents, with all the room's rules. Лілі is reactive: she only answers and never starts a conversation. **Depends on Lumi ≥ v2.5** (prod runs her server with Telegram, thoughts and the scheduler inside it); from Lumi v2.6 her server runs on 192.168.1.197 itself. Depends on: v4.1 (v4.2 for the scoped human-belief rule), v4.6 review #4 (the `ask` addressee filter: a mention-only bridge is not asked by the personas).
 
 **Tasks:**
 - The `bridge` type; `agents/lumi.toml` (shown as «Лілі»; name forms for both «Лілі» and «Стхіра»; `engine = "lumi-http"`; `[turns] mode = "mention-only"`, weight 1).
@@ -653,13 +753,13 @@ Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails t
 
 **Tests:** unit — the bridge against a fake Lumi server (turn payload with the lines since her last turn, `turn_id`, `409`, `5xx`, timeout, `thinking` never posted, no post-call filtering, no post without a trigger), mention detection for both names, the env-file isolation, `external` usage rows.
 
-### v4.9 — Лілі under the full rules
+### v6.2 — Лілі under the full rules
 
 **Status:** ⏳ planned.
 
 **Goal:** Лілі takes part in the room like Ada and Bruno — chosen by the turn-taking, not only when named.
 
-Design: more-agents.md §Lumi (the bridge), §4. Depends on: v4.8, proven in the room.
+Design: more-agents.md §Lumi (the bridge), §4. Depends on: v6.1, proven in the room.
 
 **Tasks:**
 - `agents/lumi.toml`: `[turns] mode = "ranked"`, weight 1 — she joins R1 (`OWNER_REPLIERS`) and R2 (the next speaker).
