@@ -486,3 +486,15 @@ def test_the_cats_affectionate_names_address_him():
     kit = load_member(Path("agents/kit.toml"))
     for text in ("Котику, як це?", "а котик що скаже?", "Кіте, розкажи"):
         assert mentions(text, kit.name_forms, kit.user_id), text
+
+
+def test_named_by_an_agent_the_cat_reacts_mostly_with_a_purr_and_to_the_owner_in_words():
+    """The owner, 2026-10-13: Ada and Bruno ask him so often that he talked all the time and hardly purred. Named by
+    an agent he still always reacts — a purr by CAT_PURR_P, else words; named by the owner, always words."""
+    agent_named = [decide(ME.user_id, "Коте, а ти що думаєш?", KIT, WITH_CAT, eid=f"$p{i}", purr_p=0.75)
+                   for i in range(3000)]
+    assert all(d.reply for d in agent_named)                                     # always reacts
+    assert 0.72 < sum(d.purr for d in agent_named) / 3000 < 0.78                  # mostly purrs
+    for i in range(200):
+        d = decide(OWNER, "Коте, а ти що думаєш?", KIT, WITH_CAT, eid=f"$o{i}", purr_p=0.75)
+        assert d.reply and not d.purr                                            # the owner gets words
