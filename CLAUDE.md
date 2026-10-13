@@ -18,7 +18,7 @@ Read these before planning work; they are the project's contract with itself.
 
 Proof of concept: a private Matrix room where the owner and two LLM agents ("Ada" and "Bruno", Gemini 2.5 Flash) talk together. So far the repo holds only the specification. The panel is the point of the project: it will grow into an admin panel for simulations and agents like Lili; the chat is the first simulation (VISION §The direction).
 
-Latest release: v4.7.0 (phase v4.7 — agent settings and Claude's files in the panel). Versions v0–v3 are complete. Version v4 (Ensemble) has begun: phases v4.1–v4.7 in ROADMAP (complete); v5 Voice and v6 Лілі (the Lumi bridge) are planned, designed in the draft [specification/features/more-agents.md](specification/features/more-agents.md) (Ukrainian copy: `more-agents-UA.md`).
+Latest release: v4.7.0 (phase v4.7 — agent settings and Claude's files in the panel). Versions v0–v4 are complete (v4 Ensemble: phases v4.1–v4.7); v5 Voice and v6 Лілі (the Lumi bridge) are planned, designed in the draft [specification/features/more-agents.md](specification/features/more-agents.md) (Ukrainian copy: `more-agents-UA.md`).
 
 | Version | Phases | What it delivers |
 |---|---|---|
