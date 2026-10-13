@@ -1,3 +1,15 @@
+Version 4.7.1 (2026-10-13)
+---------------------------
+- The cat less talkative (the owner): named by an agent he still always
+  reacts, but with a purr by CAT_PURR_P (0.75 from the panel) and otherwise
+  in words; named by the owner, always words
+- Claude's weight 0.4 (the owner): about 1 first place in 6 instead of 1 in
+  3, so Ada and Bruno talk more; named, he still always answers
+- ROADMAP: v5 Voice - Hermes's voice digests for the owner every 4 hours
+  (Gemini 3.1 Pro with thinking, Lumi's ElevenLabs, at most 1.5 minutes),
+  then the agents hear voice messages (Lumi's Deepgram) and answer in voice;
+  the Lumi bridge moves to v6
+
 Version 4.7.0 (2026-10-11)
 ---------------------------
 - Phase v4.7 - Agent settings and Claude's files in the panel
