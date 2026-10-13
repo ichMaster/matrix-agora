@@ -7,7 +7,7 @@ name_forms = ["клод", "клода", "клоду", "клодові", "кло�
 
 [turns]
 mode = "ranked"          # v4.5: R1 and R2 may choose him — unasked, he speaks as the philosopher
-weight = 1.0             # the owner's choice (2026-10-11), as designed
+weight = 0.4             # the owner, 2026-10-13: Ada and Bruno talk more (~17 % of first places, was 1.0)
 
 [panel]                  # shown by the panel only — never part of a prompt
 name = "Claude"

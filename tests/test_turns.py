@@ -430,7 +430,7 @@ def test_claude_is_chosen_by_r1_and_r2_like_the_others():
     picks = [tuple(sorted(owner_repliers(f"$o{i}", "як вам вечір?", roster, 2))) for i in range(600)]
     assert all(len(p) == 2 and set(p) <= ranked for p in picks)
     share = sum("claude" in p for p in picks) / len(picks)
-    assert 0.58 < share < 0.75                                   # two of three, weight 1 each
+    assert 0.33 < share < 0.48                                   # weight 0.4 (2026-10-13): in the top two ~40 %
     nexts = {next_speaker(f"$a{i}", roster["ada"].user_id, "думка", roster) for i in range(200)}
     assert nexts == {"bruno", "claude"}                           # never the sender, never the ambient cat
 
@@ -498,3 +498,14 @@ def test_named_by_an_agent_the_cat_reacts_mostly_with_a_purr_and_to_the_owner_in
     for i in range(200):
         d = decide(OWNER, "Коте, а ти що думаєш?", KIT, WITH_CAT, eid=f"$o{i}", purr_p=0.75)
         assert d.reply and not d.purr                                            # the owner gets words
+
+
+def test_claudes_lower_weight_leaves_ada_and_bruno_more_first_places():
+    """The owner, 2026-10-13: «зменш пріоритет Клоду, щоб Ада і Бруно більше говорили» — weight 0.4: about 1 first
+    place in 6 for Claude, the rest shared by Ada and Bruno."""
+    from agents.roster import load_roster
+    from agents.turns import rank
+    ranked = [m for m in load_roster("agora").values() if m.mode == "ranked"]
+    firsts = [rank(f"$w{i}", ranked)[0] for i in range(6000)]
+    assert 0.14 < firsts.count("claude") / 6000 < 0.20
+    assert firsts.count("ada") > 2 * firsts.count("claude") and firsts.count("bruno") > 2 * firsts.count("claude")

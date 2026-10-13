@@ -285,13 +285,14 @@ def test_a_room_has_at_most_one_initiator(tmp_path):
 
 
 def test_claude_is_a_ranked_assistant_who_only_brings_news():
-    """v4.4: Claude as itself — the `assistant` type, the `claude-sdk` engine; v4.5: ranked, weight 1."""
+    """v4.4: Claude as itself — the `assistant` type, the `claude-sdk` engine; v4.5: ranked; weight 0.4 from
+    2026-10-13 (the owner: Ada and Bruno talk more)."""
     from pathlib import Path
 
     from agents.turns import mentions
     claude = load_member(Path("agents/claude.toml"))
     assert (claude.type, claude.engine, claude.mode, claude.name) == ("assistant", "claude-sdk", "ranked", "Клод")
-    assert claude.weight == 1.0
+    assert claude.weight == 0.4  # the owner, 2026-10-13: lower, so Ada and Bruno talk more
     assert claude.capabilities == TYPES["assistant"] == frozenset({"news"})          # v4.5: his news
     assert all(mentions(t, claude.name_forms, claude.user_id) for t in ("Клоде, як ти?", "спитай Клода", "claude?"))
     assert claude.panel == {"name": "Claude", "role": "assistant · Opus · Max subscription", "pronoun": "it"}
