@@ -664,11 +664,16 @@ request.
 
 - **Every 4 hours**, and only after at least N new messages: no empty digest.
 - **The model is `gemini-3.1-pro-preview` with thinking** (Lumi's verified id), not the room's Flash.
-- **The length** is about two to three minutes of listening.
+- **The length follows the talk** (the owner, 2026-10-13): a few lines make a half-minute digest, a lively
+  stretch a longer one, **at most 1.5 minutes** (~1,500 characters; about 1,000 characters a minute of Ukrainian
+  speech).
 - **His voice** is an ElevenLabs voice id the owner gives. Each agent later gets its own (v5.3).
-- **The ElevenLabs quota** is a real cost: a 3-minute digest is ~3,000 characters, and six a day is ~540k a month at
-  most. The minimum of new messages and the turbo model (half the credits) bound it; the panel shows the characters
-  used. The owner confirms the plan covers it.
+- **The cost** (2026-10-13 prices): ElevenLabs turbo through the API is 0.5 credit a character, and Gemini 3.1
+  Pro is $2 / $12 per million tokens (about $0.07 a digest). At about 4 digests a day of about 1.2 minutes on average:
+  - ~145k characters a month, ~72k credits — inside Creator ($22 for 121k), **shared with Lumi's own voice**;
+  - ~$8 a month for Gemini.
+
+  The panel shows the characters used, and a monthly character cap guards the quota.
 
 **Tasks:**
 - **The member:**
@@ -680,7 +685,8 @@ request.
   - on schedule or on the owner's «підсумок», collect the Agora messages since the last digest, word for word,
     through the room's `/messages`;
   - one `gemini-3.1-pro-preview` call, with thinking, writes the digest in his character (usage kind
-    `digest_voice`);
+    `digest_voice`). Its length follows the amount of talk, capped at ~1,500 characters (about 1.5 minutes), and is
+    trimmed to its last full sentence if it overruns;
   - text to speech through ElevenLabs (his voice id, `eleven_turbo_v2_5`; usage kind `tts`, counted in
     characters), encoded to OGG/Opus (ffmpeg in the image), uploaded to the media store, sent as `m.audio` with
     Element's voice-message fields (MSC3245 voice, MSC1767 audio with duration and waveform), with the text in
@@ -692,7 +698,8 @@ request.
 - **Questions about the history:** in the private room the owner asks («що Бруно казав учора про подорож?»).
   Hermes searches the room's words and answers in text, or in voice when asked in voice (v5.2).
 - **The panel:** Hermes's card (log, tokens, the TTS characters) and his settings: the interval (4 h), the minimum
-  of new messages, the length, the voice id. They are service settings of the Matrix chat (v4.7).
+  of new messages, the maximum length (1,500 characters), a monthly character cap, the voice id. They are service
+  settings of the Matrix chat (v4.7).
 - **ARCHITECTURE:** the `herald` type, the private room and its allowlist, the digest flow, the state file and the
   env.
 - **The human-belief rule:** Hermes's prompts and digests name Ada and Bruno by name and never call them a model, a
@@ -700,7 +707,7 @@ request.
 
 **DoD:**
 - (Manual, owner) Every 4 hours, with enough new talk, a voice message from Hermes arrives in the private room. It
-  is a digest of the room in his character and his voice, with its text.
+  is a digest of the room in his character and his voice, with its text, at most about 1.5 minutes long.
 - (Manual, owner) «підсумок» in the private room brings one at once. With nothing new he says so, briefly.
 - (Manual, owner) Asked about something said yesterday, he answers from the room's words.
 - (Manual, owner) In Agora he says nothing.
