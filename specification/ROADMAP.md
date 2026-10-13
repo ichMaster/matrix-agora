@@ -637,8 +637,10 @@ Design: a settings schema in code is the single list of what may be tuned; the p
 The owner, 2026-10-13: voice messages in the room, and a standing digest of the room sent to him as a voice
 message. Element on the iPhone and the Mac already sends voice messages: each is an audio file in the homeserver's
 media store and an `m.audio` event marked as voice (MSC3245). Every agent, though, answers text only and logs a
-voice message as `ignored`. Gemini takes audio directly (speech to text) and speaks (text to speech), on the same
-`GEMINI_API_KEY`; Claude stays on his subscription, in text. Depends on: v4 (the roster, the turn rules, the panel's
+voice message as `ignored`. **The speech services are Lumi's** (the owner, 2026-10-13), with the keys already
+there: **ElevenLabs** for text to speech (`eleven_turbo_v2_5`, multilingual, one voice id per member) and
+**Deepgram** for speech to text (`nova-2`, `uk`). They are ported from Lumi's `voice/tts.py` and `voice/stt.py`.
+Claude stays on his subscription, in text. Depends on: v4 (the roster, the turn rules, the panel's
 settings under their service).
 
 **Hermes** (the owner's choice of name and character) is a new member of the room. He is the messenger god and the
@@ -660,10 +662,13 @@ request.
 - **The digest goes to the owner's private room with Hermes**, not into Agora. It carries the text too, for reading.
 - **Hermes stays silent in Agora.** He answers the owner's questions about the history in the private room.
 
-Still to confirm when the phase starts:
-- the schedule (proposed: 08:00 for the night and 21:00 for the day, only after at least N new messages);
-- the digest's length (about two to three minutes of listening);
-- Hermes's voice.
+- **Every 4 hours**, and only after at least N new messages: no empty digest.
+- **The model is `gemini-3.1-pro-preview` with thinking** (Lumi's verified id), not the room's Flash.
+- **The length** is about two to three minutes of listening.
+- **His voice** is an ElevenLabs voice id the owner gives. Each agent later gets its own (v5.3).
+- **The ElevenLabs quota** is a real cost: a 3-minute digest is ~3,000 characters, and six a day is ~540k a month at
+  most. The minimum of new messages and the turbo model (half the credits) bound it; the panel shows the characters
+  used. The owner confirms the plan covers it.
 
 **Tasks:**
 - **The member:**
@@ -674,23 +679,28 @@ Still to confirm when the phase starts:
 - **The digest:**
   - on schedule or on the owner's «підсумок», collect the Agora messages since the last digest, word for word,
     through the room's `/messages`;
-  - one Gemini call writes the digest in his character (usage kind `digest_voice`);
-  - text to speech (usage kind `tts`): one Gemini voice, encoded to OGG/Opus (ffmpeg in the image), uploaded to the
-    media store, sent as `m.audio` with the voice flag, with the text in `body`;
+  - one `gemini-3.1-pro-preview` call, with thinking, writes the digest in his character (usage kind
+    `digest_voice`);
+  - text to speech through ElevenLabs (his voice id, `eleven_turbo_v2_5`; usage kind `tts`, counted in
+    characters), encoded to OGG/Opus (ffmpeg in the image), uploaded to the media store, sent as `m.audio` with
+    Element's voice-message fields (MSC3245 voice, MSC1767 audio with duration and waveform), with the text in
+    `body`;
+  - the keys: `ELEVENLABS_API_KEY` (and from v5.2 `DEEPGRAM_API_KEY`) are copied from Lumi into Hermes's own env
+    file, never printed or logged;
   - the last digest's point is kept in `state/hermes.digest.json`; no digest when nothing new;
   - no message text, audio or digest text ever reaches a log.
 - **Questions about the history:** in the private room the owner asks («що Бруно казав учора про подорож?»).
   Hermes searches the room's words and answers in text, or in voice when asked in voice (v5.2).
-- **The panel:** Hermes's card (log, tokens) and his settings: the schedule, the minimum of new messages, the
-  length, the voice. They are service settings of the Matrix chat (v4.7).
+- **The panel:** Hermes's card (log, tokens, the TTS characters) and his settings: the interval (4 h), the minimum
+  of new messages, the length, the voice id. They are service settings of the Matrix chat (v4.7).
 - **ARCHITECTURE:** the `herald` type, the private room and its allowlist, the digest flow, the state file and the
   env.
 - **The human-belief rule:** Hermes's prompts and digests name Ada and Bruno by name and never call them a model, a
   bot or an agent (the outgoing guard applies).
 
 **DoD:**
-- (Manual, owner) At the scheduled hour, with enough new talk, a voice message from Hermes arrives in the private
-  room. It is a digest of the room in his character, with its text.
+- (Manual, owner) Every 4 hours, with enough new talk, a voice message from Hermes arrives in the private room. It
+  is a digest of the room in his character and his voice, with its text.
 - (Manual, owner) «підсумок» in the private room brings one at once. With nothing new he says so, briefly.
 - (Manual, owner) Asked about something said yesterday, he answers from the room's words.
 - (Manual, owner) In Agora he says nothing.
@@ -723,7 +733,7 @@ posts «🎙 Ich: …» as a reply to the voice event. The agents answer **the o
   as `ignored`.
 - **Hermes:**
   - he downloads the audio through the authenticated media API, within a size cap;
-  - one Gemini call transcribes it (usage kind `stt`);
+  - Deepgram transcribes it (`nova-2`, `uk`; usage kind `stt`);
   - he posts the transcript as `m.text`, replying to the voice event;
   - a failed or empty transcript is logged and stays silent;
   - no audio or transcript text ever reaches a log.
@@ -758,8 +768,8 @@ Hermes's text-to-speech pipeline from v5.1.
 - **When:**
   - an answer to the owner's voice message comes in voice;
   - any other reply comes in voice by a per-agent share (`VOICE_REPLY_P`, 0 by default).
-- **Voices:** one Gemini voice per agent, set in its TOML (Ада, Бруно and Кіт each their own); the cat may purr
-  aloud.
+- **Voices:** one ElevenLabs voice per agent, given by the owner and set in its TOML (Ада, Бруно and Кіт each
+  their own); the cat may purr aloud.
 - **Claude:** stays in text, since he runs on the subscription.
 
 **Tasks:**
