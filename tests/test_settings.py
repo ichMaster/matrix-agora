@@ -207,5 +207,9 @@ def test_hermes_settings_are_the_chats_and_only_his():
     assert validate("HERMES_VOICE_ID", "AbCdEf0123456789") == ("AbCdEf0123456789", None)
     assert validate("HERMES_VOICE_ID", "") == ("", None)
     assert validate("HERMES_VOICE_ID", "../x")[0] is None and validate("HERMES_VOICE_ID", "a b")[0] is None
+    assert validate("HERMES_VOICE_ID", "abc123XYZ")[0] is None      # review #6: what the voice would refuse
+    from agents.settings import VOICE_ID_RE
+    from agents.voice import VOICE_ID_RE as voice_re
+    assert voice_re is VOICE_ID_RE                                   # one pattern, shared
     assert validate("HERMES_DIGEST_HOURS", "09-23") == ("09-23", None)
     assert validate("HERMES_DIGEST_EVERY_S", "600")[0] is None  # at least an hour

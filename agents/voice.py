@@ -11,11 +11,12 @@ from __future__ import annotations
 import array
 import asyncio
 import logging
-import re
 import sys
 import urllib.parse
 
 import aiohttp
+
+from agents.settings import VOICE_ID_RE  # one pattern for the panel and the voice (review #6)
 
 log = logging.getLogger("agent.voice")
 
@@ -24,7 +25,6 @@ TTS_MODEL = "eleven_turbo_v2_5"  # the owner's choice: multilingual, fast; 0.5 c
 RATE = 24_000                    # pcm_24000: signed 16-bit little-endian, mono
 VOICE_SETTINGS = {"stability": 0.5, "similarity_boost": 0.75, "style": 0.4}  # Lumi's defaults
 TIMEOUT_S = 60
-VOICE_ID_RE = re.compile(r"^[A-Za-z0-9]{10,40}$")
 WAVEFORM_POINTS = 100
 WAVEFORM_MAX = 1024              # Element draws 0..1024
 FFMPEG = ("ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le", "-ar", str(RATE), "-ac", "1",

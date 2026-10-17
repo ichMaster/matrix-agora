@@ -34,7 +34,8 @@ log = logging.getLogger("agent.settings")
 
 OVERRIDES_FILE = "settings.json"
 HOURS_RE = re.compile(r"^([01]?\d|2[0-3])-([01]?\d|2[0-4])$")
-ID_RE = re.compile(r"^[A-Za-z0-9]{0,40}$")
+VOICE_ID_RE = re.compile(r"^[A-Za-z0-9]{10,40}$")  # an ElevenLabs voice id — the panel and the voice share it (#6)
+ID_RE = re.compile(rf"^(?:{VOICE_ID_RE.pattern[1:-1]})?$")  # the `id` kind: such an id, or empty (none)
 CHAT = "matrix-chat"  # the simulation kind of Agora (simulations.toml)
 
 
@@ -149,7 +150,7 @@ def validate(name: str, raw: object) -> tuple[str | None, str | None]:
     if setting.kind == "choice":
         return (text, None) if text in setting.choices else (None, "not one of " + ", ".join(setting.choices))
     if setting.kind == "id":  # v5.1: an ElevenLabs voice id — letters and digits; empty means none
-        return (text, None) if ID_RE.match(text) else (None, "not letters and digits (up to 40)")
+        return (text, None) if ID_RE.match(text) else (None, "not 10–40 letters and digits (or empty)")
     if not text or len(text) > 120 or any(ch in text for ch in "\n\r\x00"):
         return None, "empty or too long"
     return text, None

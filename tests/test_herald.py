@@ -248,6 +248,7 @@ def test_the_schedule_keeps_to_the_hours_and_the_minimum(tmp_path, monkeypatch):
     (None, "VoiceId0123456789", {}, "text: no ELEVENLABS_API_KEY"),
     (FakeTTS(ok=False), "VoiceId0123456789", {}, "text: tts failed"),
     ("default", "VoiceId0123456789", {"HERMES_TTS_MONTHLY_CHARS": "10"}, "text: monthly cap"),
+    ("default", "abc123XYZ", {}, "text: voice id malformed"),            # review #6: no request, no tts line
 ])
 def test_without_a_voice_the_digest_goes_out_as_text(tmp_path, monkeypatch, caplog, tts, voice, env, why):
     caplog.set_level(logging.INFO)
@@ -256,6 +257,8 @@ def test_without_a_voice_the_digest_goes_out_as_text(tmp_path, monkeypatch, capl
     asyncio.run(h.digest(asked=True))
     sent = private(client)
     assert [c["msgtype"] for c in sent] == ["m.text"] and why in caplog.text
+    if "malformed" in why:
+        assert not (tmp_path / "hermes.usage.jsonl").exists() or "tts" not in (tmp_path / "hermes.usage.jsonl").read_text()
 
 
 def test_the_monthly_cap_counts_what_was_already_spoken(tmp_path, monkeypatch):

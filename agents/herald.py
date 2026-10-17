@@ -67,6 +67,7 @@ from agents.logic import should_join_invite, without_outing
 from agents.matrix import join_room, login
 from agents.nudge import parse_hours
 from agents.roster import Member, load_roster, speakers
+from agents.settings import VOICE_ID_RE
 from agents.usage import month_chars, parse_lines, tts_usage_line, usage_line
 from agents.voice import TTS_MODEL, ElevenLabsTTS, duration_ms, encode_opus, voice_content, waveform
 from agents.world import local_now
@@ -133,7 +134,9 @@ class Herald:
             self.tts: ElevenLabsTTS | None = tts
         else:
             self.tts = ElevenLabsTTS(key, self.voice_id) if key and self.voice_id else None
-        self.text_only = "no voice id" if not self.voice_id else None if self.tts else f"no {KEY_VAR}"
+        self.text_only = ("no voice id" if not self.voice_id
+                          else "voice id malformed" if not VOICE_ID_RE.match(self.voice_id)  # review #6: no tts line
+                          else None if self.tts else f"no {KEY_VAR}")
         if self.text_only:
             log.warning("voice off: %s — the digests go out as text", self.text_only)
         self.clock = lambda: int(time.time() * 1000)  # injectable
