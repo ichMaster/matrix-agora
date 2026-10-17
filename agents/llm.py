@@ -18,6 +18,8 @@ from google.genai import types
 log = logging.getLogger("agent.llm")
 
 MODEL = "gemini-2.5-flash"  # the default; `GEMINI_MODEL` overrides it (v4.7: tunable in the panel)
+DIGEST_MODEL = "gemini-3.1-pro-preview"  # v5.1: Hermes's digests and answers — Lumi's verified id, with thinking
+THINK_MAX_TOKENS = 16384  # the cap counts the thinking too: room for it and a ~1,500-character digest
 
 UsageSink = Callable[[str, str, Any, bool], None]  # (kind, model, usage_metadata | None, ok)
 
@@ -28,11 +30,11 @@ class GeminiClient:
         self._sink = sink
         self.model = os.environ.get("GEMINI_MODEL", MODEL).strip() or MODEL
 
-    def _report(self, kind: str, usage: Any, ok: bool) -> None:
+    def _report(self, kind: str, usage: Any, ok: bool, model: str | None = None) -> None:
         if self._sink is None:
             return
         try:
-            self._sink(kind, self.model, usage, ok)
+            self._sink(kind, model or self.model, usage, ok)
         except Exception:
             log.exception("usage accounting failed")
 
@@ -90,6 +92,44 @@ class GeminiClient:
         text = (resp.text or "").strip() if resp is not None else ""
         self._report(kind, getattr(resp, "usage_metadata", None), bool(text))
         return text or None
+
+
+    async def think(self, contents: str, system_instruction: str, model: str = DIGEST_MODEL,
+                    max_output_tokens: int = THINK_MAX_TOKENS, kind: str = "digest_voice") -> str | None:
+        """v5.1 — one call with thinking on (a Pro model rejects a zero budget): the answer is the non-thought text;
+        the usage line names this call's model. None on failure or an empty answer (logged by type)."""
+        try:
+            resp = await self._client.aio.models.generate_content(
+                model=model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    max_output_tokens=max_output_tokens,
+                    thinking_config=types.ThinkingConfig(include_thoughts=False),
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001 — any provider failure means silence
+            log.error("gemini think failed: %s", type(exc).__name__)
+            self._report(kind, None, False, model)
+            return None
+        text = answer_text(resp)
+        self._report(kind, getattr(resp, "usage_metadata", None), bool(text), model)
+        if not text:
+            log.error("gemini think returned no answer (finish %s)", finish_of(resp))
+            return None
+        return text
+
+
+def answer_text(resp: Any) -> str:
+    """The answer of a thinking call: the first candidate's text parts that are not thoughts (the SDK's `.text`
+    when the response carries no parts)."""
+    candidates = getattr(resp, "candidates", None) or []
+    parts = getattr(getattr(candidates[0], "content", None), "parts", None) if candidates else None
+    if not parts:
+        return (getattr(resp, "text", None) or "").strip() if resp is not None else ""
+    return "".join(p.text for p in parts if isinstance(getattr(p, "text", None), str)
+                   and not getattr(p, "thought", False)).strip()
 
 
 def finish_of(resp: Any) -> str:
