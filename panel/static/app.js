@@ -4,7 +4,9 @@
 "use strict";
 
 const POLL_MS = 10000;  // one tick for everything — the dashboard, an open log, an open agent's memory (owner)
-const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood", "digest_voice", "ask", "tts"];
+const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood", "sky", "digest_voice", "ask", "tts"];
+// review #11: a kind not listed above still shows, after the listed ones — a tab's rows always add up to its total
+function kindsOf(byKind) { return [...KIND_ORDER.filter((k) => byKind[k]), ...Object.keys(byKind).filter((k) => !KIND_ORDER.includes(k)).sort()]; }
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
               ["today", "Today"], ["mood", "Mood"], ["tokens", "Tokens"], ["files", "Files"], ["settings", "Settings"]];
 // v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
@@ -659,7 +661,7 @@ function agentTabHtml(a, mem, tab) {
       <div><div class="bars">${u.per_day.map((d) => `<div><span class="a" style="height:${((d.agents[a.name] || 0) / max) * 100}%"></span></div>`).join("")}</div>
       <div class="bar-labels">${u.per_day.map((d) => `<span class="${d.day === u.until ? "today" : ""}">${esc(shortDay(d.day))}</span>`).join("")}</div></div></div>
       <table class="table" style="min-width:0"><thead><tr><th>kind</th><th class="r">calls</th><th class="r">input</th><th class="r">output</th>${chars ? `<th class="r">chars</th>` : ""}${u.priced ? `<th class="r">cost $</th>` : ""}</tr></thead>
-      <tbody>${KIND_ORDER.filter((k) => byKind[k]).map((k) => `<tr><td class="kind">${k}</td><td class="r">${fmtInt(byKind[k].calls)}</td><td class="r">${fmtInt(byKind[k].input)}</td><td class="r">${fmtInt(byKind[k].output)}</td>${cc(byKind[k].characters)}${u.priced ? `<td class="r">${byKind[k].cost == null ? "—" : byKind[k].cost.toFixed(4)}</td>` : ""}</tr>`).join("")}</tbody>
+      <tbody>${kindsOf(byKind).map((k) => `<tr><td class="kind">${k}</td><td class="r">${fmtInt(byKind[k].calls)}</td><td class="r">${fmtInt(byKind[k].input)}</td><td class="r">${fmtInt(byKind[k].output)}</td>${cc(byKind[k].characters)}${u.priced ? `<td class="r">${byKind[k].cost == null ? "—" : byKind[k].cost.toFixed(4)}</td>` : ""}</tr>`).join("")}</tbody>
       <tfoot><tr class="grand"><td>total</td><td class="r">${fmtInt(t.calls)}</td><td class="r">${fmtInt(t.input)}</td><td class="r">${fmtInt(t.output)}</td>${cc(t.characters)}${u.priced ? `<td class="r">${t.cost == null ? "—" : fmtUsd(t.cost)}</td>` : ""}</tr></tfoot></table>`;
   }
   return "";

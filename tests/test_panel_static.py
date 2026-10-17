@@ -235,3 +235,14 @@ def test_hermes_card_shows_his_digests_and_the_tables_their_characters():
     assert 'pill("warn", "monthly cap reached")' in js
     assert 'const chars = u.rows.some((r) => r.characters);' in js and '<th class="r">chars</th>' in js
     assert '"digest_voice", "ask", "tts"]' in js
+
+
+
+def test_every_kind_shows_in_the_agents_tokens_tab():
+    """Review #11: the cat's `sky` calls were in his total but not in his rows; an unlisted kind now shows too."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    from agents.usage import KINDS
+    order = js.split("const KIND_ORDER = [")[1].split("]")[0]
+    assert all(f'"{k}"' in order for k in (*KINDS, "sky"))
+    assert "function kindsOf(byKind)" in js and "${kindsOf(byKind).map((k) =>" in js
+    assert "KIND_ORDER.filter((k) => byKind[k]).map" not in js
