@@ -226,3 +226,64 @@ def test_claudes_card_reads_his_news(state, monkeypatch):
     assert c.get("/api/agents/claude/memory", headers=AUTH).json()["news"] == {"last": "2026-10-04T14:05:00+03:00",
                                                                                 "today": 2}
     assert c.get("/api/agents/kit/memory", headers=AUTH).json()["news"] is None
+
+
+# --- v5.1: Hermes's card — his digests and the spoken characters ------------------------------------------------------
+def hermes_client(state, monkeypatch):
+    monkeypatch.setattr(app_mod, "local_today", lambda: TODAY)
+    monkeypatch.setenv("TIMEZONE", "Europe/Kyiv")
+    reg = Registry()
+    return TestClient(create_app(token=TOKEN, registry=reg, docker_reader=DockerReader(client_factory=lambda: None),
+                                 prober=Prober(reg), state_dir=state, background=False))
+
+
+def test_hermes_card_reads_his_digests_his_characters_and_his_cap(state, monkeypatch):
+    from agents.usage import tts_usage_line
+    (state / "hermes.digest.json").write_text(json.dumps({
+        "room": "!dm", "point_event": "$e", "point_ts": 1, "last_ms": 1_791_111_900_000, "day": "2026-10-04",
+        "count": 2}), encoding="utf-8")
+    (state / "hermes.usage.jsonl").write_text("\n".join(json.dumps(x) for x in (
+        tts_usage_line("2026-10-02T10:00:00+03:00", "hermes", "eleven_turbo_v2_5", 1200, True),
+        tts_usage_line("2026-10-03T10:00:00+03:00", "hermes", "eleven_turbo_v2_5", 900, False),
+        tts_usage_line("2026-09-30T10:00:00+03:00", "hermes", "eleven_turbo_v2_5", 5000, True))) + "\n",
+        encoding="utf-8")
+    voice_id = "SecretishVoice0123456"
+    (state / "hermes.settings.json").write_text(json.dumps({
+        "HERMES_TTS_MONTHLY_CHARS": {"value": "150000", "source": "default"},
+        "HERMES_VOICE_ID": {"value": voice_id, "source": "env"}}), encoding="utf-8")
+    c = hermes_client(state, monkeypatch)
+    view = c.get("/api/agents/hermes/memory", headers=AUTH).json()
+    assert view["digest"] == {"last": "2026-10-04T14:05:00+03:00", "today": 2, "month_chars": 1200,
+                              "cap": 150000, "voice": True}
+    assert voice_id not in json.dumps(view) and "!dm" not in json.dumps(view["digest"])
+    for other in ("ada", "kit", "claude"):
+        assert c.get(f"/api/agents/{other}/memory", headers=AUTH).json()["digest"] is None
+
+
+def test_hermes_digest_view_before_his_start_and_when_torn(state, monkeypatch):
+    c = hermes_client(state, monkeypatch)
+    assert c.get("/api/agents/hermes/memory", headers=AUTH).json()["digest"] == {
+        "last": None, "today": 0, "month_chars": 0, "cap": None, "voice": None}
+    (state / "hermes.digest.json").write_text("{torn", encoding="utf-8")
+    r = c.get("/api/agents/hermes/memory", headers=AUTH)
+    assert r.status_code == 200 and r.json()["digest"] is None
+
+
+def test_the_usage_view_counts_characters_and_prices_pro_by_its_own_pair(state, monkeypatch):
+    from types import SimpleNamespace
+
+    from agents.usage import tts_usage_line
+    pro = SimpleNamespace(prompt_token_count=1_000_000, candidates_token_count=0, thoughts_token_count=1_000_000,
+                          total_token_count=2_000_000)
+    (state / "hermes.usage.jsonl").write_text("\n".join(json.dumps(x) for x in (
+        usage_line("2026-10-04T10:00:00+03:00", "hermes", "digest_voice", "gemini-3.1-pro-preview", pro, True),
+        tts_usage_line("2026-10-04T10:00:05+03:00", "hermes", "eleven_turbo_v2_5", 1300, True))) + "\n",
+        encoding="utf-8")
+    monkeypatch.setenv("PRICE_INPUT_PER_1M", "0.30")
+    monkeypatch.setenv("PRICE_OUTPUT_PER_1M", "2.50")
+    monkeypatch.setenv("PRICE_MODELS", "gemini-3.1-pro-preview=2/12")
+    u = usage_view(state, 3, TODAY, "hermes")
+    rows = {r["kind"]: r for r in u["rows"]}
+    assert rows["digest_voice"]["cost"] == 14.0 and rows["digest_voice"]["characters"] == 0
+    assert (rows["tts"]["characters"], rows["tts"]["cost"], rows["tts"]["billing"]) == (1300, None, "subscription")
+    assert u["per_agent"]["hermes"]["characters"] == 1300 and u["total"]["characters"] == 1300

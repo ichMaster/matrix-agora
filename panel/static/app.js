@@ -4,7 +4,7 @@
 "use strict";
 
 const POLL_MS = 10000;  // one tick for everything — the dashboard, an open log, an open agent's memory (owner)
-const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood"];
+const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood", "digest_voice", "ask", "tts"];
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
               ["today", "Today"], ["mood", "Mood"], ["tokens", "Tokens"], ["files", "Files"], ["settings", "Settings"]];
 // v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
@@ -399,6 +399,7 @@ function agentCardHtml(a) {
     ${!can(a, "today") && can(a, "mood") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Mood of the day</div>${moodLine(mem)}</div>` : ""}
     ${can(a, "pastlife") || can(a, "nudge") ? `<div class="muted" style="font-size:12px">${pastLifeLine(mem)}</div>` : ""}
     ${a.engine === "claude-sdk" ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Subscription</div>${claudeLines(mem)}</div>` : ""}
+    ${can(a, "digest") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Digests</div>${digestLine(mem)}</div>` : ""}
     <div class="card-foot rule-t"><div class="meta">${tokens == null ? `${icon("database", 13)} Memory unavailable` : `7 days · ${esc(tokens)}`}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${actionButtons({kind: "agent", id: a.name, state: d.health.docker ? c.state : "unknown", big: true})}</div>
       <button class="btn btn-primary" data-act="agent" data-id="${esc(a.name)}">Details${icon("arrow-right", 14)}</button></div>
@@ -450,19 +451,21 @@ function usageCardHtml() {
   const sorted = [...rows].sort((x, y) => y.day.localeCompare(x.day) || names.indexOf(x.agent) - names.indexOf(y.agent) ||
     KIND_ORDER.indexOf(x.kind) - KIND_ORDER.indexOf(y.kind));
   let prevDay = "";
+  const chars = u.rows.some((r) => r.characters);  // v5.1: Hermes's voice is counted in characters
+  const charCell = (n) => chars ? `<td class="r">${n ? fmtInt(n) : "—"}</td>` : "";
   const body = sorted.map((r) => {
     const day = r.day === prevDay ? "" : r.day; prevDay = r.day;
     return `<tr><td class="day">${esc(day)}</td><td>${esc(r.agent)}</td><td class="kind">${esc(r.kind)}</td><td class="r">${fmtInt(r.calls)}</td>
-      <td class="r">${fmtInt(r.input)}</td><td class="r">${fmtInt(r.output)}</td><td class="muted">${esc(r.billing || "api")}</td>${u.priced ? `<td class="r">${r.cost == null ? "—" : r.cost.toFixed(4)}</td>` : ""}</tr>`;
+      <td class="r">${fmtInt(r.input)}</td><td class="r">${fmtInt(r.output)}</td>${charCell(r.characters)}<td class="muted">${esc(r.billing || "api")}</td>${u.priced ? `<td class="r">${r.cost == null ? "—" : r.cost.toFixed(4)}</td>` : ""}</tr>`;
   }).join("");
   const foot = [...(filter === "all" ? names : [filter]).filter((n) => u.per_agent[n]).map((n) => [`total · ${n}`, u.per_agent[n], ""]), ["total", tot, "grand"]]
     .map(([lbl, t, cls]) => `<tr class="${cls}"><td colspan="3">${esc(lbl)}</td><td class="r">${fmtInt(t.calls)}</td><td class="r">${fmtInt(t.input)}</td>
-      <td class="r">${fmtInt(t.output)}</td><td class="muted">${esc(t.billing || "")}</td>${u.priced ? `<td class="r">${t.cost == null ? "—" : fmtUsd(t.cost)}</td>` : ""}</tr>`).join("");
+      <td class="r">${fmtInt(t.output)}</td>${charCell(t.characters)}<td class="muted">${esc(t.billing || "")}</td>${u.priced ? `<td class="r">${t.cost == null ? "—" : fmtUsd(t.cost)}</td>` : ""}</tr>`).join("");
   return `<section class="card usage-card" id="usage-card">${headHtml}
     <div class="usage-sum"><div><div class="big-num">${fmtM(tot.total)} tokens</div>
       <div class="muted num" style="font-size:12px">${fmtInt(tot.calls)} calls · ${fmtInt(tot.input)} in · ${fmtInt(tot.output)} out${u.priced ? costSuffix(tot.cost) : ""}</div></div>
       <div style="display:flex;gap:14px;align-items:flex-end"><div>${bars}</div>${filter === "all" ? legend : ""}</div></div>
-    <div class="table-scroll"><table class="table"><thead><tr><th>day</th><th>agent</th><th>kind</th><th class="r">calls</th><th class="r">input</th><th class="r">output</th><th>billing</th>${u.priced ? `<th class="r">cost $</th>` : ""}</tr></thead>
+    <div class="table-scroll"><table class="table"><thead><tr><th>day</th><th>agent</th><th>kind</th><th class="r">calls</th><th class="r">input</th><th class="r">output</th>${chars ? `<th class="r">chars</th>` : ""}<th>billing</th>${u.priced ? `<th class="r">cost $</th>` : ""}</tr></thead>
       <tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
     ${u.priced ? "" : `<div class="muted" style="font-size:12px">Prices are not configured — cost is not calculated.</div>`}
   </section>`;
@@ -553,6 +556,23 @@ function claudeLines(mem) {
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${pill(cls, limit)}<span class="muted" style="font-size:12px">${esc(auth)}</span></div>`;
 }
 
+// v5.1 — Hermes, the herald: «last digest 14:05 · 2 today» and the month's spoken characters against the cap
+function digestLine(mem) {
+  if (!mem.available) return `<div class="muted" style="font-size:13px">Memory unavailable</div>`;
+  const g = mem.digest;
+  if (!g) return `<div class="muted" style="font-size:13px">Digest state unreadable</div>`;
+  const last = g.last ? new Date(g.last) : null;
+  const time = last ? last.toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"}) : "";
+  const when = last && last.toDateString() !== new Date().toDateString()
+    ? `${last.toLocaleDateString("en-US", {month: "short", day: "numeric"})}, ${time}` : time;
+  const head = `${last ? `last digest ${when}` : "no digest yet"} · ${Number(g.today)} today`;
+  const voice = g.voice === false ? "text only — no voice id"
+    : `${fmtInt(g.month_chars)}${g.cap != null ? ` / ${fmtInt(g.cap)}` : ""} chars this month`;
+  const full = g.cap != null && g.cap > 0 && g.month_chars >= g.cap;
+  return `<div class="today-line">${esc(head)}</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${full ? pill("warn", "monthly cap reached") : ""}<span class="muted" style="font-size:12px">${esc(voice)}</span></div>`;
+}
+
 // v4.3 — the cat's past life and initiative: «93 theses · last nudge 14:05 · 2 today»
 function pastLifeLine(mem) {
   if (!mem.available) return "";
@@ -631,14 +651,15 @@ function agentTabHtml(a, mem, tab) {
     const t = u.per_agent[a.name];
     if (!t || !t.calls) return `<p class="muted">No data yet</p>`;
     const byKind = {};
-    rows.forEach((r) => { const k = byKind[r.kind] ||= {calls: 0, input: 0, output: 0, cost: null}; k.calls += r.calls; k.input += r.input; k.output += r.output; if (r.cost != null) k.cost = (k.cost ?? 0) + r.cost; });
+    rows.forEach((r) => { const k = byKind[r.kind] ||= {calls: 0, input: 0, output: 0, characters: 0, cost: null}; k.calls += r.calls; k.input += r.input; k.output += r.output; k.characters += r.characters || 0; if (r.cost != null) k.cost = (k.cost ?? 0) + r.cost; });
+    const chars = rows.some((r) => r.characters), cc = (n) => chars ? `<td class="r">${n ? fmtInt(n) : "—"}</td>` : "";
     const max = Math.max(1, ...u.per_day.map((d) => d.agents[a.name] || 0));
     return `<div class="usage-sum" style="margin-bottom:14px"><div><div class="big-num">${fmtM(t.total)} tokens</div><div class="muted num" style="font-size:12px">${fmtInt(t.calls)} calls${u.priced ? costSuffix(t.cost) : ""}</div></div>
       <div><div class="bars">${u.per_day.map((d) => `<div><span class="a" style="height:${((d.agents[a.name] || 0) / max) * 100}%"></span></div>`).join("")}</div>
       <div class="bar-labels">${u.per_day.map((d) => `<span class="${d.day === u.until ? "today" : ""}">${esc(shortDay(d.day))}</span>`).join("")}</div></div></div>
-      <table class="table" style="min-width:0"><thead><tr><th>kind</th><th class="r">calls</th><th class="r">input</th><th class="r">output</th>${u.priced ? `<th class="r">cost $</th>` : ""}</tr></thead>
-      <tbody>${KIND_ORDER.filter((k) => byKind[k]).map((k) => `<tr><td class="kind">${k}</td><td class="r">${fmtInt(byKind[k].calls)}</td><td class="r">${fmtInt(byKind[k].input)}</td><td class="r">${fmtInt(byKind[k].output)}</td>${u.priced ? `<td class="r">${byKind[k].cost == null ? "—" : byKind[k].cost.toFixed(4)}</td>` : ""}</tr>`).join("")}</tbody>
-      <tfoot><tr class="grand"><td>total</td><td class="r">${fmtInt(t.calls)}</td><td class="r">${fmtInt(t.input)}</td><td class="r">${fmtInt(t.output)}</td>${u.priced ? `<td class="r">${t.cost == null ? "—" : fmtUsd(t.cost)}</td>` : ""}</tr></tfoot></table>`;
+      <table class="table" style="min-width:0"><thead><tr><th>kind</th><th class="r">calls</th><th class="r">input</th><th class="r">output</th>${chars ? `<th class="r">chars</th>` : ""}${u.priced ? `<th class="r">cost $</th>` : ""}</tr></thead>
+      <tbody>${KIND_ORDER.filter((k) => byKind[k]).map((k) => `<tr><td class="kind">${k}</td><td class="r">${fmtInt(byKind[k].calls)}</td><td class="r">${fmtInt(byKind[k].input)}</td><td class="r">${fmtInt(byKind[k].output)}</td>${cc(byKind[k].characters)}${u.priced ? `<td class="r">${byKind[k].cost == null ? "—" : byKind[k].cost.toFixed(4)}</td>` : ""}</tr>`).join("")}</tbody>
+      <tfoot><tr class="grand"><td>total</td><td class="r">${fmtInt(t.calls)}</td><td class="r">${fmtInt(t.input)}</td><td class="r">${fmtInt(t.output)}</td>${cc(t.characters)}${u.priced ? `<td class="r">${t.cost == null ? "—" : fmtUsd(t.cost)}</td>` : ""}</tr></tfoot></table>`;
   }
   return "";
 }

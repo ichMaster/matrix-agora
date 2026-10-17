@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from agents.usage import Row, aggregate, cost, parse_lines
+from agents.usage import Row, aggregate, cost, month_chars, parse_lines, parse_model_prices
 
 DAYS_SHOWN = 60
 ITEM_RE = re.compile(r"^\s*(?:[-•*]|\d+[.)])\s+(.*\S)\s*$")
@@ -118,9 +118,44 @@ def ratelimit_view(state_dir: Path, name: str) -> dict | None:
             for k in RATELIMIT_FIELDS}
 
 
+def _usage_records(path: Path) -> list[dict]:
+    try:
+        return parse_lines(path.read_text(encoding="utf-8").splitlines())[0]
+    except FileNotFoundError:
+        return []
+
+
+def digest_view(state_dir: Path, name: str, today: date, tz: str | None = None) -> dict | None:
+    """v5.1 — Hermes's digests: the last one sent and today's count (`<name>.digest.json`), this month's spoken
+    characters (his usage file), the cap and whether a voice id is set (`<name>.settings.json` — a boolean, never
+    the id). No texts. No file yet → none sent; anything unreadable → None, never a 500."""
+    try:
+        data = json.loads((state_dir / f"{name}.digest.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        data = {}
+    except (OSError, ValueError):
+        return None
+    try:
+        sent = data.get("last_ms")
+        last = (datetime.fromtimestamp(int(sent) / 1000, ZoneInfo(tz or os.environ.get("TIMEZONE", "Europe/Kyiv")))
+                .isoformat(timespec="seconds") if sent is not None else None)
+        count = int(data.get("count") or 0) if str(data.get("day")) == today.isoformat() else 0
+        spoken = month_chars(_usage_records(state_dir / f"{name}.usage.jsonl"), name, today.strftime("%Y-%m"))
+    except (OSError, ValueError, TypeError, AttributeError, OverflowError):
+        return None
+    cap, voice = None, None
+    try:
+        runs = json.loads((state_dir / f"{name}.settings.json").read_text(encoding="utf-8"))
+        cap = int(runs["HERMES_TTS_MONTHLY_CHARS"]["value"])
+        voice = bool(str(runs["HERMES_VOICE_ID"]["value"]).strip())
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass  # not started yet, or an older file: the card shows what it knows
+    return {"last": last, "today": count, "month_chars": spoken, "cap": cap, "voice": voice}
+
+
 def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = None, with_mood: bool = False,
                 memories: Path | None = None, with_nudge: bool = False, with_ratelimit: bool = False,
-                with_news: bool = False) -> dict:
+                with_news: bool = False, with_digest: bool = False) -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -161,6 +196,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "nudge": nudge_view(state_dir, name, today) if with_nudge else None,
         "ratelimit": ratelimit_view(state_dir, name) if with_ratelimit else None,
         "news": nudge_view(state_dir, name, today, kind="news") if with_news else None,  # v4.5: Claude's news
+        "digest": digest_view(state_dir, name, today) if with_digest else None,           # v5.1: Hermes
     }
 
 
@@ -187,19 +223,20 @@ def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None
     since = today - timedelta(days=days - 1)
     rows = aggregate(records, since, today)
     p_in, p_out = _price("PRICE_INPUT_PER_1M"), _price("PRICE_OUTPUT_PER_1M")
-    priced = p_in is not None and p_out is not None
+    models, _ = parse_model_prices(os.environ.get("PRICE_MODELS"))  # v5.1: Hermes's Pro calls priced as Pro
+    priced = p_in is not None and p_out is not None or bool(models)
 
     def money(r):  # v4.4: only `api` tokens are priced; a subscription row has no cost, never $0
-        c = cost(r, p_in, p_out) if priced else None
+        c = cost(r, p_in, p_out, models) if priced else None
         return round(c, 6) if c is not None else None
 
     out_rows, per_agent, per_day, agent_rows = [], {}, {}, {}
     total_row = Row()
-    total = {"calls": 0, "failed": 0, "input": 0, "output": 0, "total": 0}
+    total = {"calls": 0, "failed": 0, "input": 0, "output": 0, "total": 0, "characters": 0}
     for (day, ag, kind), r in rows.items():
         out_rows.append({"day": day, "agent": ag, "kind": kind, "calls": r.calls, "failed": r.failed,
                          "input": r.prompt, "output": r.output, "total": r.total, "cost": money(r),
-                         "engine": r.engine or "gemini", "billing": r.billing or "api"})
+                         "engine": r.engine or "gemini", "billing": r.billing or "api", "characters": r.characters})
         agent_rows.setdefault(ag, Row()).add(r)
         total_row.add(r)
         for acc in (per_agent.setdefault(ag, dict.fromkeys(total, 0)), total):
@@ -208,6 +245,7 @@ def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None
             acc["input"] += r.prompt
             acc["output"] += r.output
             acc["total"] += r.total
+            acc["characters"] += r.characters  # v5.1: text to speech
         per_day.setdefault(day, {}).setdefault(ag, 0)
         per_day[day][ag] += r.total
 

@@ -224,3 +224,14 @@ def test_the_file_picker_survives_the_redraw():
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert "document.body.appendChild(pickerEl);" in js and 'act === "file-pick") filePicker().click();' in js
     assert '<input id="file-pick" type="file" hidden>' not in js
+
+
+def test_hermes_card_shows_his_digests_and_the_tables_their_characters():
+    """v5.1: «last digest 14:05 · 2 today», the month's characters against the cap (or text only), a chars column
+    only when some row has characters."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert '${can(a, "digest") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Digests</div>${digestLine(mem)}' in js
+    assert "function digestLine(mem)" in js and '"text only — no voice id"' in js and "chars this month" in js
+    assert 'pill("warn", "monthly cap reached")' in js
+    assert 'const chars = u.rows.some((r) => r.characters);' in js and '<th class="r">chars</th>' in js
+    assert '"digest_voice", "ask", "tts"]' in js
