@@ -505,3 +505,31 @@ def test_a_stop_waits_for_a_digest_on_its_way(tmp_path, monkeypatch, caplog):
 
     asyncio.run(stuck())
     assert "still running after" in caplog.text
+
+
+
+def edit(sender, body, ts, of="$orig"):
+    return RoomMessage.parse_event({
+        "event_id": f"$edit{ts}", "sender": sender, "origin_server_ts": ts, "type": "m.room.message",
+        "content": {"msgtype": "m.text", "body": f"* {body}", "m.new_content": {"msgtype": "m.text", "body": body},
+                    "m.relates_to": {"rel_type": "m.replace", "event_id": of}}})
+
+
+def test_edits_are_never_counted_digested_or_answered(tmp_path, monkeypatch):
+    """Review #9: an edited question would cost a second Pro answer, an edited line would appear twice."""
+    from agents.logic import is_edit
+    assert is_edit(edit(OWNER, "x", 1)) and not is_edit(ev(OWNER, "x", 1))
+    room = [edit(ADA, "репліка 5 (виправлено)", ms(10, 6)), *talk(6)]
+    llm = FakeLLM()
+    h, client = make(tmp_path, monkeypatch, events=room, llm=llm, state=DigestState(room="!dm"))
+    h.started = True
+
+    async def owner_edits():
+        await h.on_message(SimpleNamespace(room_id="!dm"), edit(OWNER, "що Бруно казав учора?", ms(14)))
+        await h.on_message(SimpleNamespace(room_id=AGORA), edit(ADA, "виправлено", ms(14)))
+        await asyncio.gather(*h._tasks)
+
+    asyncio.run(owner_edits())
+    assert client.sent == [] and llm.calls == [] and h.new_count == 0
+    asyncio.run(h.digest())
+    assert "виправлено" not in llm.calls[0].contents and len(llm.calls[0].contents.splitlines()) == 6

@@ -63,7 +63,7 @@ from agents.digest import (
     trim_digest,
 )
 from agents.llm import DIGEST_MODEL, GeminiClient
-from agents.logic import should_join_invite, without_outing
+from agents.logic import is_edit, should_join_invite, without_outing
 from agents.matrix import join_room, login
 from agents.nudge import parse_hours
 from agents.roster import Member, load_roster, speakers
@@ -209,7 +209,7 @@ class Herald:
                 return out, False
             done = False
             for e in resp.chunk:
-                if not isinstance(e, RoomMessageText):
+                if not isinstance(e, RoomMessageText) or is_edit(e):  # an edit is not a new line (review #9)
                     continue
                 m = Message(str(e.event_id), e.sender, int(e.server_timestamp), e.body)
                 out.append(m)
@@ -366,6 +366,8 @@ class Herald:
         try:
             if not self.started:
                 return  # the first sync's backlog: never processed
+            if is_edit(event):  # review #9: never counted, never a second digest or a second paid answer
+                return
             what, why = route(room.room_id, event.sender, event.body, self.cfg, self.state.room)
             if what == "count":
                 self.new_count += 1  # read, never answered — and no log line per room message

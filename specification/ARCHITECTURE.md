@@ -138,7 +138,7 @@ joins only the owner's invite into Agora and leaves any other.
   the owner invited) and keeps its id in `state/<name>.digest.json`. He makes a new one only when he is no longer in
   it or the owner neither is nor is invited (`needs_private_room`); one made in this run is trusted before the sync
   brings it back.
-- **His allowlist** (`route`, pure): an Agora text message is **read, never answered** — it only counts toward the next
+- **His allowlist** (`route`, pure; an edit — `m.replace` — is never a new line for him: not counted, digested or answered, `is_edit`, review #9): an Agora text message is **read, never answered** — it only counts toward the next
   digest (not his own, not a purr; no log line per message); in the private room only the owner's `RoomMessageText`
   is handled — «підсумок» (`asks_digest`: at most three words holding «підсумок» / «підсумки» / «підсумуй») brings a
   digest, anything else is a question; everything else is logged as `ignored`. **Every send goes through

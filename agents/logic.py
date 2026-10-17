@@ -64,6 +64,14 @@ OTHERS_RE = re.compile(r"\b(ти|тебе|тобі|тобою|ви|вас|вам
                        re.IGNORECASE)
 
 
+def is_edit(event) -> bool:
+    """An edit (`m.relates_to.rel_type == "m.replace"`, body «* …»): nio parses it as a RoomMessageText, but it is
+    never a new message — the herald neither counts, digests nor answers one (v5.1 review #9)."""
+    content = (getattr(event, "source", None) or {}).get("content") or {}
+    relates = content.get("m.relates_to") if isinstance(content, dict) else None
+    return isinstance(relates, dict) and relates.get("rel_type") == "m.replace"
+
+
 def without_outing(text: str, personas: Iterable) -> str:
     """v5.1 (review #1) — the herald's guard, per sentence: a sentence that holds a banned term **and** names a persona
     (any of its forms, or its Matrix id) is removed, the rest kept. His words go only to the owner, so «ти» there is
