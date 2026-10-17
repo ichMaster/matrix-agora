@@ -295,8 +295,25 @@ def test_the_guard_regenerates_once_then_skips_the_stretch(tmp_path, monkeypatch
     llm2 = FakeLLM(outed, outed)
     h2, client2 = make(tmp_path / "b", monkeypatch, events=talk(6), llm=llm2, state=DigestState(room="!dm"))
     assert asyncio.run(h2.digest()) is True and len(llm2.calls) == 2 and client2.sent == []
-    assert load_digest_state(tmp_path / "b" / "hermes.digest.json").point_event is not None   # skipped, not retried
+    skipped = load_digest_state(tmp_path / "b" / "hermes.digest.json")
+    assert skipped.point_event is not None                                                  # skipped, not retried
+    assert (skipped.day, skipped.count) == ("2026-10-17", 0)            # review #7: nothing was sent today
     assert "dropped by the outgoing guard" in caplog.text
+
+
+def test_a_digest_on_an_ordinary_topic_keeps_everything_but_the_outing_sentence(tmp_path, monkeypatch, caplog):
+    """Review #1: «ти» is Ich in his text; a novel's «персонаж» or an AI «модель» never costs the whole digest —
+    only a sentence that ties a persona to a banned word goes."""
+    caplog.set_level(logging.INFO)
+    text = ("Вісті з Олімпу! Клод приніс тобі новину про нову модель штучного інтелекту, і вони сперечались. "
+            "Бруно сказав, що Ада пише як бот. Ада сміялась.")
+    llm = FakeLLM(text)
+    h, client = make(tmp_path, monkeypatch, events=talk(6), llm=llm, state=DigestState(room="!dm"))
+    assert asyncio.run(h.digest()) is True and len(llm.calls) == 1
+    body = private(client)[-1]["body"].split("\n\n", 1)[1]
+    assert body == ("Вісті з Олімпу! Клод приніс тобі новину про нову модель штучного інтелекту, і вони сперечались. "
+                    "Ада сміялась.")
+    assert "the outgoing guard removed a sentence" in caplog.text
 
 
 def test_a_failed_model_call_retries_after_ten_minutes(tmp_path, monkeypatch):

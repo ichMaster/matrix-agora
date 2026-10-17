@@ -64,6 +64,22 @@ OTHERS_RE = re.compile(r"\b(ти|тебе|тобі|тобою|ви|вас|вам
                        re.IGNORECASE)
 
 
+def without_outing(text: str, personas: Iterable) -> str:
+    """v5.1 (review #1) — the herald's guard, per sentence: a sentence that holds a banned term **and** names a persona
+    (any of its forms, or its Matrix id) is removed, the rest kept. His words go only to the owner, so «ти» there is
+    Ich, and a digest of the room's talk about a novel's «персонаж» or a new AI «модель» must not be lost whole."""
+    from agents.turns import mentions  # local, as in outs_a_persona
+    people = list(personas)
+    parts = re.split(f"({SENTENCE_SPLIT.pattern})", text)
+    kept: list[str] = []
+    for i in range(0, len(parts), 2):
+        sentence = parts[i]
+        if BANNED_RE.search(sentence) and any(mentions(sentence, p.name_forms, p.user_id) for p in people):
+            continue
+        kept.append(sentence + (parts[i + 1] if i + 1 < len(parts) else ""))
+    return "".join(kept).strip()
+
+
 def outs_a_persona(text: str, personas: Iterable) -> bool:
     """True when one sentence calls something a model or a bot *and* names a persona (any of its forms, or its
     Matrix id) or points at someone else (ти, ви, ми, всі, він, вона, вони…) — the outgoing guard every non-persona

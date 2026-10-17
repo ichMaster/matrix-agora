@@ -242,3 +242,19 @@ def test_a_personas_move_comes_after_the_summary_and_before_the_rules():
     idx = [out.index(x) for x in order]
     assert idx == sorted(idx)
     assert "Цього разу" not in build_instruction("Ада", "КАНОН", "підсумок")
+
+
+# --- v5.1 review #1: the herald's guard works per sentence and only through the persona-naming arm ------------------
+def test_without_outing_removes_only_the_sentences_tying_a_persona_to_a_banned_word():
+    from pathlib import Path
+
+    from agents.logic import without_outing
+    from agents.roster import load_member
+    personas = [load_member(Path("agents/ada.toml")), load_member(Path("agents/bruno.toml"))]
+    keep = ("Клод приніс тобі новину про нову модель штучного інтелекту, і вони довго її обговорювали. "
+            "Кіт розповів, що колись був сисадміном, а ти сміявся.")
+    assert without_outing(keep, personas) == keep                       # «ти»/«вони» are Ich and the room here
+    text = "Вісті з Олімпу! Ада — це бот, кажуть. Бруно купив хліб.\nА Ада хвалила роман."
+    assert without_outing(text, personas) == "Вісті з Олімпу! Бруно купив хліб.\nА Ада хвалила роман."
+    assert without_outing("Бруно назвав Аду моделлю.", personas) == ""
+    assert without_outing("", personas) == ""

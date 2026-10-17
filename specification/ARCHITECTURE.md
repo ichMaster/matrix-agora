@@ -154,9 +154,12 @@ joins only the owner's invite into Agora and leaves any other.
   kind `digest_voice`): his canon, then `DIGEST_BRIEF` — what was talked about, who thought what, where they argued,
   what they asked Ich, what was settled; members by name, never what they are; about `target_chars` (300 + 40 per
   message, at most `HERMES_DIGEST_MAX_CHARS`, 1,500 — about a minute and a half) of speech, no lists or markup,
-  numbers in words. The text is cut to its last full sentence within the cap (`trim_digest`) and checked by the
-  outgoing guard (`outs_a_persona`): a trip is regenerated once; a second trip skips the stretch (the point moves, so
-  it is never paid for every ten minutes). Typing is on in the private room during the call, off in a `finally`.
+  numbers in words. The text is cut to its last full sentence within the cap (`trim_digest`) and goes through the
+  herald's guard, **per sentence** (`without_outing`, v5.1 review #1): a sentence that holds a banned term and names a
+  persona is removed, the rest is sent — his words go only to the owner, so «ти» there is Ich, and a talk about a
+  novel's «персонаж» or an AI «модель» never costs the whole digest. Only when nothing is left is it regenerated once;
+  nothing again skips the stretch (the point moves, the day's count stays — so it is never paid for every ten
+  minutes). Typing is on in the private room during the call, off in a `finally`.
 - **Voice, then text.** The voice (§Voice messages) unless `HERMES_VOICE_ID` is empty, his key is missing, this
   month's characters (`month_chars` over his usage file) plus the digest would pass `HERMES_TTS_MONTHLY_CHARS`
   (150,000; 0 — text only), or a step fails; every TTS call is a `tts` usage line. Then the text as an `m.text`,
@@ -165,7 +168,7 @@ joins only the owner's invite into Agora and leaves any other.
 - **Questions about the history.** Any other owner message in the private room: the Agora messages of the last 7
   days (at most 2,000, the newest), as `"DD.MM HH:MM Name: text"`, then «Питання Ich: …»; one thinking call (kind
   `ask`, `ASK_BRIEF`: only from these lines, briefly, in his character, say so when they don't hold the answer), the
-  same guard, an `m.text` answer (≤ 3,000 characters). An empty week is a fixed line, with no model call. Nothing
+  same per-sentence guard, an `m.text` answer (≤ 3,000 characters). An empty week is a fixed line, with no model call. Nothing
   of the room is kept anywhere: he reads it from the homeserver each time.
 - **The key** (`ELEVENLABS_API_KEY`, his own env file) is taken out of the environment at start and never reaches a
   prompt, a log or the state; without it — or without a voice id — he logs `voice off` once and digests in text.

@@ -59,10 +59,11 @@ from agents.digest import (
     since_point,
     target_chars,
     text_header,
+    today_count,
     trim_digest,
 )
 from agents.llm import DIGEST_MODEL, GeminiClient
-from agents.logic import outs_a_persona, should_join_invite
+from agents.logic import should_join_invite, without_outing
 from agents.matrix import join_room, login
 from agents.nudge import parse_hours
 from agents.roster import Member, load_roster, speakers
@@ -245,7 +246,8 @@ class Herald:
             day = local_now(now, self.tz).date().isoformat()
             if text is None:
                 if guarded:  # the same stretch would trip it again: skip it rather than pay for it every 10 minutes
-                    self.state = replace(record_sent(self.state, now, day, messages[-1]), count=self.state.count)
+                    self.state = replace(record_sent(self.state, now, day, messages[-1]),
+                                         count=today_count(self.state, day))  # nothing sent today (review #7)
                     save_digest_state(self.state_file, self.state)
                     log.warning("digest: dropped by the outgoing guard — %d messages skipped", len(messages))
                     return True
@@ -261,8 +263,9 @@ class Herald:
             return True
 
     async def _think(self, contents: str, system: str, kind: str, cap: int) -> tuple[str | None, bool]:
-        """One thinking call, trimmed to `cap`, checked by the outgoing guard — regenerated once if it trips.
-        (text, False), or (None, True) when the guard dropped both, (None, False) on a failure."""
+        """One thinking call, trimmed to `cap`, through the herald's guard: a sentence tying a persona to a banned
+        word is removed (`without_outing`, review #1); nothing left → regenerated once. (text, False), or (None, True)
+        when the guard left nothing twice, (None, False) on a failure."""
         guarded = False
         await self._typing(True)
         try:
@@ -274,11 +277,14 @@ class Herald:
                 if not out:
                     log.error("%s: no full sentence within the cap", kind)
                     return None, False
-                if outs_a_persona(out, self.personas):
+                kept = without_outing(out, self.personas)
+                if not kept:
                     guarded = True
                     log.warning("%s: dropped by the outgoing guard", kind)
                     continue
-                return out, False
+                if kept != out:
+                    log.warning("%s: the outgoing guard removed a sentence", kind)
+                return kept, False
             return None, guarded
         finally:
             await self._typing(False)
