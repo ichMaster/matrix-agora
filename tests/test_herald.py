@@ -447,3 +447,17 @@ def test_a_question_is_never_answered_from_a_partial_read(tmp_path, monkeypatch)
     h, client = make(tmp_path, monkeypatch, events=talk(5), llm=llm, state=DigestState(room="!dm"))
     client.fail_page = 0
     assert asyncio.run(h.answer("що було?")) is False and client.sent == [] and llm.calls == []
+
+
+
+def test_a_room_made_this_run_is_trusted_only_until_the_sync_brings_it_back(tmp_path, monkeypatch):
+    """Review #4: the owner declines the invite — once the sync shows the room without him, a new one is made
+    instead of sending every digest (and paid voice) into a room nobody reads."""
+    h, client = make(tmp_path, monkeypatch)
+    first = asyncio.run(h.ensure_private_room())
+    assert asyncio.run(h.ensure_private_room()) == first and len(client.created) == 1   # not synced yet: trusted
+    client.rooms[first] = SimpleNamespace(users={CFG.user_id: 1}, invited_users={})     # synced, the owner declined
+    second = asyncio.run(h.ensure_private_room())
+    assert second != first and len(client.created) == 2
+    client.rooms[second] = SimpleNamespace(users={CFG.user_id: 1}, invited_users={OWNER: 1})  # invited: kept
+    assert asyncio.run(h.ensure_private_room()) == second and len(client.created) == 2

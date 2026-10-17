@@ -150,10 +150,10 @@ class Herald:
     # --- the private room -------------------------------------------------------------------------------------------
     async def ensure_private_room(self) -> str | None:
         """The private room with the owner: the stored one while both are in it, else a new one, the owner invited."""
-        if self.state.room is not None and self.state.room == self._made_room:
-            return self.state.room  # made in this run: the sync may not have brought it back yet
-        rooms = {rid: {*getattr(r, "users", {}), *getattr(r, "invited_users", {})}
-                 for rid, r in (getattr(self.client, "rooms", {}) or {}).items()}
+        joined = getattr(self.client, "rooms", {}) or {}
+        if self.state.room is not None and self.state.room == self._made_room and self.state.room not in joined:
+            return self.state.room  # made in this run and not synced back yet; once it is, the owner is checked (#4)
+        rooms = {rid: {*getattr(r, "users", {}), *getattr(r, "invited_users", {})} for rid, r in joined.items()}
         if not needs_private_room(self.state.room, rooms, self.cfg.room_id, self.cfg.owner):
             return self.state.room
         resp = await self.client.room_create(
