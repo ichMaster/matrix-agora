@@ -464,3 +464,44 @@ def test_a_room_made_this_run_is_trusted_only_until_the_sync_brings_it_back(tmp_
     assert second != first and len(client.created) == 2
     client.rooms[second] = SimpleNamespace(users={CFG.user_id: 1}, invited_users={OWNER: 1})  # invited: kept
     assert asyncio.run(h.ensure_private_room()) == second and len(client.created) == 2
+
+
+
+def test_a_stop_waits_for_a_digest_on_its_way(tmp_path, monkeypatch, caplog):
+    """Review #8: a deploy's SIGTERM mid-digest — the voice and the state land before the client closes, so the
+    restart never sends the same stretch again; a digest stuck past the bound is left to the cancel."""
+    h, client = make(tmp_path, monkeypatch, events=talk(6), state=DigestState(room="!dm"))
+    think = h.llm.think
+
+    async def scenario():
+        gate = asyncio.Event()
+
+        async def slow(*a, **kw):
+            await gate.wait()
+            return await think(*a, **kw)
+
+        h.llm.think = slow
+        digest = asyncio.create_task(h.digest())
+        await asyncio.sleep(0)
+        drain = asyncio.create_task(h.drain(5))
+        await asyncio.sleep(0.01)
+        assert not drain.done()                                       # waiting for the digest
+        gate.set()
+        await drain
+        assert digest.done() and digest.result() is True
+
+    asyncio.run(scenario())
+    assert [c["msgtype"] for c in private(client)] == ["m.audio", "m.text"]
+    assert load_digest_state(tmp_path / "hermes.digest.json").last_ms == ms(14)
+
+    async def stuck():
+        h._busy = asyncio.Lock()                                      # a fresh loop: a fresh lock (one loop in life)
+        h.llm.think = lambda *a, **kw: asyncio.Event().wait()
+        h.state = DigestState(room="!dm")
+        task = asyncio.create_task(h.digest())
+        await asyncio.sleep(0)
+        await h.drain(0.05)
+        task.cancel()
+
+    asyncio.run(stuck())
+    assert "still running after" in caplog.text

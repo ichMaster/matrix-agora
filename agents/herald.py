@@ -468,6 +468,17 @@ class Herald:
         self.client.add_event_callback(self.on_message, RoomMessageText)
         self.client.add_event_callback(self.on_invite, InviteMemberEvent)
 
+    async def drain(self, timeout_s: float = 20.0) -> None:
+        """On a stop, let a digest or an answer on its way finish (compose allows 30 s): cancelled after the voice
+        went out but before the state was saved, the restart would send the same stretch again (review #8)."""
+        if not self._busy.locked():
+            return
+        try:
+            async with asyncio.timeout(timeout_s), self._busy:
+                pass
+        except TimeoutError:
+            log.warning("stop: a digest or answer still running after %.0fs — cancelled", timeout_s)
+
     async def run(self) -> None:
         await self.start()
         log.info("%s: entering sync_forever", self.cfg.localpart)
@@ -479,7 +490,10 @@ class Herald:
         watcher = asyncio.create_task(self.watcher())
         stop_task = asyncio.create_task(stop.wait())
         await asyncio.wait({sync_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
-        for t in (sync_task, watcher, stop_task, *self._tasks):
+        for t in (sync_task, stop_task):
+            t.cancel()
+        await self.drain()  # review #8: a digest on its way finishes — its voice sent, its state saved
+        for t in (watcher, *self._tasks):
             t.cancel()
         await self.client.close()
         log.info("%s: stopped", self.cfg.localpart)
