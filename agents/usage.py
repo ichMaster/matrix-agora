@@ -5,13 +5,16 @@ from __future__ import annotations
 
 import calendar
 import json
+import math
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
-KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood")
-# v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan), `external` (Lumi's own)
+KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
+         "digest_voice", "ask", "tts")  # v5.1: Hermes's digest and answers (Gemini Pro), his voice (ElevenLabs)
+# v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan; v5.1 also the ElevenLabs
+# plan's credits), `external` (Lumi's own)
 BILLING = ("api", "subscription", "external")
 
 
@@ -20,16 +23,24 @@ def _count(usage: Any, field: str) -> int | None:
     return int(value) if isinstance(value, int) else None
 
 
+def _output(usage: Any) -> int | None:
+    """The answer plus the thinking (v5.1): Gemini bills the thoughts as output."""
+    answer, thoughts = _count(usage, "candidates_token_count"), _count(usage, "thoughts_token_count")
+    if answer is None and thoughts is None:
+        return None
+    return (answer or 0) + (thoughts or 0)
+
+
 def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: bool) -> dict:
-    """One record per Gemini call (v2 since v4.4: engine, billing, cache tokens). Missing metadata → nulls. Never any
-    text."""
+    """One record per Gemini call (v2 since v4.4: engine, billing, cache tokens; v3 since v5.1: `characters`, null
+    here, and the thinking counted in the output). Missing metadata → nulls. Never any text."""
     return {
         "ts": ts_iso,
         "agent": agent,
         "kind": kind,
         "model": model,
         "prompt_tokens": _count(usage, "prompt_token_count"),
-        "output_tokens": _count(usage, "candidates_token_count"),
+        "output_tokens": _output(usage),
         "total_tokens": _count(usage, "total_token_count"),
         "ok": bool(ok),
         "engine": "gemini",
@@ -37,6 +48,19 @@ def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: b
         "cache_read_tokens": _count(usage, "cached_content_token_count"),
         "cache_write_tokens": None,
         "reported_cost_usd": None,
+        "characters": None,
+    }
+
+
+def tts_usage_line(ts_iso: str, agent: str, model: str, characters: int, ok: bool) -> dict:
+    """v5.1 — one record per text-to-speech call (ElevenLabs): counted in characters, paid from the plan's credits
+    (`subscription`, never priced); no tokens. Never any text."""
+    return {
+        "ts": ts_iso, "agent": agent, "kind": "tts", "model": model,
+        "prompt_tokens": None, "output_tokens": None, "total_tokens": None, "ok": bool(ok),
+        "engine": "elevenlabs", "billing": "subscription",
+        "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
+        "characters": int(characters),
     }
 
 
@@ -63,10 +87,12 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
         "cache_read_tokens": cache_read,
         "cache_write_tokens": cache_write,
         "reported_cost_usd": cost,
+        "characters": None,
     }
 
 
-COUNT_FIELDS = ("prompt_tokens", "output_tokens", "total_tokens", "cache_read_tokens", "cache_write_tokens")
+COUNT_FIELDS = ("prompt_tokens", "output_tokens", "total_tokens", "cache_read_tokens", "cache_write_tokens",
+                "characters")
 
 
 def _valid(rec: Any) -> bool:
@@ -112,6 +138,8 @@ class Row:
     priced_output: int = 0
     engine: str = ""        # the rows' engine and billing; "mixed" when a total spans several
     billing: str = ""
+    characters: int = 0     # v5.1: text-to-speech characters (ElevenLabs)
+    by_model: dict[str, list[int]] = field(default_factory=dict)  # v5.1: the `api` tokens per model, for its price
 
     def add(self, other: Row) -> None:
         self.calls += other.calls
@@ -123,6 +151,11 @@ class Row:
         self.priced_output += other.priced_output
         self.engine = _merge(self.engine, other.engine)
         self.billing = _merge(self.billing, other.billing)
+        self.characters += other.characters
+        for model, (p, o) in other.by_model.items():
+            mine = self.by_model.setdefault(model, [0, 0])
+            mine[0] += p
+            mine[1] += o
 
 
 def _merge(a: str, b: str) -> str:
@@ -145,34 +178,86 @@ def aggregate(records: list[dict], since: date | None = None,
         row.prompt += r.get("prompt_tokens") or 0
         row.output += r.get("output_tokens") or 0
         row.total += r.get("total_tokens") or 0
+        row.characters += r.get("characters") or 0
         if billing == "api":
-            row.priced_prompt += r.get("prompt_tokens") or 0
-            row.priced_output += r.get("output_tokens") or 0
+            p, o = r.get("prompt_tokens") or 0, r.get("output_tokens") or 0
+            row.priced_prompt += p
+            row.priced_output += o
+            mine = row.by_model.setdefault(str(r.get("model", "")), [0, 0])
+            mine[0] += p
+            mine[1] += o
     return dict(sorted(rows.items()))
 
 
-def cost(row: Row, price_in: float | None, price_out: float | None) -> float | None:
-    """The price of a row's `api` tokens (the PRICE_* pair is Gemini's); a row with no `api` part — Claude on the
-    subscription, Lumi's own — has no cost, never $0 (v4.4)."""
-    if price_in is None or price_out is None:
-        return None
+Prices = dict[str, tuple[float, float]]
+
+
+def parse_model_prices(spec: str | None) -> tuple[Prices, list[str]]:
+    """v5.1 — `PRICE_MODELS`: comma-separated `model=in/out` (USD per 1M tokens), e.g.
+    `gemini-3.1-pro-preview=2/12`. Returns the prices and the malformed entries (to warn about, never fatal)."""
+    prices: Prices = {}
+    bad: list[str] = []
+    for entry in (spec or "").split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        model, _, pair = entry.partition("=")
+        p_in, _, p_out = pair.partition("/")
+        try:
+            values = float(p_in), float(p_out)
+        except ValueError:
+            bad.append(entry)
+            continue
+        if not model.strip() or not all(math.isfinite(v) and v >= 0 for v in values):
+            bad.append(entry)
+            continue
+        prices[model.strip()] = values
+    return prices, bad
+
+
+def cost(row: Row, price_in: float | None, price_out: float | None, models: Prices | None = None) -> float | None:
+    """The price of a row's `api` tokens: a model listed in `models` (v5.1, `PRICE_MODELS`) by its own pair, the rest
+    by the PRICE_* pair (Gemini Flash's). A row with no `api` part — Claude on the subscription, the ElevenLabs
+    credits, Lumi's own — has no cost, never $0 (v4.4); api tokens with no price known → None."""
     if row.billing and row.billing != "api" and not (row.priced_prompt or row.priced_output):
         return None
-    return row.priced_prompt / 1e6 * price_in + row.priced_output / 1e6 * price_out
+    models = models or {}
+    total, listed_in, listed_out = 0.0, 0, 0
+    for model, (p, o) in row.by_model.items():
+        pair = models.get(model)
+        if pair:
+            total += p / 1e6 * pair[0] + o / 1e6 * pair[1]
+            listed_in, listed_out = listed_in + p, listed_out + o
+    rest_in, rest_out = row.priced_prompt - listed_in, row.priced_output - listed_out
+    if rest_in or rest_out or not (listed_in or listed_out):
+        if price_in is None or price_out is None:
+            return None
+        total += rest_in / 1e6 * price_in + rest_out / 1e6 * price_out
+    return total
+
+
+def month_chars(records: list[dict], agent: str, month: str) -> int:
+    """v5.1 — the text-to-speech characters `agent` used in `month` (`YYYY-MM`): its ok `tts` lines. The usage file
+    is the one record; Hermes's monthly cap reads this."""
+    return sum(r.get("characters") or 0 for r in records
+               if r.get("agent") == agent and r.get("kind") == "tts" and r.get("ok") and str(r["ts"])[:7] == month)
 
 
 def render(rows: dict[tuple[str, str, str], Row], price_in: float | None, price_out: float | None,
-           markdown: bool = False) -> str:
+           markdown: bool = False, models: Prices | None = None) -> str:
     if not rows:
         return "no data"
-    with_cost = price_in is not None and price_out is not None
+    with_cost = price_in is not None and price_out is not None or bool(models)
+    with_chars = any(r.characters for r in rows.values())  # v5.1: text to speech counts characters
     prices = (price_in, price_out)
-    head = ["day", "agent", "kind", "calls", "failed", "input", "output", "total", "billing"] \
+    head = ["day", "agent", "kind", "calls", "failed", "input", "output", "total"] \
+        + (["chars"] if with_chars else []) + ["billing"] \
         + (["cost $"] if with_cost else [])  # v4.4: billing — only `api` rows carry a cost
     body = []
 
     def line(cells: list[str], r: Row) -> None:
-        body.append(cells + [r.billing or "api"] + ([_usd(r, prices)] if with_cost else []))
+        body.append(cells + ([str(r.characters)] if with_chars else []) + [r.billing or "api"]
+                    + ([_usd(r, prices, models)] if with_cost else []))
 
     per_agent: dict[str, Row] = defaultdict(Row)
     overall = Row()
@@ -218,8 +303,8 @@ def _n(x: float) -> str:
     return f"{round(x):,}"
 
 
-def _usd(row: Row, prices: tuple[float | None, float | None]) -> str:
-    c = cost(row, *prices)
+def _usd(row: Row, prices: tuple[float | None, float | None], models: Prices | None = None) -> str:
+    c = cost(row, *prices, models)
     return "—" if c is None else f"{c:.4f}"
 
 
@@ -230,26 +315,32 @@ def _change(now: float, before: float) -> str:
 
 
 def daily_report(records: list[dict], now: datetime, price_in: float | None = None,
-                 price_out: float | None = None) -> str:
+                 price_out: float | None = None, models: Prices | None = None) -> str:
     """The daily markdown report for the local `now`: yesterday in detail, the day before for comparison,
     the last 7 complete days, the month of yesterday so far (+ a projection), and today so far."""
     prices = (price_in, price_out)
-    priced = price_in is not None and price_out is not None
+    priced = price_in is not None and price_out is not None or bool(models)
     today = now.date()
     yday = today - timedelta(days=1)
     usd = ["cost $"] if priced else []
+    chars = ["chars"] if any(r.get("characters") for r in records) else []  # v5.1: text to speech
 
     def money(r: Row) -> list[str]:
-        return [_usd(r, prices)] if priced else []
+        return [_usd(r, prices, models)] if priced else []
+
+    def spoken(r: Row) -> list[str]:
+        return [_n(r.characters)] if chars else []
 
     def stats_row(label: str, r: Row) -> list[str]:
-        return [label, _n(r.calls), _n(r.failed), _n(r.prompt), _n(r.output), _n(r.total)] + money(r)
+        return [label, _n(r.calls), _n(r.failed), _n(r.prompt), _n(r.output), _n(r.total)] + spoken(r) + money(r)
 
-    head = ["", "calls", "failed", "input", "output", "total"] + usd
+    head = ["", "calls", "failed", "input", "output", "total"] + chars + usd
     out = [f"# Token usage — {today.isoformat()}",
            "",
            f"Generated {now.strftime('%Y-%m-%d %H:%M')} ({now.tzname() or 'local'}). "
-           + (f"Prices: ${price_in:.2f} input / ${price_out:.2f} output per 1M tokens." if priced
+           + (f"Prices: ${price_in:.2f} input / ${price_out:.2f} output per 1M tokens"
+              + "".join(f"; {m} ${a:g} / ${b:g}" for m, (a, b) in sorted((models or {}).items())) + "."
+              if price_in is not None and price_out is not None
               else "No prices set (`PRICE_INPUT_PER_1M` / `PRICE_OUTPUT_PER_1M`) — tokens only."),
            ""]
 
@@ -264,14 +355,14 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
                       markdown=True), ""]
         out += [f"vs {(yday - timedelta(days=1)).isoformat()}: calls {_change(y.calls, before.calls)}, "
                 f"tokens {_change(y.total, before.total)}"
-                + (f", cost {_change(cost(y, *prices) or 0.0, cost(before, *prices) or 0.0)}"
+                + (f", cost {_change(cost(y, *prices, models) or 0.0, cost(before, *prices, models) or 0.0)}"
                    if priced else "") + ".", ""]
         k_head = ["kind", "calls", "share of tokens", "avg input / call", "avg output / call", "failed"] + usd
         k_body = [[k, _n(r.calls), f"{(r.total / y.total * 100 if y.total else 0):.0f}%",
                    _n(r.prompt / r.calls), _n(r.output / r.calls), _n(r.failed)] + money(r)
                   for k, r in sorted(rollup(y_rows, 2).items(), key=lambda kv: -kv[1].total)]
         out += ["### By kind", "", table(k_head, k_body, markdown=True), ""]
-        out += ["### By agent × kind", "", render(y_rows, price_in, price_out, markdown=True), ""]
+        out += ["### By agent × kind", "", render(y_rows, price_in, price_out, markdown=True, models=models), ""]
 
     # the last 7 complete days
     first = yday - timedelta(days=6)
@@ -281,10 +372,10 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
     days = [first + timedelta(days=i) for i in range(7)]
     d_body = [stats_row(d.isoformat(), by_day.get(d.isoformat(), Row())) for d in days]
     out += [f"## Last 7 days — {first.isoformat()} … {yday.isoformat()}", "",
-            table(["day", "calls", "failed", "input", "output", "total"] + usd,
+            table(["day", "calls", "failed", "input", "output", "total"] + chars + usd,
                   d_body + [stats_row("**total**", w)], markdown=True), "",
             f"Daily average: {_n(w.calls / 7)} calls, {_n(w.total / 7)} tokens"
-            + (f", ${(cost(w, *prices) or 0.0) / 7:.4f}" if priced else "") + "."
+            + (f", ${(cost(w, *prices, models) or 0.0) / 7:.4f}" if priced else "") + "."
             + (f" Busiest day: {max(by_day.items(), key=lambda kv: kv[1].total)[0]}." if by_day else ""), ""]
 
     # the month of yesterday, so far
@@ -294,7 +385,8 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
     out += [f"## Month so far — {m_first.strftime('%Y-%m')} (days 1–{yday.day} of {m_days})", "",
             f"{_n(m.calls)} calls · {_n(m.failed)} failed · {_n(m.total)} tokens "
             f"({_n(m.prompt)} input, {_n(m.output)} output)"
-            + (f" · ${cost(m, *prices) or 0.0:.4f} · projected month ${(cost(m, *prices) or 0.0) / yday.day * m_days:.2f}"
+            + (f" · ${cost(m, *prices, models) or 0.0:.4f} · projected month "
+               f"${(cost(m, *prices, models) or 0.0) / yday.day * m_days:.2f}"
                if priced else "") + ".", ""]
 
     # today so far

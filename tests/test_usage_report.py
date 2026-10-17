@@ -155,3 +155,34 @@ def test_write_daily_end_to_end(tmp_path, capsys, monkeypatch):
     (out / "latest.md").write_text("old", encoding="utf-8")
     usage_report.main(["--state-dir", str(state), "--write", str(out)])
     assert (out / "latest.md").read_text() != "old"                          # rewritten every run
+
+
+# --- v5.1: Hermes's Pro calls priced as Pro, his voice in characters --------------------------------------------------
+def hermes_lines():
+    from agents.usage import tts_usage_line
+    pro = SimpleNamespace(prompt_token_count=10_000, candidates_token_count=400, thoughts_token_count=1_600,
+                          total_token_count=12_000)
+    return [usage_line("2026-10-02T14:00:00+03:00", "hermes", "digest_voice", "gemini-3.1-pro-preview", pro, True),
+            tts_usage_line("2026-10-02T14:00:05+03:00", "hermes", "eleven_turbo_v2_5", 1200, True)]
+
+
+def test_the_daily_report_prices_pro_by_its_pair_and_shows_characters():
+    from datetime import datetime
+    models = {"gemini-3.1-pro-preview": (2.0, 12.0)}
+    md = daily_report(hermes_lines(), datetime(2026, 10, 3, 7, 0, tzinfo=KYIV), 0.30, 2.50, models)
+    assert "gemini-3.1-pro-preview $2 / $12" in md
+    y = md.split("## Yesterday — 2026-10-02")[1].split("## Last 7 days")[0]
+    assert "| **all** | 2 | 0 | 10,000 | 2,000 | 12,000 | 1,200 | 0.0440 |" in y   # 10k·2 + 2k·12 per 1M
+    assert "| chars |" in y.split("### By agent × kind")[1]
+
+
+def test_the_report_command_reads_price_models_and_warns_on_a_bad_entry(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(usage_report, "load_dotenv", lambda: None)
+    monkeypatch.setenv("PRICE_INPUT_PER_1M", "0.30")
+    monkeypatch.setenv("PRICE_OUTPUT_PER_1M", "2.50")
+    monkeypatch.setenv("PRICE_MODELS", "gemini-3.1-pro-preview=2/12, broken")
+    (tmp_path / "hermes.usage.jsonl").write_text("\n".join(json.dumps(x) for x in hermes_lines()), encoding="utf-8")
+    usage_report.main(["--state-dir", str(tmp_path), "--since", "2026-10-01", "--markdown"])
+    out, err = capsys.readouterr()
+    assert "'broken'" in err and "| 2026-10-02 | hermes | digest_voice | 1 | 0 | 10000 | 2000 | 12000 | 0 | api | 0.0440 |" in out
+    assert "| 2026-10-02 | hermes | tts | 1 | 0 | 0 | 0 | 0 | 1200 | subscription | — |" in out

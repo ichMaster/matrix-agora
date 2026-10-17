@@ -190,3 +190,12 @@ def test_claude_takes_the_room_and_the_turn_settings_from_the_shared_file():
     assert env_keys(ROOT / "server" / "claude.env.example") == {"CLAUDE_PASSWORD", "CLAUDE_CODE_OAUTH_TOKEN",
                                                                   "CLAUDE_MODEL", "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
                                                                   "CLAUDE_TIMEOUT_S", "GUARDIAN_API_KEY"}
+
+
+def test_both_env_examples_price_the_pro_model_by_its_own_pair():
+    """v5.1: Hermes's digests run on gemini-3.1-pro-preview — priced as Pro, not as Flash."""
+    from agents.usage import parse_model_prices
+    for path in (ROOT / ".env.example", ROOT / "server" / ".env.example"):
+        values = dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines()
+                      if line and not line.startswith("#") and "=" in line)
+        assert parse_model_prices(values["PRICE_MODELS"]) == ({"gemini-3.1-pro-preview": (2.0, 12.0)}, []), path

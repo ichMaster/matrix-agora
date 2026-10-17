@@ -21,7 +21,9 @@ META = SimpleNamespace(prompt_token_count=1200, candidates_token_count=80, total
 def test_usage_line_shape_and_no_text():
     line = usage_line("2026-10-03T14:00:00+03:00", "ada", "reply", "gemini-2.5-flash", META, True)
     assert set(line) == {"ts", "agent", "kind", "model", "prompt_tokens", "output_tokens", "total_tokens", "ok",
-                         "engine", "billing", "cache_read_tokens", "cache_write_tokens", "reported_cost_usd"}  # v2
+                         "engine", "billing", "cache_read_tokens", "cache_write_tokens", "reported_cost_usd",
+                         "characters"}  # v2; v3 (v5.1) adds `characters`
+    assert line["characters"] is None
     assert (line["engine"], line["billing"]) == ("gemini", "api")
     assert (line["prompt_tokens"], line["output_tokens"], line["total_tokens"], line["ok"]) == (1200, 80, 1280, True)
 
@@ -34,7 +36,8 @@ def test_missing_metadata_gives_nulls():
 
 
 def test_kind_list_is_the_contract():
-    assert KINDS == ("reply", "summary", "plan", "day_memory", "digest", "today", "mood")
+    assert KINDS == ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
+                     "digest_voice", "ask", "tts")  # v5.1: Hermes
 
 
 # --- the seam reports every call ---
@@ -198,3 +201,80 @@ def test_the_gemini_model_is_a_setting(monkeypatch):
     usage = []
     asyncio.run(llm_mod.GeminiClient(sink=lambda *a: usage.append(a)).generate("c", "s"))
     assert seen["model"] == "gemini-2.5-pro" and usage[0][1] == "gemini-2.5-pro"
+
+
+# --- v5.1: Hermes — thinking, characters, prices per model ----------------------------------------------------------
+def test_thinking_tokens_count_as_output():
+    meta = SimpleNamespace(prompt_token_count=9000, candidates_token_count=400, thoughts_token_count=2600,
+                           total_token_count=12000)
+    line = usage_line("2026-10-17T14:00:00+03:00", "hermes", "digest_voice", "gemini-3.1-pro-preview", meta, True)
+    assert (line["output_tokens"], line["total_tokens"]) == (3000, 12000)
+    only = SimpleNamespace(prompt_token_count=1, candidates_token_count=None, thoughts_token_count=7, total_token_count=8)
+    assert usage_line("2026-10-17T14:00:00", "hermes", "ask", "m", only, False)["output_tokens"] == 7
+
+
+def test_the_tts_line_counts_characters_and_carries_no_text_and_no_price():
+    from agents.usage import parse_lines, tts_usage_line
+    line = tts_usage_line("2026-10-17T14:00:00+03:00", "hermes", "eleven_turbo_v2_5", 1234, True)
+    assert set(line) == set(usage_line("t", "a", "k", "m", None, True))
+    assert (line["kind"], line["engine"], line["billing"], line["characters"]) == ("tts", "elevenlabs", "subscription", 1234)
+    assert line["prompt_tokens"] is line["output_tokens"] is line["total_tokens"] is None
+    old_v1 = {"ts": "2026-10-01T10:00:00", "agent": "ada", "kind": "reply", "model": "m", "prompt_tokens": 1,
+              "output_tokens": 1, "total_tokens": 2, "ok": True}
+    records, bad = parse_lines([json.dumps(line), json.dumps(old_v1), json.dumps({**line, "characters": "many"})])
+    assert (len(records), bad) == (2, 1)
+
+
+def test_characters_are_summed_and_the_report_shows_them_only_when_there_are_some():
+    from agents.usage import aggregate, render, tts_usage_line
+    tts = [tts_usage_line("2026-10-17T14:00:00", "hermes", "eleven_turbo_v2_5", n, True) for n in (700, 800)]
+    reply = usage_line("2026-10-17T14:00:00", "ada", "reply", "gemini-2.5-flash", META, True)
+    rows = aggregate([*tts, reply])
+    assert rows[("2026-10-17", "hermes", "tts")].characters == 1500
+    out = render(rows, 0.3, 2.5)
+    assert "chars" in out.splitlines()[0] and "1500" in out
+    assert "chars" not in render(aggregate([reply]), 0.3, 2.5).splitlines()[0]
+
+
+@pytest.mark.parametrize("spec,prices,bad", [
+    ("gemini-3.1-pro-preview=2/12", {"gemini-3.1-pro-preview": (2.0, 12.0)}, []),
+    (" a=1/2 , b=0.5/0.25 ", {"a": (1.0, 2.0), "b": (0.5, 0.25)}, []),
+    ("", {}, []), (None, {}, []),
+    ("a=1, b=x/2, =1/2, c=-1/2, d=1/inf", {}, ["a=1", "b=x/2", "=1/2", "c=-1/2", "d=1/inf"]),
+])
+def test_price_models_parsing(spec, prices, bad):
+    from agents.usage import parse_model_prices
+    assert parse_model_prices(spec) == (prices, bad)
+
+
+def test_a_pro_row_is_priced_by_its_own_pair_and_the_rest_by_the_default():
+    from agents.usage import aggregate, cost
+    pro = SimpleNamespace(prompt_token_count=1_000_000, candidates_token_count=0, thoughts_token_count=1_000_000,
+                          total_token_count=2_000_000)
+    flash = SimpleNamespace(prompt_token_count=1_000_000, candidates_token_count=1_000_000, total_token_count=2_000_000)
+    lines = [usage_line("2026-10-17T14:00:00", "hermes", "digest_voice", "gemini-3.1-pro-preview", pro, True),
+             usage_line("2026-10-17T14:00:00", "hermes", "digest_voice", "gemini-2.5-flash", flash, True)]
+    row = aggregate(lines)[("2026-10-17", "hermes", "digest_voice")]
+    models = {"gemini-3.1-pro-preview": (2.0, 12.0)}
+    assert cost(row, 0.3, 2.5, models) == pytest.approx(2 + 12 + 0.3 + 2.5)
+    assert cost(row, 0.3, 2.5) == pytest.approx(2 * (0.3 + 2.5))          # without PRICE_MODELS: as before
+    assert cost(row, None, None, models) is None                           # the flash part has no price
+    pro_only = aggregate(lines[:1])[("2026-10-17", "hermes", "digest_voice")]
+    assert cost(pro_only, None, None, models) == pytest.approx(14.0)
+
+
+def test_a_tts_row_has_no_cost():
+    from agents.usage import aggregate, cost, tts_usage_line
+    row = aggregate([tts_usage_line("2026-10-17T14:00:00", "hermes", "eleven_turbo_v2_5", 900, True)])
+    assert cost(next(iter(row.values())), 0.3, 2.5, {"eleven_turbo_v2_5": (1.0, 1.0)}) is None
+
+
+def test_month_chars_counts_only_this_agents_ok_tts_lines_in_the_month():
+    from agents.usage import month_chars, tts_usage_line
+    records = [tts_usage_line("2026-10-01T00:05:00+03:00", "hermes", "m", 100, True),
+               tts_usage_line("2026-10-31T23:55:00+02:00", "hermes", "m", 200, True),
+               tts_usage_line("2026-10-17T12:00:00+03:00", "hermes", "m", 400, False),   # failed: not spent
+               tts_usage_line("2026-09-30T23:55:00+03:00", "hermes", "m", 800, True),    # last month
+               tts_usage_line("2026-10-17T12:00:00+03:00", "other", "m", 1600, True)]
+    assert month_chars(records, "hermes", "2026-10") == 300
+    assert month_chars([], "hermes", "2026-10") == 0

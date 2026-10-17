@@ -3,7 +3,8 @@
 
 Reads every state/*.usage.jsonl and prints calls and tokens by day × agent ×
 kind, with an estimated cost when PRICE_INPUT_PER_1M / PRICE_OUTPUT_PER_1M are
-set in .env (USD per 1M tokens). Corrupt lines are skipped with a warning.
+set in .env (USD per 1M tokens) — a model listed in PRICE_MODELS (v5.1,
+`model=in/out,…`) by its own pair. Corrupt lines are skipped with a warning.
 
 --write writes the daily report (statistics for yesterday, the last 7 days,
 the month so far and today) to DIR/YYYY-MM-DD.md and DIR/latest.md
@@ -23,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
 
-from agents.usage import aggregate, daily_report, parse_lines, render
+from agents.usage import aggregate, daily_report, parse_lines, parse_model_prices, render
 
 
 def _price(name: str) -> float | None:
@@ -62,10 +63,13 @@ def main(argv: list[str] | None = None) -> int:
     if bad:
         print(f"warning: skipped {bad} corrupt line(s)", file=sys.stderr)
     prices = _price("PRICE_INPUT_PER_1M"), _price("PRICE_OUTPUT_PER_1M")
+    models, bad_models = parse_model_prices(os.environ.get("PRICE_MODELS"))
+    for entry in bad_models:
+        print(f"warning: PRICE_MODELS entry {entry!r} is not model=in/out — ignored", file=sys.stderr)
     if args.write:
-        print(write_daily(Path(args.write), daily_report(records, now, *prices), now.date()))
+        print(write_daily(Path(args.write), daily_report(records, now, *prices, models), now.date()))
         return 0
-    print(render(aggregate(records, since), *prices, markdown=args.markdown))
+    print(render(aggregate(records, since), *prices, markdown=args.markdown, models=models))
     return 0
 
 
