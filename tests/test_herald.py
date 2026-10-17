@@ -319,12 +319,33 @@ def test_a_digest_on_an_ordinary_topic_keeps_everything_but_the_outing_sentence(
 def test_a_failed_model_call_retries_after_ten_minutes(tmp_path, monkeypatch):
     llm = FakeLLM()
     llm.texts = []
-    h, client = make(tmp_path, monkeypatch, events=talk(6), llm=llm, state=DigestState(room="!dm"))
+    h, client = make(tmp_path, monkeypatch, events=talk(6, 11), llm=llm, state=DigestState(room="!dm"))
     h.new_count = 6
     asyncio.run(h.tick())
     assert client.sent == [] and h._retry_at == ms(14) + herald_mod.RETRY_MS
     asyncio.run(h.tick())
     assert len(llm.calls) == 1                                          # not again before the retry time
+    assert h.new_count == 6                                             # review #2: a failure keeps the count
+    llm.texts = ["Вісті з Олімпу: Ада і Бруно сперечались."]
+    h.clock = lambda: ms(14, 11)                                        # the retry time: tried again, no new talk
+    asyncio.run(h.tick())
+    assert len(llm.calls) == 2 and [c["msgtype"] for c in private(client)] == ["m.audio", "m.text"]
+    assert h.new_count == 0
+
+
+def test_lines_that_arrive_during_a_digest_count_toward_the_next_one(tmp_path, monkeypatch):
+    """Review #2: the count drops only by what the digest saw when it began."""
+    h, client = make(tmp_path, monkeypatch, events=talk(6), state=DigestState(room="!dm"))
+    h.new_count = 6
+    think = h.llm.think
+
+    async def slow_think(*a, **kw):
+        h.new_count += 2                                                # two lines while the model thinks
+        return await think(*a, **kw)
+
+    h.llm.think = slow_think
+    asyncio.run(h.tick())
+    assert private(client) and h.new_count == 2
 
 
 # --- a question about the history ------------------------------------------------------------------------------------

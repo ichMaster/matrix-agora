@@ -231,10 +231,15 @@ class Herald:
             if await self.ensure_private_room() is None:
                 return False
             now = self.clock()
+            seen = self.new_count  # review #2: only a settled digest takes these off the count; a failure keeps them
+
+            def settled() -> None:
+                self.new_count = max(0, self.new_count - seen)  # what arrived meanwhile counts toward the next one
+
             messages = await self.collect_since_point()
-            self.new_count = 0  # what arrives from here on counts toward the next one
             if not messages:
                 log.info("digest: nothing new")
+                settled()
                 if asked:
                     await self.send_text(NOTHING_NEW)
                 return True
@@ -249,6 +254,7 @@ class Herald:
                     self.state = replace(record_sent(self.state, now, day, messages[-1]),
                                          count=today_count(self.state, day))  # nothing sent today (review #7)
                     save_digest_state(self.state_file, self.state)
+                    settled()
                     log.warning("digest: dropped by the outgoing guard — %d messages skipped", len(messages))
                     return True
                 log.error("digest: no text (%d messages) — retrying later", len(messages))
@@ -258,6 +264,7 @@ class Herald:
                 return False  # neither the voice nor the text reached the owner
             self.state = record_sent(self.state, now, day, messages[-1])
             save_digest_state(self.state_file, self.state)
+            settled()
             log.info("digest: sent (%d messages, %d chars, %s)", len(messages), len(text),
                      "voice" if why is None else f"text: {why}")
             return True
