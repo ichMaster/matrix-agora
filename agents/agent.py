@@ -16,7 +16,6 @@ import signal
 import stat
 import sys
 import time
-import urllib.parse
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -25,7 +24,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from nio import (
     AsyncClient,
     InviteMemberEvent,
-    LoginResponse,
     MatrixRoom,
     MessageDirection,
     RoomMessagesError,
@@ -71,6 +69,8 @@ from agents.logic import (
     should_handle,
     should_join_invite,
 )
+from agents.matrix import join_room as matrix_join
+from agents.matrix import login as matrix_login
 from agents.memory import build_summary_request, cap_words, load_memory, save_memory, session_ended
 from agents.mood import (
     MOOD_MAX_TOKENS,
@@ -111,7 +111,6 @@ from agents.plans import (
 from agents.responder import Turn, responder_for, trim_to_sentence
 from agents.roster import Member, load_roster, speakers
 from agents.runtime import acquire_lock, lock_holder, setup_logging
-from agents.session import load_session, save_session
 from agents.settings import start as settings_start
 from agents.sky import SKY_MAX_TOKENS, clean_sky, load_sky, save_sky, sky_query
 from agents.turns import (
@@ -275,39 +274,10 @@ class Agent:
         self._nudging = False
 
     async def login(self) -> None:
-        stored = load_session(self.cfg.state_file)
-        if stored:
-            self.client.restore_login(
-                user_id=stored["user_id"],
-                device_id=stored["device_id"],
-                access_token=stored["access_token"],
-            )
-            log.info("%s: session restored (device %s)", self.cfg.localpart, stored["device_id"])
-            return
-        resp = await self.client.login(self.cfg.password, device_name=f"agent-{self.cfg.localpart}")
-        if not isinstance(resp, LoginResponse):
-            raise RuntimeError(f"login failed: {getattr(resp, 'status_code', resp)}")
-        save_session(self.cfg.state_file, resp.user_id, resp.device_id, resp.access_token)
-        log.info("%s: logged in with the password; token stored", self.cfg.localpart)
+        await matrix_login(self.client, self.cfg.localpart, self.cfg.password, self.cfg.state_file)
 
     async def join_room(self, room_id: str) -> bool:
-        """Join with an explicit '{}' body: Continuwuity rejects nio's body-less
-        POST /join with M_BAD_JSON, so client.join() fails silently."""
-        path = f"/_matrix/client/v3/rooms/{urllib.parse.quote(room_id)}/join"
-        resp = await self.client.send(
-            "POST", path, data="{}",
-            headers={
-                "Authorization": f"Bearer {self.client.access_token}",
-                "Content-Type": "application/json",
-            },
-        )
-        await resp.read()  # consume the body — never leak the connection back unconsumed
-        ok = resp.status == 200
-        if ok:
-            log.info("joined %s", room_id)
-        else:
-            log.error("join %s failed: HTTP %s", room_id, resp.status)
-        return ok
+        return await matrix_join(self.client, room_id)
 
     def seed_context(self, events_newest_first: list) -> int:
         """Restart backfill: room messages become context (history + streak
@@ -1427,6 +1397,10 @@ def main() -> None:
         log.error("%s: another instance is running (pid %s) — exiting", cfg.localpart, lock_holder(cfg.lock_file))
         raise SystemExit(1)
     settings_start(os.environ, cfg.memory_file.parent, cfg)  # v4.7: the panel's overrides, before anything reads them
+    if cfg.type == "herald":  # v5.1: Hermes — his own process, no turns, never a word in the room
+        from agents.herald import Herald
+        asyncio.run(Herald(cfg).run())
+        return
     try:
         agent = Agent(cfg)
     except AuthRefused as exc:  # v4.4: the names of what tripped it, never a value

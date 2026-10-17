@@ -34,13 +34,14 @@ log = logging.getLogger("agent.settings")
 
 OVERRIDES_FILE = "settings.json"
 HOURS_RE = re.compile(r"^([01]?\d|2[0-3])-([01]?\d|2[0-4])$")
+ID_RE = re.compile(r"^[A-Za-z0-9]{0,40}$")
 CHAT = "matrix-chat"  # the simulation kind of Agora (simulations.toml)
 
 
 @dataclass(frozen=True)
 class Setting:
     name: str
-    kind: str                  # int | float | hours | choice | text
+    kind: str                  # int | float | hours | choice | text | id (v5.1: letters and digits, empty = none)
     default: str               # the code default, as the environment would hold it
     group: str                 # a group within its scope (see GROUPS)
     scope: str                 # the members it concerns: shared | type:<t> | cap:<c> | engine:<e>
@@ -86,6 +87,17 @@ SCHEMA: tuple[Setting, ...] = (
     _s("CLAUDE_NEWS_IDLE_S", "int", "300", "claude", "cap:news", CHAT, "Тиша перед новиною", "s", 0, 86400),
     _s("CLAUDE_NEWS_PER_DAY", "int", "24", "claude", "cap:news", CHAT, "Найбільше новин на день", "", 0, 200),
     _s("CLAUDE_NEWS_HOURS", "hours", "09-01", "claude", "cap:news", CHAT, "Години новин (HH-HH)"),
+    # Hermes, the herald (v5.1): his digests of the room — read only by the member with `digest`
+    _s("HERMES_DIGEST_EVERY_S", "int", "14400", "hermes", "cap:digest", CHAT, "Як часто Гермес приносить підсумок",
+       "s", 3600, 86400),
+    _s("HERMES_DIGEST_MIN_MESSAGES", "int", "5", "hermes", "cap:digest", CHAT,
+       "Найменше нових повідомлень для підсумку", "msgs", 1, 500),
+    _s("HERMES_DIGEST_MAX_CHARS", "int", "1500", "hermes", "cap:digest", CHAT, "Найдовший підсумок (~1000 знаків — хвилина)",
+       "chars", 300, 3000),
+    _s("HERMES_DIGEST_HOURS", "hours", "09-23", "hermes", "cap:digest", CHAT, "Години підсумків за розкладом (HH-HH)"),
+    _s("HERMES_TTS_MONTHLY_CHARS", "int", "150000", "hermes", "cap:digest", CHAT,
+       "Межа озвучених знаків на місяць (0 — лише текст)", "chars", 0, 1_000_000),
+    _s("HERMES_VOICE_ID", "id", "", "hermes", "cap:digest", CHAT, "Голос Гермеса (ElevenLabs voice id; порожньо — текст)"),
     # the chat's sessions
     _s("SESSION_IDLE_S", "int", "900", "session", "cap:summary", CHAT, "Тиша, після якої сесія закінчується", "s", 60, 86400),
     _s("SESSION_MAX_MESSAGES", "int", "200", "session", "cap:summary", CHAT, "Найбільша сесія", "msgs", 20, 2000),
@@ -108,7 +120,7 @@ SCHEMA: tuple[Setting, ...] = (
 BY_NAME: dict[str, Setting] = {s.name: s for s in SCHEMA}
 # the groups in their order, for a service's card and for an agent's tab
 SERVICE_GROUPS = (("turns", "Room & turns"), ("moves", "Ада і Бруно: ходи"), ("cat", "Кіт у кімнаті"),
-                  ("claude", "Клод у кімнаті"), ("session", "Сесії розмови"))
+                  ("claude", "Клод у кімнаті"), ("hermes", "Гермес"), ("session", "Сесії розмови"))
 AGENT_GROUPS = (("memory", "Пам'ять"), ("plans", "Плани"), ("life", "Життя"), ("model", "Модель"))
 
 
@@ -136,6 +148,8 @@ def validate(name: str, raw: object) -> tuple[str | None, str | None]:
         return (text, None) if HOURS_RE.match(text) else (None, "not HH-HH")
     if setting.kind == "choice":
         return (text, None) if text in setting.choices else (None, "not one of " + ", ".join(setting.choices))
+    if setting.kind == "id":  # v5.1: an ElevenLabs voice id — letters and digits; empty means none
+        return (text, None) if ID_RE.match(text) else (None, "not letters and digits (up to 40)")
     if not text or len(text) > 120 or any(ch in text for ch in "\n\r\x00"):
         return None, "empty or too long"
     return text, None

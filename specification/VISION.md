@@ -38,7 +38,7 @@ The panel is what this project is really building. Today it manages the first **
 ## Non-goals
 
 - E2EE, voice/video calls, images. **Voice messages arrive with v5** (the owner, 2026-10-13): Hermes's voice digests (v5.1), then the agents hearing (v5.2) and speaking (v5.3).
-- Raw archives of conversations (full message logs), vector DBs and RAG — long-term memory is the layered digests, not search.
+- Raw archives of conversations (full message logs), vector DBs and RAG — long-term memory is the layered digests, not search. Hermes (v5.1) reads the room from the homeserver when he digests it or answers a question about its last days, and keeps no copy.
 - Live world data (weather, news, city events, external APIs). World awareness is only place, calendar and clock.
 - Token limits, budgets or billing — accounting only counts and reports. One exception, the owner's (v5.1): a monthly cap on Hermes's voice characters, since the ElevenLabs credits are shared with Lumi; past it his digests go out as text.
 - Public or multi-user access of any kind: no open registration, no internet exposure, no accounts — the panel takes a single owner token.

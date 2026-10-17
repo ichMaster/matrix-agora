@@ -127,6 +127,52 @@ The agents see each other, so without rules they would reply to each other endle
 5. **The fallback:** if no agent has answered an unnamed, non-group owner message within `FALLBACK_S` (default 30), the best-ranked ranked member that R1 did not choose answers. Each agent checks for itself from the timeline; busy with another reply, it re-arms briefly instead of giving up, and it re-checks right before sending, so a slow chosen answer that lands meanwhile is never doubled.
 6. **`PASS`:** if the model returns exactly `PASS` (tolerating surrounding whitespace), send nothing. The prompt must explicitly allow this. A `PASS` on its own line or at the very end of a longer reply is dropped and the rest is sent; nothing of its own left → nothing is sent — the sentinel never reaches the room (pinned by `tests/test_turns.py` and `tests/test_first_sync.py`).
 
+## The herald (v5.1)
+
+**Hermes** (`agents/herald.py`, the `herald` type) is a member of Agora who never takes part in the talk. `agents/agent.py`
+`main()` runs him as his own process (`Herald.run`) with the same lock, log and settings start. Like every agent he
+logs in once and reuses the token (`agents/matrix.py`, shared with the speakers), never processes the first sync,
+joins only the owner's invite into Agora and leaves any other.
+
+- **The private room.** At his first start he creates a room with the owner (`trusted_private_chat`, direct, «Гермес»,
+  the owner invited) and keeps its id in `state/<name>.digest.json`. He makes a new one only when he is no longer in
+  it or the owner neither is nor is invited (`needs_private_room`); one made in this run is trusted before the sync
+  brings it back.
+- **His allowlist** (`route`, pure): an Agora text message is **read, never answered** — it only counts toward the next
+  digest (not his own, not a purr; no log line per message); in the private room only the owner's `RoomMessageText`
+  is handled — «підсумок» (`asks_digest`: at most three words holding «підсумок» / «підсумки» / «підсумуй») brings a
+  digest, anything else is a question; everything else is logged as `ignored`. **Every send goes through
+  `send_private`**, which refuses any room but the private one — Agora never hears him.
+- **The schedule.** A watcher ticks every minute: `digest_due` — at least `HERMES_DIGEST_EVERY_S` (4 h) since the last
+  digest (none yet: at once), within the local `HERMES_DIGEST_HOURS` (`09-23`, the owner, 2026-10-17), and at least
+  `HERMES_DIGEST_MIN_MESSAGES` (5) new messages, the count seeded at start by one bounded read since the point. A
+  failed digest is tried again after 10 minutes; a restart never digests at once (`last_ms` is kept). «підсумок»
+  works at any hour and with any count; with nothing new he says so in one fixed line, with no model call.
+- **The digest.** The Agora text messages since the last digest's point, read word for word from `/messages` (paged
+  back from the latest sync, at most 1,500, purrs left out; the first run takes the last interval), as `"HH:MM
+  Name: text"` lines (the owner is «Ich»). One `gemini-3.1-pro-preview` call with thinking (`GeminiClient.think`,
+  kind `digest_voice`): his canon, then `DIGEST_BRIEF` — what was talked about, who thought what, where they argued,
+  what they asked Ich, what was settled; members by name, never what they are; about `target_chars` (300 + 40 per
+  message, at most `HERMES_DIGEST_MAX_CHARS`, 1,500 — about a minute and a half) of speech, no lists or markup,
+  numbers in words. The text is cut to its last full sentence within the cap (`trim_digest`) and checked by the
+  outgoing guard (`outs_a_persona`): a trip is regenerated once; a second trip skips the stretch (the point moves, so
+  it is never paid for every ten minutes). Typing is on in the private room during the call, off in a `finally`.
+- **Voice, then text.** The voice (§Voice messages) unless `HERMES_VOICE_ID` is empty, his key is missing, this
+  month's characters (`month_chars` over his usage file) plus the digest would pass `HERMES_TTS_MONTHLY_CHARS`
+  (150,000; 0 — text only), or a step fails; every TTS call is a `tts` usage line. Then the text as an `m.text`,
+  headed by a line made in code («Агора, 10:05–14:10 · 23 повідомлення») — Element Desktop does not show a voice
+  message's body. The state moves its point to the newest message covered, `last_ms`, the day's count.
+- **Questions about the history.** Any other owner message in the private room: the Agora messages of the last 7
+  days (at most 2,000, the newest), as `"DD.MM HH:MM Name: text"`, then «Питання Ich: …»; one thinking call (kind
+  `ask`, `ASK_BRIEF`: only from these lines, briefly, in his character, say so when they don't hold the answer), the
+  same guard, an `m.text` answer (≤ 3,000 characters). An empty week is a fixed line, with no model call. Nothing
+  of the room is kept anywhere: he reads it from the homeserver each time.
+- **The key** (`ELEVENLABS_API_KEY`, his own env file) is taken out of the environment at start and never reaches a
+  prompt, a log or the state; without it — or without a voice id — he logs `voice off` once and digests in text.
+- **His log** names events only: the private room created, `digest: sent (N messages, M chars, voice | text:
+  <reason>)`, `digest: nothing new`, `digest: asked by the owner`, `ask: answered (N messages read)`, the guard's
+  drops, `ignored` lines — never a text.
+
 ## Voice messages (v5.1)
 
 Hermes's digest goes out as an **Element voice message** (`agents/voice.py`). ElevenLabs speaks the text
@@ -294,6 +340,8 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `PERSONA_ASK_P`, `PERSONA_DISAGREE_P`, `PERSONA_PLAN_P`, `PERSONA_STORY_P` | v4.6 | read only by a `persona` — the move's weights (0.25 / 0.15 / 0.1 / 0.1; the rest is a plain answer); a bad value falls back to its default (logged by name), a sum above 1 is scaled to 1 |
 | `CLAUDE_HISTORY_N` | v4.5 | the philosopher's wider window — the last N room messages, RAM only (150); interpolated into Claude's service from the shared file |
 | `CLAUDE_NEWS_EVERY_S`, `CLAUDE_NEWS_IDLE_S`, `CLAUDE_NEWS_PER_DAY`, `CLAUDE_NEWS_HOURS` | v4.5 | read only by an agent with `news` — Claude brings a Guardian item: every this many seconds, once the room has been quiet this long (never less than `BOT_WINDOW_S`), at most so many a day, within these local hours (3600 / 300 / 24 / `09-01`); interpolated into Claude's service from the shared file |
+| `HERMES_DIGEST_EVERY_S`, `HERMES_DIGEST_MIN_MESSAGES`, `HERMES_DIGEST_MAX_CHARS`, `HERMES_DIGEST_HOURS`, `HERMES_TTS_MONTHLY_CHARS`, `HERMES_VOICE_ID` | v5.1 | read only by the member with `digest` (Hermes; the Matrix chat's service settings) — a digest every so many seconds, after so many new messages, at most so many characters, within these local hours, at most so many spoken characters a month (0: text only), his ElevenLabs voice id (letters and digits; empty: text only) (14400 / 5 / 1500 / `09-23` / 150000 / empty) |
+| `ELEVENLABS_API_KEY`, `HERMES_PASSWORD` | v5.1 | Hermes's own env file `server/hermes.env` only (the key copied from Lumi's, the owner's decision 2026-10-13): taken out of the environment at start, never in a prompt or a log |
 | `GUARDIAN_API_KEY` | v4.5 | Claude's news source, a Guardian Open Platform key — `server/claude.env` only; taken out of the environment at start, never in a prompt or a log; unset: no news |
 | `CLAUDE_WORKSPACE`, `CLAUDE_TIMEOUT_S` | v4.5 | his own folder (`/workspace`, set by compose) and the bound on a reply with tool rounds (300 s from v4.5.2 — 180 s cut his web answers; the direct brief asks for at most 2–3 searches or pages); up to 8 turns per reply; the log names the tools a call used and how long it took (names only) |
 | `REPLY_MAX_TOKENS` | v4.1 | the output cap of a reply (200); summaries, memories and plans keep their own caps |
@@ -328,6 +376,8 @@ From v3.2 the production values live in `server/.env` on the Ubuntu box (synced 
 | The deploy password leaks | Key auth after a one-time `ssh-copy-id`; `server_con.yaml` gitignored; the password never in argv, logs or output |
 | Secrets in CI or in the image | CI uses mocks and `GITHUB_TOKEN` only; `.env` and `state/` stay on the host, never in the image |
 | Claude silently billed to an API key (v4.4) | the subscription only, in layers (`agents/claude_sdk.py`): Claude's own env file holds the OAuth token and no service names a forbidden variable (any `ANTHROPIC_*`, `CLAUDE_CODE_USE_*`, `CLAUDE_CODE_SIMPLE`, an API key's file descriptor, managed settings, another base URL, host credentials); startup refuses on any of them or a missing `CLAUDE_CODE_OAUTH_TOKEN`, naming variables, never values; they are scrubbed from the environment the SDK's CLI inherits; `setting_sources=[]` and a tmpfs `CLAUDE_CONFIG_DIR`; the CLI's `system/init` must report `apiKeySource == "none"`, only his allowed tools and no MCP servers (`strict_mcp_config`, the account's claude.ai connectors off), or every later reply is blocked; no `anthropic` import anywhere and the SDK only in the responder; at a limit he is silent until it resets (a warning mutes him for an hour and re-checks — v4.4 review #9; a reply billed as extra usage is dropped and a 429 mutes him — #4); every usage line is `subscription` |
+| Hermes speaking in Agora, or answering anyone but the owner (v5.1) | he has no turns and is out of every speaker's allowlist; his own `route` only counts Agora's lines and answers only the owner in the private room; every send goes through `send_private`, which refuses any other room (pinned by `tests/test_herald.py`) |
+| The ElevenLabs key or a digest's text leaking (v5.1) | the key lives in `server/hermes.env` (0600, his service only), leaves the environment at start, and is never logged (an HTTP error by its status); texts never reach a log, the state file or a usage line; the monthly character cap guards Lumi's shared credits |
 | Claude's tools reaching beyond his folder (v4.5) | the owner gave him the web (`WebSearch`, `WebFetch`) and his own folder (`Read`, `Write`, `Edit`, `Glob`, `Grep` in `/workspace` = the host's `~/matrix-agora/claude-workspace`); nothing else runs (`Bash`, agents, skills disallowed). Our own `PreToolUse` hook (`tool_denial`, pure) checks every call before it runs: a path outside `/workspace` (absolute, relative, `..`, a glob) — so never `state/`, the other agents' sessions, `/proc` or the CLI's config — and a `WebFetch` of a private, loopback or local address (the homeserver, the panel, the LAN) are denied. Web pages can carry instructions (prompt injection): the outgoing guard still checks every line he sends |
 
 HTTP without TLS on the LAN is a deliberate PoC trade-off: passwords travel in plaintext over the home network. Before any external access: Tailscale (or a reverse proxy with TLS).
@@ -353,7 +403,7 @@ HTTP without TLS on the LAN is a deliberate PoC trade-off: passwords travel in p
 ## Observability
 
 - Each agent logs to `state/logs/<name>.log` (rotating, 1 MB × 3) and the console; in a container the same file arrives via the `state/` mount, and `docker logs` shows the console stream.
-- Log lines record events — joined, `ignored` (with the reason), replied, summary / memory / plan / today written, usage-write failed — **never** message, summary, memory or plan texts, tokens, passwords or keys. That is what makes the panel's log view safe to render.
+- Log lines record events — joined, `ignored` (with the reason), replied, summary / memory / plan / today written, usage-write failed, v5.1 Hermes's digest and answer lines (counts and reasons) — **never** message, summary, memory or plan texts, tokens, passwords or keys. That is what makes the panel's log view safe to render.
 - `state/<name>.usage.jsonl` is the metrics stream: one line per Gemini call with token counts; `usage_report.py` and the panel aggregate it (§Token accounting).
 - The panel logs its own actions to its container log (`docker logs panel`) — same rules: no tokens, no texts.
 - The panel (any LAN browser, with the token) is the live view: the simulation's health and services, agent state and logs, memory, plans, the today block, the token table, host metrics.

@@ -186,3 +186,25 @@ def test_a_herald_is_concerned_only_by_his_own_capabilities_settings():
         assert not concerns(BY_NAME[name], hermes), name
     from agents.settings import Setting
     assert concerns(Setting("X", "int", "1", "g", "cap:digest", None, "x"), hermes)
+
+
+def test_hermes_settings_are_the_chats_and_only_his():
+    """v5.1: six service settings of the Matrix chat, scoped to `digest`; the voice id is letters and digits or
+    empty (text only); his key is never tunable."""
+    from pathlib import Path
+
+    from agents.roster import load_member
+    names = [s.name for s in SCHEMA if s.name.startswith("HERMES_")]
+    assert names == ["HERMES_DIGEST_EVERY_S", "HERMES_DIGEST_MIN_MESSAGES", "HERMES_DIGEST_MAX_CHARS",
+                     "HERMES_DIGEST_HOURS", "HERMES_TTS_MONTHLY_CHARS", "HERMES_VOICE_ID"]
+    assert {(BY_NAME[n].service, BY_NAME[n].scope, BY_NAME[n].group) for n in names} == {("matrix-chat", "cap:digest", "hermes")}
+    assert [BY_NAME[n].default for n in names] == ["14400", "5", "1500", "09-23", "150000", ""]
+    hermes = load_member(Path("agents/hermes.toml"))
+    assert {s.name for s in SCHEMA if concerns(s, hermes)} == set(names)
+    assert not {s.name for m in ROOM.values() for s in SCHEMA if concerns(s, m)} & set(names)
+    assert "ELEVENLABS_API_KEY" not in BY_NAME
+    assert validate("HERMES_VOICE_ID", "AbCdEf0123456789") == ("AbCdEf0123456789", None)
+    assert validate("HERMES_VOICE_ID", "") == ("", None)
+    assert validate("HERMES_VOICE_ID", "../x")[0] is None and validate("HERMES_VOICE_ID", "a b")[0] is None
+    assert validate("HERMES_DIGEST_HOURS", "09-23") == ("09-23", None)
+    assert validate("HERMES_DIGEST_EVERY_S", "600")[0] is None  # at least an hour
