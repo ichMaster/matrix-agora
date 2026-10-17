@@ -59,9 +59,14 @@ class FakeClient:
     async def room_typing(self, room, on):
         self.typing.append((room, on))
 
+    fail_page: int | None = None  # review #3: this page answers with an error
+
     async def room_messages(self, room_id, start=None, direction=None, limit=100):
+        from nio import RoomMessagesError
         assert room_id == AGORA
         page = 0 if start == "s1" else int(start[1:])
+        if page == self.fail_page:
+            return RoomMessagesError("bad gateway", "502")
         chunk = self.events[page * limit:(page + 1) * limit]
         return SimpleNamespace(chunk=chunk, end=f"p{page + 1}")
 
@@ -416,3 +421,29 @@ def test_main_runs_a_herald_as_his_own_process(monkeypatch):
     monkeypatch.setattr(agent_mod.sys, "argv", ["agent.py", "agents/hermes.toml"])
     agent_mod.main()
     assert ran == ["herald", "run"]
+
+
+
+@pytest.mark.parametrize("fail_page", [0, 1])
+def test_a_failed_page_never_moves_the_point_or_says_nothing_new(tmp_path, monkeypatch, caplog, fail_page):
+    """Review #3: 250 lines since the point and a page answers 502 — no digest from a partial read, the point stays,
+    «підсумок» never hears "nothing new", and the retry reads it all."""
+    room = talk(251, 9)
+    point = room[-1]
+    llm = FakeLLM()
+    h, client = make(tmp_path, monkeypatch, events=room, llm=llm,
+                     state=DigestState(room="!dm", point_event=point.event_id, point_ts=point.server_timestamp))
+    client.fail_page = fail_page
+    assert asyncio.run(h.digest(asked=True)) is False
+    assert client.sent == [] and llm.calls == [] and "the room could not be read" in caplog.text
+    assert load_digest_state(tmp_path / "hermes.digest.json").point_event == point.event_id
+    client.fail_page = None
+    assert asyncio.run(h.digest(asked=True)) is True
+    assert llm.calls[0].contents.count("\n") == 249                  # all 250 lines since the point
+
+
+def test_a_question_is_never_answered_from_a_partial_read(tmp_path, monkeypatch):
+    llm = FakeLLM()
+    h, client = make(tmp_path, monkeypatch, events=talk(5), llm=llm, state=DigestState(room="!dm"))
+    client.fail_page = 0
+    assert asyncio.run(h.answer("що було?")) is False and client.sent == [] and llm.calls == []

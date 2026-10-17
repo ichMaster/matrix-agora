@@ -192,8 +192,10 @@ class Herald:
 
     # --- reading the room -------------------------------------------------------------------------------------------
     async def fetch(self, *, stop_event: str | None = None, stop_ts: int | None = None, since_ms: int | None = None,
-                    limit: int = COLLECT_MAX) -> list[Message]:
-        """Agora's text messages, newest first, paged back from the latest sync until the stop or the bound."""
+                    limit: int = COLLECT_MAX) -> tuple[list[Message], bool]:
+        """Agora's text messages, newest first, paged back from the latest sync until the stop or the bound — and
+        whether the read completed (review #3): False when a page failed before the stop, the bound or the room's
+        start, so nothing is digested from a partial read."""
         token = getattr(self.client, "next_batch", None)
         out: list[Message] = []
         for _ in range(MAX_PAGES):
@@ -201,7 +203,7 @@ class Herald:
                                                    limit=PAGE)
             if isinstance(resp, RoomMessagesError):
                 log.error("reading the room failed: %s", resp.status_code or "error")
-                break
+                return out, False
             done = False
             for e in resp.chunk:
                 if not isinstance(e, RoomMessageText):
@@ -215,13 +217,13 @@ class Herald:
             if done or not resp.chunk or not isinstance(end, str) or end == token or len(out) >= limit * 2:
                 break
             token = end
-        return out
+        return out, True  # the stop, the room's start, or the bound (the newest are what a digest covers)
 
-    async def collect_since_point(self) -> list[Message]:
-        newest_first = await self.fetch(stop_event=self.state.point_event, stop_ts=self.state.point_ts,
-                                        since_ms=None if self.state.point_ts is not None or self.state.point_event
-                                        else self.clock() - self.every_ms)
-        return since_point(newest_first, self.state, self.clock(), self.every_ms)
+    async def collect_since_point(self) -> tuple[list[Message], bool]:
+        newest_first, complete = await self.fetch(
+            stop_event=self.state.point_event, stop_ts=self.state.point_ts,
+            since_ms=None if self.state.point_ts is not None or self.state.point_event else self.clock() - self.every_ms)
+        return since_point(newest_first, self.state, self.clock(), self.every_ms), complete
 
     # --- the digest -------------------------------------------------------------------------------------------------
     async def digest(self, asked: bool = False) -> bool:
@@ -236,7 +238,10 @@ class Herald:
             def settled() -> None:
                 self.new_count = max(0, self.new_count - seen)  # what arrived meanwhile counts toward the next one
 
-            messages = await self.collect_since_point()
+            messages, complete = await self.collect_since_point()
+            if not complete:  # never digest a partial read, never say "nothing new" from one (review #3)
+                log.error("digest: the room could not be read — retrying later")
+                return False
             if not messages:
                 log.info("digest: nothing new")
                 settled()
@@ -334,7 +339,11 @@ class Herald:
             if await self.ensure_private_room() is None:
                 return False
             since = ask_window(self.clock())
-            messages = collect(await self.fetch(since_ms=since, limit=ASK_MAX), since_ms=since, limit=ASK_MAX)
+            newest_first, complete = await self.fetch(since_ms=since, limit=ASK_MAX)
+            if not complete:  # an answer from part of the week could say «not a word» falsely (review #3)
+                log.error("ask: the room could not be read")
+                return False
+            messages = collect(newest_first, since_ms=since, limit=ASK_MAX)
             if not messages:
                 await self.send_text(NOTHING_RECENT)
                 log.info("ask: nothing in the window")
@@ -448,7 +457,7 @@ class Herald:
         await self.join_pending_invites()
         await self.ensure_private_room()
         try:
-            self.new_count = len(await self.collect_since_point())
+            self.new_count = len((await self.collect_since_point())[0])
         except Exception:
             log.exception("counting the room since the last digest failed (starting from zero)")
         log.info("%s: %d new room messages since the last digest", self.cfg.localpart, self.new_count)
