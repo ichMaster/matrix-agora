@@ -237,3 +237,12 @@ def test_hermes_settings_are_in_both_env_examples_with_the_schema_defaults():
 
 def test_the_panel_gets_the_model_prices():
     assert SERVICES["panel"]["environment"]["PRICE_MODELS"] == "${PRICE_MODELS:-}"
+
+
+
+def test_the_shared_server_example_never_invites_hermes_secrets():
+    """Review #10: the server's .env is read by every Gemini container — the ElevenLabs key never goes there."""
+    lines = [line for line in (ROOT / "server" / ".env.example").read_text(encoding="utf-8").splitlines()
+             if "ELEVENLABS_API_KEY" in line or "hermes.env" in line]
+    assert lines and all("never" in line or "only in" in line for line in lines), lines
+    assert "dev mode" not in "\n".join(lines)
