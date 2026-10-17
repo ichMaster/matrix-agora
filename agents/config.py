@@ -70,10 +70,10 @@ def _require(env: dict[str, str], key: str) -> str:
     return value
 
 
-def load_canon(common: Path, personal: Path) -> str:
-    """Common + personal canon; a missing or empty file refuses to start."""
+def load_canon(*paths: Path) -> str:
+    """Common + personal canon (or a herald's own file alone); a missing or empty file refuses to start."""
     parts = []
-    for path in (common, personal):
+    for path in paths:
         try:
             text = path.read_text(encoding="utf-8").strip()
         except FileNotFoundError as exc:
@@ -106,7 +106,10 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
     for key in required:
         if not str(data.get(key, "")).strip():
             raise ConfigError(f"{toml_path}: missing '{key}'")
-    canon = load_canon(COMMON_CANON, Path(str(data["canon"]))) if member.can("canon") else ""
+    canon = ""
+    if member.can("canon"):  # a herald's canon is his own file only (v5.1): common.md speaks to the room's speakers
+        personal = Path(str(data["canon"]))
+        canon = load_canon(personal) if member.type == "herald" else load_canon(COMMON_CANON, personal)
     life = None
     if member.can("life"):
         life_path = Path(str(data["life"]))

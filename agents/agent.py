@@ -109,7 +109,7 @@ from agents.plans import (
     strip_tags,
 )
 from agents.responder import Turn, responder_for, trim_to_sentence
-from agents.roster import Member, load_roster
+from agents.roster import Member, load_roster, speakers
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.session import load_session, save_session
 from agents.settings import start as settings_start
@@ -154,7 +154,8 @@ class Agent:
         # the room's members come from the registry (v4.1): nothing in the code names them
         self.roster = roster if roster is not None else load_roster(cfg.simulation, strict_for=cfg.localpart)
         self.me = self.roster.get(cfg.localpart) or Member(cfg.localpart, cfg.user_id, cfg.name, (cfg.name.lower(),))
-        self.others = {m.user_id: m for m in self.roster.values() if m.user_id != cfg.user_id}
+        # the members it talks with — never a herald (v5.1): he is not allowlisted and takes no turn
+        self.others = {m.user_id: m for m in speakers(self.roster.values()) if m.user_id != cfg.user_id}
         self.personas = [m for m in self.others.values() if m.type == "persona"]
         self.client = AsyncClient(cfg.homeserver, cfg.user_id)
         self.started = False  # flips True after the first sync; nothing earlier is handled
@@ -227,7 +228,8 @@ class Agent:
         self.timeline: list[tuple[str, int, str]] = []  # (name, server_ts_ms, event_id), parallel to history
         self.last_owner: tuple[str, str] | None = None  # (event_id, text) of the owner's latest message
         self.rng = random.random  # injectable in tests
-        self.names = {cfg.user_id: cfg.name, cfg.owner: "Ich", **{uid: m.name for uid, m in self.others.items()}}
+        self.names = {cfg.user_id: cfg.name, cfg.owner: "Ich",
+                      **{m.user_id: m.name for m in self.roster.values() if m.user_id != cfg.user_id}}
         self.summary: str | None = None  # last-session memory (v2.1)
         self.memory_file = cfg.memory_file
         self.session: list[tuple[str, str]] = []  # every room message since the last summary

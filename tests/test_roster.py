@@ -49,7 +49,8 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
         "@ada:agora.lan", "Ада", "persona", "gemini", "ranked", 1.0)
     assert "адо" in ada.name_forms  # the vocative lives in the TOML now, not in code
     assert roster["bruno"].name_forms == ("бруно", "bruno")  # v4.4 review #8: the Latin form too
-    assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES) - {"mood", "pastlife", "nudge", "news"}
+    assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES) - {"mood", "pastlife", "nudge", "news",
+                                                                              "digest"}
     assert ada.panel["name"] == "Ada"
 
 
@@ -306,3 +307,67 @@ def test_news_belongs_to_the_assistant_and_one_member_per_initiative(tmp_path):
     roster = load_roster("agora")
     assert [n for n, m in roster.items() if m.can("news")] == ["claude"]
     assert [n for n, m in roster.items() if m.can("nudge")] == ["kit"]
+
+
+# --- v5.1: the herald (Hermes) — a member with no turns -------------------------------------------------------------
+def test_hermes_is_a_herald_with_no_turns_and_his_own_canon():
+    from pathlib import Path
+    hermes = load_member(Path("agents/hermes.toml"))
+    assert (hermes.type, hermes.engine, hermes.mode, hermes.name) == ("herald", "gemini", "none", "Гермес")
+    assert hermes.capabilities == TYPES["herald"] == frozenset({"canon", "digest"})
+    assert hermes.panel == {"name": "Hermes", "role": "messenger god · voice digests", "pronoun": "he"}
+
+
+@pytest.mark.parametrize("data,match", [
+    ({"type": "herald", "turns": {"mode": "ranked"}}, "a herald takes no turns"),
+    ({"type": "herald", "turns": {}}, "a herald takes no turns"),
+    ({"turns": {"mode": "none"}}, "turn mode 'none' belongs to the herald type only"),
+    ({"capabilities": {"digest": True}}, "'digest' belongs to the herald type only"),
+    ({"type": "creature", "capabilities": {"digest": True}}, "'digest' belongs to the herald type only"),
+])
+def test_the_herald_rules_are_named_errors(data, match):
+    with pytest.raises(RosterError, match=match):
+        parse_member("x", {"name": "X", "user_id": "@x:agora.lan", **data})
+
+
+def test_a_simulation_has_at_most_one_herald(tmp_path):
+    reg, agents = write_roster(tmp_path, 'name = "Кіт"\nuser_id = "@kit:agora.lan"\ntype = "herald"\n')
+    roster = load_roster("sim", reg, agents)
+    assert roster["kit"].mode == "none" and roster["kit"].can("digest")
+    (agents / "bruno.toml").write_text('name = "Бруно"\nuser_id = "@bruno:agora.lan"\ntype = "herald"\n')
+    with pytest.raises(RosterError, match="only one member may digest the room with 'digest'"):
+        load_roster("sim", reg, agents)
+
+
+def test_a_heralds_config_loads_his_own_canon_without_the_common_one(tmp_path):
+    from pathlib import Path
+    reg = tmp_path / "simulations.toml"  # the registry lists him from AGORA-084, with his compose service
+    reg.write_text(Path("simulations.toml").read_text(encoding="utf-8").replace('"claude"]', '"claude", "hermes"]'))
+    cfg = load_config("agents/hermes.toml", env={**ENV, "HERMES_PASSWORD": "pw"}, registry_path=reg)
+    common = Path("agents/canon/common.md").read_text(encoding="utf-8").strip()
+    own = Path("agents/canon/hermes.md").read_text(encoding="utf-8").strip()
+    assert cfg.canon == own and common not in cfg.canon
+    assert cfg.type == "herald" and cfg.can("digest") and cfg.life is None
+
+
+def test_hermes_canon_never_calls_a_persona_a_model_or_a_bot():
+    """He is openly not human, but nothing he is given may tie a persona to a banned word (the outgoing guard's
+    rule, v4.2): his canon passes the same check every digest will."""
+    from agents.logic import SENTENCE_SPLIT, outs_a_persona
+    personas = [m for m in load_roster("agora").values() if m.type == "persona"]
+    from pathlib import Path
+    text = Path("agents/canon/hermes.md").read_text(encoding="utf-8")
+    assert [s for s in SENTENCE_SPLIT.split(text) if outs_a_persona(s, personas)] == []
+
+
+def test_the_speaking_agents_never_allowlist_the_herald_but_name_him():
+    """v5.1: a line from Hermes in Agora — he never sends one — would be ignored, never answered."""
+    from pathlib import Path
+
+    from agents.logic import should_handle
+    hermes = load_member(Path("agents/hermes.toml"))
+    roster = {**load_roster("agora"), "hermes": hermes}
+    agent = Agent(CFG, llm=FakeLLM(), roster=roster)
+    assert hermes.user_id not in agent.others
+    assert should_handle(CFG.room_id, hermes.user_id, CFG, agent.others).reason == "sender-not-allowlisted"
+    assert agent.names[hermes.user_id] == "Гермес"

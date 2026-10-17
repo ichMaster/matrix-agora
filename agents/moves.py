@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from agents.roster import Member
+from agents.roster import Member, speakers
 from agents.turns import uniform
 
 KINDS = ("ask", "disagree", "plan", "story")  # drawn in this order; `answer` is what is left
@@ -67,7 +67,8 @@ def persona_move(event_id: str, me: Member, roster: Mapping[str, Member], owner_
         return Move("answer")
     if kind != "ask":
         return Move(kind)
-    names = sorted({m.name for m in roster.values() if m.user_id != me.user_id} | {owner_name})
+    # v5.1: never the herald — he takes no turn, so a question to him would hang
+    names = sorted({m.name for m in speakers(roster.values()) if m.user_id != me.user_id} | {owner_name})
     pick = names[min(int(uniform(event_id, "ask:" + me.localpart) * len(names)), len(names) - 1)]
     return Move("ask", pick)
 

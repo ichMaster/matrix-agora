@@ -142,10 +142,13 @@ def validate(name: str, raw: object) -> tuple[str | None, str | None]:
 
 
 def concerns(setting: Setting, member: Member) -> bool:
-    """Whether a setting changes what `member` does — the agents a change restarts."""
+    """Whether a setting changes what `member` does — the agents a change restarts. A herald (v5.1) reads only the
+    settings of his own capabilities: a turn setting or the room's model never restarts him."""
+    kind, _, value = setting.scope.partition(":")
+    if member.type == "herald" and kind != "cap":
+        return False
     if setting.scope == "shared":
         return True
-    kind, _, value = setting.scope.partition(":")
     if kind == "type":
         return member.type == value
     if kind == "cap":

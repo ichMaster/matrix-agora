@@ -22,7 +22,7 @@ log = logging.getLogger("agent.roster")
 
 # the type sets the default capabilities; a later phase adds the bridge
 CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood", "pastlife", "nudge",
-                "news")
+                "news", "digest")
 TYPES: dict[str, frozenset[str]] = {
     # a human persona: the full memory stack, no horoscope
     "persona": frozenset({"canon", "life", "summary", "chronicle", "plans", "today", "world"}),
@@ -32,12 +32,17 @@ TYPES: dict[str, frozenset[str]] = {
     # v4.4 — an assistant (Claude, as itself): no canon, no life, no memory — a short brief in code;
     # v4.5 — news he brings himself after a quiet stretch (`news`)
     "assistant": frozenset({"news"}),
+    # v5.1 — a herald (Hermes): no turns, never a word in the room; he reads it and digests it for the owner in his
+    # own room (`digest`); his canon is his own file only
+    "herald": frozenset({"canon", "digest"}),
 }
 CREATURE_ONLY = frozenset({"pastlife", "nudge"})  # v4.3: no persona remembers a past life or speaks first
 ASSISTANT_ONLY = frozenset({"news"})               # v4.5: only Claude brings news unasked
+HERALD_ONLY = frozenset({"digest"})                # v5.1: only the herald digests the room
 INITIATIVES = ("nudge", "news")                    # who may speak first: one member per initiative
+SINGLES = (*INITIATIVES, "digest")                 # one member per simulation with each of these
 ENGINES = ("gemini", "claude-sdk")  # v4.4: Claude through the Agent SDK, on the subscription only
-MODES = ("ranked", "ambient", "mention-only")
+MODES = ("ranked", "ambient", "mention-only", "none")  # v5.1: `none` — a herald's, in no turn pool
 
 
 class RosterError(RuntimeError):
@@ -88,12 +93,19 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
     for cap in sorted(caps & ASSISTANT_ONLY):
         if kind != "assistant":
             raise RosterError(f"{source}: '{cap}' belongs to the assistant type only")
+    for cap in sorted(caps & HERALD_ONLY):
+        if kind != "herald":
+            raise RosterError(f"{source}: '{cap}' belongs to the herald type only")
     turns = data.get("turns", {})
     if not isinstance(turns, dict):
         raise RosterError(f"{source}: [turns] must be a table")
-    mode = str(turns.get("mode", "ranked"))
+    if kind == "herald" and "turns" in data:  # v5.1: he never takes a turn — nothing to tune
+        raise RosterError(f"{source}: a herald takes no turns — drop its [turns] table")
+    mode = "none" if kind == "herald" else str(turns.get("mode", "ranked"))
     if mode not in MODES:
         raise RosterError(f"{source}: unknown turn mode {mode!r} (known: {', '.join(MODES)})")
+    if mode == "none" and kind != "herald":
+        raise RosterError(f"{source}: turn mode 'none' belongs to the herald type only")
     weight = turns.get("weight", 1.0)
     if isinstance(weight, bool) or not isinstance(weight, int | float) or not math.isfinite(weight) or weight <= 0:
         raise RosterError(f"{source}: [turns] weight must be a positive finite number")
@@ -144,12 +156,17 @@ def load_roster(sim_id: str, registry_path: Path = REGISTRY_PATH, agents_dir: Pa
             if strict_for is None or name == strict_for:
                 raise
             log.error("roster: skipping %s — %s", name, exc)
-    for initiative in INITIATIVES:  # one member per initiative: two would race on the same silence (v4.3 review #6)
-        initiators = [n for n, m in roster.items() if m.can(initiative)]
-        if len(initiators) > 1:
-            raise RosterError(f"{sim_id}: only one member may start conversations with '{initiative}', "
-                              f"got {', '.join(initiators)}")
+    for single in SINGLES:  # one member per initiative: two would race on the same silence (v4.3 review #6); one herald
+        holders = [n for n, m in roster.items() if m.can(single)]
+        if len(holders) > 1:
+            what = "digest the room" if single == "digest" else "start conversations"
+            raise RosterError(f"{sim_id}: only one member may {what} with '{single}', got {', '.join(holders)}")
     return roster
+
+
+def speakers(members):
+    """The members who take part in the talk — every one but a herald (mode `none`, v5.1)."""
+    return [m for m in members if m.mode != "none"]
 
 
 def main() -> None:

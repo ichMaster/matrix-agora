@@ -174,3 +174,15 @@ def test_a_flat_or_hand_edited_file_is_named_not_applied(tmp_path, caplog):
     env = {}
     assert start(env, tmp_path, CFG) == [] and "MAX_BOT_TURNS" not in env
     assert "settings: MAX_BOT_TURNS ignored — not under services/agents" in caplog.text
+
+
+def test_a_herald_is_concerned_only_by_his_own_capabilities_settings():
+    """v5.1: a turn setting, a persona's or the room's model never restarts Hermes."""
+    from pathlib import Path
+
+    from agents.roster import load_member
+    hermes = load_member(Path("agents/hermes.toml"))
+    for name in ("MAX_BOT_TURNS", "CAT_REACT_P", "PERSONA_ASK_P", "GEMINI_MODEL", "SESSION_IDLE_S", "MEMORY_DAYS"):
+        assert not concerns(BY_NAME[name], hermes), name
+    from agents.settings import Setting
+    assert concerns(Setting("X", "int", "1", "g", "cap:digest", None, "x"), hermes)

@@ -14,7 +14,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 
 from agents.config import AgentConfig
-from agents.roster import Member
+from agents.roster import Member, speakers
 
 PASS_RE = re.compile(r"^\W*PASS\W*$")
 TRAILING_PASS_RE = re.compile(r"\s*\bPASS\W*$")
@@ -103,7 +103,8 @@ def uniform(event_id: str, localpart: str) -> float:
 
 
 def named(text: str, members: Iterable[Member]) -> list[Member]:
-    return [m for m in members if mentions(text, m.name_forms, m.user_id)]
+    """The members a message names — never a herald (v5.1): he takes no turn, so naming him chooses no one."""
+    return [m for m in speakers(members) if mentions(text, m.name_forms, m.user_id)]
 
 
 def owner_repliers(event_id: str, text: str, roster: Mapping[str, Member], k: int) -> list[str]:
@@ -236,7 +237,8 @@ def decide_reply(
     def delay() -> float:
         return 1.0 + rng() * max(reply_delay_s - 1.0, 0.0)
 
-    allowed = sender == cfg.owner or any(m.user_id == sender for m in roster.values())
+    talkers = speakers(roster.values())  # v5.1: a herald is never answered
+    allowed = sender == cfg.owner or any(m.user_id == sender for m in talkers)
     if me.mode == "ambient" and allowed and sender != me.user_id:
         return _ambient(sender, text, event_id, wave, cfg, me, max_bot_turns, react_p, purr_p, delay)
     if sender != cfg.owner and is_purr(text):
@@ -247,7 +249,7 @@ def decide_reply(
         if mentions(text, me.name_forms, me.user_id):
             return ReplyDecision(True, 0.0, "owner-mentioned-me")
         return ReplyDecision(True, delay(), "owner-chose-me")
-    if any(m.user_id == sender for m in roster.values()) and sender != me.user_id:
+    if any(m.user_id == sender for m in talkers) and sender != me.user_id:
         if next_speaker(event_id, sender, text, roster) != me.localpart:
             return ReplyDecision(False, reason="not-next-speaker")
         if wave >= max_bot_turns:

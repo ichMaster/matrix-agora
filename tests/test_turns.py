@@ -2,11 +2,12 @@ import random
 import subprocess
 import sys
 from collections import Counter
+from pathlib import Path
 
 import pytest
 
 from agents.config import AgentConfig
-from agents.roster import Member, load_roster
+from agents.roster import Member, load_member, load_roster
 from agents.turns import (
     addresses_everyone,
     decide_reply,
@@ -509,3 +510,30 @@ def test_claudes_lower_weight_leaves_ada_and_bruno_more_first_places():
     firsts = [rank(f"$w{i}", ranked)[0] for i in range(6000)]
     assert 0.14 < firsts.count("claude") / 6000 < 0.20
     assert firsts.count("ada") > 2 * firsts.count("claude") and firsts.count("bruno") > 2 * firsts.count("claude")
+
+
+# --- v5.1: the herald takes no turn ----------------------------------------------------------------------------------
+HERMES = load_member(Path("agents/hermes.toml"))
+WITH_HERMES = {**ROSTER, "hermes": HERMES}
+
+
+def test_naming_the_herald_chooses_no_one_and_the_room_answers_as_if_unnamed():
+    unnamed = owner_repliers("$e", "як справи?", ROSTER, 2)
+    assert owner_repliers("$e", "Гермесе, як справи?", WITH_HERMES, 2) == unnamed
+    assert "hermes" not in owner_repliers("$e", "всім привіт", WITH_HERMES, 2)
+    assert fallback_replier("$e", "Гермесе, як справи?", WITH_HERMES, 2) == fallback_replier("$e", "як справи?", ROSTER, 2)
+    assert next_speaker("$e", BRUNO.user_id, "Гермесе, а ти?", WITH_HERMES) == next_speaker("$e", BRUNO.user_id, "а ти?", ROSTER)
+
+
+def test_a_heralds_message_is_never_answered():
+    d = decide_reply(HERMES.user_id, "Адо, привіт", "$e", 1, CFG, ME, WITH_HERMES, rng=rng(0.0), **KW)
+    assert (d.reply, d.reason) == (False, "not-allowlisted")
+
+
+def test_the_ask_move_never_addresses_the_herald():
+    from agents.moves import persona_move
+    weights = {"ask": 1.0}
+    for i in range(200):
+        move = persona_move(f"$e{i}", ME, WITH_HERMES, "Ich", weights, has_plans=True, has_life=True)
+        assert move.kind == "ask" and move.addressee != "Гермес"
+        assert move == persona_move(f"$e{i}", ME, ROSTER, "Ich", weights, has_plans=True, has_life=True)
