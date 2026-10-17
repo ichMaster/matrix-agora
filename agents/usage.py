@@ -308,6 +308,28 @@ def _usd(row: Row, prices: tuple[float | None, float | None], models: Prices | N
     return "—" if c is None else f"{c:.4f}"
 
 
+def _prices_line(price_in: float | None, price_out: float | None, models: Prices | None) -> str:
+    """The report's price line: the pairs that are set (v5.1 review #5 — a model's own pair alone is not "no
+    prices", and the models without one show «—», never $0)."""
+    parts = [f"${price_in:.2f} input / ${price_out:.2f} output per 1M tokens"] \
+        if price_in is not None and price_out is not None else []
+    parts += [f"{m} ${a:g} / ${b:g}" for m, (a, b) in sorted((models or {}).items())]
+    if not parts:
+        return "No prices set (`PRICE_INPUT_PER_1M` / `PRICE_OUTPUT_PER_1M`) — tokens only."
+    rest = "" if price_in is not None and price_out is not None else \
+        " Other models have no price (`PRICE_INPUT_PER_1M` / `PRICE_OUTPUT_PER_1M`): a cost that includes them is —."
+    return "Prices: " + "; ".join(parts) + "." + rest
+
+
+def _per(c: float | None, divisor: float, digits: int) -> str:
+    """A cost divided (an average, a projection), or «—» when it cannot be known — never a made-up $0."""
+    return "—" if c is None else f"${c / divisor:.{digits}f}"
+
+
+def _cost_change(now: float | None, before: float | None) -> str:
+    return "—" if now is None or before is None else _change(now, before)
+
+
 def _change(now: float, before: float) -> str:
     if not before:
         return "—"
@@ -338,10 +360,7 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
     out = [f"# Token usage — {today.isoformat()}",
            "",
            f"Generated {now.strftime('%Y-%m-%d %H:%M')} ({now.tzname() or 'local'}). "
-           + (f"Prices: ${price_in:.2f} input / ${price_out:.2f} output per 1M tokens"
-              + "".join(f"; {m} ${a:g} / ${b:g}" for m, (a, b) in sorted((models or {}).items())) + "."
-              if price_in is not None and price_out is not None
-              else "No prices set (`PRICE_INPUT_PER_1M` / `PRICE_OUTPUT_PER_1M`) — tokens only."),
+           + _prices_line(price_in, price_out, models),
            ""]
 
     # yesterday
@@ -355,7 +374,7 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
                       markdown=True), ""]
         out += [f"vs {(yday - timedelta(days=1)).isoformat()}: calls {_change(y.calls, before.calls)}, "
                 f"tokens {_change(y.total, before.total)}"
-                + (f", cost {_change(cost(y, *prices, models) or 0.0, cost(before, *prices, models) or 0.0)}"
+                + (f", cost {_cost_change(cost(y, *prices, models), cost(before, *prices, models))}"
                    if priced else "") + ".", ""]
         k_head = ["kind", "calls", "share of tokens", "avg input / call", "avg output / call", "failed"] + usd
         k_body = [[k, _n(r.calls), f"{(r.total / y.total * 100 if y.total else 0):.0f}%",
@@ -375,7 +394,7 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
             table(["day", "calls", "failed", "input", "output", "total"] + chars + usd,
                   d_body + [stats_row("**total**", w)], markdown=True), "",
             f"Daily average: {_n(w.calls / 7)} calls, {_n(w.total / 7)} tokens"
-            + (f", ${(cost(w, *prices, models) or 0.0) / 7:.4f}" if priced else "") + "."
+            + (f", {_per(cost(w, *prices, models), 7, 4)}" if priced else "") + "."
             + (f" Busiest day: {max(by_day.items(), key=lambda kv: kv[1].total)[0]}." if by_day else ""), ""]
 
     # the month of yesterday, so far
@@ -385,8 +404,8 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
     out += [f"## Month so far — {m_first.strftime('%Y-%m')} (days 1–{yday.day} of {m_days})", "",
             f"{_n(m.calls)} calls · {_n(m.failed)} failed · {_n(m.total)} tokens "
             f"({_n(m.prompt)} input, {_n(m.output)} output)"
-            + (f" · ${cost(m, *prices, models) or 0.0:.4f} · projected month "
-               f"${(cost(m, *prices, models) or 0.0) / yday.day * m_days:.2f}"
+            + (f" · {_per(cost(m, *prices, models), 1, 4)} · projected month "
+               f"{_per(cost(m, *prices, models), yday.day / m_days, 2)}"
                if priced else "") + ".", ""]
 
     # today so far

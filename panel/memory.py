@@ -255,6 +255,7 @@ def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None
     total["cost"] = money(total_row)
     return {
         "available": True, "since": since.isoformat(), "until": today.isoformat(), "priced": priced,
+        "default_priced": p_in is not None and p_out is not None,  # v5.1 review #5: the room's own models
         "corrupt_lines": bad, "rows": out_rows, "per_agent": per_agent, "total": total,
         "per_day": [{"day": (since + timedelta(days=i)).isoformat(),
                      "agents": per_day.get((since + timedelta(days=i)).isoformat(), {})} for i in range(days)],

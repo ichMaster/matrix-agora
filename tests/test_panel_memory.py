@@ -287,3 +287,15 @@ def test_the_usage_view_counts_characters_and_prices_pro_by_its_own_pair(state, 
     assert rows["digest_voice"]["cost"] == 14.0 and rows["digest_voice"]["characters"] == 0
     assert (rows["tts"]["characters"], rows["tts"]["cost"], rows["tts"]["billing"]) == (1300, None, "subscription")
     assert u["per_agent"]["hermes"]["characters"] == 1300 and u["total"]["characters"] == 1300
+
+
+def test_the_usage_view_says_when_only_some_models_are_priced(state, monkeypatch):
+    """Review #5: PRICE_MODELS alone prices those models; the page then says the others have no price."""
+    monkeypatch.delenv("PRICE_INPUT_PER_1M", raising=False)
+    monkeypatch.delenv("PRICE_OUTPUT_PER_1M", raising=False)
+    monkeypatch.setenv("PRICE_MODELS", "gemini-3.1-pro-preview=2/12")
+    u = usage_view(state, 3, TODAY)
+    assert u["priced"] is True and u["default_priced"] is False
+    assert all(r["cost"] is None for r in u["rows"])                  # the fixture's rows are another model
+    from panel.app import STATIC_DIR
+    assert "Only some models have prices (PRICE_MODELS)" in (STATIC_DIR / "app.js").read_text(encoding="utf-8")

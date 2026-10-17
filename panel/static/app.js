@@ -467,7 +467,8 @@ function usageCardHtml() {
       <div style="display:flex;gap:14px;align-items:flex-end"><div>${bars}</div>${filter === "all" ? legend : ""}</div></div>
     <div class="table-scroll"><table class="table"><thead><tr><th>day</th><th>agent</th><th>kind</th><th class="r">calls</th><th class="r">input</th><th class="r">output</th>${chars ? `<th class="r">chars</th>` : ""}<th>billing</th>${u.priced ? `<th class="r">cost $</th>` : ""}</tr></thead>
       <tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
-    ${u.priced ? "" : `<div class="muted" style="font-size:12px">Prices are not configured — cost is not calculated.</div>`}
+    ${u.priced ? (u.default_priced === false ? `<div class="muted" style="font-size:12px">Only some models have prices (PRICE_MODELS) — a cost that includes the others shows —.</div>` : "")
+      : `<div class="muted" style="font-size:12px">Prices are not configured — cost is not calculated.</div>`}
   </section>`;
 }
 

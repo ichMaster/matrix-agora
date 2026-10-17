@@ -186,3 +186,16 @@ def test_the_report_command_reads_price_models_and_warns_on_a_bad_entry(tmp_path
     out, err = capsys.readouterr()
     assert "'broken'" in err and "| 2026-10-02 | hermes | digest_voice | 1 | 0 | 10000 | 2000 | 12000 | 0 | api | 0.0440 |" in out
     assert "| 2026-10-02 | hermes | tts | 1 | 0 | 0 | 0 | 0 | 1200 | subscription | — |" in out
+
+
+def test_with_only_a_models_pair_the_report_never_prints_a_made_up_zero():
+    """Review #5: the shipped examples set PRICE_MODELS and leave the Flash pair empty — the Flash rows' cost is
+    unknown, so a total, an average or a projection that includes them is «—», never $0.0000."""
+    from datetime import datetime
+    models = {"gemini-3.1-pro-preview": (2.0, 12.0)}
+    md = daily_report(DAILY + hermes_lines(), datetime(2026, 10, 3, 7, 0, tzinfo=KYIV), None, None, models)
+    assert "No prices set" not in md and "Prices: gemini-3.1-pro-preview $2 / $12." in md
+    assert "Other models have no price" in md
+    assert "$0.0000" not in md and "projected month —" in md and ", cost —." in md
+    hermes_only = daily_report(hermes_lines(), datetime(2026, 10, 3, 7, 0, tzinfo=KYIV), None, None, models)
+    assert "| hermes | 2 | 0 | 10,000 | 2,000 | 12,000 | 1,200 | 0.0440 |" in hermes_only  # his own rows priced
