@@ -299,3 +299,15 @@ def test_the_usage_view_says_when_only_some_models_are_priced(state, monkeypatch
     assert all(r["cost"] is None for r in u["rows"])                  # the fixture's rows are another model
     from panel.app import STATIC_DIR
     assert "Only some models have prices (PRICE_MODELS)" in (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+
+
+def test_a_malformed_price_models_entry_is_named_once(state, monkeypatch, caplog):
+    """Review #12: ARCHITECTURE says a malformed entry is ignored with a warning — the panel said nothing."""
+    import logging
+    caplog.set_level(logging.WARNING)
+    monkeypatch.setenv("PRICE_MODELS", "gemini-3.1-pro-preview=2/12, pro=twelve")
+    for _ in range(3):
+        u = usage_view(state, 3, TODAY)
+    assert u["priced"] is True
+    assert [r.getMessage() for r in caplog.records].count("PRICE_MODELS entry 'pro=twelve' is not model=in/out — ignored") == 1

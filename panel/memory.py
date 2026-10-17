@@ -8,6 +8,7 @@ module raw: they become `deviation: true` for the owner's eyes only.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from datetime import date, datetime, timedelta
@@ -17,6 +18,8 @@ from zoneinfo import ZoneInfo
 from agents.usage import Row, aggregate, cost, month_chars, parse_lines, parse_model_prices
 
 DAYS_SHOWN = 60
+log = logging.getLogger("panel.memory")
+_WARNED: set[str] = set()  # the malformed PRICE_MODELS entries already named in the log
 ITEM_RE = re.compile(r"^\s*(?:[-•*]|\d+[.)])\s+(.*\S)\s*$")
 TAG_RE = re.compile(r"\s*<!--.*?-->")
 MUTATION_RE = re.compile(r"<!--\s*mutation:")
@@ -223,7 +226,10 @@ def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None
     since = today - timedelta(days=days - 1)
     rows = aggregate(records, since, today)
     p_in, p_out = _price("PRICE_INPUT_PER_1M"), _price("PRICE_OUTPUT_PER_1M")
-    models, _ = parse_model_prices(os.environ.get("PRICE_MODELS"))  # v5.1: Hermes's Pro calls priced as Pro
+    models, bad_prices = parse_model_prices(os.environ.get("PRICE_MODELS"))  # v5.1: Hermes's Pro calls priced as Pro
+    for entry in sorted(set(bad_prices) - _WARNED):  # review #12: named once per entry — a price spec, never a secret
+        log.warning("PRICE_MODELS entry %r is not model=in/out — ignored", entry)
+        _WARNED.add(entry)
     priced = p_in is not None and p_out is not None or bool(models)
 
     def money(r):  # v4.4: only `api` tokens are priced; a subscription row has no cost, never $0
