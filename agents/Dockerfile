@@ -3,6 +3,9 @@
 # Two targets (v4.4): `agent` (Ada, Bruno, Кіт) and `claude` (+ the Claude Agent SDK and its bundled CLI).
 FROM python:3.12-slim AS agent
 
+# v5.1 — ffmpeg encodes the voice messages (OGG/Opus); every speaker needs it from v5.3, so the shared layer has it
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+
 COPY --from=ghcr.io/astral-sh/uv:0.10 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never \
     PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH"

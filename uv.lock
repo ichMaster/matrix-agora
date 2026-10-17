@@ -840,6 +840,7 @@ name = "matrix-agora"
 version = "4.7.1"
 source = { virtual = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "google-genai" },
     { name = "matrix-nio" },
     { name = "python-dotenv" },
@@ -865,6 +866,7 @@ panel = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.9" },
     { name = "google-genai", specifier = ">=1.0" },
     { name = "matrix-nio", specifier = ">=0.25" },
     { name = "python-dotenv", specifier = ">=1.0" },

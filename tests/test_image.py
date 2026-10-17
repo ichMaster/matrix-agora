@@ -30,3 +30,10 @@ def test_the_panel_gets_docker_and_compose_from_official_images():
     text = (ROOT / "panel" / "Dockerfile").read_text()
     assert "COPY --from=docker:27-cli /usr/local/bin/docker " in text
     assert "COPY --from=docker/compose-bin:v2" in text and "cli-plugins/docker-compose" in text
+
+
+def test_the_agent_image_has_ffmpeg_for_the_voice_messages():
+    """v5.1: Hermes encodes his digests to OGG/Opus; the `claude` target inherits the layer."""
+    text = (ROOT / "agents" / "Dockerfile").read_text()
+    agent = text.split("FROM agent AS claude")[0]
+    assert "apt-get install -y --no-install-recommends ffmpeg" in agent and "rm -rf /var/lib/apt/lists/*" in agent

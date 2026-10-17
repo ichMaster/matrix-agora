@@ -42,6 +42,7 @@ Two small axes bound by one agent codebase. **The agents' capabilities** grow: e
 | Owner's browser (LAN) | panel (Ubuntu) | HTTP :8090, LAN | the panel UI + API; Bearer `PANEL_TOKEN` on every API call |
 | Agents (Ubuntu) | homeserver (Ubuntu) | HTTP :8008, compose network | Matrix client-server API (`sync`, send, typing) |
 | Agents (Ubuntu) | Gemini API | HTTPS :443, outbound | replies, summaries, day memories, plans, today blocks |
+| Hermes (Ubuntu, v5.1) | ElevenLabs API | HTTPS :443, outbound | text to speech for his voice digests (`xi-api-key`) |
 | Panel (Ubuntu) | Docker daemon (Ubuntu) | local socket | simulation + agent containers: state, start/stop, logs |
 | Panel (Ubuntu) | homeserver (Ubuntu) | HTTP :8008, compose network | the simulation health probe (`/_matrix/client/versions`) |
 | `server/deploy.sh` (Mac) | Ubuntu host | SSH :22, LAN | rsync `server/` + remote `docker compose pull && up -d` |
@@ -50,7 +51,7 @@ Two small axes bound by one agent codebase. **The agents' capabilities** grow: e
 | Developer (Mac) | GitHub | HTTPS :443, outbound | `git push` triggers CI |
 | **Inbound from the internet** | — | **nothing** | no forwarded ports, federation off, the panel token-gated and LAN-only |
 
-Everything is plain HTTP inside the LAN (the PoC trade-off in §Security and access) and HTTPS to the two cloud services. There are no other listeners.
+Everything is plain HTTP inside the LAN (the PoC trade-off in §Security and access) and HTTPS to the cloud services. There are no other listeners.
 
 ## Tech stack
 
@@ -69,7 +70,9 @@ Everything is plain HTTP inside the LAN (the PoC trade-off in §Security and acc
 | GitHub Actions | CI | lint + tests + compose gates + image build on every push/PR; GHCR push on `vA.B.C` tags |
 | GHCR | registry | hosts the agent and panel images |
 | ruff + pytest | gates | lint and the unit/contract tests (nio/Gemini mocked, clock and randomness injected) |
-| Gemini API | external service | the only LLM and the only paid dependency; everything else is free and local |
+| Gemini API | external service | the Gemini agents' LLM and the paid API; Claude runs on the owner's subscription (v4.4) |
+| ElevenLabs API | external service (v5.1) | text to speech for Hermes's voice digests (`eleven_turbo_v2_5`, PCM 24 kHz) — the credits of Lumi's plan, shared with her; ported from Lumi's `voice/tts.py` (`agents/voice.py`) |
+| ffmpeg | the agent image (v5.1) | PCM → OGG/Opus 32 kb/s for an Element voice message (one fixed argv) |
 
 ## Components
 
@@ -123,6 +126,18 @@ The agents see each other, so without rules they would reply to each other endle
 4. **R4 — a rate, not a lock:** a candidate blocked by the limit pauses until the window frees (the oldest counted turn ages out) and then re-evaluates — only if nothing newer arrived meanwhile; a resumed decision always rolls `BOT_REPLY_P`, named or not (v4.5 review #2 — two agents naming each other would otherwise never stop). So the agents talk in bursts of at most `MAX_BOT_TURNS` per window until `PASS` or the probability gate ends the exchange; the owner never has to restart it (owner, 2026-10-10: background waves stay).
 5. **The fallback:** if no agent has answered an unnamed, non-group owner message within `FALLBACK_S` (default 30), the best-ranked ranked member that R1 did not choose answers. Each agent checks for itself from the timeline; busy with another reply, it re-arms briefly instead of giving up, and it re-checks right before sending, so a slow chosen answer that lands meanwhile is never doubled.
 6. **`PASS`:** if the model returns exactly `PASS` (tolerating surrounding whitespace), send nothing. The prompt must explicitly allow this. A `PASS` on its own line or at the very end of a longer reply is dropped and the rest is sent; nothing of its own left → nothing is sent — the sentinel never reaches the room (pinned by `tests/test_turns.py` and `tests/test_first_sync.py`).
+
+## Voice messages (v5.1)
+
+Hermes's digest goes out as an **Element voice message** (`agents/voice.py`). ElevenLabs speaks the text
+(`POST /v1/text-to-speech/{voice}?output_format=pcm_24000`, `eleven_turbo_v2_5`, `language_code` `uk`, Lumi's voice
+settings — stability 0.5, similarity 0.75, style 0.4; 60 s); the raw PCM gives the duration and the waveform (100
+peaks scaled to 0..1024) by arithmetic; ffmpeg encodes it to OGG/Opus (`-c:a libopus -b:a 32k -application voip -f
+ogg`); the file is uploaded to the homeserver's media store and sent as `m.audio` with `info {mimetype audio/ogg, size,
+duration}`, `org.matrix.msc1767.audio {duration, waveform}`, `org.matrix.msc3245.voice {}`, the text in `body`
+(with a `filename`, so clients that show captions show it) and in `org.matrix.msc1767.text`. Any failure of a step —
+the request, the encode, the upload — returns None, logged by type, HTTP status or exit code, never the key or the
+text, and the digest goes out as text only.
 
 ## Canon
 

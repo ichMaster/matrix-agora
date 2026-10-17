@@ -28,6 +28,7 @@ The panel is what this project is really building. Today it manages the first **
 - **Memories follow the life; plans drift from it.** Day memories are generated *from* the life story — new concrete details of each day, never copied text. Plans — for the year, the month, the week and the day — are intentions with mutations: people plan things that don't happen, and the memories tell what really did. The agent never knows which of its plans will fail.
 - **Everything is kept; what is old is compressed.** Nothing the agents lived is ever deleted: every day memory, day journal and plan stays in `state/`. Older time is summarized in layers — weeks from days, months from days, years from months — so the prompt carries yesterday in detail and last year in a paragraph. No full conversation logs, vector stores or RAG.
 - **Invention is bounded by the record.** Day memories, plans and the today block may invent what the agent does alone in Lviv, but anything involving the owner or the other agent comes only from the conversation journal — otherwise the two agents' memories would contradict each other — and a plan never commits the owner or the other agent to anything.
+- **The voice is a paid service too (v5).** ElevenLabs speaks for Hermes, on the credits of Lumi's plan; every call is counted in characters, and a monthly character cap guards the quota.
 - **Every model call is counted.** Each Gemini call appends a usage line (tokens, kind, ok) so the owner can always see what conversations cost. Counting and reporting only — no limits, budgets or billing.
 - **The repo deploys itself.** Configuration lives in the repo and reaches the server by script: `server/deploy.sh` pushes the whole stack — homeserver, panel, one container per agent — to the Ubuntu host, which pulls the images from GHCR. Nothing is hand-edited on a host. CI runs the gates and builds the images, but never reaches the LAN; `uv run` on the Mac stays as the dev mode.
 - **The agents run without the panel.** The panel is a management surface, not a dependency: `docker compose` and the terminal dev mode always work, and stopping the panel never stops the agents.
@@ -36,10 +37,10 @@ The panel is what this project is really building. Today it manages the first **
 
 ## Non-goals
 
-- E2EE, voice/video calls, media (images, voice messages) — text only.
+- E2EE, voice/video calls, images. **Voice messages arrive with v5** (the owner, 2026-10-13): Hermes's voice digests (v5.1), then the agents hearing (v5.2) and speaking (v5.3).
 - Raw archives of conversations (full message logs), vector DBs and RAG — long-term memory is the layered digests, not search.
 - Live world data (weather, news, city events, external APIs). World awareness is only place, calendar and clock.
-- Token limits, budgets or billing — accounting only counts and reports.
+- Token limits, budgets or billing — accounting only counts and reports. One exception, the owner's (v5.1): a monthly cap on Hermes's voice characters, since the ElevenLabs credits are shared with Lumi; past it his digests go out as text.
 - Public or multi-user access of any kind: no open registration, no internet exposure, no accounts — the panel takes a single owner token.
 - Cloud-to-LAN CD, container orchestration beyond docker compose, registries beyond GHCR.
 - A general remote shell: the panel offers only fixed actions (deploy state, start/stop/restart, logs, health, forget) — never command input.
