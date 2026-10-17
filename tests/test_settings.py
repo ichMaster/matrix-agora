@@ -201,7 +201,8 @@ def test_hermes_settings_are_the_chats_and_only_his():
     assert [BY_NAME[n].default for n in names] == ["14400", "5", "1500", "09-23", "150000", ""]
     hermes = load_member(Path("agents/hermes.toml"))
     assert {s.name for s in SCHEMA if concerns(s, hermes)} == set(names)
-    assert not {s.name for m in ROOM.values() for s in SCHEMA if concerns(s, m)} & set(names)
+    assert ROOM["hermes"] == hermes                                   # the registry lists him (AGORA-084)
+    assert not {s.name for m in ROOM.values() if m is not ROOM["hermes"] for s in SCHEMA if concerns(s, m)} & set(names)
     assert "ELEVENLABS_API_KEY" not in BY_NAME
     assert validate("HERMES_VOICE_ID", "AbCdEf0123456789") == ("AbCdEf0123456789", None)
     assert validate("HERMES_VOICE_ID", "") == ("", None)

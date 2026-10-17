@@ -117,6 +117,27 @@ services:
       - ../claude-workspace:/workspace           # v4.5: his own folder — the only place his tools may read or write
     stop_grace_period: 30s
 
+  hermes:
+    # v5.1 — Hermes, the herald: the shared agent image (ffmpeg inside); he reads Agora and digests it for the owner in
+    # his own room — no turns, never a word in Agora. His own env file holds his password and the ElevenLabs key.
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
+    command: ["agents/hermes.toml"]
+    restart: unless-stopped
+    init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
+    depends_on: [homeserver]
+    env_file:
+      - path: .env
+        required: false
+      - path: hermes.env                         # HERMES_PASSWORD, ELEVENLABS_API_KEY — his alone
+        required: false
+    environment:
+      HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
+      TZ: ${TIMEZONE:-Europe/Kyiv}
+    user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
+    volumes:
+      - ../state:/app/state
+    stop_grace_period: 30s
+
   usage-report:
     # the daily token report (v3.1.1), 07:00 in TIMEZONE → ~/matrix-agora/reports/usage/
     image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
@@ -145,6 +166,7 @@ services:
       PANEL_TOKEN: ${PANEL_TOKEN:-}              # unset or short → the panel refuses to start
       PRICE_INPUT_PER_1M: ${PRICE_INPUT_PER_1M:-}
       PRICE_OUTPUT_PER_1M: ${PRICE_OUTPUT_PER_1M:-}
+      PRICE_MODELS: ${PRICE_MODELS:-}            # v5.1: a model's own price pair (Hermes's Pro calls)
       TIMEZONE: ${TIMEZONE:-Europe/Kyiv}
       TZ: ${TIMEZONE:-Europe/Kyiv}
       STACK_DIR: ${STACK_DIR:-/home/ich/matrix-agora}   # v3.4: compose for a start lives at $STACK_DIR/server

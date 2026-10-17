@@ -43,7 +43,7 @@ def write_roster(tmp_path, kit_toml: str):
 
 def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
     roster = load_roster("agora")
-    assert list(roster) == ["ada", "bruno", "kit", "claude"]
+    assert list(roster) == ["ada", "bruno", "kit", "claude", "hermes"]  # v5.1: the herald
     ada = roster["ada"]
     assert (ada.user_id, ada.name, ada.type, ada.engine, ada.mode, ada.weight) == (
         "@ada:agora.lan", "Ада", "persona", "gemini", "ranked", 1.0)
@@ -181,7 +181,7 @@ def test_the_agent_reads_its_members_from_the_roster():
 
 def test_the_launcher_lists_the_registry_agents():
     out = subprocess.run([sys.executable, "-m", "agents.roster"], capture_output=True, text=True, check=True).stdout
-    assert out.split() == ["ada", "bruno", "kit", "claude"]
+    assert out.split() == ["ada", "bruno", "kit", "claude", "hermes"]
 
 
 def test_an_unreadable_toml_is_a_roster_error_not_a_crash(tmp_path):

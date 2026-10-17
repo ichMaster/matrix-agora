@@ -15,7 +15,7 @@ def env_keys(path: Path) -> set[str]:
 
 
 def test_the_service_set():
-    assert set(SERVICES) == {"homeserver", "ada", "bruno", "kit", "claude", "usage-report", "panel"}  # v4.4
+    assert set(SERVICES) == {"homeserver", "ada", "bruno", "kit", "claude", "hermes", "usage-report", "panel"}  # v5.1
 
 
 def test_the_homeserver_stays_closed():
@@ -79,8 +79,8 @@ def test_the_panel_gets_only_its_own_settings_and_the_stack_at_its_host_path():
                               "/etc/os-release:/host/os-release:ro",
                               f"{stack}:{stack}:ro"]                       # same path inside: compose resolves host paths
     assert "env_file" not in svc  # never the agents' keys or passwords in its environment
-    assert set(svc["environment"]) == {"PANEL_TOKEN", "PRICE_INPUT_PER_1M", "PRICE_OUTPUT_PER_1M", "TIMEZONE", "TZ",
-                                       "STACK_DIR", "COMPOSE_PROJECT"}
+    assert set(svc["environment"]) == {"PANEL_TOKEN", "PRICE_INPUT_PER_1M", "PRICE_OUTPUT_PER_1M", "PRICE_MODELS",
+                                       "TIMEZONE", "TZ", "STACK_DIR", "COMPOSE_PROJECT"}  # v5.1: PRICE_MODELS
     assert svc["environment"]["COMPOSE_PROJECT"] == "server"
     assert not svc.get("privileged") and "cap_add" not in svc and "network_mode" not in svc
 
@@ -199,3 +199,41 @@ def test_both_env_examples_price_the_pro_model_by_its_own_pair():
         values = dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines()
                       if line and not line.startswith("#") and "=" in line)
         assert parse_model_prices(values["PRICE_MODELS"]) == ({"gemini-3.1-pro-preview": (2.0, 12.0)}, []), path
+
+
+
+# --- v5.1: Hermes's own service and env file ---------------------------------------------------------------------------
+def test_hermes_runs_the_shared_image_with_the_shared_file_and_his_own():
+    svc = SERVICES["hermes"]
+    assert svc["image"] == IMAGE and svc["command"] == ["agents/hermes.toml"] and svc["init"] is True
+    assert svc["env_file"] == [{"path": ".env", "required": False}, {"path": "hermes.env", "required": False}]
+    assert svc["environment"]["HOMESERVER"] == "http://homeserver:8008" and svc["user"] == "1000:1000"
+    assert svc["volumes"] == ["../state:/app/state"] and "ports" not in svc and svc["stop_grace_period"] == "30s"
+    others = [n for n, s in SERVICES.items() if n != "hermes"
+              and any((e.get("path") if isinstance(e, dict) else e) == "hermes.env" for e in s.get("env_file", []))]
+    assert others == []                                             # his key reaches no other container
+
+
+def test_hermes_env_example_holds_his_password_and_key_only():
+    assert env_keys(ROOT / "server" / "hermes.env.example") == {"HERMES_PASSWORD", "ELEVENLABS_API_KEY"}
+    assert not [k for k in env_keys(ROOT / "server" / "hermes.env.example") if _forbidden(k)]
+    for example in (".env.example", "server/.env.example"):
+        assert not env_keys(ROOT / example) & {"ELEVENLABS_API_KEY", "HERMES_PASSWORD"}, example
+
+
+def test_deploy_syncs_hermes_env_file_privately():
+    deploy = (ROOT / "server" / "deploy.sh").read_text()
+    assert 'HERMES_ENV="$REPO_DIR/server/hermes.env"' in deploy and "chmod 600 ~/$REMOTE_DIR/hermes.env" in deploy
+
+
+def test_hermes_settings_are_in_both_env_examples_with_the_schema_defaults():
+    from agents.settings import SCHEMA
+    hermes = {s.name: s.default for s in SCHEMA if s.name.startswith("HERMES_")}
+    for path in (ROOT / ".env.example", ROOT / "server" / ".env.example"):
+        values = dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines()
+                      if line.startswith("HERMES_"))
+        assert values == hermes, path
+
+
+def test_the_panel_gets_the_model_prices():
+    assert SERVICES["panel"]["environment"]["PRICE_MODELS"] == "${PRICE_MODELS:-}"

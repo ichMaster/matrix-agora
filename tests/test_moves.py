@@ -39,7 +39,8 @@ def test_the_move_is_the_same_for_the_same_event_and_differs_between_the_two():
 def test_the_addressee_is_never_oneself_and_everyone_is_asked():
     for me in (ADA, BRUNO):
         asked = {m.addressee for m in (draw(f"$a{i}", me) for i in range(3000)) if m.kind == "ask"}
-        others = {m.name for m in ROOM.values() if m.user_id != me.user_id} | {"Ich"}
+        others = {m.name for m in ROOM.values() if m.user_id != me.user_id and m.type != "herald"} | {"Ich"}
+        assert "Гермес" not in asked  # v5.1: the herald takes no turn — a question to him would hang
         assert asked == others and me.name not in asked
 
 
