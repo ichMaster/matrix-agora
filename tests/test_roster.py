@@ -50,7 +50,7 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
     assert "адо" in ada.name_forms  # the vocative lives in the TOML now, not in code
     assert roster["bruno"].name_forms == ("бруно", "bruno")  # v4.4 review #8: the Latin form too
     assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES) - {"mood", "pastlife", "nudge", "news",
-                                                                              "digest"}
+                                                                              "digest", "transcribe"}
     assert ada.panel["name"] == "Ada"
 
 
@@ -314,7 +314,7 @@ def test_hermes_is_a_herald_with_no_turns_and_his_own_canon():
     from pathlib import Path
     hermes = load_member(Path("agents/hermes.toml"))
     assert (hermes.type, hermes.engine, hermes.mode, hermes.name) == ("herald", "gemini", "none", "Гермес")
-    assert hermes.capabilities == TYPES["herald"] == frozenset({"canon", "digest"})
+    assert hermes.capabilities == TYPES["herald"] == frozenset({"canon", "digest", "transcribe"})  # v5.2: hearing
     assert hermes.panel == {"name": "Hermes", "role": "messenger god · voice digests", "pronoun": "he"}
 
 
@@ -371,3 +371,15 @@ def test_the_speaking_agents_never_allowlist_the_herald_but_name_him():
     assert hermes.user_id not in agent.others
     assert should_handle(CFG.room_id, hermes.user_id, CFG, agent.others).reason == "sender-not-allowlisted"
     assert agent.names[hermes.user_id] == "Гермес"
+
+
+
+def test_transcribe_belongs_to_the_herald_and_one_member(tmp_path):
+    """v5.2: two transcribers would post every voice message twice."""
+    with pytest.raises(RosterError, match="'transcribe' belongs to the herald type only"):
+        parse_member("x", {"name": "X", "user_id": "@x:agora.lan", "capabilities": {"transcribe": True}})
+    reg, agents = write_roster(tmp_path, 'name = "Кіт"\nuser_id = "@kit:agora.lan"\ntype = "herald"\n'
+                                         '[capabilities]\ndigest = false\n')
+    (agents / "bruno.toml").write_text('name = "Бруно"\nuser_id = "@bruno:agora.lan"\ntype = "herald"\n')
+    with pytest.raises(RosterError, match="only one member may transcribe the owner with 'transcribe'"):
+        load_roster("sim", reg, agents)

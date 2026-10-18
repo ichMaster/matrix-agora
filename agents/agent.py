@@ -18,6 +18,7 @@ import sys
 import time
 from datetime import date, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -26,6 +27,7 @@ from nio import (
     InviteMemberEvent,
     MatrixRoom,
     MessageDirection,
+    RoomMessageAudio,
     RoomMessagesError,
     RoomMessageText,
     SyncError,
@@ -68,6 +70,7 @@ from agents.logic import (
     same_message,
     should_handle,
     should_join_invite,
+    transcript_of,
 )
 from agents.matrix import join_room as matrix_join
 from agents.matrix import login as matrix_login
@@ -144,6 +147,7 @@ from agents.world import (
 log = logging.getLogger("agent")
 BACKFILL_PAGE = 100  # the homeserver's cap on one /messages page
 BACKFILL_PAGES = 5  # at most this many pages on a start
+VOICES_KEPT = 200  # v5.2: the owner's recent voice event ids an agent remembers, to know a transcript of one
 
 
 class Agent:
@@ -156,6 +160,9 @@ class Agent:
         # the members it talks with — never a herald (v5.1): he is not allowlisted and takes no turn
         self.others = {m.user_id: m for m in speakers(self.roster.values()) if m.user_id != cfg.user_id}
         self.personas = [m for m in self.others.values() if m.type == "persona"]
+        # v5.2 — the member who hears the owner's voice (Hermes); his transcript of it is the owner's line
+        self.transcriber = next((m.user_id for m in self.roster.values() if m.can("transcribe")), None)
+        self.owner_voices: list[str] = []  # the owner's recent voice event ids in the room (RAM, bounded)
         self.client = AsyncClient(cfg.homeserver, cfg.user_id)
         self.started = False  # flips True after the first sync; nothing earlier is handled
         self.started_ms: int | None = None  # when it did (v4.3: the silence before a nudge counts from here at least)
@@ -279,10 +286,26 @@ class Agent:
     async def join_room(self, room_id: str) -> bool:
         return await matrix_join(self.client, room_id)
 
+    def _remember_voice(self, event_id: str) -> None:
+        self.owner_voices = [*self.owner_voices, event_id][-VOICES_KEPT:]
+
+    def _heard(self, event):
+        """v5.2 — a transcript of the owner's voice is the owner's own line: the speaker Ich, the transcript's event id
+        and time. Any other event is returned as it is."""
+        text = transcript_of(event, self.transcriber, self.owner_voices)
+        if text is None:
+            return event
+        return SimpleNamespace(sender=self.cfg.owner, body=text, event_id=getattr(event, "event_id", ""),
+                               server_timestamp=getattr(event, "server_timestamp", 0),
+                               source=getattr(event, "source", {}))
+
     def seed_context(self, events_newest_first: list) -> int:
         """Restart backfill: room messages become context (history + streak
         timeline), chronologically — never replied to, never re-summarized."""
-        texts = [e for e in reversed(events_newest_first) if isinstance(e, RoomMessageText)]
+        for e in reversed(events_newest_first):  # v5.2: the owner's voices first, so their transcripts read as his
+            if isinstance(e, RoomMessageAudio) and e.sender == self.cfg.owner:
+                self._remember_voice(str(getattr(e, "event_id", "")))
+        texts = [self._heard(e) for e in reversed(events_newest_first) if isinstance(e, RoomMessageText)]
         window = max(self.history_n, self.wide_n)
         for e in texts[-window:]:
             speaker = self.names.get(e.sender, e.sender)
@@ -348,6 +371,8 @@ class Agent:
         try:
             if not self.started:
                 return  # first-sync backlog: never replay history
+            if room.room_id == self.cfg.room_id:
+                event = self._heard(event)  # v5.2: Hermes's transcript of the owner's voice is the owner's line
             now_ms = int(getattr(event, "server_timestamp", 0) or time.time() * 1000)
             event_id = str(getattr(event, "event_id", "") or f"${now_ms}:{len(self.timeline)}")
             if room.room_id == self.cfg.room_id:
@@ -406,6 +431,20 @@ class Agent:
             self._spawn(self.reply_later(room.room_id, decision.delay_s))
         except Exception:
             log.exception("message handler failed (bot keeps running)")
+
+    async def on_audio(self, room: MatrixRoom, event: RoomMessageAudio) -> None:
+        """v5.2 — no agent answers audio: the owner's voice in the room is remembered, so Hermes's transcript of it
+        reads as the owner's line; everything is logged as ignored."""
+        try:
+            if not self.started:
+                return
+            if room.room_id == self.cfg.room_id and event.sender == self.cfg.owner:
+                self._remember_voice(str(getattr(event, "event_id", "")))
+                log.info("ignored: audio (%s)", "transcribed by Hermes" if self.transcriber else "no one transcribes")
+            else:
+                log.info("ignored: audio (room %s)", room.room_id)
+        except Exception:
+            log.exception("audio handler failed (bot keeps running)")
 
     def reserved(self, now_ms: int) -> int:
         """The owner's chosen answers still on their way — they hold their place in the wave until FALLBACK_S.
@@ -1368,6 +1407,7 @@ class Agent:
         if self.cfg.can("mood"):
             self._spawn(self.ensure_mood(local_now(self.clock(), self.tz)))  # the day's horoscope, early
         self.client.add_event_callback(self.on_message, RoomMessageText)
+        self.client.add_event_callback(self.on_audio, RoomMessageAudio)  # v5.2: remembered, never answered
         self.client.add_event_callback(self.on_invite, InviteMemberEvent)
         log.info("%s: entering sync_forever", self.cfg.localpart)
         stop = asyncio.Event()

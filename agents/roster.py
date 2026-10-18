@@ -22,7 +22,7 @@ log = logging.getLogger("agent.roster")
 
 # the type sets the default capabilities; a later phase adds the bridge
 CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood", "pastlife", "nudge",
-                "news", "digest")
+                "news", "digest", "transcribe")
 TYPES: dict[str, frozenset[str]] = {
     # a human persona: the full memory stack, no horoscope
     "persona": frozenset({"canon", "life", "summary", "chronicle", "plans", "today", "world"}),
@@ -32,15 +32,16 @@ TYPES: dict[str, frozenset[str]] = {
     # v4.4 — an assistant (Claude, as itself): no canon, no life, no memory — a short brief in code;
     # v4.5 — news he brings himself after a quiet stretch (`news`)
     "assistant": frozenset({"news"}),
-    # v5.1 — a herald (Hermes): no turns, never a word in the room; he reads it and digests it for the owner in his
-    # own room (`digest`); his canon is his own file only
-    "herald": frozenset({"canon", "digest"}),
+    # v5.1 — a herald (Hermes): no turns, never a word of his own in the room; he reads it and digests it for the owner
+    # in his own room (`digest`); his canon is his own file only. v5.2 — he hears the owner's voice (`transcribe`):
+    # his transcript in the room is the owner's line for every speaker
+    "herald": frozenset({"canon", "digest", "transcribe"}),
 }
 CREATURE_ONLY = frozenset({"pastlife", "nudge"})  # v4.3: no persona remembers a past life or speaks first
 ASSISTANT_ONLY = frozenset({"news"})               # v4.5: only Claude brings news unasked
-HERALD_ONLY = frozenset({"digest"})                # v5.1: only the herald digests the room
+HERALD_ONLY = frozenset({"digest", "transcribe"})  # v5.1: only the herald digests; v5.2: and transcribes
 INITIATIVES = ("nudge", "news")                    # who may speak first: one member per initiative
-SINGLES = (*INITIATIVES, "digest")                 # one member per simulation with each of these
+SINGLES = (*INITIATIVES, "digest", "transcribe")   # one member per simulation with each of these
 ENGINES = ("gemini", "claude-sdk")  # v4.4: Claude through the Agent SDK, on the subscription only
 MODES = ("ranked", "ambient", "mention-only", "none")  # v5.1: `none` — a herald's, in no turn pool
 
@@ -159,7 +160,7 @@ def load_roster(sim_id: str, registry_path: Path = REGISTRY_PATH, agents_dir: Pa
     for single in SINGLES:  # one member per initiative: two would race on the same silence (v4.3 review #6); one herald
         holders = [n for n, m in roster.items() if m.can(single)]
         if len(holders) > 1:
-            what = "digest the room" if single == "digest" else "start conversations"
+            what = {"digest": "digest the room", "transcribe": "transcribe the owner"}.get(single, "start conversations")
             raise RosterError(f"{sim_id}: only one member may {what} with '{single}', got {', '.join(holders)}")
     return roster
 

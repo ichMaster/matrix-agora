@@ -64,6 +64,37 @@ OTHERS_RE = re.compile(r"\b(ти|тебе|тобі|тобою|ви|вас|вам
                        re.IGNORECASE)
 
 
+# v5.2 — one transcript, shared by every agent: Hermes posts it as a reply to the owner's voice event
+TRANSCRIPT_PREFIX = "🎙 Ich: "
+
+
+def transcript_content(voice_event_id: str, text: str) -> dict:
+    """The transcript of the owner's voice message, as Hermes posts it: «🎙 Ich: …», a reply to the voice event."""
+    return {"msgtype": "m.text", "body": TRANSCRIPT_PREFIX + text,
+            "m.relates_to": {"m.in_reply_to": {"event_id": voice_event_id}}}
+
+
+def replied_to(event) -> str | None:
+    """The event a message replies to (`m.relates_to.m.in_reply_to.event_id`), or None."""
+    content = (getattr(event, "source", None) or {}).get("content") or {}
+    relates = content.get("m.relates_to") if isinstance(content, dict) else None
+    reply = relates.get("m.in_reply_to") if isinstance(relates, dict) else None
+    eid = reply.get("event_id") if isinstance(reply, dict) else None
+    return eid if isinstance(eid, str) and eid else None
+
+
+def transcript_of(event, transcriber_id: str | None, owner_voices) -> str | None:
+    """v5.2 — the owner's words when `event` is the transcriber's transcript of an owner voice event the agent saw:
+    from the roster's `transcribe` member, not an edit, «🎙 Ich: …», replying to one of `owner_voices`. Else None —
+    any other line from him stays unallowlisted."""
+    if not transcriber_id or getattr(event, "sender", None) != transcriber_id or is_edit(event):
+        return None
+    body = getattr(event, "body", None) or ""
+    if not body.startswith(TRANSCRIPT_PREFIX) or replied_to(event) not in owner_voices:
+        return None
+    return body[len(TRANSCRIPT_PREFIX):].strip() or None
+
+
 def is_edit(event) -> bool:
     """An edit (`m.relates_to.rel_type == "m.replace"`, body «* …»): nio parses it as a RoomMessageText, but it is
     never a new message — the herald neither counts, digests nor answers one (v5.1 review #9)."""
