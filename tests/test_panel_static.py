@@ -234,7 +234,7 @@ def test_hermes_card_shows_his_digests_and_the_tables_their_characters():
     assert "function digestLine(mem)" in js and '"text only — no voice id"' in js and "chars this month" in js
     assert 'pill("warn", "monthly cap reached")' in js
     assert 'const chars = u.rows.some((r) => r.characters);' in js and '<th class="r">chars</th>' in js
-    assert '"digest_voice", "ask", "tts"]' in js
+    assert '"digest_voice", "ask", "tts", "stt"]' in js  # v5.2: hearing
 
 
 
