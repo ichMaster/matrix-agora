@@ -1,3 +1,31 @@
+Version 5.1.1 (2026-10-18)
+---------------------------
+- Phase v5.1 - Hermes: voice digests for the owner (AGORA-079...086); no
+  separate 5.1.0: the phase ships together with the live fix below
+- Hermes, a new member of the `herald` type (AGORA-079): no turns, never a
+  word in Agora; the speakers never allowlist, name, ask or answer him; his
+  own canon (the messenger god of the agora)
+- The digest (AGORA-080, 083): every 4 hours in 09-23 with at least 5 new
+  messages, or at once on "pidsumok"; Agora read word for word from the
+  homeserver; gemini-3.1-pro-preview with thinking; the length follows the
+  talk, at most 1,500 characters; a private room with the owner
+- The voice (AGORA-081): ElevenLabs eleven_turbo_v2_5 (Lumi's key),
+  OGG/Opus by ffmpeg (now in the agent image), an Element voice message
+  with its text; a monthly character cap, text only past it
+- Accounting (AGORA-082): thinking counted as output, TTS lines in
+  characters, PRICE_MODELS prices a model by its own pair
+- The hermes service and server/hermes.env (AGORA-084); his panel card
+  with the last digest and the month's characters (AGORA-085); deployed
+  and confirmed live by the owner (AGORA-086)
+- Code review, 13 fixes: the herald's guard removes an outing sentence,
+  not the digest; a failed digest retries; no digest from a partial read;
+  a declined private room is replaced; no made-up $0 costs; one voice-id
+  pattern; a stop finishes a digest on its way; edits never count
+- The owner's live finding (review #14): his room is a conversation, not a
+  digest - Hermes answers what was written, briefly, with the room's last
+  20 lines as context and Agora only when asked; thinking low, so an
+  answer comes in seconds
+
 Version 4.7.1 (2026-10-13)
 ---------------------------
 - The cat less talkative (the owner): named by an agent he still always
