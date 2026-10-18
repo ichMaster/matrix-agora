@@ -209,10 +209,11 @@ Hermes's digest goes out as an **Element voice message** (`agents/voice.py`). El
 settings — stability 0.5, similarity 0.75, style 0.4; 60 s); the raw PCM gives the duration and the waveform (100
 peaks scaled to 0..1024) by arithmetic; ffmpeg encodes it to OGG/Opus (`-c:a libopus -b:a 32k -application voip -f
 ogg`); the file is uploaded to the homeserver's media store and sent as `m.audio` with `info {mimetype audio/ogg, size,
-duration}`, `org.matrix.msc1767.audio {duration, waveform}`, `org.matrix.msc3245.voice {}`, and a plain
-label «Голосове повідомлення» as `body` and `org.matrix.msc1767.text`, like Element's own voice messages — never the
-words and no `filename` (a newer Element shows a body that differs from the filename as a caption, which doubled
-the text that always follows as its own message; the owner, 2026-10-18). Any failure of a step —
+duration}`, `org.matrix.msc1767.audio {duration, waveform}`, `org.matrix.msc3245.voice {}`, and, for
+Hermes's digest, a plain label «Голосове повідомлення» as `body` and `org.matrix.msc1767.text`, like Element's own
+voice messages, with no `filename` — his text follows as its own message, and a newer Element shows a body that
+differs from the filename as a caption, which would double it. A speaker's voice (v5.3) carries its words as that
+caption instead, and nothing follows. Any failure of a step —
 the request, the encode, the upload — returns None, logged by type, HTTP status or exit code, never the key or the
 text, and the digest goes out as text only.
 
@@ -223,11 +224,14 @@ news — after all its text checks (PASS, the guard, the cap, the duplicate, R3)
 `voice`, its own voice and the key, the line is `voiceable` (never an action purr), `voice_due` (always when it
 answers a transcript of the owner's voice; otherwise its own deterministic draw against `VOICE_REPLY_P`), and the
 speakers' month (`speakers_month_chars` over every usage file but the heralds') plus the line stays within
-`VOICE_MONTHLY_CHARS`. **The voice goes first, then always the same text** as `m.text`: the other agents read only
-text, so the turn-taking, the history and Hermes's digests never see the voice. A failed step sends the text alone
-(`voice: text only (<reason>)`); each synth is a `tts` usage line; a member's voice message is never logged by the
-others or by Hermes. `ELEVENLABS_API_KEY` leaves the environment first thing at an agent's start, so Claude's CLI
-never inherits it.
+`VOICE_MONTHLY_CHARS`. **A voiced line is one voice message, its words the caption** (the owner, 2026-10-18:
+only voice messages in the room): `body` = the line beside a different `filename`, which Element shows under the
+player; nothing else is sent. **Every speaker reads a member's voiced line by its caption** (`voice_caption`) as that
+member's text line — the history, the timeline, R2/R3, the session, the backfill — and Hermes reads and counts it
+the same way, so the turn-taking sees each line once whatever its form. A line that stays text (not voiced by the
+share, over the budget, no voice, an action purr) or whose voice step fails is a plain `m.text`. Each synth is a
+`tts` usage line; a member's voice is never logged as ignored. `ELEVENLABS_API_KEY` leaves the environment first
+thing at an agent's start, so Claude's CLI never inherits it.
 
 **Hearing (v5.2).** `DeepgramSTT` (ported from Lumi's `voice/stt.py`): `POST https://api.deepgram.com/v1/listen`
 with `model=nova-2`, `language=uk`, `smart_format=true`, `Authorization: Token …` and the audio's own content type

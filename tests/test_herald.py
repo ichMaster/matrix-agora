@@ -711,3 +711,23 @@ def test_a_speakers_voice_is_never_heard_or_logged(tmp_path, monkeypatch, caplog
     h, client, downloads = hearing(tmp_path, monkeypatch)
     asyncio.run(heard(h, AGORA, voice(ADA, "$ada-voice")))
     assert client.sent == [] and downloads == [] and "ignored" not in caplog.text
+
+
+
+def test_his_digest_reads_the_speakers_voiced_lines_and_counts_them(tmp_path, monkeypatch):
+    """v5.3: the speakers' lines are captioned voices — Hermes reads them as their lines and counts them."""
+    def member_voice(sender, eid, body, ts):
+        return RoomMessage.parse_event({"event_id": eid, "sender": sender, "origin_server_ts": ts,
+                                        "type": "m.room.message",
+                                        "content": {"msgtype": "m.audio", "body": body, "filename": "a.ogg",
+                                                    "url": "mxc://agora.lan/a", "org.matrix.msc3245.voice": {},
+                                                    "info": {"mimetype": "audio/ogg", "size": 9, "duration": 900}}})
+
+    llm = FakeLLM()
+    h, client = make(tmp_path, monkeypatch, events=[member_voice(ADA, "$a1", "Я читаю Кальвіно.", ms(13)), *talk(5)],
+                     llm=llm, state=DigestState(room="!dm"))
+    h.started = True
+    asyncio.run(h.on_audio(SimpleNamespace(room_id=AGORA), member_voice(ADA, "$a2", "Ще раз.", ms(13, 1))))
+    assert h.new_count == 1 and client.sent == []
+    asyncio.run(h.digest(asked=True))
+    assert llm.calls[0].contents.splitlines()[-1] == "13:00 Ада: Я читаю Кальвіно."

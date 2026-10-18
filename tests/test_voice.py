@@ -226,3 +226,20 @@ def test_a_failed_stt_call_is_silent_and_keyless(stt_session, caplog, reply, fai
 def test_an_unheard_or_odd_answer_is_no_transcript(data, text, ms):
     from agents.voice import deepgram_duration_ms, deepgram_transcript
     assert (deepgram_transcript(data), deepgram_duration_ms(data)) == (text, ms)
+
+
+
+def test_a_speakers_voice_carries_its_words_as_the_caption_and_reads_back():
+    """The owner, 2026-10-18: only voice messages — a speaker's line is its caption (`body` beside a different
+    `filename`); a plain voice (a digest's, the owner's) carries the label and no caption."""
+    from types import SimpleNamespace
+
+    from agents.voice import voice_caption
+    c = voice_content("mxc://agora.lan/abc", 10, 900, [1], caption="Привіт усім.", filename="ada-1.ogg")
+    assert (c["body"], c["filename"], c["org.matrix.msc1767.text"]) == ("Привіт усім.", "ada-1.ogg", "Привіт усім.")
+    assert voice_caption(SimpleNamespace(source={"content": c})) == "Привіт усім."
+    plain = voice_content("mxc://agora.lan/abc", 10, 900, [1])
+    assert voice_caption(SimpleNamespace(source={"content": plain})) is None
+    assert voice_caption(SimpleNamespace(source={"content": {"msgtype": "m.audio", "body": "x.ogg",
+                                                             "filename": "x.ogg"}})) is None
+    assert voice_caption(SimpleNamespace(source={"content": {"msgtype": "m.text", "body": "так"}})) is None

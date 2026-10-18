@@ -42,7 +42,8 @@ def speakers_month_chars(records: Iterable[dict], month: str, heralds: Iterable[
 
 
 async def voice_message(client, tts, text: str, filename: str, reply_to: str | None = None,
-                        on_synth: Callable[[bool], None] | None = None) -> tuple[dict | None, str | None]:
+                        on_synth: Callable[[bool], None] | None = None,
+                        caption: bool = False) -> tuple[dict | None, str | None]:
     """synth → OGG/Opus → upload → the `m.audio` content, not yet sent: (content, None), or (None, why it stays
     text). `reply_to` relates it to the owner's voice it answers; `on_synth(ok)` records the paid call."""
     pcm = await tts.synth(text)
@@ -57,7 +58,8 @@ async def voice_message(client, tts, text: str, filename: str, reply_to: str | N
     if not isinstance(resp, UploadResponse):
         log.error("upload failed: %s", getattr(resp, "status_code", type(resp).__name__))
         return None, "upload failed"
-    content = voice_content(resp.content_uri, len(ogg), duration_ms(pcm), waveform(pcm))
+    content = voice_content(resp.content_uri, len(ogg), duration_ms(pcm), waveform(pcm),
+                            caption=text if caption else None, filename=filename)
     if reply_to:
         content["m.relates_to"] = {"m.in_reply_to": {"event_id": reply_to}}
     return content, None

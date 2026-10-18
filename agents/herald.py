@@ -76,6 +76,7 @@ from agents.voice import (
     TTS_MODEL,
     DeepgramSTT,
     ElevenLabsTTS,
+    voice_caption,
 )
 from agents.world import local_now
 
@@ -244,9 +245,12 @@ class Herald:
                 return out, False
             done = False
             for e in resp.chunk:
-                if not isinstance(e, RoomMessageText) or is_edit(e):  # an edit is not a new line (review #9)
+                if isinstance(e, RoomMessageAudio) and e.sender in self.member_ids and voice_caption(e):
+                    m = Message(str(e.event_id), e.sender, int(e.server_timestamp), voice_caption(e))  # v5.3
+                elif not isinstance(e, RoomMessageText) or is_edit(e):  # an edit is not a new line (review #9)
                     continue
-                m = self._as_read(e)
+                else:
+                    m = self._as_read(e)
                 out.append(m)
                 if (stop_event and m.event_id == stop_event or stop_ts is not None and m.ts < stop_ts
                         or since_ms is not None and m.ts < since_ms):
@@ -455,6 +459,9 @@ class Herald:
             if not self.started or is_edit(event):
                 return  # the first sync's backlog: never processed
             where, why = route_audio(room.room_id, event.sender, self.cfg, self.state.room, self.member_ids)
+            if why == "member-audio" and room.room_id == self.cfg.room_id and voice_caption(event):
+                self.new_count += 1  # v5.3: a speaker's voiced line counts toward the next digest, like its text did
+                return
             if where == "ignored":
                 if why not in ("own-audio", "member-audio"):
                     log.info("ignored: %s (room %s)", why, room.room_id)

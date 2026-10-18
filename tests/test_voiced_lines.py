@@ -62,18 +62,18 @@ def test_the_key_never_stays_in_the_environment(tmp_path, monkeypatch):
     assert "ELEVENLABS_API_KEY" not in os.environ and agent.tts is not None
 
 
-def test_an_answer_to_the_owners_voice_is_voiced_then_written(tmp_path, monkeypatch, caplog):
+def test_an_answer_to_the_owners_voice_is_one_voice_message_with_its_words_as_the_caption(tmp_path, monkeypatch,
+                                                                                         caplog):
     caplog.set_level(logging.DEBUG)
     agent = voiced_agent(tmp_path, monkeypatch, p="0.0", llm=FakeLLM(f"Привіт, Ich! {SECRET}"))
     asyncio.run(agent.on_audio(ROOM, voice_event(OWNER, "$voice")))
     asyncio.run(run_with_tasks(agent, ROOM, transcript("Адо, як ти?", eid="$tr")))
-    audio, text = sent(agent)
+    [audio] = sent(agent)                                              # only the voice (the owner, 2026-10-18)
     assert audio["msgtype"] == "m.audio" and audio["org.matrix.msc3245.voice"] == {}
-    assert "m.relates_to" not in audio and "m.relates_to" not in text     # never a reply (the owner, 2026-10-18)
-    assert text["body"] == f"Привіт, Ich! {SECRET}" and text["msgtype"] == "m.text"
-    assert audio["body"] == "Голосове повідомлення" and "filename" not in audio   # the words only once, as text
+    assert "m.relates_to" not in audio                                 # never a reply
+    assert audio["body"] == f"Привіт, Ich! {SECRET}" and audio["filename"].endswith(".ogg")  # the caption
     usage = json.loads((tmp_path / "ada.usage.jsonl").read_text().splitlines()[-1])
-    assert (usage["kind"], usage["characters"]) == ("tts", len(text["body"]))
+    assert (usage["kind"], usage["characters"]) == ("tts", len(audio["body"]))
     assert all(SECRET not in r.getMessage() for r in caplog.records) and "voice: sent" in caplog.text
 
 
@@ -84,7 +84,7 @@ def test_a_typed_question_is_voiced_by_the_share(tmp_path, monkeypatch, p, voice
                                                                      event_id="$typed", server_timestamp=1)
     asyncio.run(run_with_tasks(agent, room, event))
     kinds = [c["msgtype"] for c in sent(agent)]
-    assert kinds == (["m.audio", "m.text"] if voiced else ["m.text"])
+    assert kinds == (["m.audio"] if voiced else ["m.text"])
     if voiced:
         assert "m.relates_to" not in sent(agent)[0]                    # not an answer to a voice
 
@@ -112,7 +112,7 @@ def test_the_budget_counts_every_speaker_but_the_herald(tmp_path, monkeypatch):
     (tmp_path / "hermes.usage.jsonl").write_text(json.dumps(tts_usage_line(month, "hermes", "m", 90000, True)) + "\n")
     agent.clock = lambda: 1_792_310_400_000                             # 2026-10-18 (Kyiv)
     asyncio.run(agent.send_line("!room", "Привіт.", "$e"))             # 990 + 7 ≤ 1000: Hermes not counted
-    assert [c["msgtype"] for c in sent(agent)] == ["m.audio", "m.text"]
+    assert [c["msgtype"] for c in sent(agent)] == ["m.audio"]
     agent.client.room_send.reset_mock()
     asyncio.run(agent.send_line("!room", "Ще одне довше речення.", "$f"))  # its own 7 chars now count too
     assert [c["msgtype"] for c in sent(agent)] == ["m.text"]
@@ -126,7 +126,7 @@ def test_pass_and_the_checks_still_mean_nothing_at_all(tmp_path, monkeypatch):
     assert sent(agent) == [] and agent.tts.texts == []
 
 
-@pytest.mark.parametrize("purr,kinds", [("Мрррр.", ["m.audio", "m.text"]), ("*потягується*", ["m.text"])])
+@pytest.mark.parametrize("purr,kinds", [("Мрррр.", ["m.audio"]), ("*потягується*", ["m.text"])])
 def test_the_cat_may_purr_aloud_but_never_reads_an_action(tmp_path, monkeypatch, purr, kinds):
     agent = voiced_agent(tmp_path, monkeypatch)
     asyncio.run(agent.send_line("!room", purr, "$e", answering="$e"))
@@ -146,3 +146,27 @@ def test_a_failed_voice_send_still_sends_the_text(tmp_path, monkeypatch, caplog)
     agent.client.room_send = flaky
     asyncio.run(agent.send_line("!room", "Привіт.", "$e"))
     assert calls == ["m.audio", "m.text"] and "voice: text only (send failed (ConnectionError))" in caplog.text
+
+
+
+def test_every_speaker_reads_a_members_voiced_line_by_its_caption(tmp_path, monkeypatch):
+    """Only voice messages in the room: Bruno's captioned voice is, for Ada, Bruno's line — her history, her turn
+    rules (named → she answers) — and her own voice is her own line; a plain voice from a member is nothing."""
+    from nio import RoomMessage
+
+    def member_voice(sender, eid, body, filename="bruno-1.ogg"):
+        content = {"msgtype": "m.audio", "body": body, "url": "mxc://agora.lan/b", "org.matrix.msc3245.voice": {},
+                   "info": {"mimetype": "audio/ogg", "size": 10, "duration": 900}}
+        if filename:
+            content["filename"] = filename
+        return RoomMessage.parse_event({"event_id": eid, "sender": sender, "origin_server_ts": 5_000,
+                                        "type": "m.room.message", "content": content})
+
+    agent = voiced_agent(tmp_path, monkeypatch, p="0.0")
+    asyncio.run(agent.on_audio(ROOM, member_voice("@bruno:agora.lan", "$b1", "Адо, а ти що читаєш?")))
+    assert agent.history[-1] == ("Бруно", "Адо, а ти що читаєш?") and agent.timeline[-1][2] == "$b1"
+    asyncio.run(agent.on_audio(ROOM, member_voice("@bruno:agora.lan", "$b2", "Голосове повідомлення", filename=None)))
+    assert agent.history[-1] == ("Бруно", "Адо, а ти що читаєш?")      # a plain voice carries no line
+    seeded = make_agent()
+    assert seeded.seed_context([member_voice("@bruno:agora.lan", "$b3", "Привіт усім.")]) == 1
+    assert seeded.history == [("Бруно", "Привіт усім.")]

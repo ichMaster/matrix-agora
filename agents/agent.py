@@ -136,7 +136,7 @@ from agents.turns import (
     wave_frees_at,
 )
 from agents.usage import parse_lines, sdk_usage_line, tts_usage_line, usage_line
-from agents.voice import TTS_MODEL, ElevenLabsTTS
+from agents.voice import TTS_MODEL, ElevenLabsTTS, voice_caption
 from agents.world import (
     MONTHS_NOM,
     day_label,
@@ -326,13 +326,33 @@ class Agent:
                                server_timestamp=getattr(event, "server_timestamp", 0),
                                source=getattr(event, "source", {}))
 
+    @staticmethod
+    def _line_of(event, text: str):
+        """A voiced line as the room's text line it carries: the speaker, its caption, its event id and time."""
+        return SimpleNamespace(sender=event.sender, body=text, event_id=getattr(event, "event_id", ""),
+                               server_timestamp=getattr(event, "server_timestamp", 0),
+                               source=getattr(event, "source", {}))
+
+    def _lines(self, events_oldest_first: list) -> list:
+        """The room's lines in order: text messages (a transcript of the owner's voice as his) and the members'
+        voiced lines by their captions (v5.3)."""
+        out = []
+        for e in events_oldest_first:
+            if isinstance(e, RoomMessageText):
+                out.append(self._heard(e))
+            elif isinstance(e, RoomMessageAudio) and e.sender in self.member_ids:
+                caption = voice_caption(e)
+                if caption is not None:
+                    out.append(self._line_of(e, caption))
+        return out
+
     def seed_context(self, events_newest_first: list) -> int:
         """Restart backfill: room messages become context (history + streak
         timeline), chronologically — never replied to, never re-summarized."""
         for e in reversed(events_newest_first):  # v5.2: the owner's voices first, so their transcripts read as his
             if isinstance(e, RoomMessageAudio) and e.sender == self.cfg.owner:
                 self._remember_voice(str(getattr(e, "event_id", "")))
-        texts = [self._heard(e) for e in reversed(events_newest_first) if isinstance(e, RoomMessageText)]
+        texts = self._lines(list(reversed(events_newest_first)))
         window = max(self.history_n, self.wide_n)
         for e in texts[-window:]:
             speaker = self.names.get(e.sender, e.sender)
@@ -363,7 +383,7 @@ class Agent:
             events.extend(resp.chunk)
             end = getattr(resp, "end", None)
             if (not resp.chunk or not isinstance(end, str) or end == token
-                    or sum(isinstance(e, RoomMessageText) for e in events) >= window):
+                    or sum(isinstance(e, RoomMessageText | RoomMessageAudio) for e in events) >= window):
                 break
             token = end
         n = self.seed_context(events)
@@ -460,10 +480,10 @@ class Agent:
             log.exception("message handler failed (bot keeps running)")
 
     async def send_line(self, room_id: str, text: str, event_key: str, answering: str | None = None) -> None:
-        """v5.3 — every line the agent says: in its own voice first when it should and can (`voice_due`, a voice, a
-        voiceable line, under the speakers' monthly budget) — never as a reply to the owner's voice; then always the
-        same text — the other agents read only text, so the turn-taking never sees the voice. A failed voice step
-        leaves the text alone, logged by reason; never a word in a log."""
+        """v5.3 — every line the agent says: a voice message with its words as the caption when it should and can
+        (`voice_due`, a voice, a voiceable line, under the speakers' monthly budget) — the only message (the owner,
+        2026-10-18: only voice messages); never a reply. Every speaker reads a member's caption as that member's line
+        (`on_audio`). Otherwise, or when a voice step fails, the text as `m.text`. Never a word in a log."""
         voice_of = self._transcript_voice.get(answering or "") or None
         why = self.voice_off
         if self.tts is not None:
@@ -476,16 +496,17 @@ class Agent:
             else:
                 name = f"{self.cfg.localpart}-{local_now(self.clock(), self.tz):%Y%m%d-%H%M%S}.ogg"
                 # never a reply (the owner, 2026-10-18: «забери ці реплаї») — it is voiced, not quoted
-                content, why = await voice_message(self.client, self.tts, text, name,
+                content, why = await voice_message(self.client, self.tts, text, name, caption=True,
                                                    on_synth=lambda ok: self.record_tts(len(text), ok))
                 if content is not None:
                     try:
                         await self.client.room_send(room_id=room_id, message_type="m.room.message", content=content)
-                    except Exception as exc:  # noqa: BLE001 — the text still goes out
+                    except Exception as exc:  # noqa: BLE001 — the text goes out instead
                         why = f"send failed ({type(exc).__name__})"
             if why is None:
                 log.info("voice: sent (%d chars)", len(text))
-            elif why not in ("share", "not voiceable"):
+                return  # the voice message carries the words as its caption: nothing else is sent
+            if why not in ("share", "not voiceable"):
                 log.info("voice: text only (%s)", why)
         await self.client.room_send(room_id=room_id, message_type="m.room.message",
                                     content={"msgtype": "m.text", "body": text})
@@ -510,7 +531,10 @@ class Agent:
             if not self.started:
                 return
             if event.sender in self.member_ids:
-                return  # v5.3: a speaker's voice is a copy of its text line — never logged
+                caption = voice_caption(event) if room.room_id == self.cfg.room_id else None
+                if caption is not None:  # v5.3: a speaker's voiced line — its caption is its words, read as a line
+                    await self.on_message(room, self._line_of(event, caption))
+                return
             if room.room_id == self.cfg.room_id and event.sender == self.cfg.owner:
                 self._remember_voice(str(getattr(event, "event_id", "")))
                 log.info("ignored: audio (%s)", "transcribed by Hermes" if self.transcriber else "no one transcribes")

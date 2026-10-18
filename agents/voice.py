@@ -154,16 +154,34 @@ def waveform(pcm: bytes, points: int = WAVEFORM_POINTS) -> list[int]:
 VOICE_BODY = "Голосове повідомлення"  # what Element's own voice messages carry: a label, never the words
 
 
-def voice_content(mxc_url: str, size: int, duration: int, wave: list[int]) -> dict:
-    """An `m.audio` event Element shows as a voice message: the voice flag, the duration and the waveform, under a
-    plain label like Element's own. Never the words, and no `filename` — a newer Element shows a body that differs
-    from it as a caption, which doubled the text that always follows as its own message (the owner, 2026-10-18)."""
-    return {
+def voice_content(mxc_url: str, size: int, duration: int, wave: list[int], caption: str | None = None,
+                  filename: str = "voice.ogg") -> dict:
+    """An `m.audio` event Element shows as a voice message: the voice flag, the duration and the waveform. With a
+    `caption` (a speaker's line — the owner, 2026-10-18: only voice messages in the room) the words are its `body`
+    under a `filename` that differs, which Element shows as a caption under the player; without one, a plain label
+    like Element's own (Hermes's digest, whose text follows as its own message)."""
+    body = caption if caption else VOICE_BODY
+    content = {
         "msgtype": "m.audio",
-        "body": VOICE_BODY,
+        "body": body,
         "url": mxc_url,
         "info": {"mimetype": "audio/ogg", "size": size, "duration": duration},
         "org.matrix.msc1767.audio": {"duration": duration, "waveform": wave},
         "org.matrix.msc3245.voice": {},
-        "org.matrix.msc1767.text": VOICE_BODY,
+        "org.matrix.msc1767.text": body,
     }
+    if caption:
+        content["filename"] = filename
+    return content
+
+
+def voice_caption(event) -> str | None:
+    """The words of a voiced line: the caption of an `m.audio` — a `body` beside a different `filename`; None for a
+    plain voice message (the owner's, a digest's) or anything else."""
+    content = (getattr(event, "source", None) or {}).get("content") or {}
+    if not isinstance(content, dict) or content.get("msgtype") != "m.audio":
+        return None
+    body, filename = content.get("body"), content.get("filename")
+    if not isinstance(body, str) or not isinstance(filename, str) or not body.strip() or body == filename:
+        return None
+    return body.strip()
