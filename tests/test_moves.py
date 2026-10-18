@@ -101,3 +101,14 @@ def test_disagree_only_where_there_is_a_view_to_disagree_with():
     """v4.6 review #3: drawn for a reply to the owner too, «заперечити» turned a greeting into an argument."""
     line = move_line(Move("disagree"))
     assert "якщо в тому, на що відповідаєш, є думка" in line and "відповідай як звичайно" in line
+
+
+def test_a_persona_is_reminded_of_its_own_questions_of_this_session():
+    """v5.3 (the owner): the questions she asked ten minutes ago are out of the window but in her prompt."""
+    from tests.test_first_sync import make_agent
+    agent = make_agent()
+    agent.session = [("Ада", "Ich, а ти бував у Флоренції?"), ("Ich", "Так."), ("Ада", "Гарно.")]
+    prompt = agent.build_prompt()
+    assert "Твої питання в цій розмові — не повторюй їх: «Ich, а ти бував у Флоренції?»" in prompt
+    agent.session = []
+    assert "Твої питання в цій розмові" not in agent.build_prompt()

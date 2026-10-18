@@ -258,3 +258,25 @@ def test_without_outing_removes_only_the_sentences_tying_a_persona_to_a_banned_w
     assert without_outing(text, personas) == "Вісті з Олімпу! Бруно купив хліб.\nА Ада хвалила роман."
     assert without_outing("Бруно назвав Аду моделлю.", personas) == ""
     assert without_outing("", personas) == ""
+
+
+# --- v5.3 (the owner, 2026-10-18): a persona never asks the same thing twice in one conversation ----------------------
+def test_own_questions_are_the_personas_question_sentences_once_newest_last():
+    from agents.logic import asked_section, own_questions
+    session = [("Ада", "Привіт! Як твій день, Ich?"), ("Ich", "Добре. А ти що читаєш?"),
+               ("Бруно", "Хто йде в гори?"), ("Ада", "Читаю Кальвіно. А ти, Ich, що читаєш?"),
+               ("Ада", "Як твій день, Ich?"), ("Ада", "Без питань.")]
+    assert own_questions(session, "Ада") == ["Як твій день, Ich?", "А ти, Ich, що читаєш?"]
+    assert own_questions(session, "Ада", k=1) == ["А ти, Ich, що читаєш?"]
+    assert own_questions(session, "Кіт") == [] and asked_section([]) is None
+    line = asked_section(own_questions(session, "Ада"))
+    assert line == "Твої питання в цій розмові — не повторюй їх: «Як твій день, Ich?»; «А ти, Ich, що читаєш?»"
+    from agents.logic import BANNED_RE
+    assert not BANNED_RE.search(line.split(":")[0])
+
+
+def test_the_asked_section_comes_after_the_move_and_before_the_rules():
+    from agents.logic import build_instruction
+    text = build_instruction("Ада", "КАНОН", "підсумок", move="Цього разу: ХІД", asked="Твої питання: ПИТАННЯ")
+    assert text.index("ХІД") < text.index("ПИТАННЯ") < text.index("Ти — Ада.")
+    assert "ПИТАННЯ" not in build_instruction("Ада", "КАНОН")

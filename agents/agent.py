@@ -64,9 +64,11 @@ from agents.logic import (
     CLAUDE_NEWS_BRIEF,
     CREATURE_RULES,
     append_history,
+    asked_section,
     build_instruction,
     clean_reply,
     outs_a_persona,
+    own_questions,
     replied_to,
     same_message,
     should_handle,
@@ -707,6 +709,8 @@ class Agent:
             nudge=nudge if can("nudge") else None,
             rules_extra=CREATURE_RULES if self.cfg.type == "creature" else None,
             move=move if self.cfg.type == "persona" else None,
+            # v5.3 (the owner): its own questions of this session outlast the context window — never asked twice
+            asked=asked_section(own_questions(self.session, self.cfg.name)) if self.cfg.type == "persona" else None,
         )
 
     def draw_move(self, event_id: str, now) -> str | None:

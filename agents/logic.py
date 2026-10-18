@@ -202,6 +202,32 @@ def same_message(a: str, b: str) -> bool:
     return bool(a) and norm(a) == norm(b)
 
 
+ASKED_KEPT = 8            # the persona's own questions of this session it is reminded of (v5.3, the owner)
+ASKED_MAX_CHARS = 200
+
+
+def own_questions(session: list[tuple[str, str]], own_name: str, k: int = ASKED_KEPT) -> list[str]:
+    """The persona's own questions in this session, newest last: the sentences ending with «?» in its own lines,
+    each once, at most `k`. The context window holds about ten minutes of a lively room; these outlast it, so a
+    persona never asks the owner the same thing twice in one conversation (the owner, 2026-10-18)."""
+    seen: list[str] = []
+    for speaker, text in session:
+        if speaker != own_name:
+            continue
+        for sentence in SENTENCE_SPLIT.split(text or ""):
+            q = sentence.strip()
+            if q.endswith("?") and q not in seen:
+                seen.append(q[:ASKED_MAX_CHARS])
+    return seen[-k:]
+
+
+def asked_section(questions: list[str]) -> str | None:
+    """«Твої питання в цій розмові — не повторюй їх: …», or None when there are none."""
+    if not questions:
+        return None
+    return "Твої питання в цій розмові — не повторюй їх: " + "; ".join(f"«{q}»" for q in questions)
+
+
 def build_instruction(
     name: str,
     canon: str,
@@ -217,18 +243,21 @@ def build_instruction(
     nudge: str | None = None,
     rules_extra: str | None = None,
     move: str | None = None,
+    asked: str | None = None,
 ) -> str:
     """The system instruction, in contract order (ARCHITECTURE §Prompt assembly):
     canon → life so far → place and time → memories → plans → today →
     (v4.2) the mood of the day → (v4.3) a past-life memory → (v4.3) a nudge's material and rule →
-    last-session memory → (v4.6) the persona's move → rules. Empty sections are skipped. Nothing here may say a
-    persona is a model or a bot."""
+    last-session memory → (v4.6) the persona's move → (v5.3) its own questions of this session → rules. Empty
+    sections are skipped. Nothing here may say a persona is a model or a bot."""
     parts = [canon]
     parts += [s for s in (life, world, memories, plans, today, mood, pastlife, nudge) if s]  # «Настрій дня», …
     if summary:
         parts.append(f"Що ти пам'ятаєш з минулої розмови: {summary}")
     if move:
         parts.append(move)  # the freshest instruction: how to reply this time (v4.6)
+    if asked:
+        parts.append(asked)  # v5.3: what it already asked in this conversation — never again
     rules = (
         f"Ти — {name}. Відповідай лише від себе, коротко, без префікса з іменем. "
         "Якщо тобі нема чого додати — відповідай рівно PASS."
