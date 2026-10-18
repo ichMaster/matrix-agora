@@ -1,3 +1,24 @@
+Version 5.2.0 (2026-10-18)
+---------------------------
+- Phase v5.2 - The agents hear voice messages (AGORA-087...090)
+- One transcript, shared by every agent (AGORA-087): the owner's voice in
+  Agora is never answered itself; Hermes's "Ich: ..." reply to it (the
+  `transcribe` capability) is the owner's own line for every speaker - R1,
+  the fallback, the session, the memories and the backfill as for typed
+  words; any other line of his is still ignored
+- Hearing (AGORA-088): Deepgram nova-2 in Ukrainian (Lumi's key), the
+  authenticated media download with a 20 MB cap, usage line v4 (`audio_ms`,
+  stt lines)
+- Hermes hears (AGORA-089): the transcript into Agora is his one kind of
+  message there; in his own room a voice question gets a voice answer and a
+  spoken "pidsumok" a digest
+- Deployed and seen live (AGORA-090): a 4.6 s voice message transcribed in
+  about 2 s, answered by Ada and Bruno as typed words; released at the
+  owner's word (the silence case and a voice question in his room were not
+  seen in the logs; both are covered by tests)
+- Code review: a failure while hearing is a reasoned log line, not a lost
+  task; a malformed audio event never raises
+
 Version 5.1.1 (2026-10-18)
 ---------------------------
 - Phase v5.1 - Hermes: voice digests for the owner (AGORA-079...086); no

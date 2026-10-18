@@ -725,7 +725,7 @@ request.
 
 ### v5.2 — The agents hear voice messages
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.2.0` on 2026-10-18.
 
 **Goal:** a voice message from the owner in Agora is understood by the agents as if it were typed, and the room
 sees the words.
