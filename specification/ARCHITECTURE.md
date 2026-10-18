@@ -222,7 +222,11 @@ news — after all its text checks (PASS, the guard, the cap, the duplicate, R3)
 answers a transcript of the owner's voice; otherwise its own deterministic draw against `VOICE_REPLY_P`), and the
 speakers' month (`speakers_month_chars` over every usage file but the heralds') plus the line stays within
 `VOICE_MONTHLY_CHARS`. **The voice goes first, then always the same text** as `m.text`: the other agents read only
-text, so the turn-taking, the history and Hermes's digests never see the voice. A failed step sends the text alone
+text, so the turn-taking, the history and Hermes's digests never see the voice. The text of a voiced line is **a
+thread reply under its voice** (`text_under_voice`: `rel_type m.thread`, falling back to a reply): Element plays a
+room's voice messages one after another but stops at the first text message between them (the owner, 2026-10-18),
+so the main timeline keeps the voices consecutive and shows each line's words as its thread summary; a line that
+stays text is a plain message. A failed step sends the text alone
 (`voice: text only (<reason>)`); each synth is a `tts` usage line; a member's voice message is never logged by the
 others or by Hermes. `ELEVENLABS_API_KEY` leaves the environment first thing at an agent's start, so Claude's CLI
 never inherits it.
