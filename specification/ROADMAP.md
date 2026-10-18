@@ -651,7 +651,7 @@ word for word from the homeserver and speaks to the owner in a private room.
 
 ### v5.1 — Hermes: voice digests for the owner
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.1.1` on 2026-10-18 (no separate `v5.1.0`: the owner released the phase together with the live fix that made his room a conversation).
 
 **Goal:** a standing digest of the room — what was talked about, who thought what, where they argued, what they
 asked the owner, what was settled — reaches the owner as a voice message in Hermes's colour, on a schedule and on
