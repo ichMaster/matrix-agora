@@ -69,7 +69,7 @@ def test_an_answer_to_the_owners_voice_is_voiced_then_written(tmp_path, monkeypa
     asyncio.run(run_with_tasks(agent, ROOM, transcript("Адо, як ти?", eid="$tr")))
     audio, text = sent(agent)
     assert audio["msgtype"] == "m.audio" and audio["org.matrix.msc3245.voice"] == {}
-    assert audio["m.relates_to"] == {"m.in_reply_to": {"event_id": "$voice"}}     # a reply to the owner's voice
+    assert "m.relates_to" not in audio and "m.relates_to" not in text     # never a reply (the owner, 2026-10-18)
     assert audio["body"] == text["body"] == f"Привіт, Ich! {SECRET}" and text["msgtype"] == "m.text"
     usage = json.loads((tmp_path / "ada.usage.jsonl").read_text().splitlines()[-1])
     assert (usage["kind"], usage["characters"]) == ("tts", len(text["body"]))

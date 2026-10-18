@@ -215,8 +215,8 @@ the request, the encode, the upload — returns None, logged by type, HTTP statu
 text, and the digest goes out as text only.
 
 **The agents speak (v5.3).** The pipeline is shared (`agents/speech.py` `voice_message`: synth → encode → upload →
-the `m.audio` content, related by `m.in_reply_to` to the owner's voice it answers), used by Hermes and by every
-speaker. **Every line a speaker says goes through `send_line`** — the reply, the purr, the cat's nudge, Claude's
+the `m.audio` content), used by Hermes and by every speaker. A speaker's voice is never a reply (the owner,
+2026-10-18: no quote of his voice above each answer); answering his voice decides only that it is voiced. **Every line a speaker says goes through `send_line`** — the reply, the purr, the cat's nudge, Claude's
 news — after all its text checks (PASS, the guard, the cap, the duplicate, R3): it is voiced when the agent has
 `voice`, its own voice and the key, the line is `voiceable` (never an action purr), `voice_due` (always when it
 answers a transcript of the owner's voice; otherwise its own deterministic draw against `VOICE_REPLY_P`), and the

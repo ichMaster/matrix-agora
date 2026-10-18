@@ -461,7 +461,7 @@ class Agent:
 
     async def send_line(self, room_id: str, text: str, event_key: str, answering: str | None = None) -> None:
         """v5.3 — every line the agent says: in its own voice first when it should and can (`voice_due`, a voice, a
-        voiceable line, under the speakers' monthly budget), a reply to the owner's voice it answers; then always the
+        voiceable line, under the speakers' monthly budget) — never as a reply to the owner's voice; then always the
         same text — the other agents read only text, so the turn-taking never sees the voice. A failed voice step
         leaves the text alone, logged by reason; never a word in a log."""
         voice_of = self._transcript_voice.get(answering or "") or None
@@ -475,7 +475,8 @@ class Agent:
                 why = "monthly cap"
             else:
                 name = f"{self.cfg.localpart}-{local_now(self.clock(), self.tz):%Y%m%d-%H%M%S}.ogg"
-                content, why = await voice_message(self.client, self.tts, text, name, reply_to=voice_of,
+                # never a reply (the owner, 2026-10-18: «забери ці реплаї») — it is voiced, not quoted
+                content, why = await voice_message(self.client, self.tts, text, name,
                                                    on_synth=lambda ok: self.record_tts(len(text), ok))
                 if content is not None:
                     try:
