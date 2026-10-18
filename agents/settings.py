@@ -100,7 +100,7 @@ SCHEMA: tuple[Setting, ...] = (
        "Межа озвучених знаків на місяць (0 — лише текст)", "chars", 0, 1_000_000),
     _s("HERMES_VOICE_ID", "id", "", "hermes", "cap:digest", CHAT, "Голос Гермеса (ElevenLabs voice id; порожньо — текст)"),
     # v5.3 — the speakers' voices: one budget for all of them (Hermes keeps his own)
-    _s("VOICE_MONTHLY_CHARS", "int", "50000", "voice", "cap:voice", CHAT,
+    _s("VOICE_MONTHLY_CHARS", "int", "100000", "voice", "cap:voice", CHAT,
        "Межа озвучених знаків агентів на місяць (0 — лише текст)", "chars", 0, 1_000_000),
     # the chat's sessions
     _s("SESSION_IDLE_S", "int", "900", "session", "cap:summary", CHAT, "Тиша, після якої сесія закінчується", "s", 60, 86400),

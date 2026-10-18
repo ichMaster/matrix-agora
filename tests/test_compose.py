@@ -275,4 +275,4 @@ def test_the_voice_key_reaches_exactly_the_members_who_speak():
     assert 'VOICE_ENV="$REPO_DIR/server/voice.env"' in deploy and "chmod 600 ~/$REMOTE_DIR/voice.env" in deploy
     env = SERVICES["claude"]["environment"]
     assert env["CLAUDE_VOICE_ID"] == "${CLAUDE_VOICE_ID:-}" and env["VOICE_REPLY_P"] == "${VOICE_REPLY_P:-1.0}"
-    assert env["VOICE_MONTHLY_CHARS"] == "${VOICE_MONTHLY_CHARS:-50000}"
+    assert env["VOICE_MONTHLY_CHARS"] == "${VOICE_MONTHLY_CHARS:-100000}"

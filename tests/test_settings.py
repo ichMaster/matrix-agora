@@ -230,4 +230,4 @@ def test_each_agents_voice_is_its_own_and_the_panel_overrides_one_agent(tmp_path
         assert runs["VOICE_REPLY_P"]["value"] == {"ada": "1.0", "bruno": "0.2"}[name]
     assert {s.name for s in SCHEMA if concerns(s, ROOM["hermes"])} >= {"HERMES_VOICE_ID"}
     assert not {"VOICE_ID", "VOICE_REPLY_P", "VOICE_MONTHLY_CHARS"} & {s.name for s in SCHEMA if concerns(s, ROOM["hermes"])}
-    assert BY_NAME["VOICE_MONTHLY_CHARS"].default == "50000" and BY_NAME["VOICE_REPLY_P"].default == "1.0"
+    assert BY_NAME["VOICE_MONTHLY_CHARS"].default == "100000" and BY_NAME["VOICE_REPLY_P"].default == "1.0"
