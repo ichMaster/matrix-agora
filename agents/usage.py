@@ -12,7 +12,8 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
-         "digest_voice", "ask", "tts")  # v5.1: Hermes's digest and answers (Gemini Pro), his voice (ElevenLabs)
+         "digest_voice", "ask", "tts",  # v5.1: Hermes's digest and answers (Gemini Pro), his voice (ElevenLabs)
+         "stt")                         # v5.2: his hearing (Deepgram)
 # v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan; v5.1 also the ElevenLabs
 # plan's credits), `external` (Lumi's own)
 BILLING = ("api", "subscription", "external")
@@ -49,6 +50,7 @@ def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: b
         "cache_write_tokens": None,
         "reported_cost_usd": None,
         "characters": None,
+        "audio_ms": None,
     }
 
 
@@ -61,6 +63,19 @@ def tts_usage_line(ts_iso: str, agent: str, model: str, characters: int, ok: boo
         "engine": "elevenlabs", "billing": "subscription",
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
         "characters": int(characters),
+        "audio_ms": None,
+    }
+
+
+def stt_usage_line(ts_iso: str, agent: str, model: str, audio_ms: int | None, ok: bool) -> dict:
+    """v5.2 — one record per speech-to-text call (Deepgram): counted by the audio's length (usage line v4,
+    `audio_ms`), paid from the plan's credits (`subscription`, never priced); no tokens. Never any text."""
+    return {
+        "ts": ts_iso, "agent": agent, "kind": "stt", "model": model,
+        "prompt_tokens": None, "output_tokens": None, "total_tokens": None, "ok": bool(ok),
+        "engine": "deepgram", "billing": "subscription",
+        "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
+        "characters": None, "audio_ms": int(audio_ms) if isinstance(audio_ms, int) else None,
     }
 
 
@@ -88,11 +103,12 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
         "cache_write_tokens": cache_write,
         "reported_cost_usd": cost,
         "characters": None,
+        "audio_ms": None,
     }
 
 
 COUNT_FIELDS = ("prompt_tokens", "output_tokens", "total_tokens", "cache_read_tokens", "cache_write_tokens",
-                "characters")
+                "characters", "audio_ms")
 
 
 def _valid(rec: Any) -> bool:

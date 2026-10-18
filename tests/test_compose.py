@@ -215,10 +215,11 @@ def test_hermes_runs_the_shared_image_with_the_shared_file_and_his_own():
 
 
 def test_hermes_env_example_holds_his_password_and_key_only():
-    assert env_keys(ROOT / "server" / "hermes.env.example") == {"HERMES_PASSWORD", "ELEVENLABS_API_KEY"}
+    assert env_keys(ROOT / "server" / "hermes.env.example") == {"HERMES_PASSWORD", "ELEVENLABS_API_KEY",
+                                                                  "DEEPGRAM_API_KEY"}  # v5.2: his hearing
     assert not [k for k in env_keys(ROOT / "server" / "hermes.env.example") if _forbidden(k)]
     for example in (".env.example", "server/.env.example"):
-        assert not env_keys(ROOT / example) & {"ELEVENLABS_API_KEY", "HERMES_PASSWORD"}, example
+        assert not env_keys(ROOT / example) & {"ELEVENLABS_API_KEY", "DEEPGRAM_API_KEY", "HERMES_PASSWORD"}, example
 
 
 def test_deploy_syncs_hermes_env_file_privately():

@@ -164,3 +164,63 @@ def test_the_voice_message_content():
     assert c["org.matrix.msc1767.audio"] == {"duration": 61_500, "waveform": [1, 2]}
     assert c["org.matrix.msc3245.voice"] == {} and c["org.matrix.msc1767.text"] == "Вісті з Агори."
     assert c["filename"] == "hermes-20261017-1405.ogg"
+
+
+# --- v5.2: speech to text (Deepgram) -----------------------------------------------------------------------------------
+class FakeJSONResponse(FakeResponse):
+    async def json(self, content_type=None):
+        import json as _json
+        return _json.loads(self.body)
+
+
+class FakeSTTSession(FakeSession):
+    def post(self, url, params=None, data=None, headers=None, json=None):
+        FakeSession.seen.update(url=url, params=params, data=data, headers=headers)
+        return FakeJSONResponse(*FakeSession.reply)
+
+
+DEEPGRAM_OK = (b'{"metadata": {"duration": 3.42}, "results": {"channels": [{"alternatives": '
+               b'[{"transcript": " \\u0410\\u0434\\u043e, \\u043f\\u0440\\u0438\\u0432\\u0456\\u0442 "}]}]}}')
+
+
+@pytest.fixture
+def stt_session(monkeypatch):
+    FakeSession.seen, FakeSession.reply, FakeSession.fail = {}, (200, DEEPGRAM_OK), None
+    monkeypatch.setattr(voice.aiohttp, "ClientSession", FakeSTTSession)
+    return FakeSession
+
+
+def test_deepgram_hears_ukrainian_with_nova_2(stt_session, caplog):
+    from agents.voice import DeepgramSTT
+    caplog.set_level(logging.DEBUG)
+    text, ms = asyncio.run(DeepgramSTT(KEY).transcribe(b"OggS...", "audio/ogg"))
+    assert (text, ms) == ("Адо, привіт", 3420)
+    seen = stt_session.seen
+    assert seen["url"] == "https://api.deepgram.com/v1/listen"
+    assert seen["params"] == {"model": "nova-2", "language": "uk", "smart_format": "true"}
+    assert seen["headers"] == {"Authorization": f"Token {KEY}", "Content-Type": "audio/ogg"} and seen["data"] == b"OggS..."
+    assert seen["timeout"].total == 30
+    assert all(KEY not in r.getMessage() and "привіт" not in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.parametrize("reply,fail,why", [
+    ((401, b"{}"), None, "HTTP 401"), (None, OSError("down"), "OSError"),
+])
+def test_a_failed_stt_call_is_silent_and_keyless(stt_session, caplog, reply, fail, why):
+    from agents.voice import DeepgramSTT
+    if reply:
+        stt_session.reply = reply
+    stt_session.fail = fail
+    assert asyncio.run(DeepgramSTT(KEY).transcribe(b"x")) == (None, None)
+    assert why in caplog.text and KEY not in caplog.text
+
+
+@pytest.mark.parametrize("data,text,ms", [
+    ({"metadata": {"duration": 1.0}, "results": {"channels": [{"alternatives": [{"transcript": "   "}]}]}}, None, 1000),
+    ({"results": {"channels": []}}, None, None),
+    ({}, None, None), ([], None, None),
+    ({"metadata": {"duration": "x"}, "results": {"channels": [{"alternatives": [{"transcript": "так"}]}]}}, "так", None),
+])
+def test_an_unheard_or_odd_answer_is_no_transcript(data, text, ms):
+    from agents.voice import deepgram_duration_ms, deepgram_transcript
+    assert (deepgram_transcript(data), deepgram_duration_ms(data)) == (text, ms)

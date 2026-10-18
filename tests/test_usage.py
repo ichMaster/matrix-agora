@@ -22,8 +22,8 @@ def test_usage_line_shape_and_no_text():
     line = usage_line("2026-10-03T14:00:00+03:00", "ada", "reply", "gemini-2.5-flash", META, True)
     assert set(line) == {"ts", "agent", "kind", "model", "prompt_tokens", "output_tokens", "total_tokens", "ok",
                          "engine", "billing", "cache_read_tokens", "cache_write_tokens", "reported_cost_usd",
-                         "characters"}  # v2; v3 (v5.1) adds `characters`
-    assert line["characters"] is None
+                         "characters", "audio_ms"}  # v2; v3 (v5.1) `characters`; v4 (v5.2) `audio_ms`
+    assert line["characters"] is None and line["audio_ms"] is None
     assert (line["engine"], line["billing"]) == ("gemini", "api")
     assert (line["prompt_tokens"], line["output_tokens"], line["total_tokens"], line["ok"]) == (1200, 80, 1280, True)
 
@@ -37,7 +37,7 @@ def test_missing_metadata_gives_nulls():
 
 def test_kind_list_is_the_contract():
     assert KINDS == ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
-                     "digest_voice", "ask", "tts")  # v5.1: Hermes
+                     "digest_voice", "ask", "tts", "stt")  # v5.1–v5.2: Hermes
 
 
 # --- the seam reports every call ---
@@ -278,3 +278,18 @@ def test_month_chars_counts_only_this_agents_ok_tts_lines_in_the_month():
                tts_usage_line("2026-10-17T12:00:00+03:00", "other", "m", 1600, True)]
     assert month_chars(records, "hermes", "2026-10") == 300
     assert month_chars([], "hermes", "2026-10") == 0
+
+
+
+def test_the_stt_line_counts_the_audio_and_carries_no_text_and_no_price():
+    """v5.2 (usage line v4): Deepgram bills by the audio's length — `audio_ms`, never priced, no tokens."""
+    from agents.usage import aggregate, cost, parse_lines, stt_usage_line
+    line = stt_usage_line("2026-10-18T14:00:00+03:00", "hermes", "nova-2", 4200, True)
+    assert set(line) == set(usage_line("t", "a", "k", "m", None, True))
+    assert (line["kind"], line["engine"], line["billing"], line["audio_ms"]) == ("stt", "deepgram", "subscription", 4200)
+    assert line["characters"] is line["prompt_tokens"] is None
+    assert stt_usage_line("t", "hermes", "nova-2", None, False)["audio_ms"] is None
+    records, bad = parse_lines([json.dumps(line), json.dumps({**line, "audio_ms": "long"})])
+    assert (len(records), bad) == (1, 1)
+    row = next(iter(aggregate(records).values()))
+    assert cost(row, 0.3, 2.5) is None

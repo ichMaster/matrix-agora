@@ -31,6 +31,54 @@ FFMPEG = ("ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le", "-ar", 
           "-i", "pipe:0", "-c:a", "libopus", "-b:a", "32k", "-application", "voip", "-f", "ogg", "pipe:1")
 
 
+STT_URL = "https://api.deepgram.com/v1/listen"
+STT_MODEL = "nova-2"             # the owner's choice (ROADMAP v5): Ukrainian, `smart_format`
+STT_TIMEOUT_S = 30
+
+
+class DeepgramSTT:
+    """v5.2 — speech to text, ported from Lumi's `voice/stt.py` (a direct REST call, no SDK)."""
+
+    def __init__(self, api_key: str, model: str = STT_MODEL, language: str = "uk") -> None:
+        self._key = api_key
+        self.model = model
+        self.language = language
+
+    async def transcribe(self, audio: bytes, content_type: str = "audio/ogg") -> tuple[str | None, int | None]:
+        """(the transcript, the audio's length in ms): (None, …) when nothing was heard or the call failed —
+        logged by type or HTTP status only, never the key or a word."""
+        params = {"model": self.model, "language": self.language, "smart_format": "true"}
+        headers = {"Authorization": f"Token {self._key}", "Content-Type": content_type or "audio/ogg"}
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=STT_TIMEOUT_S)) as session, \
+                    session.post(STT_URL, params=params, data=audio, headers=headers) as resp:
+                if resp.status != 200:
+                    await resp.read()
+                    log.error("stt failed: HTTP %s", resp.status)
+                    return None, None
+                data = await resp.json(content_type=None)
+        except Exception as exc:  # noqa: BLE001 — any failure means silence
+            log.error("stt failed: %s", type(exc).__name__)
+            return None, None
+        return deepgram_transcript(data), deepgram_duration_ms(data)
+
+
+def deepgram_transcript(data) -> str | None:
+    """`results.channels[0].alternatives[0].transcript`, stripped; anything missing or empty → None."""
+    try:
+        text = data["results"]["channels"][0]["alternatives"][0]["transcript"]
+    except (KeyError, IndexError, TypeError):
+        return None
+    return text.strip() or None if isinstance(text, str) else None
+
+
+def deepgram_duration_ms(data) -> int | None:
+    try:
+        return round(float(data["metadata"]["duration"]) * 1000)
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+
+
 class ElevenLabsTTS:
     def __init__(self, api_key: str, voice_id: str, model: str = TTS_MODEL) -> None:
         self._key = api_key
