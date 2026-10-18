@@ -46,22 +46,26 @@ shouting. Warm tenor with a smooth, confident timbre. Studio quality, clear reco
 
 ## Ада — редакторка, 32 роки (v5.3)
 
-**Характер.** Незалежна, трохи «з іншої планети»: зовні спокійна й спостережлива, а в голові — несподівані ідеї,
-які вона вимовляє буденно. Говорить рівно й тепло, з легкою іронією; любить ставити одне влучне запитання. Живе у
-Львові, гуляє старим містом, п'є каву в маленьких кав'ярнях.
+**Характер.** Незалежна, трохи «з іншої планети»: спостережлива, а в голові — несподівані ідеї, які вона
+вимовляє з живим блиском в очах. Говорить тепло, жваво, з усмішкою в голосі й легкою іронією; любить ставити одне
+влучне запитання. Живе у Львові, гуляє старим містом, п'є каву в маленьких кав'ярнях.
+
+> 2026-10-18: перший голос Ади вийшов надто повільним і сумним («депресивним»). Опис нижче — жвавіший; згенеруйте
+> голос заново і надішліть новий ID.
 
 **Voice description:**
 ```
-A woman in her early thirties, native Ukrainian speaker from Lviv. Calm, warm and observant, with a soft, slightly
-low, velvety voice. Unhurried, even pace; thoughtful pauses; gentle, dry irony in the intonation, as if she is
-quietly amused by an unexpected idea. Intimate and clear, like talking to a close friend in a small café.
+A woman in her early thirties, native Ukrainian speaker from Lviv. Bright, warm and lively, with a clear,
+medium-pitched voice and a smile you can hear. Natural, upbeat, medium-fast pace; expressive, playful intonation
+with light, witty irony, as if she has just had a delightful idea and can't wait to share it. Curious and engaged,
+energetic but never shouting, never sleepy, sad or melancholic. Like chatting with a close friend over coffee.
 Studio quality, clear recording.
 ```
 
 **Text to preview:**
 ```
-Знаєш, я сьогодні довго гуляла старим містом і подумала: а навіщо, власне, поспішати? Бруно, звісно, скаже, що
-життя коротке. А я спитаю інакше: що ти встигнеш помітити, якщо весь час біжиш?
+Слухай, я сьогодні гуляла старим містом і мені спала на думку чудова ідея! А навіщо, власне, поспішати? Бруно,
+звісно, скаже, що життя коротке. А я спитаю: що ти встигнеш помітити, якщо весь час біжиш?
 ```
 
 ---
