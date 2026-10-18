@@ -158,12 +158,14 @@ def test_duration_and_waveform():
 
 
 def test_the_voice_message_content():
-    c = voice_content("mxc://agora.lan/abc", 4096, 61_500, [1, 2], "Вісті з Агори.", "hermes-20261017-1405.ogg")
-    assert c["msgtype"] == "m.audio" and c["body"] == "Вісті з Агори." and c["url"] == "mxc://agora.lan/abc"
+    c = voice_content("mxc://agora.lan/abc", 4096, 61_500, [1, 2])
+    assert c["msgtype"] == "m.audio" and c["url"] == "mxc://agora.lan/abc"
     assert c["info"] == {"mimetype": "audio/ogg", "size": 4096, "duration": 61_500}
     assert c["org.matrix.msc1767.audio"] == {"duration": 61_500, "waveform": [1, 2]}
-    assert c["org.matrix.msc3245.voice"] == {} and c["org.matrix.msc1767.text"] == "Вісті з Агори."
-    assert c["filename"] == "hermes-20261017-1405.ogg"
+    assert c["org.matrix.msc3245.voice"] == {}
+    # a plain label, no filename — never the words as a caption under the voice (the owner, 2026-10-18)
+    assert c["body"] == c["org.matrix.msc1767.text"] == "Голосове повідомлення" and "filename" not in c
+
 
 
 # --- v5.2: speech to text (Deepgram) -----------------------------------------------------------------------------------

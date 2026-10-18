@@ -70,7 +70,8 @@ def test_an_answer_to_the_owners_voice_is_voiced_then_written(tmp_path, monkeypa
     audio, text = sent(agent)
     assert audio["msgtype"] == "m.audio" and audio["org.matrix.msc3245.voice"] == {}
     assert "m.relates_to" not in audio and "m.relates_to" not in text     # never a reply (the owner, 2026-10-18)
-    assert audio["body"] == text["body"] == f"Привіт, Ich! {SECRET}" and text["msgtype"] == "m.text"
+    assert text["body"] == f"Привіт, Ich! {SECRET}" and text["msgtype"] == "m.text"
+    assert audio["body"] == "Голосове повідомлення" and "filename" not in audio   # the words only once, as text
     usage = json.loads((tmp_path / "ada.usage.jsonl").read_text().splitlines()[-1])
     assert (usage["kind"], usage["characters"]) == ("tts", len(text["body"]))
     assert all(SECRET not in r.getMessage() for r in caplog.records) and "voice: sent" in caplog.text

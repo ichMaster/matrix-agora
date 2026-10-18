@@ -209,8 +209,10 @@ Hermes's digest goes out as an **Element voice message** (`agents/voice.py`). El
 settings — stability 0.5, similarity 0.75, style 0.4; 60 s); the raw PCM gives the duration and the waveform (100
 peaks scaled to 0..1024) by arithmetic; ffmpeg encodes it to OGG/Opus (`-c:a libopus -b:a 32k -application voip -f
 ogg`); the file is uploaded to the homeserver's media store and sent as `m.audio` with `info {mimetype audio/ogg, size,
-duration}`, `org.matrix.msc1767.audio {duration, waveform}`, `org.matrix.msc3245.voice {}`, the text in `body`
-(with a `filename`, so clients that show captions show it) and in `org.matrix.msc1767.text`. Any failure of a step —
+duration}`, `org.matrix.msc1767.audio {duration, waveform}`, `org.matrix.msc3245.voice {}`, and a plain
+label «Голосове повідомлення» as `body` and `org.matrix.msc1767.text`, like Element's own voice messages — never the
+words and no `filename` (a newer Element shows a body that differs from the filename as a caption, which doubled
+the text that always follows as its own message; the owner, 2026-10-18). Any failure of a step —
 the request, the encode, the upload — returns None, logged by type, HTTP status or exit code, never the key or the
 text, and the digest goes out as text only.
 

@@ -207,7 +207,7 @@ def test_a_scheduled_digest_sends_the_voice_then_the_text_and_moves_the_point(tm
     asyncio.run(h.tick())
     voice, text = private(client)
     assert voice["msgtype"] == "m.audio" and voice["org.matrix.msc3245.voice"] == {}
-    assert voice["url"] == "mxc://agora.lan/voice" and voice["body"] == llm_text(llm, voice)
+    assert voice["url"] == "mxc://agora.lan/voice" and voice["body"] == "Голосове повідомлення"  # never the words
     assert voice["info"]["duration"] == 200 and len(voice["org.matrix.msc1767.audio"]["waveform"]) == 100
     assert text["msgtype"] == "m.text" and text["body"].startswith("Агора, 10:00–10:07 · 8 повідомлень\n\n")
     call = llm.calls[0]
@@ -218,7 +218,7 @@ def test_a_scheduled_digest_sends_the_voice_then_the_text_and_moves_the_point(tm
     assert (state.point_event, state.last_ms, state.count, h.new_count) == (room[0].event_id, ms(14), 1, 0)
     assert [r for r, _ in client.typing] == ["!dm", "!dm"] and client.typing[-1][1] is False
     usage = [json.loads(x) for x in (tmp_path / "hermes.usage.jsonl").read_text().splitlines()]
-    assert [(u["kind"], u["characters"]) for u in usage] == [("tts", len(voice["body"]))]
+    assert [(u["kind"], u["characters"]) for u in usage] == [("tts", len(text["body"].split("\n\n", 1)[1]))]
     assert all(SECRET not in r.getMessage() for r in caplog.records)
     assert "digest: sent (8 messages" in caplog.text and "voice)" in caplog.text
     client.sent.clear()
@@ -226,10 +226,6 @@ def test_a_scheduled_digest_sends_the_voice_then_the_text_and_moves_the_point(tm
     h.clock = lambda: ms(17)                                            # 3 h later: not yet
     asyncio.run(h.tick())
     assert client.sent == []
-
-
-def llm_text(llm, voice):
-    return voice["org.matrix.msc1767.text"]
 
 
 def test_a_restart_never_digests_at_once(tmp_path, monkeypatch):

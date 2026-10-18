@@ -57,7 +57,7 @@ async def voice_message(client, tts, text: str, filename: str, reply_to: str | N
     if not isinstance(resp, UploadResponse):
         log.error("upload failed: %s", getattr(resp, "status_code", type(resp).__name__))
         return None, "upload failed"
-    content = voice_content(resp.content_uri, len(ogg), duration_ms(pcm), waveform(pcm), text, filename)
+    content = voice_content(resp.content_uri, len(ogg), duration_ms(pcm), waveform(pcm))
     if reply_to:
         content["m.relates_to"] = {"m.in_reply_to": {"event_id": reply_to}}
     return content, None

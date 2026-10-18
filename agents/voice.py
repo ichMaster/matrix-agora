@@ -151,16 +151,19 @@ def waveform(pcm: bytes, points: int = WAVEFORM_POINTS) -> list[int]:
     return [round(p * WAVEFORM_MAX / top) if top else 0 for p in peaks]
 
 
-def voice_content(mxc_url: str, size: int, duration: int, wave: list[int], text: str, filename: str) -> dict:
-    """An `m.audio` event Element shows as a voice message: the voice flag, the duration and the waveform; the text
-    in `body` (a caption where `filename` differs) and as MSC1767 text."""
+VOICE_BODY = "Голосове повідомлення"  # what Element's own voice messages carry: a label, never the words
+
+
+def voice_content(mxc_url: str, size: int, duration: int, wave: list[int]) -> dict:
+    """An `m.audio` event Element shows as a voice message: the voice flag, the duration and the waveform, under a
+    plain label like Element's own. Never the words, and no `filename` — a newer Element shows a body that differs
+    from it as a caption, which doubled the text that always follows as its own message (the owner, 2026-10-18)."""
     return {
         "msgtype": "m.audio",
-        "body": text,
-        "filename": filename,
+        "body": VOICE_BODY,
         "url": mxc_url,
         "info": {"mimetype": "audio/ogg", "size": size, "duration": duration},
         "org.matrix.msc1767.audio": {"duration": duration, "waveform": wave},
         "org.matrix.msc3245.voice": {},
-        "org.matrix.msc1767.text": text,
+        "org.matrix.msc1767.text": VOICE_BODY,
     }
