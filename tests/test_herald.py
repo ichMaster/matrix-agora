@@ -15,7 +15,7 @@ from nio import RoomCreateResponse, RoomMessage, RoomSendResponse, UploadRespons
 from agents import herald as herald_mod
 from agents.config import AgentConfig
 from agents.digest import NOTHING_NEW, DigestState, load_digest_state, save_digest_state
-from agents.herald import NOTHING_RECENT, Herald, needs_private_room, route
+from agents.herald import CHAT_THINKING, Herald, needs_private_room, route
 from agents.roster import TYPES, load_member, load_roster
 
 TZ = "Europe/Kyiv"
@@ -39,6 +39,7 @@ def ev(sender, body, ts, eid=None):
 class FakeClient:
     def __init__(self, events_newest_first=()):
         self.events = list(events_newest_first)
+        self.private_events: list = []  # the private room's lines, newest first
         self.rooms: dict = {}
         self.invited_rooms: dict = {}
         self.next_batch = "s1"
@@ -63,7 +64,8 @@ class FakeClient:
 
     async def room_messages(self, room_id, start=None, direction=None, limit=100):
         from nio import RoomMessagesError
-        assert room_id == AGORA
+        if room_id != AGORA:                                           # the private room: one page of the chat
+            return SimpleNamespace(chunk=self.private_events[:limit], end="end")
         page = 0 if start == "s1" else int(start[1:])
         if page == self.fail_page:
             return RoomMessagesError("bad gateway", "502")
@@ -83,8 +85,10 @@ class FakeLLM:
         self.texts = list(texts) or ["Вісті з Олімпу. Ада сперечалась із Бруно."]
         self.calls = []
 
-    async def think(self, contents, system_instruction, model=None, max_output_tokens=None, kind="digest_voice"):
-        self.calls.append(SimpleNamespace(contents=contents, system=system_instruction, model=model, kind=kind))
+    async def think(self, contents, system_instruction, model=None, max_output_tokens=None, kind="digest_voice",
+                    level=None):
+        self.calls.append(SimpleNamespace(contents=contents, system=system_instruction, model=model, kind=kind,
+                                          level=level))
         return self.texts.pop(0) if self.texts else None
 
 
@@ -365,17 +369,29 @@ def test_a_question_reads_the_last_days_and_answers_in_text(tmp_path, monkeypatc
     assert asyncio.run(h.answer("що Бруно казав учора про подорож?")) is True
     assert private(client) == [{"msgtype": "m.text", "body": "Бруно вчора збирався в Карпати."}]
     call = llm.calls[0]
-    assert call.kind == "ask" and call.contents.startswith(f"16.10 20:00 Бруно: поїду в Карпати {SECRET}")
+    assert call.kind == "ask" and call.level == CHAT_THINKING == "low"   # a chat answers in seconds
+    assert call.contents.startswith(f"Агора за останні дні:\n16.10 20:00 Бруно: поїду в Карпати {SECRET}")
     assert "давно" not in call.contents                                 # older than the window
-    assert call.contents.endswith("Питання Ich: що Бруно казав учора про подорож?")
+    assert call.contents.endswith("\n\nIch: що Бруно казав учора про подорож?")
+    assert "це розмова, а не підсумок" in call.system
     assert SECRET not in caplog.text and "ask: answered (1 messages read)" in caplog.text
 
 
-def test_a_question_with_an_empty_week_needs_no_model(tmp_path, monkeypatch):
-    llm = FakeLLM()
+def test_the_owner_chats_with_hermes_and_a_follow_up_has_its_context(tmp_path, monkeypatch):
+    """The owner, 2026-10-18: «він зазвичай відповідає цілим дайджестом». A message is a conversation: the chat
+    brief, your recent lines (his digest text among them), and what was just written — never the line twice."""
+    llm = FakeLLM("Вітаю, смертний! Олімп тихий, а я тут.")
     h, client = make(tmp_path, monkeypatch, llm=llm, state=DigestState(room="!dm"))
-    asyncio.run(h.answer("що було?"))
-    assert private(client) == [{"msgtype": "m.text", "body": NOTHING_RECENT}] and llm.calls == []
+    client.private_events = [ev(OWNER, "а що ще?", ms(14, 2), "$now"),
+                             ev(CFG.user_id, "Агора, 10:00–10:07 · 8 повідомлень\n\nВісті з Олімпу…", ms(14, 1)),
+                             ev(OWNER, "привіт", ms(14)),
+                             ev(ADA, "чужий рядок", ms(13))]          # never another sender's
+    assert asyncio.run(h.answer("а що ще?", "$now")) is True
+    contents = llm.calls[0].contents
+    assert contents.startswith("Агора за останні дні:\n(тиша)")         # a quiet week still gets an answer
+    assert "Ваша недавня розмова:\nIch: привіт\nГермес: Агора, 10:00–10:07 · 8 повідомлень" in contents
+    assert contents.endswith("\n\nIch: а що ще?") and contents.count("а що ще?") == 1 and "чужий" not in contents
+    assert private(client) == [{"msgtype": "m.text", "body": "Вітаю, смертний! Олімп тихий, а я тут."}]
 
 
 # --- the process ------------------------------------------------------------------------------------------------------

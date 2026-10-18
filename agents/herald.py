@@ -41,14 +41,16 @@ from nio import (
 from agents.config import AgentConfig
 from agents.digest import (
     ASK_MAX,
+    CHAT_HISTORY_N,
     COLLECT_MAX,
     NOTHING_NEW,
     Message,
-    ask_request,
     ask_window,
     asks_digest,
+    chat_request,
     collect,
     counts,
+    dialogue_lines,
     digest_due,
     digest_lines,
     digest_request,
@@ -79,8 +81,8 @@ PAGE = 100              # the homeserver's cap on one /messages page
 MAX_PAGES = 40          # at most this many pages for one digest or question
 WATCH_S = 60.0          # the watcher's tick
 RETRY_MS = 600_000      # a failed digest is tried again after 10 minutes, never in a loop
-ANSWER_MAX_CHARS = 3000
-NOTHING_RECENT = "У моїх сувоях за останній тиждень порожньо: в Агорі мовчали."
+ANSWER_MAX_CHARS = 1500  # a chat answer; the brief asks for one to four sentences
+CHAT_THINKING = "low"    # the owner waits for a chat answer: bounded thinking, seconds not a minute
 ROOM_NAME = "Гермес"
 
 
@@ -277,7 +279,8 @@ class Herald:
                      "voice" if why is None else f"text: {why}")
             return True
 
-    async def _think(self, contents: str, system: str, kind: str, cap: int) -> tuple[str | None, bool]:
+    async def _think(self, contents: str, system: str, kind: str, cap: int,
+                     level: str | None = None) -> tuple[str | None, bool]:
         """One thinking call, trimmed to `cap`, through the herald's guard: a sentence tying a persona to a banned
         word is removed (`without_outing`, review #1); nothing left → regenerated once. (text, False), or (None, True)
         when the guard left nothing twice, (None, False) on a failure."""
@@ -285,7 +288,7 @@ class Herald:
         await self._typing(True)
         try:
             for _ in range(2):
-                out = await self.llm.think(contents, system, model=DIGEST_MODEL, kind=kind)
+                out = await self.llm.think(contents, system, model=DIGEST_MODEL, kind=kind, level=level)
                 if out is None:
                     return None, False
                 out = trim_digest(out, cap)
@@ -337,7 +340,22 @@ class Herald:
         return None if await self.send_private(content) else "send failed"
 
     # --- a question about the history -------------------------------------------------------------------------------
-    async def answer(self, question: str) -> bool:
+    async def recent_dialogue(self, current_event: str | None) -> list[Message]:
+        """The private room's last lines (Ich and Гермес), oldest first, without the message being answered — read
+        from the homeserver like Agora, never kept. A failed read means none (the answer still goes out)."""
+        resp = await self.client.room_messages(self.state.room, start=getattr(self.client, "next_batch", None),
+                                               direction=MessageDirection.back, limit=CHAT_HISTORY_N + 1)
+        if isinstance(resp, RoomMessagesError):
+            log.warning("ask: the conversation could not be read (answering without it)")
+            return []
+        out = [Message(str(e.event_id), e.sender, int(e.server_timestamp), e.body) for e in resp.chunk
+               if isinstance(e, RoomMessageText) and not is_edit(e) and e.sender in (self.cfg.owner, self.cfg.user_id)
+               and str(e.event_id) != current_event]
+        return list(reversed(out[:CHAT_HISTORY_N]))
+
+    async def answer(self, question: str, event_id: str | None = None) -> bool:
+        """The owner wrote to him (not «підсумок»): a conversation — he answers what was written, briefly, with the
+        room's last days as reference and your recent lines as context (the owner, 2026-10-18)."""
         async with self._busy:
             if await self.ensure_private_room() is None:
                 return False
@@ -347,13 +365,10 @@ class Herald:
                 log.error("ask: the room could not be read")
                 return False
             messages = collect(newest_first, since_ms=since, limit=ASK_MAX)
-            if not messages:
-                await self.send_text(NOTHING_RECENT)
-                log.info("ask: nothing in the window")
-                return True
-            system, contents = ask_request(self.cfg.canon, digest_lines(messages, self.names, self.tz, True),
-                                           question, self.members)
-            text, _ = await self._think(contents, system, "ask", ANSWER_MAX_CHARS)
+            dialogue = await self.recent_dialogue(event_id)
+            system, contents = chat_request(self.cfg.canon, digest_lines(messages, self.names, self.tz, True),
+                                            dialogue_lines(dialogue, self.names), question, self.members)
+            text, _ = await self._think(contents, system, "ask", ANSWER_MAX_CHARS, level=CHAT_THINKING)
             if text is None:
                 log.error("ask: no answer (%d messages read)", len(messages))
                 return False
@@ -376,7 +391,7 @@ class Herald:
                 self._spawn(self.digest(asked=True))
             elif what == "ask":
                 log.info("ask: a question from the owner")
-                self._spawn(self.answer(event.body))
+                self._spawn(self.answer(event.body, str(getattr(event, "event_id", "") or "")))
             elif what == "ignored" and why != "purr":
                 log.info("ignored: %s (room %s)", why, room.room_id)
         except Exception:

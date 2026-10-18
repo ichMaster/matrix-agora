@@ -95,9 +95,11 @@ class GeminiClient:
 
 
     async def think(self, contents: str, system_instruction: str, model: str = DIGEST_MODEL,
-                    max_output_tokens: int = THINK_MAX_TOKENS, kind: str = "digest_voice") -> str | None:
+                    max_output_tokens: int = THINK_MAX_TOKENS, kind: str = "digest_voice",
+                    level: str | None = None) -> str | None:
         """v5.1 — one call with thinking on (a Pro model rejects a zero budget): the answer is the non-thought text;
-        the usage line names this call's model. None on failure or an empty answer (logged by type)."""
+        the usage line names this call's model. `level` (`low`, …) bounds the thinking — the chat with the owner
+        answers in seconds, the digest thinks at the model's default. None on failure or an empty answer."""
         try:
             resp = await self._client.aio.models.generate_content(
                 model=model,
@@ -105,7 +107,9 @@ class GeminiClient:
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
                     max_output_tokens=max_output_tokens,
-                    thinking_config=types.ThinkingConfig(include_thoughts=False),
+                    thinking_config=types.ThinkingConfig(
+                        include_thoughts=False,
+                        thinking_level=getattr(types.ThinkingLevel, level.upper()) if level else None),
                     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                 ),
             )

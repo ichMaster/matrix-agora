@@ -165,11 +165,16 @@ joins only the owner's invite into Agora and leaves any other.
   (150,000; 0 — text only), or a step fails; every TTS call is a `tts` usage line. Then the text as an `m.text`,
   headed by a line made in code («Агора, 10:05–14:10 · 23 повідомлення») — Element Desktop does not show a voice
   message's body. The state moves its point to the newest message covered, `last_ms`, the day's count.
-- **Questions about the history.** Any other owner message in the private room: the Agora messages of the last 7
-  days (at most 2,000, the newest), as `"DD.MM HH:MM Name: text"`, then «Питання Ich: …»; one thinking call (kind
-  `ask`, `ASK_BRIEF`: only from these lines, briefly, in his character, say so when they don't hold the answer), the
-  same per-sentence guard, an `m.text` answer (≤ 3,000 characters). An empty week is a fixed line, with no model call. Nothing
-  of the room is kept anywhere: he reads it from the homeserver each time.
+- **A conversation with the owner** (the owner, 2026-10-18: «він зазвичай відповідає цілим дайджестом»). Any
+  other owner message in the private room is a conversation, not a digest: one thinking call (kind `ask`, thinking
+  `low` — an answer in seconds) with his canon (its «Як ти говориш з Ich» section; the digest recipe is for digests
+  only) and `CHAT_BRIEF` — answer exactly what he wrote, briefly (one to four sentences), in character; a greeting
+  with a greeting; tell of Agora only when asked, and only what was asked, from its lines (or say they don't hold
+  it); a full digest only on «підсумок». The contents: the Agora messages of the last 7 days (at most 2,000, the
+  newest) as `"DD.MM HH:MM Name: text"` for reference, the private room's last 20 lines (Ich and Гермес, each cut to
+  1,500 characters, without the message being answered — so a follow-up has its context), then «Ich: …». The same
+  per-sentence guard, an `m.text` answer (≤ 1,500 characters). Nothing of either room is kept anywhere: he reads
+  them from the homeserver each time.
 - **The key** (`ELEVENLABS_API_KEY`, his own env file) is taken out of the environment at start and never reaches a
   prompt, a log or the state; without it — or without a voice id — he logs `voice off` once and digests in text.
 - **His log** names events only: the private room created, `digest: sent (N messages, M chars, voice | text:

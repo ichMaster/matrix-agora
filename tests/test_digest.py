@@ -13,16 +13,17 @@ import pytest
 
 import agents.llm as llm_mod
 from agents.digest import (
-    ASK_BRIEF,
     ASK_DAYS,
+    CHAT_BRIEF,
     DIGEST_BRIEF,
     NOTHING_NEW,
     DigestState,
     Message,
-    ask_request,
     ask_window,
     asks_digest,
+    chat_request,
     collect,
+    dialogue_lines,
     digest_due,
     digest_lines,
     digest_request,
@@ -146,15 +147,20 @@ def test_asks_digest(text, expect):
 
 # --- the prompts --------------------------------------------------------------------------------------------------
 def test_the_briefs_never_hold_a_banned_word_and_name_the_members():
-    for brief in (DIGEST_BRIEF, ASK_BRIEF, NOTHING_NEW):
+    for brief in (DIGEST_BRIEF, CHAT_BRIEF, NOTHING_NEW):
         assert not BANNED_RE.search(brief), brief
     system, contents = digest_request("КАНОН", ["10:05 Ада: так"], "10:05–10:07", 2, 380, 1500,
                                       ["Ich", "Ада", "Бруно"])
     assert system.startswith("КАНОН\n\n") and "Ich, Ада, Бруно" in system and "близько 380 знаків" in system
     assert "не обговорюй, хто вони і яка їхня природа" in system and contents == "10:05 Ада: так"
-    system, contents = ask_request("КАНОН", ["17.10 10:05 Ада: так"], "що казала Ада?", ["Ich", "Ада"])
-    assert "не обговорюй, хто вони і яка їхня природа" in system
-    assert contents.endswith("\n\nПитання Ich: що казала Ада?")
+    system, contents = chat_request("КАНОН", ["17.10 10:05 Ада: так"], ["Ich: привіт", "Гермес: вітаю"],
+                                    "що казала Ада?", ["Ich", "Ада"])
+    assert "не обговорюй, хто вони і яка їхня природа" in system and "це розмова, а не підсумок" in system
+    assert contents == ("Агора за останні дні:\n17.10 10:05 Ада: так\n\nВаша недавня розмова:\nIch: привіт\n"
+                        "Гермес: вітаю\n\nIch: що казала Ада?")
+    assert chat_request("К", [], [], "привіт", ["Ich"])[1] == "Агора за останні дні:\n(тиша)\n\nIch: привіт"
+    long = Message("$d", "@hermes:agora.lan", 1, "в" * 2000)
+    assert dialogue_lines([long], {"@hermes:agora.lan": "Гермес"}) == ["Гермес: " + "в" * 1500 + "…"]
 
 
 # --- the state ----------------------------------------------------------------------------------------------------
@@ -221,3 +227,14 @@ def test_think_reports_a_failure_or_an_empty_answer_under_its_model(monkeypatch)
     client, usage = client_with(monkeypatch, Models(thinking_response(SimpleNamespace(text="лише думка", thought=True))))
     assert asyncio.run(client.think("рядки", "канон")) is None
     assert usage == [("digest_voice", llm_mod.DIGEST_MODEL, "META", False)]
+
+
+def test_think_can_bound_the_thinking_for_a_chat(monkeypatch):
+    """The chat with the owner thinks `low` (seconds, not a minute); the digest keeps the model's default."""
+    from google.genai import types
+    models = Models(thinking_response(SimpleNamespace(text="Вітаю.", thought=None)))
+    client, _ = client_with(monkeypatch, models)
+    assert asyncio.run(client.think("рядки", "канон", kind="ask", level="low")) == "Вітаю."
+    assert models.seen["config"].thinking_config.thinking_level == types.ThinkingLevel.LOW
+    asyncio.run(client.think("рядки", "канон"))
+    assert models.seen["config"].thinking_config.thinking_level is None

@@ -41,12 +41,18 @@ DIGEST_BRIEF = (
     "розмітки, числа й години словами. Відповідай лише текстом підсумку."
 )
 
-ASK_BRIEF = (
-    "Ich питає тебе про те, що було в Агорі. Нижче — дослівні рядки розмови за останні дні, кожен у форматі "
-    "«дата час Ім'я: текст». У кімнаті: {members}. Відповідай лише з цих рядків — коротко, кількома реченнями, у "
-    "своєму характері, на «ти». Якщо в рядках відповіді немає, так і скажи і нічого не вигадуй. Учасників "
-    "називай на ім'я і не обговорюй, хто вони і яка їхня природа. Без списків і розмітки."
+# the owner, 2026-10-18: «він зазвичай відповідає цілим дайджестом» — a message from Ich is a conversation, not a digest
+CHAT_BRIEF = (
+    "Зараз Ich пише тобі сам, у вашій окремій кімнаті, — це розмова, а не підсумок. Відповідай саме на те, що він "
+    "написав: коротко, як у чаті, одним–чотирма реченнями, у своєму характері, на «ти». Привітання — привітанням, "
+    "жарт — жартом, питання — відповіддю на нього. Нижче — дослівні рядки з Агори за останні дні («дата час Ім'я: "
+    "текст») і ваша недавня розмова. Агору згадуй лише тоді, коли він питає про неї, і лише те, про що питає, — без "
+    "вісницького зачину й підпису; повний підсумок — тільки коли він попросить «підсумок». Коли питає про Агору, "
+    "відповідай лише з цих рядків, а якщо відповіді там немає, так і скажи і нічого не вигадуй. У кімнаті: "
+    "{members}. Учасників називай на ім'я і не обговорюй, хто вони і яка їхня природа. Без списків і розмітки."
 )
+CHAT_HISTORY_N = 20       # the last lines of the private room he sees, so a follow-up has its context
+CHAT_LINE_MAX = 1500      # a digest in that history is cut to this many characters
 
 
 @dataclass(frozen=True)
@@ -229,7 +235,22 @@ def digest_request(canon: str, lines: list[str], when: str, n: int, target: int,
     return f"{canon}\n\n{brief}", "\n".join(lines)
 
 
-def ask_request(canon: str, lines: list[str], question: str, members: list[str]) -> tuple[str, str]:
-    """(system instruction, contents) of an answer about the history: the lines, then the owner's question."""
-    brief = ASK_BRIEF.format(members=members_line(members))
-    return f"{canon}\n\n{brief}", "\n".join(lines) + f"\n\nПитання Ich: {question}"
+def dialogue_lines(messages: list[Message], names: dict[str, str]) -> list[str]:
+    """The private room's recent lines, `"Name: text"` (Ich and Гермес), each cut to `CHAT_LINE_MAX`."""
+    out = []
+    for m in messages:
+        text = m.text if len(m.text) <= CHAT_LINE_MAX else m.text[:CHAT_LINE_MAX] + "…"
+        out.append(f"{names.get(m.sender, m.sender)}: {text}")
+    return out
+
+
+def chat_request(canon: str, agora: list[str], dialogue: list[str], message: str,
+                 members: list[str]) -> tuple[str, str]:
+    """(system instruction, contents) of his answer to the owner: his canon and the chat brief; the room's last
+    days as reference, your recent conversation, then what Ich just wrote."""
+    brief = CHAT_BRIEF.format(members=members_line(members))
+    parts = ["Агора за останні дні:\n" + ("\n".join(agora) or "(тиша)")]
+    if dialogue:
+        parts.append("Ваша недавня розмова:\n" + "\n".join(dialogue))
+    parts.append(f"Ich: {message}")
+    return f"{canon}\n\n{brief}", "\n\n".join(parts)
