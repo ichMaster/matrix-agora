@@ -480,10 +480,10 @@ class Agent:
             log.exception("message handler failed (bot keeps running)")
 
     async def send_line(self, room_id: str, text: str, event_key: str, answering: str | None = None) -> None:
-        """v5.3 — every line the agent says: a voice message with its words as the caption when it should and can
-        (`voice_due`, a voice, a voiceable line, under the speakers' monthly budget) — the only message (the owner,
-        2026-10-18: only voice messages); never a reply. Every speaker reads a member's caption as that member's line
-        (`on_audio`). Otherwise, or when a voice step fails, the text as `m.text`. Never a word in a log."""
+        """v5.3 — every line the agent says: a voice message under a plain label when it should and can (`voice_due`,
+        a voice, a voiceable line, under the speakers' monthly budget), never a reply; then always the same text as
+        `m.text` — the only form the iPhone's Element shows the words in (it renders no media caption; the owner,
+        2026-10-18). The other agents read the text. Never a word in a log."""
         voice_of = self._transcript_voice.get(answering or "") or None
         why = self.voice_off
         if self.tts is not None:
@@ -496,17 +496,16 @@ class Agent:
             else:
                 name = f"{self.cfg.localpart}-{local_now(self.clock(), self.tz):%Y%m%d-%H%M%S}.ogg"
                 # never a reply (the owner, 2026-10-18: «забери ці реплаї») — it is voiced, not quoted
-                content, why = await voice_message(self.client, self.tts, text, name, caption=True,
+                content, why = await voice_message(self.client, self.tts, text, name,
                                                    on_synth=lambda ok: self.record_tts(len(text), ok))
                 if content is not None:
                     try:
                         await self.client.room_send(room_id=room_id, message_type="m.room.message", content=content)
-                    except Exception as exc:  # noqa: BLE001 — the text goes out instead
+                    except Exception as exc:  # noqa: BLE001 — the text still goes out
                         why = f"send failed ({type(exc).__name__})"
             if why is None:
                 log.info("voice: sent (%d chars)", len(text))
-                return  # the voice message carries the words as its caption: nothing else is sent
-            if why not in ("share", "not voiceable"):
+            elif why not in ("share", "not voiceable"):
                 log.info("voice: text only (%s)", why)
         await self.client.room_send(room_id=room_id, message_type="m.room.message",
                                     content={"msgtype": "m.text", "body": text})
