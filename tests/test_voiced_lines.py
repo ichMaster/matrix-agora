@@ -45,7 +45,6 @@ def voiced_agent(tmp_path, monkeypatch, voice_id="AdaVoice0123456789", key=KEY, 
     agent = make_agent(llm)
     agent.memory_file = tmp_path / "ada.memory.md"                 # its usage file and the budget read here
     agent.client.upload = AsyncMock(return_value=(UploadResponse(content_uri="mxc://agora.lan/ada"), None))
-    agent.client.room_send = AsyncMock(return_value=SimpleNamespace(event_id="$ada-voice"))
     if agent.tts is not None:
         agent.tts = FakeTTS()
     agent.started = True
@@ -72,8 +71,6 @@ def test_an_answer_to_the_owners_voice_is_voiced_then_written(tmp_path, monkeypa
     assert audio["msgtype"] == "m.audio" and audio["org.matrix.msc3245.voice"] == {}
     assert audio["m.relates_to"] == {"m.in_reply_to": {"event_id": "$voice"}}     # a reply to the owner's voice
     assert audio["body"] == text["body"] == f"Привіт, Ich! {SECRET}" and text["msgtype"] == "m.text"
-    assert text["m.relates_to"] == {"rel_type": "m.thread", "event_id": "$ada-voice", "is_falling_back": True,
-                                    "m.in_reply_to": {"event_id": "$ada-voice"}}  # the words under the voice
     usage = json.loads((tmp_path / "ada.usage.jsonl").read_text().splitlines()[-1])
     assert (usage["kind"], usage["characters"]) == ("tts", len(text["body"]))
     assert all(SECRET not in r.getMessage() for r in caplog.records) and "voice: sent" in caplog.text
@@ -148,14 +145,3 @@ def test_a_failed_voice_send_still_sends_the_text(tmp_path, monkeypatch, caplog)
     agent.client.room_send = flaky
     asyncio.run(agent.send_line("!room", "Привіт.", "$e"))
     assert calls == ["m.audio", "m.text"] and "voice: text only (send failed (ConnectionError))" in caplog.text
-
-
-
-def test_a_text_only_line_is_a_plain_message_and_the_voices_stay_consecutive(tmp_path, monkeypatch):
-    """Element plays the room's voice messages in a row and stops at the first text message between them (the owner,
-    2026-10-18): a voiced line's words are a thread reply, a text-only line stays plain."""
-    from agents.speech import text_under_voice
-    assert text_under_voice("так", None) == {"msgtype": "m.text", "body": "так"}
-    agent = voiced_agent(tmp_path, monkeypatch, p="0.0")
-    asyncio.run(agent.send_line("!room", "Мені добре.", "$e"))
-    assert sent(agent) == [{"msgtype": "m.text", "body": "Мені добре."}]

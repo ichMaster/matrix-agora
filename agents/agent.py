@@ -118,7 +118,7 @@ from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.settings import VOICE_ID_RE
 from agents.settings import start as settings_start
 from agents.sky import SKY_MAX_TOKENS, clean_sky, load_sky, save_sky, sky_query
-from agents.speech import speakers_month_chars, text_under_voice, voice_due, voice_message, voiceable
+from agents.speech import speakers_month_chars, voice_due, voice_message, voiceable
 from agents.turns import (
     claude_mode,
     decide_reply,
@@ -463,11 +463,9 @@ class Agent:
         """v5.3 — every line the agent says: in its own voice first when it should and can (`voice_due`, a voice, a
         voiceable line, under the speakers' monthly budget), a reply to the owner's voice it answers; then always the
         same text — the other agents read only text, so the turn-taking never sees the voice. A failed voice step
-        leaves the text alone, logged by reason; never a word in a log. A voiced line's text is a thread reply under
-        its voice (`text_under_voice`): Element plays the room's voice messages in a row only while no text message
-        stands between them (the owner, 2026-10-18)."""
+        leaves the text alone, logged by reason; never a word in a log."""
         voice_of = self._transcript_voice.get(answering or "") or None
-        why, voiced_id = self.voice_off, None
+        why = self.voice_off
         if self.tts is not None:
             if not voiceable(text):
                 why = "not voiceable"
@@ -481,19 +479,15 @@ class Agent:
                                                    on_synth=lambda ok: self.record_tts(len(text), ok))
                 if content is not None:
                     try:
-                        resp = await self.client.room_send(room_id=room_id, message_type="m.room.message",
-                                                           content=content)
-                        eid = getattr(resp, "event_id", None)
-                        voiced_id = eid if isinstance(eid, str) and eid else None
+                        await self.client.room_send(room_id=room_id, message_type="m.room.message", content=content)
                     except Exception as exc:  # noqa: BLE001 — the text still goes out
                         why = f"send failed ({type(exc).__name__})"
             if why is None:
                 log.info("voice: sent (%d chars)", len(text))
             elif why not in ("share", "not voiceable"):
                 log.info("voice: text only (%s)", why)
-        # the words under their voice (a thread reply), so the room's voices stay consecutive for Element's playback
         await self.client.room_send(room_id=room_id, message_type="m.room.message",
-                                    content=text_under_voice(text, voiced_id))
+                                    content={"msgtype": "m.text", "body": text})
 
     def _speakers_month_used(self) -> int:
         """This month's spoken characters of every speaker (their usage files in state/), the heralds left out."""
