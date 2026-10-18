@@ -7,9 +7,16 @@ voiced and never logs a word.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import io
+import logging
+from collections.abc import Callable, Iterable
+
+from nio import UploadResponse
 
 from agents.turns import uniform
+from agents.voice import duration_ms, encode_opus, voice_content, waveform
+
+log = logging.getLogger("agent.speech")
 
 
 def voice_due(answers_owner_voice: bool, event_key: str, localpart: str, p: float) -> bool:
@@ -32,3 +39,25 @@ def speakers_month_chars(records: Iterable[dict], month: str, heralds: Iterable[
     skip = set(heralds)
     return sum(r.get("characters") or 0 for r in records
                if r.get("kind") == "tts" and r.get("ok") and r.get("agent") not in skip and str(r["ts"])[:7] == month)
+
+
+async def voice_message(client, tts, text: str, filename: str, reply_to: str | None = None,
+                        on_synth: Callable[[bool], None] | None = None) -> tuple[dict | None, str | None]:
+    """synth → OGG/Opus → upload → the `m.audio` content, not yet sent: (content, None), or (None, why it stays
+    text). `reply_to` relates it to the owner's voice it answers; `on_synth(ok)` records the paid call."""
+    pcm = await tts.synth(text)
+    if on_synth is not None:
+        on_synth(pcm is not None)
+    if pcm is None:
+        return None, "tts failed"
+    ogg = await encode_opus(pcm)
+    if ogg is None:
+        return None, "encode failed"
+    resp, _ = await client.upload(io.BytesIO(ogg), content_type="audio/ogg", filename=filename, filesize=len(ogg))
+    if not isinstance(resp, UploadResponse):
+        log.error("upload failed: %s", getattr(resp, "status_code", type(resp).__name__))
+        return None, "upload failed"
+    content = voice_content(resp.content_uri, len(ogg), duration_ms(pcm), waveform(pcm), text, filename)
+    if reply_to:
+        content["m.relates_to"] = {"m.in_reply_to": {"event_id": reply_to}}
+    return content, None

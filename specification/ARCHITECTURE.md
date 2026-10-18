@@ -214,6 +214,19 @@ duration}`, `org.matrix.msc1767.audio {duration, waveform}`, `org.matrix.msc3245
 the request, the encode, the upload — returns None, logged by type, HTTP status or exit code, never the key or the
 text, and the digest goes out as text only.
 
+**The agents speak (v5.3).** The pipeline is shared (`agents/speech.py` `voice_message`: synth → encode → upload →
+the `m.audio` content, related by `m.in_reply_to` to the owner's voice it answers), used by Hermes and by every
+speaker. **Every line a speaker says goes through `send_line`** — the reply, the purr, the cat's nudge, Claude's
+news — after all its text checks (PASS, the guard, the cap, the duplicate, R3): it is voiced when the agent has
+`voice`, its own voice and the key, the line is `voiceable` (never an action purr), `voice_due` (always when it
+answers a transcript of the owner's voice; otherwise its own deterministic draw against `VOICE_REPLY_P`), and the
+speakers' month (`speakers_month_chars` over every usage file but the heralds') plus the line stays within
+`VOICE_MONTHLY_CHARS`. **The voice goes first, then always the same text** as `m.text`: the other agents read only
+text, so the turn-taking, the history and Hermes's digests never see the voice. A failed step sends the text alone
+(`voice: text only (<reason>)`); each synth is a `tts` usage line; a member's voice message is never logged by the
+others or by Hermes. `ELEVENLABS_API_KEY` leaves the environment first thing at an agent's start, so Claude's CLI
+never inherits it.
+
 **Hearing (v5.2).** `DeepgramSTT` (ported from Lumi's `voice/stt.py`): `POST https://api.deepgram.com/v1/listen`
 with `model=nova-2`, `language=uk`, `smart_format=true`, `Authorization: Token …` and the audio's own content type
 (Element's voice messages are OGG/Opus, sent as they are), 30 s; the transcript is

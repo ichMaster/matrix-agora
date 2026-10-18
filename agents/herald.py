@@ -13,7 +13,6 @@ digest or answer text ever reaches a log.
 from __future__ import annotations
 
 import asyncio
-import io
 import json
 import logging
 import os
@@ -36,7 +35,6 @@ from nio import (
     RoomSendResponse,
     RoomVisibility,
     SyncError,
-    UploadResponse,
 )
 
 from agents.config import AgentConfig
@@ -71,16 +69,13 @@ from agents.matrix import download, join_room, login
 from agents.nudge import parse_hours
 from agents.roster import Member, load_roster, speakers
 from agents.settings import VOICE_ID_RE
+from agents.speech import voice_message
 from agents.usage import month_chars, parse_lines, stt_usage_line, tts_usage_line, usage_line
 from agents.voice import (
     STT_MODEL,
     TTS_MODEL,
     DeepgramSTT,
     ElevenLabsTTS,
-    duration_ms,
-    encode_opus,
-    voice_content,
-    waveform,
 )
 from agents.world import local_now
 
@@ -113,11 +108,14 @@ def route(room_id: str, sender: str, text: str, cfg: AgentConfig, private_room: 
     return ("digest", "asked") if asks_digest(text) else ("ask", "question")
 
 
-def route_audio(room_id: str, sender: str, cfg: AgentConfig, private_room: str | None) -> tuple[str, str]:
+def route_audio(room_id: str, sender: str, cfg: AgentConfig, private_room: str | None,
+                members: frozenset[str] = frozenset()) -> tuple[str, str]:
     """v5.2 — what a voice message means to the herald: ("agora", …) the owner's in the room — transcribed for every
     speaker; ("private", …) the owner's in his room — heard as a message to him; ("ignored", reason) otherwise."""
     if sender == cfg.user_id:
         return "ignored", "own-audio"
+    if sender in members:
+        return "ignored", "member-audio"  # v5.3: a speaker's voice is a copy of its text line — never logged
     if sender != cfg.owner:
         return "ignored", "audio-not-owner"
     if room_id == cfg.room_id:
@@ -144,6 +142,7 @@ class Herald:
         self.cfg = cfg
         roster = roster if roster is not None else load_roster(cfg.simulation, strict_for=cfg.localpart)
         self.personas = [m for m in roster.values() if m.type == "persona"]
+        self.member_ids = frozenset(m.user_id for m in roster.values())
         self.names = {cfg.owner: "Ich", **{m.user_id: m.name for m in roster.values()}}
         # who talks in the room, for the briefs — never himself
         self.members = ["Ich", *[m.name for m in speakers(roster.values()) if m.user_id != cfg.user_id]]
@@ -363,20 +362,11 @@ class Herald:
             return self.text_only or "no voice"
         if self.month_used(now) + len(text) > self.monthly_chars:
             return "monthly cap"
-        pcm = await self.tts.synth(text)
-        self.record_tts(len(text), pcm is not None)
-        if pcm is None:
-            return "tts failed"
-        ogg = await encode_opus(pcm)
-        if ogg is None:
-            return "encode failed"
         name = f"hermes-{local_now(now, self.tz):%Y%m%d-%H%M}.ogg"
-        resp, _ = await self.client.upload(io.BytesIO(ogg), content_type="audio/ogg", filename=name,
-                                           filesize=len(ogg))
-        if not isinstance(resp, UploadResponse):
-            log.error("upload failed: %s", getattr(resp, "status_code", type(resp).__name__))
-            return "upload failed"
-        content = voice_content(resp.content_uri, len(ogg), duration_ms(pcm), waveform(pcm), text, name)
+        content, why = await voice_message(self.client, self.tts, text, name,  # v5.3: the shared pipeline
+                                           on_synth=lambda ok: self.record_tts(len(text), ok))
+        if content is None:
+            return why
         return None if await self.send_private(content) else "send failed"
 
     # --- a question about the history -------------------------------------------------------------------------------
@@ -464,9 +454,9 @@ class Herald:
         try:
             if not self.started or is_edit(event):
                 return  # the first sync's backlog: never processed
-            where, why = route_audio(room.room_id, event.sender, self.cfg, self.state.room)
+            where, why = route_audio(room.room_id, event.sender, self.cfg, self.state.room, self.member_ids)
             if where == "ignored":
-                if why != "own-audio":
+                if why not in ("own-audio", "member-audio"):
                     log.info("ignored: %s (room %s)", why, room.room_id)
                 return
             self._spawn(self._heard_voice(event, where))

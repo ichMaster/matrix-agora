@@ -13,6 +13,7 @@ import pytest
 from nio import RoomCreateResponse, RoomMessage, RoomSendResponse, UploadResponse
 
 from agents import herald as herald_mod
+from agents import speech as speech_mod
 from agents.config import AgentConfig
 from agents.digest import NOTHING_NEW, DigestState, load_digest_state, save_digest_state
 from agents.herald import CHAT_THINKING, Herald, needs_private_room, route
@@ -104,7 +105,7 @@ class FakeTTS:
 def make(tmp_path, monkeypatch, events=(), llm=None, tts="default", voice="VoiceId0123456789", state=None, **env):
     for k, v in {"HERMES_VOICE_ID": voice, "TIMEZONE": TZ, **env}.items():
         monkeypatch.setenv(k, str(v))
-    monkeypatch.setattr(herald_mod, "encode_opus", fake_encode)
+    monkeypatch.setattr(speech_mod, "encode_opus", fake_encode)  # v5.3: the shared pipeline
     if state is not None:
         save_digest_state(tmp_path / "hermes.digest.json", state)
     client = FakeClient(events)
@@ -605,7 +606,7 @@ def test_the_owners_voice_in_agora_becomes_one_transcript_reply(tmp_path, monkey
 
 
 @pytest.mark.parametrize("room,sender,why", [
-    (AGORA, ADA, "audio-not-owner"), ("!other", OWNER, "foreign-room"),
+    (AGORA, "@mallory:agora.lan", "audio-not-owner"), ("!other", OWNER, "foreign-room"),
 ])
 def test_anyone_elses_voice_or_another_room_is_ignored(tmp_path, monkeypatch, caplog, room, sender, why):
     caplog.set_level(logging.INFO)
@@ -705,3 +706,12 @@ def test_a_malformed_info_is_treated_as_empty(tmp_path, monkeypatch):
     event.source["content"]["info"] = "x"
     asyncio.run(heard(h, AGORA, event))
     assert [r for r, _ in client.sent] == [AGORA]
+
+
+
+def test_a_speakers_voice_is_never_heard_or_logged(tmp_path, monkeypatch, caplog):
+    """v5.3: Ada's voiced line is a copy of her text — no download, no transcript, no log line."""
+    caplog.set_level(logging.INFO)
+    h, client, downloads = hearing(tmp_path, monkeypatch)
+    asyncio.run(heard(h, AGORA, voice(ADA, "$ada-voice")))
+    assert client.sent == [] and downloads == [] and "ignored" not in caplog.text

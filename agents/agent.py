@@ -67,6 +67,7 @@ from agents.logic import (
     build_instruction,
     clean_reply,
     outs_a_persona,
+    replied_to,
     same_message,
     should_handle,
     should_join_invite,
@@ -114,8 +115,10 @@ from agents.plans import (
 from agents.responder import Turn, responder_for, trim_to_sentence
 from agents.roster import Member, load_roster, speakers
 from agents.runtime import acquire_lock, lock_holder, setup_logging
+from agents.settings import VOICE_ID_RE
 from agents.settings import start as settings_start
 from agents.sky import SKY_MAX_TOKENS, clean_sky, load_sky, save_sky, sky_query
+from agents.speech import speakers_month_chars, voice_due, voice_message, voiceable
 from agents.turns import (
     claude_mode,
     decide_reply,
@@ -132,7 +135,8 @@ from agents.turns import (
     wave_count,
     wave_frees_at,
 )
-from agents.usage import sdk_usage_line, usage_line
+from agents.usage import parse_lines, sdk_usage_line, tts_usage_line, usage_line
+from agents.voice import TTS_MODEL, ElevenLabsTTS
 from agents.world import (
     MONTHS_NOM,
     day_label,
@@ -154,6 +158,8 @@ class Agent:
     def __init__(self, cfg: AgentConfig, llm: GeminiClient | None = None,
                  roster: dict[str, Member] | None = None) -> None:
         self.cfg = cfg
+        # v5.3 — the voice key stays in this process: out of the environment before anything (Claude's CLI) can inherit it
+        voice_key = os.environ.pop("ELEVENLABS_API_KEY", "").strip()
         # the room's members come from the registry (v4.1): nothing in the code names them
         self.roster = roster if roster is not None else load_roster(cfg.simulation, strict_for=cfg.localpart)
         self.me = self.roster.get(cfg.localpart) or Member(cfg.localpart, cfg.user_id, cfg.name, (cfg.name.lower(),))
@@ -281,10 +287,22 @@ class Agent:
         # v5.3 — its own voice (VOICE_ID: the agent's <NAME>_VOICE_ID unless the panel says otherwise), how often it
         # speaks in it, and the speakers' monthly budget; read only by an agent with `voice`
         self.voice_id, self.voice_reply_p, self.voice_monthly_chars = "", 0.0, 0
+        self.tts: ElevenLabsTTS | None = None
+        self.voice_off: str | None = "no voice capability"
         if cfg.can("voice"):
             self.voice_id = os.environ.get("VOICE_ID", "").strip()
             self.voice_reply_p = float(os.environ.get("VOICE_REPLY_P", "1.0"))
             self.voice_monthly_chars = int(os.environ.get("VOICE_MONTHLY_CHARS", "50000"))
+            self.voice_off = ("no voice id" if not self.voice_id
+                              else "voice id malformed" if not VOICE_ID_RE.match(self.voice_id)
+                              else "no ELEVENLABS_API_KEY" if not voice_key else None)
+            if self.voice_off:
+                log.warning("voice off: %s — every line goes out as text", self.voice_off)
+            else:
+                self.tts = ElevenLabsTTS(voice_key, self.voice_id)
+        self.heralds = [m.localpart for m in self.roster.values() if m.type == "herald"]
+        self.member_ids = frozenset(m.user_id for m in self.roster.values())
+        self._transcript_voice: dict[str, str] = {}  # a transcript's event id → the owner's voice it answers (RAM)
         self._nudging = False
 
     async def login(self) -> None:
@@ -302,6 +320,8 @@ class Agent:
         text = transcript_of(event, self.transcriber, self.owner_voices)
         if text is None:
             return event
+        eid = str(getattr(event, "event_id", ""))
+        self._transcript_voice = dict([*self._transcript_voice.items(), (eid, replied_to(event) or "")][-VOICES_KEPT:])
         return SimpleNamespace(sender=self.cfg.owner, body=text, event_id=getattr(event, "event_id", ""),
                                server_timestamp=getattr(event, "server_timestamp", 0),
                                source=getattr(event, "source", {}))
@@ -439,12 +459,57 @@ class Agent:
         except Exception:
             log.exception("message handler failed (bot keeps running)")
 
+    async def send_line(self, room_id: str, text: str, event_key: str, answering: str | None = None) -> None:
+        """v5.3 — every line the agent says: in its own voice first when it should and can (`voice_due`, a voice, a
+        voiceable line, under the speakers' monthly budget), a reply to the owner's voice it answers; then always the
+        same text — the other agents read only text, so the turn-taking never sees the voice. A failed voice step
+        leaves the text alone, logged by reason; never a word in a log."""
+        voice_of = self._transcript_voice.get(answering or "") or None
+        why = self.voice_off
+        if self.tts is not None:
+            if not voiceable(text):
+                why = "not voiceable"
+            elif not voice_due(voice_of is not None, event_key or "", self.cfg.localpart, self.voice_reply_p):
+                why = "share"
+            elif self._speakers_month_used() + len(text) > self.voice_monthly_chars:
+                why = "monthly cap"
+            else:
+                name = f"{self.cfg.localpart}-{local_now(self.clock(), self.tz):%Y%m%d-%H%M%S}.ogg"
+                content, why = await voice_message(self.client, self.tts, text, name, reply_to=voice_of,
+                                                   on_synth=lambda ok: self.record_tts(len(text), ok))
+                if content is not None:
+                    try:
+                        await self.client.room_send(room_id=room_id, message_type="m.room.message", content=content)
+                    except Exception as exc:  # noqa: BLE001 — the text still goes out
+                        why = f"send failed ({type(exc).__name__})"
+            if why is None:
+                log.info("voice: sent (%d chars)", len(text))
+            elif why not in ("share", "not voiceable"):
+                log.info("voice: text only (%s)", why)
+        await self.client.room_send(room_id=room_id, message_type="m.room.message",
+                                    content={"msgtype": "m.text", "body": text})
+
+    def _speakers_month_used(self) -> int:
+        """This month's spoken characters of every speaker (their usage files in state/), the heralds left out."""
+        records: list = []
+        for path in self.memory_file.parent.glob("*.usage.jsonl"):
+            try:
+                records += parse_lines(path.read_text(encoding="utf-8").splitlines())[0]
+            except OSError:
+                continue
+        return speakers_month_chars(records, local_now(self.clock(), self.tz).strftime("%Y-%m"), self.heralds)
+
+    def record_tts(self, characters: int, ok: bool) -> None:
+        self._append_usage(lambda ts: tts_usage_line(ts, self.cfg.localpart, TTS_MODEL, characters, ok))
+
     async def on_audio(self, room: MatrixRoom, event: RoomMessageAudio) -> None:
         """v5.2 — no agent answers audio: the owner's voice in the room is remembered, so Hermes's transcript of it
         reads as the owner's line; everything is logged as ignored."""
         try:
             if not self.started:
                 return
+            if event.sender in self.member_ids:
+                return  # v5.3: a speaker's voice is a copy of its text line — never logged
             if room.room_id == self.cfg.room_id and event.sender == self.cfg.owner:
                 self._remember_voice(str(getattr(event, "event_id", "")))
                 log.info("ignored: audio (%s)", "transcribed by Hermes" if self.transcriber else "no one transcribes")
@@ -515,10 +580,7 @@ class Agent:
             if self._reply_pending:  # his words are on their way: a purr now would count as his answer (v4.3 review #1)
                 log.info("purr dropped: a reply is on its way")
                 return
-            await self.client.room_send(
-                room_id=room_id, message_type="m.room.message",
-                content={"msgtype": "m.text", "body": pick_purr(event_id, self.cfg.localpart)},
-            )
+            await self.send_line(room_id, pick_purr(event_id, self.cfg.localpart), event_id, answering=event_id)
         except Exception:
             log.exception("purr failed (bot keeps running)")
 
@@ -1083,6 +1145,7 @@ class Agent:
                     log.exception("mood of the day failed (reply continues)")
             memory = self._pick_thesis()
             answered = trigger or (self.last_owner[0] if self.last_owner else "")
+            answered_id = answered  # v5.3: the message this line answers — a transcript of the owner's voice is voiced
             move = self.draw_move(answered, local_now(self.clock(), self.tz))
             prompt = self.build_prompt(pastlife_section(self.cfg.theses[memory]) if memory is not None else None,
                                        move=move)
@@ -1116,11 +1179,7 @@ class Agent:
                 log.info("silent: the owner was answered meanwhile")
                 return False
             self._last_sent = text
-            await self.client.room_send(
-                room_id=room_id,
-                message_type="m.room.message",
-                content={"msgtype": "m.text", "body": text},
-            )
+            await self.send_line(room_id, text, answered_id, answering=answered_id)
             if memory is not None:
                 self.told.add(memory)
             return True
@@ -1254,8 +1313,7 @@ class Agent:
                 log.info("news silent: the room spoke meanwhile")
                 return False
             self._last_sent = text
-            await self.client.room_send(room_id=room_id, message_type="m.room.message",
-                                        content={"msgtype": "m.text", "body": text})
+            await self.send_line(room_id, text, f"news:{marker}")
             log.info("news sent")
             return True
         finally:
@@ -1311,11 +1369,7 @@ class Agent:
                 log.info("nudge silent: the room spoke meanwhile")
                 return kind, False
             self._last_sent = text
-            await self.client.room_send(
-                room_id=room_id,
-                message_type="m.room.message",
-                content={"msgtype": "m.text", "body": text},
-            )
+            await self.send_line(room_id, text, f"nudge:{marker}")
             if memory is not None:
                 self.told.add(memory)
             log.info("nudge sent (%s)", kind)

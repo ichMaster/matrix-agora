@@ -71,7 +71,8 @@ def test_the_owners_voice_is_never_answered_but_remembered(caplog):
     asyncio.run(agent.on_audio(SimpleNamespace(room_id="!dm"), voice_event(OWNER, "$dm-voice")))
     assert agent.owner_voices == ["$voice"] and agent.transcriber == HERMES
     agent.client.room_send.assert_not_awaited()
-    assert "ignored: audio (transcribed by Hermes)" in caplog.text and caplog.text.count("ignored: audio") == 3
+    assert "ignored: audio (transcribed by Hermes)" in caplog.text
+    assert caplog.text.count("ignored: audio") == 2                      # v5.3: a member's voice is never logged
 
 
 def test_a_transcript_is_the_owners_message_named_or_not():
