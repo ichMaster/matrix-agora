@@ -684,3 +684,24 @@ def test_his_room_hears_the_voice_questions_he_heard_in_the_chat(tmp_path, monke
     client.private_events = [voice(OWNER, "$q1", ts=ms(14)), voice(OWNER, "$never-heard", ts=ms(13))]
     asyncio.run(h.answer("а ще?", "$q2"))
     assert "Ваша недавня розмова:\nIch: що казав Бруно?" in llm.calls[0].contents
+
+
+def test_a_failure_while_hearing_is_logged_and_he_keeps_running(tmp_path, monkeypatch, caplog):
+    """v5.2 review #1: an exception in the hearing task is a log line, not asyncio's lost-task traceback."""
+    h, client, _ = hearing(tmp_path, monkeypatch)
+
+    async def broken(*a, **kw):
+        raise RuntimeError("deepgram exploded")
+
+    h.stt.transcribe = broken
+    asyncio.run(heard(h, AGORA, voice(OWNER, "$v")))
+    assert client.sent == [] and "hearing failed (he keeps running)" in caplog.text
+
+
+def test_a_malformed_info_is_treated_as_empty(tmp_path, monkeypatch):
+    """v5.2 review #2: `"info": "x"` from a client never raises in `hear`."""
+    h, client, _ = hearing(tmp_path, monkeypatch)
+    event = voice(OWNER, "$v")
+    event.source["content"]["info"] = "x"
+    asyncio.run(heard(h, AGORA, event))
+    assert [r for r, _ in client.sent] == [AGORA]

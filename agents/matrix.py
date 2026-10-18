@@ -61,7 +61,11 @@ async def download(client: AsyncClient, mxc: str, max_bytes: int) -> bytes | Non
         log.error("download refused: not an mxc:// uri")
         return None
     path = f"/_matrix/client/v1/media/download/{urllib.parse.quote(m[1])}/{urllib.parse.quote(m[2])}"
-    resp = await client.send("GET", path, headers={"Authorization": f"Bearer {client.access_token}"})
+    try:
+        resp = await client.send("GET", path, headers={"Authorization": f"Bearer {client.access_token}"})
+    except Exception as exc:  # noqa: BLE001 — a dropped connection is a failed download (v5.2 review #1)
+        log.error("download failed: %s", type(exc).__name__)
+        return None
     try:
         if resp.status != 200:
             log.error("download failed: HTTP %s", resp.status)
@@ -70,7 +74,11 @@ async def download(client: AsyncClient, mxc: str, max_bytes: int) -> bytes | Non
         if length is not None and length.isdigit() and int(length) > max_bytes:
             log.error("download refused: %s bytes over the cap", length)
             return None
-        body = await resp.content.read(max_bytes + 1)
+        try:
+            body = await resp.content.read(max_bytes + 1)
+        except Exception as exc:  # noqa: BLE001 — a body cut midway (review #1)
+            log.error("download failed: %s", type(exc).__name__)
+            return None
         if len(body) > max_bytes:
             log.error("download refused: over the cap")
             return None

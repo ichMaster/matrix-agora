@@ -62,3 +62,20 @@ def test_a_failed_or_oversized_download_is_none(caplog, resp, why):
 def test_a_malformed_mxc_never_reaches_the_server(mxc):
     client, seen = client_with(FakeResp())
     assert asyncio.run(download(client, mxc, 1000)) is None and seen == {}
+
+
+@pytest.mark.parametrize("where", ["send", "read"])
+def test_a_dropped_connection_is_a_failed_download_not_an_exception(caplog, where):
+    """v5.2 review #1: the homeserver restarts mid-download — None, logged by type, never a dead task."""
+    resp = FakeResp()
+
+    async def boom(*a, **kw):
+        raise ConnectionResetError("gone")
+
+    if where == "read":
+        resp.content.read = boom
+        client, _ = client_with(resp)
+    else:
+        client = SimpleNamespace(send=boom, access_token="tok-123")
+    assert asyncio.run(download(client, "mxc://agora.lan/abc", 1000)) is None
+    assert "download failed: ConnectionResetError" in caplog.text

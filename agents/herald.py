@@ -440,6 +440,8 @@ class Herald:
             log.info("ignored: audio (hearing off)")
             return None
         info = ((getattr(event, "source", None) or {}).get("content") or {}).get("info") or {}
+        if not isinstance(info, dict):  # a malformed client's event (review #2)
+            info = {}
         size = info.get("size") if isinstance(info, dict) else None
         if isinstance(size, int) and size > TRANSCRIBE_MAX_BYTES:
             log.warning("hear: audio over the cap (%d bytes) — not heard", size)
@@ -472,6 +474,12 @@ class Herald:
             log.exception("audio handler failed (he keeps running)")
 
     async def _heard_voice(self, event, where: str) -> None:
+        try:  # like every callback: a failure is logged, and he keeps running (review #1)
+            await self._hear_and_answer(event, where)
+        except Exception:
+            log.exception("hearing failed (he keeps running)")
+
+    async def _hear_and_answer(self, event, where: str) -> None:
         text = await self.hear(event, where)
         if text is None:
             return
