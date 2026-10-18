@@ -9,7 +9,8 @@ CONF="$REPO_DIR/server_con.yaml"
 COMPOSE="$REPO_DIR/server/docker-compose.yml"
 LOCAL_ENV="$REPO_DIR/server/.env"
 CLAUDE_ENV="$REPO_DIR/server/claude.env"   # v4.4: Claude's own env file (the subscription's OAuth token)
-HERMES_ENV="$REPO_DIR/server/hermes.env"   # v5.1: Hermes's own env file (his password, the ElevenLabs key)
+HERMES_ENV="$REPO_DIR/server/hermes.env"   # v5.1: Hermes's own env file (his password, the Deepgram key)
+VOICE_ENV="$REPO_DIR/server/voice.env"     # v5.3: the ElevenLabs key, for the members who speak
 REMOTE_DIR="matrix-agora/server"
 DRY_RUN=0
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=1
@@ -56,6 +57,10 @@ fi
 if [ -f "$HERMES_ENV" ]; then   # never printed: rsync -i lists the file name only
   CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$HERMES_ENV" "$TARGET:$REMOTE_DIR/hermes.env")"
   [ "$DRY_RUN" = 1 ] || ssh "$TARGET" "chmod 600 ~/$REMOTE_DIR/hermes.env"
+fi
+if [ -f "$VOICE_ENV" ]; then   # never printed: rsync -i lists the file name only
+  CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$VOICE_ENV" "$TARGET:$REMOTE_DIR/voice.env")"
+  [ "$DRY_RUN" = 1 ] || ssh "$TARGET" "chmod 600 ~/$REMOTE_DIR/voice.env"
 fi
 if [ -n "${CHANGES//[[:space:]]/}" ]; then say "deploy: changed:"; say "$CHANGES"; else say "deploy: nothing to sync"; fi
 

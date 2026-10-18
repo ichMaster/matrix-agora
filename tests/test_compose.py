@@ -33,7 +33,7 @@ def test_one_container_per_agent_from_one_image():
         assert svc["environment"]["HOMESERVER"] == "http://homeserver:8008"  # the compose network
         assert svc["volumes"] == ["../state:/app/state"] and svc["user"] == "1000:1000"
         assert svc["stop_grace_period"] == "30s" and svc["restart"] == "unless-stopped"
-        assert svc["env_file"] == [{"path": ".env", "required": False}]
+        assert svc["env_file"] == [{"path": ".env", "required": False}, {"path": "voice.env", "required": False}]  # v5.3: the voice key
         assert "ports" not in svc  # agents listen on nothing
 
 
@@ -139,7 +139,7 @@ def test_claude_runs_his_own_image_with_his_own_env_file_only():
     svc = SERVICES["claude"]
     assert svc["image"] == "ghcr.io/ichmaster/matrix-agora-agent-claude:${AGENT_IMAGE_TAG:-latest}"
     assert svc["command"] == ["agents/claude.toml"] and svc["init"] is True and svc["user"] == "1000:1000"
-    assert svc["env_file"] == [{"path": "claude.env", "required": False}]           # never the shared .env
+    assert svc["env_file"] == [{"path": "claude.env", "required": False}, {"path": "voice.env", "required": False}]  # never the shared .env
     assert svc["environment"]["CLAUDE_CONFIG_DIR"] == svc["environment"]["HOME"] == "/tmp/claude"
     assert svc["tmpfs"] == ["/tmp/claude:uid=1000,gid=1000,mode=0700,size=64m"]     # bounded; nothing survives
     assert svc["volumes"] == ["../state:/app/state", "../claude-workspace:/workspace"]  # v4.5: his own folder
@@ -206,7 +206,8 @@ def test_both_env_examples_price_the_pro_model_by_its_own_pair():
 def test_hermes_runs_the_shared_image_with_the_shared_file_and_his_own():
     svc = SERVICES["hermes"]
     assert svc["image"] == IMAGE and svc["command"] == ["agents/hermes.toml"] and svc["init"] is True
-    assert svc["env_file"] == [{"path": ".env", "required": False}, {"path": "hermes.env", "required": False}]
+    assert svc["env_file"] == [{"path": ".env", "required": False}, {"path": "hermes.env", "required": False},
+                               {"path": "voice.env", "required": False}]
     assert svc["environment"]["HOMESERVER"] == "http://homeserver:8008" and svc["user"] == "1000:1000"
     assert svc["volumes"] == ["../state:/app/state"] and "ports" not in svc and svc["stop_grace_period"] == "30s"
     others = [n for n, s in SERVICES.items() if n != "hermes"
@@ -215,8 +216,8 @@ def test_hermes_runs_the_shared_image_with_the_shared_file_and_his_own():
 
 
 def test_hermes_env_example_holds_his_password_and_key_only():
-    assert env_keys(ROOT / "server" / "hermes.env.example") == {"HERMES_PASSWORD", "ELEVENLABS_API_KEY",
-                                                                  "DEEPGRAM_API_KEY"}  # v5.2: his hearing
+    assert env_keys(ROOT / "server" / "hermes.env.example") == {"HERMES_PASSWORD", "DEEPGRAM_API_KEY"}  # v5.3: the
+    # ElevenLabs key moved to voice.env
     assert not [k for k in env_keys(ROOT / "server" / "hermes.env.example") if _forbidden(k)]
     for example in (".env.example", "server/.env.example"):
         assert not env_keys(ROOT / example) & {"ELEVENLABS_API_KEY", "DEEPGRAM_API_KEY", "HERMES_PASSWORD"}, example
@@ -260,3 +261,18 @@ def test_the_voice_settings_are_in_both_env_examples_with_the_schema_defaults():
             ("ADA_VOICE_ID", "BRUNO_VOICE_ID", "KIT_VOICE_ID", "CLAUDE_VOICE_ID"), "")
         assert values["VOICE_REPLY_P"] == BY_NAME["VOICE_REPLY_P"].default
         assert values["VOICE_MONTHLY_CHARS"] == BY_NAME["VOICE_MONTHLY_CHARS"].default
+
+
+
+def test_the_voice_key_reaches_exactly_the_members_who_speak():
+    """v5.3: server/voice.env — the ElevenLabs key alone, for ada, bruno, kit, claude and hermes; never the panel or
+    the report; synced privately."""
+    readers = {n for n, svc in SERVICES.items()
+               if any((e.get("path") if isinstance(e, dict) else e) == "voice.env" for e in svc.get("env_file", []))}
+    assert readers == {"ada", "bruno", "kit", "claude", "hermes"}
+    assert env_keys(ROOT / "server" / "voice.env.example") == {"ELEVENLABS_API_KEY"}
+    deploy = (ROOT / "server" / "deploy.sh").read_text()
+    assert 'VOICE_ENV="$REPO_DIR/server/voice.env"' in deploy and "chmod 600 ~/$REMOTE_DIR/voice.env" in deploy
+    env = SERVICES["claude"]["environment"]
+    assert env["CLAUDE_VOICE_ID"] == "${CLAUDE_VOICE_ID:-}" and env["VOICE_REPLY_P"] == "${VOICE_REPLY_P:-1.0}"
+    assert env["VOICE_MONTHLY_CHARS"] == "${VOICE_MONTHLY_CHARS:-50000}"

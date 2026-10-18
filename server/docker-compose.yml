@@ -27,6 +27,8 @@ services:
     env_file:
       - path: .env
         required: false
+      - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
+        required: false
     environment:
       HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
       TZ: ${TIMEZONE:-Europe/Kyiv}
@@ -44,6 +46,8 @@ services:
     depends_on: [homeserver]
     env_file:
       - path: .env
+        required: false
+      - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
         required: false
     environment:
       HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
@@ -64,6 +68,8 @@ services:
     env_file:
       - path: .env
         required: false
+      - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
+        required: false
     environment:
       HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
       TZ: ${TIMEZONE:-Europe/Kyiv}
@@ -82,6 +88,8 @@ services:
     depends_on: [homeserver]
     env_file:
       - path: claude.env
+        required: false
+      - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
         required: false
     environment:
       HOMESERVER: http://homeserver:8008
@@ -109,6 +117,9 @@ services:
       CLAUDE_NEWS_IDLE_S: ${CLAUDE_NEWS_IDLE_S:-300}    # …once the room has been quiet this long…
       CLAUDE_NEWS_PER_DAY: ${CLAUDE_NEWS_PER_DAY:-24}   # …at most so many a day…
       CLAUDE_NEWS_HOURS: ${CLAUDE_NEWS_HOURS:-09-01}    # …in these local hours
+      CLAUDE_VOICE_ID: ${CLAUDE_VOICE_ID:-}        # v5.3: his voice and the speakers' share and budget
+      VOICE_REPLY_P: ${VOICE_REPLY_P:-1.0}
+      VOICE_MONTHLY_CHARS: ${VOICE_MONTHLY_CHARS:-50000}
     tmpfs:
       - /tmp/claude:uid=1000,gid=1000,mode=0700,size=64m   # bounded (review #7)
     user: "1000:1000"
@@ -128,7 +139,9 @@ services:
     env_file:
       - path: .env
         required: false
-      - path: hermes.env                         # HERMES_PASSWORD, ELEVENLABS_API_KEY — his alone
+      - path: hermes.env                         # HERMES_PASSWORD, DEEPGRAM_API_KEY — his alone
+        required: false
+      - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
         required: false
     environment:
       HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
