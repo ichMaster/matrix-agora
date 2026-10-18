@@ -51,7 +51,8 @@ def test_the_service_view_holds_the_rooms_settings_and_the_agents_view_its_own(r
     view = client.get(SIM, headers=AUTH).json()
     rows = {r["name"]: r for r in view["settings"]}
     assert view["scope"] == "services" and view["owner"] == "agora"
-    assert [g["id"] for g in view["groups"]] == ["turns", "moves", "cat", "claude", "hermes", "session"]  # v5.1
+    assert [g["id"] for g in view["groups"]] == ["turns", "moves", "cat", "claude", "hermes", "voice",
+                                                 "session"]  # v5.1, v5.3
     assert "MEMORY_DAYS" not in rows and "GEMINI_MODEL" not in rows                     # the agents' own
     mbt = rows["MAX_BOT_TURNS"]
     assert (mbt["default"], mbt["override"], sorted(mbt["agents"])) == ("3", "8", ["ada", "bruno", "claude", "kit"])
@@ -59,7 +60,8 @@ def test_the_service_view_holds_the_rooms_settings_and_the_agents_view_its_own(r
     ada = {r["name"] for r in client.get("/api/agents/ada/settings", headers=AUTH).json()["settings"]}
     claude = {r["name"] for r in client.get("/api/agents/claude/settings", headers=AUTH).json()["settings"]}
     assert {"MEMORY_DAYS", "PLAN_MAX_WORDS", "LOCATION", "GEMINI_MODEL"} <= ada and "MAX_BOT_TURNS" not in ada
-    assert claude == {"CLAUDE_MODEL", "CLAUDE_TIMEOUT_S", "CLAUDE_CODE_MAX_OUTPUT_TOKENS"}
+    assert claude == {"CLAUDE_MODEL", "CLAUDE_TIMEOUT_S", "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
+                      "VOICE_ID", "VOICE_REPLY_P"}  # v5.3: his voice
     assert "GEMINI_API_KEY" not in json.dumps(view) and "PANEL_TOKEN" not in json.dumps(view)
 
 

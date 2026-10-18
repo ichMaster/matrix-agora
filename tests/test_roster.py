@@ -209,7 +209,7 @@ def test_the_panel_greys_an_unreadable_agent_card_instead_of_crashing(tmp_path):
 def test_the_cat_is_an_ambient_creature_with_a_horoscope_and_no_memories():
     kit = load_roster("agora")["kit"]
     assert (kit.type, kit.mode, kit.name) == ("creature", "ambient", "Кіт")
-    assert kit.capabilities == frozenset({"canon", "life", "world", "mood", "pastlife", "nudge"})  # v4.3
+    assert kit.capabilities == frozenset({"canon", "life", "world", "mood", "pastlife", "nudge", "voice"})  # v5.3
     assert kit.memories == "agents/canon/kit.memories.md"
     assert {"кіт", "коте", "кота"} <= set(kit.name_forms)
     assert kit.panel["name"] == "Kit" and kit.panel["pronoun"] == "he"
@@ -294,7 +294,7 @@ def test_claude_is_a_ranked_assistant_who_only_brings_news():
     claude = load_member(Path("agents/claude.toml"))
     assert (claude.type, claude.engine, claude.mode, claude.name) == ("assistant", "claude-sdk", "ranked", "Клод")
     assert claude.weight == 0.4  # the owner, 2026-10-13: lower, so Ada and Bruno talk more
-    assert claude.capabilities == TYPES["assistant"] == frozenset({"news"})          # v4.5: his news
+    assert claude.capabilities == TYPES["assistant"] == frozenset({"news", "voice"})  # v4.5 news; v5.3 his voice
     assert all(mentions(t, claude.name_forms, claude.user_id) for t in ("Клоде, як ти?", "спитай Клода", "claude?"))
     assert claude.panel == {"name": "Claude", "role": "assistant · Opus · Max subscription", "pronoun": "it"}
 

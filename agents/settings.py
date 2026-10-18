@@ -99,6 +99,9 @@ SCHEMA: tuple[Setting, ...] = (
     _s("HERMES_TTS_MONTHLY_CHARS", "int", "150000", "hermes", "cap:digest", CHAT,
        "Межа озвучених знаків на місяць (0 — лише текст)", "chars", 0, 1_000_000),
     _s("HERMES_VOICE_ID", "id", "", "hermes", "cap:digest", CHAT, "Голос Гермеса (ElevenLabs voice id; порожньо — текст)"),
+    # v5.3 — the speakers' voices: one budget for all of them (Hermes keeps his own)
+    _s("VOICE_MONTHLY_CHARS", "int", "50000", "voice", "cap:voice", CHAT,
+       "Межа озвучених знаків агентів на місяць (0 — лише текст)", "chars", 0, 1_000_000),
     # the chat's sessions
     _s("SESSION_IDLE_S", "int", "900", "session", "cap:summary", CHAT, "Тиша, після якої сесія закінчується", "s", 60, 86400),
     _s("SESSION_MAX_MESSAGES", "int", "200", "session", "cap:summary", CHAT, "Найбільша сесія", "msgs", 20, 2000),
@@ -110,6 +113,10 @@ SCHEMA: tuple[Setting, ...] = (
     _s("PLAN_MAX_WORDS", "int", "120", "plans", "cap:plans", None, "Межа слів плану", "words", 30, 600),
     _s("PLAN_MUTATION_RATE", "float", "0.3", "plans", "cap:plans", None, "Частка пунктів плану, що зміняться", "", 0, 1),
     _s("LOCATION", "text", "Львів, Україна", "life", "cap:world", None, "Де живе"),
+    # v5.3 — its own voice (the base is the agent's <NAME>_VOICE_ID) and how often it speaks in it
+    _s("VOICE_ID", "id", "", "voice", "cap:voice", None, "Голос (ElevenLabs voice id; порожньо — текст)"),
+    _s("VOICE_REPLY_P", "float", "1.0", "voice", "cap:voice", None,
+       "Частка реплік голосом (на голос Ich — завжди)", "", 0, 1),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
        choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),
@@ -121,8 +128,10 @@ SCHEMA: tuple[Setting, ...] = (
 BY_NAME: dict[str, Setting] = {s.name: s for s in SCHEMA}
 # the groups in their order, for a service's card and for an agent's tab
 SERVICE_GROUPS = (("turns", "Room & turns"), ("moves", "Ада і Бруно: ходи"), ("cat", "Кіт у кімнаті"),
-                  ("claude", "Клод у кімнаті"), ("hermes", "Гермес"), ("session", "Сесії розмови"))
-AGENT_GROUPS = (("memory", "Пам'ять"), ("plans", "Плани"), ("life", "Життя"), ("model", "Модель"))
+                  ("claude", "Клод у кімнаті"), ("hermes", "Гермес"), ("voice", "Голоси агентів"),
+                  ("session", "Сесії розмови"))
+AGENT_GROUPS = (("memory", "Пам'ять"), ("plans", "Плани"), ("life", "Життя"), ("model", "Модель"),
+                ("voice", "Голос"))
 
 
 def validate(name: str, raw: object) -> tuple[str | None, str | None]:
@@ -273,6 +282,9 @@ def start(env: MutableMapping[str, str], state_dir: Path, member: Member,
     except (RegistryError, OSError) as exc:
         log.warning("settings: no simulation registry (%s) — only the agent's own overrides", type(exc).__name__)
         simulation = None
+    # v5.3 — each agent's own voice is its base: <NAME>_VOICE_ID becomes VOICE_ID unless VOICE_ID is set
+    if not str(env.get("VOICE_ID", "")).strip():
+        env["VOICE_ID"] = str(env.get(f"{member.localpart.upper()}_VOICE_ID", "")).strip()
     stray = _stray_keys(state_dir / OVERRIDES_FILE)
     if stray:  # an older flat file, or a hand edit: said by name, never applied (078 review #4)
         log.warning("settings: %s ignored — not under services/agents", ", ".join(stray))

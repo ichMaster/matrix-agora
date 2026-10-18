@@ -22,16 +22,16 @@ log = logging.getLogger("agent.roster")
 
 # the type sets the default capabilities; a later phase adds the bridge
 CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood", "pastlife", "nudge",
-                "news", "digest", "transcribe")
+                "news", "digest", "transcribe", "voice")
 TYPES: dict[str, frozenset[str]] = {
     # a human persona: the full memory stack, no horoscope
-    "persona": frozenset({"canon", "life", "summary", "chronicle", "plans", "today", "world"}),
+    "persona": frozenset({"canon", "life", "summary", "chronicle", "plans", "today", "world", "voice"}),
     # v4.2 — a creature (the cat): canon, a life story and the world, a daily horoscope; no memories, no plans;
     # v4.3 — his fixed past-life theses (`pastlife`) and the only initiative in the room (`nudge`)
-    "creature": frozenset({"canon", "life", "world", "mood", "pastlife", "nudge"}),
+    "creature": frozenset({"canon", "life", "world", "mood", "pastlife", "nudge", "voice"}),
     # v4.4 — an assistant (Claude, as itself): no canon, no life, no memory — a short brief in code;
     # v4.5 — news he brings himself after a quiet stretch (`news`)
-    "assistant": frozenset({"news"}),
+    "assistant": frozenset({"news", "voice"}),  # v5.3: every speaker may answer in its own voice (`voice`)
     # v5.1 — a herald (Hermes): no turns, never a word of his own in the room; he reads it and digests it for the owner
     # in his own room (`digest`); his canon is his own file only. v5.2 — he hears the owner's voice (`transcribe`):
     # his transcript in the room is the owner's line for every speaker

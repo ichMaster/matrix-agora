@@ -59,7 +59,8 @@ def test_the_only_mutating_routes_are_the_v34_actions_and_the_v47_settings_and_f
 def test_the_agent_view_carries_type_engine_and_capabilities(client):
     ada = client.get("/api/agents/ada", headers=AUTH).json()
     assert (ada["type"], ada["engine"]) == ("persona", "gemini")
-    assert ada["capabilities"] == sorted(["canon", "life", "summary", "chronicle", "plans", "today", "world"])
+    assert ada["capabilities"] == sorted(["canon", "life", "summary", "chronicle", "plans", "today", "world",
+                                          "voice"])  # v5.3
     assert {a["name"]: a["type"] for a in client.get("/api/agents", headers=AUTH).json()} == {
         "ada": "persona", "bruno": "persona", "kit": "creature", "claude": "assistant", "hermes": "herald"}
 
@@ -83,7 +84,7 @@ def test_a_capability_less_agent_shows_no_memory_capabilities(tmp_path):
                                    '[panel]\nname = "Kit"\npronoun = "it"\n')
     c = TestClient(create_app(token=TOKEN, registry=reg))
     kit = c.get("/api/agents/kit", headers=AUTH).json()
-    assert kit["capabilities"] == ["canon", "life", "world"] and kit["pronoun"] == "it"
+    assert kit["capabilities"] == ["canon", "life", "voice", "world"] and kit["pronoun"] == "it"
     assert c.get("/api/agents/kit").status_code == 401  # still token-gated
     assert c.get("/api/agents/nobody", headers=AUTH).status_code == 404
 

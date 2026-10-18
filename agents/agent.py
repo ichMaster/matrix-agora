@@ -278,6 +278,13 @@ class Agent:
         self._mood_lock = asyncio.Lock()
         self._mood_retry_ms = 0
         self.told: set[int] = set()  # v4.3: the theses retold this run — RAM only, like the context window
+        # v5.3 — its own voice (VOICE_ID: the agent's <NAME>_VOICE_ID unless the panel says otherwise), how often it
+        # speaks in it, and the speakers' monthly budget; read only by an agent with `voice`
+        self.voice_id, self.voice_reply_p, self.voice_monthly_chars = "", 0.0, 0
+        if cfg.can("voice"):
+            self.voice_id = os.environ.get("VOICE_ID", "").strip()
+            self.voice_reply_p = float(os.environ.get("VOICE_REPLY_P", "1.0"))
+            self.voice_monthly_chars = int(os.environ.get("VOICE_MONTHLY_CHARS", "50000"))
         self._nudging = False
 
     async def login(self) -> None:

@@ -213,3 +213,21 @@ def test_hermes_settings_are_the_chats_and_only_his():
     assert voice_re is VOICE_ID_RE                                   # one pattern, shared
     assert validate("HERMES_DIGEST_HOURS", "09-23") == ("09-23", None)
     assert validate("HERMES_DIGEST_EVERY_S", "600")[0] is None  # at least an hour
+
+
+def test_each_agents_voice_is_its_own_and_the_panel_overrides_one_agent(tmp_path, monkeypatch):
+    """v5.3: VOICE_ID's base is the agent's <NAME>_VOICE_ID; an agent override changes only that agent."""
+    import json as _json
+
+    from agents.settings import start
+    (tmp_path / "settings.json").write_text(_json.dumps({"services": {}, "agents": {"bruno": {
+        "VOICE_ID": "PanelVoice0123456789", "VOICE_REPLY_P": "0.2"}}}))
+    for name in ("ada", "bruno"):
+        env = {"ADA_VOICE_ID": "AdaVoice0123456789", "BRUNO_VOICE_ID": "BrunoVoice012345678"}
+        start(env, tmp_path, ROOM[name])
+        runs = _json.loads((tmp_path / f"{name}.settings.json").read_text())
+        assert runs["VOICE_ID"]["value"] == {"ada": "AdaVoice0123456789", "bruno": "PanelVoice0123456789"}[name]
+        assert runs["VOICE_REPLY_P"]["value"] == {"ada": "1.0", "bruno": "0.2"}[name]
+    assert {s.name for s in SCHEMA if concerns(s, ROOM["hermes"])} >= {"HERMES_VOICE_ID"}
+    assert not {"VOICE_ID", "VOICE_REPLY_P", "VOICE_MONTHLY_CHARS"} & {s.name for s in SCHEMA if concerns(s, ROOM["hermes"])}
+    assert BY_NAME["VOICE_MONTHLY_CHARS"].default == "50000" and BY_NAME["VOICE_REPLY_P"].default == "1.0"
