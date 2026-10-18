@@ -146,11 +146,12 @@ joins only the owner's invite into Agora and leaves any other.
   the owner invited) and keeps its id in `state/<name>.digest.json`. He makes a new one only when he is no longer in
   it or the owner neither is nor is invited (`needs_private_room`); one made in this run is trusted before the sync
   brings it back.
-- **His allowlist** (`route`, pure; an edit — `m.replace` — is never a new line for him: not counted, digested or answered, `is_edit`, review #9): an Agora text message is **read, never answered** — it only counts toward the next
+- **His allowlist** (`route` for text, `route_audio` for voice — both pure; an edit — `m.replace` — is never a new line for him: not counted, digested or answered, `is_edit`, review #9): an Agora text message is **read, never answered** — it only counts toward the next
   digest (not his own, not a purr; no log line per message); in the private room only the owner's `RoomMessageText`
   is handled — «підсумок» (`asks_digest`: at most three words holding «підсумок» / «підсумки» / «підсумуй») brings a
   digest, anything else is a question; everything else is logged as `ignored`. **Every send goes through
-  `send_private`**, which refuses any room but the private one — Agora never hears him.
+  `send_private`**, which refuses any room but the private one — Agora never hears a word of his own; from v5.2 his
+  only Agora message is a transcript of the owner's voice (`send_transcript`, below).
 - **The schedule.** A watcher ticks every minute: `digest_due` — at least `HERMES_DIGEST_EVERY_S` (4 h) since the last
   digest (none yet: at once), within the local `HERMES_DIGEST_HOURS` (`09-23`, the owner, 2026-10-17), and at least
   `HERMES_DIGEST_MIN_MESSAGES` (5) new messages, the count seeded at start by one bounded read since the point. A
@@ -183,11 +184,23 @@ joins only the owner's invite into Agora and leaves any other.
   1,500 characters, without the message being answered — so a follow-up has its context), then «Ich: …». The same
   per-sentence guard, an `m.text` answer (≤ 1,500 characters). Nothing of either room is kept anywhere: he reads
   them from the homeserver each time.
+- **Hearing (v5.2, `transcribe`).** An owner's voice message (`RoomMessageAudio`; `route_audio`, never in the first
+  sync, never an edit) is heard: its `info.size` against a 20 MB cap, the authenticated download, Deepgram, a `stt`
+  usage line. **In Agora** the words go back as a transcript — «🎙 Ich: …», a reply to the voice event
+  (`send_transcript`) — **his one and only kind of Agora message**, which every speaker reads as the owner's own line
+  (§Message flow); a posted transcript counts toward the next digest. **In his room** the words are a message to
+  him: «підсумок» brings a digest, anything else the conversation — and a question asked in voice is answered in
+  voice too (`send_voice`, the same cap and fallbacks), then the text; no transcript is posted there, and the words
+  of the voice questions he heard are kept in RAM (the last 50) so the chat's history reads them. His readers take
+  his own transcripts in Agora as the owner's lines (`_as_read`) and leave the raw audio out. Anything else's voice,
+  or another room, is `ignored`; an over-cap, unheard or failed one is logged by reason and stays silent.
+  `DEEPGRAM_API_KEY` leaves the environment at start like the ElevenLabs key; without it he logs `hearing off`.
 - **The key** (`ELEVENLABS_API_KEY`, his own env file) is taken out of the environment at start and never reaches a
   prompt, a log or the state; without it — or without a voice id — he logs `voice off` once and digests in text.
 - **His log** names events only: the private room created, `digest: sent (N messages, M chars, voice | text:
-  <reason>)`, `digest: nothing new`, `digest: asked by the owner`, `ask: answered (N messages read)`, the guard's
-  drops, `ignored` lines — never a text.
+  <reason>)`, `digest: nothing new`, `digest: asked by the owner` (v5.2 «in voice»), `ask: answered (N messages read,
+  voice | text: <reason>)`, `hear: transcribed (agora | private, N s audio, M chars)`, `hear: nothing heard`, the
+  guard's drops, `ignored` lines — never a text.
 
 ## Voice messages (v5.1)
 
@@ -401,7 +414,8 @@ From v3.2 the production values live in `server/.env` on the Ubuntu box (synced 
 | The deploy password leaks | Key auth after a one-time `ssh-copy-id`; `server_con.yaml` gitignored; the password never in argv, logs or output |
 | Secrets in CI or in the image | CI uses mocks and `GITHUB_TOKEN` only; `.env` and `state/` stay on the host, never in the image |
 | Claude silently billed to an API key (v4.4) | the subscription only, in layers (`agents/claude_sdk.py`): Claude's own env file holds the OAuth token and no service names a forbidden variable (any `ANTHROPIC_*`, `CLAUDE_CODE_USE_*`, `CLAUDE_CODE_SIMPLE`, an API key's file descriptor, managed settings, another base URL, host credentials); startup refuses on any of them or a missing `CLAUDE_CODE_OAUTH_TOKEN`, naming variables, never values; they are scrubbed from the environment the SDK's CLI inherits; `setting_sources=[]` and a tmpfs `CLAUDE_CONFIG_DIR`; the CLI's `system/init` must report `apiKeySource == "none"`, only his allowed tools and no MCP servers (`strict_mcp_config`, the account's claude.ai connectors off), or every later reply is blocked; no `anthropic` import anywhere and the SDK only in the responder; at a limit he is silent until it resets (a warning mutes him for an hour and re-checks — v4.4 review #9; a reply billed as extra usage is dropped and a 429 mutes him — #4); every usage line is `subscription` |
-| Hermes speaking in Agora, or answering anyone but the owner (v5.1) | he has no turns and is out of every speaker's allowlist; his own `route` only counts Agora's lines and answers only the owner in the private room; every send goes through `send_private`, which refuses any other room (pinned by `tests/test_herald.py`) |
+| Hermes speaking in Agora, or answering anyone but the owner (v5.1) | he has no turns and is out of every speaker's allowlist; his own `route` only counts Agora's lines and answers only the owner in the private room; every send goes through `send_private`, which refuses any other room — from v5.2 the one exception is `send_transcript`, a «🎙 Ich: …» reply to the owner's own voice event, which the speakers accept only when it replies to a voice they saw from the owner (pinned by `tests/test_herald.py` and `tests/test_transcripts.py`) |
+| The owner's voice or a transcript leaking (v5.2) | the audio is downloaded through the authenticated media API, capped, never written to disk or a log; Deepgram's key (`server/hermes.env`) leaves the environment at start; no word of a transcript reaches a log, the state or a usage line (`stt` lines carry only the audio's length) |
 | The ElevenLabs key or a digest's text leaking (v5.1) | the key lives in `server/hermes.env` (0600, his service only), leaves the environment at start, and is never logged (an HTTP error by its status); texts never reach a log, the state file or a usage line; the monthly character cap guards Lumi's shared credits |
 | Claude's tools reaching beyond his folder (v4.5) | the owner gave him the web (`WebSearch`, `WebFetch`) and his own folder (`Read`, `Write`, `Edit`, `Glob`, `Grep` in `/workspace` = the host's `~/matrix-agora/claude-workspace`); nothing else runs (`Bash`, agents, skills disallowed). Our own `PreToolUse` hook (`tool_denial`, pure) checks every call before it runs: a path outside `/workspace` (absolute, relative, `..`, a glob) — so never `state/`, the other agents' sessions, `/proc` or the CLI's config — and a `WebFetch` of a private, loopback or local address (the homeserver, the panel, the LAN) are denied. Web pages can carry instructions (prompt injection): the outgoing guard still checks every line he sends |
 

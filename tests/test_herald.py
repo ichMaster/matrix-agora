@@ -374,7 +374,7 @@ def test_a_question_reads_the_last_days_and_answers_in_text(tmp_path, monkeypatc
     assert "давно" not in call.contents                                 # older than the window
     assert call.contents.endswith("\n\nIch: що Бруно казав учора про подорож?")
     assert "це розмова, а не підсумок" in call.system
-    assert SECRET not in caplog.text and "ask: answered (1 messages read)" in caplog.text
+    assert SECRET not in caplog.text and "ask: answered (1 messages read, text: asked in text)" in caplog.text
 
 
 def test_the_owner_chats_with_hermes_and_a_follow_up_has_its_context(tmp_path, monkeypatch):
@@ -549,3 +549,138 @@ def test_edits_are_never_counted_digested_or_answered(tmp_path, monkeypatch):
     assert client.sent == [] and llm.calls == [] and h.new_count == 0
     asyncio.run(h.digest())
     assert "виправлено" not in llm.calls[0].contents and len(llm.calls[0].contents.splitlines()) == 6
+
+
+
+# --- v5.2: hearing ----------------------------------------------------------------------------------------------------
+class FakeSTT:
+    def __init__(self, text="Адо, як ти?", ms=2400):
+        self.text, self.ms, self.calls = text, ms, []
+
+    async def transcribe(self, audio, content_type="audio/ogg"):
+        self.calls.append((audio, content_type))
+        return self.text, self.ms
+
+
+def voice(sender, eid, size=9000, ts=None):
+    return RoomMessage.parse_event({"event_id": eid, "sender": sender, "origin_server_ts": ts or ms(14),
+                                    "type": "m.room.message",
+                                    "content": {"msgtype": "m.audio", "body": "Voice message", "url": "mxc://agora.lan/v1",
+                                                "org.matrix.msc3245.voice": {},
+                                                "info": {"mimetype": "audio/ogg", "size": size, "duration": 2400}}})
+
+
+def hearing(tmp_path, monkeypatch, stt=None, **kw):
+    downloads = []
+
+    async def fake_download(client, mxc, max_bytes):
+        downloads.append((mxc, max_bytes))
+        return b"OggS-voice"
+
+    monkeypatch.setattr(herald_mod, "download", fake_download)
+    h, client = make(tmp_path, monkeypatch, state=DigestState(room="!dm"), **kw)
+    h.stt = stt if stt is not None else FakeSTT()
+    h.started = True
+    return h, client, downloads
+
+
+async def heard(h, room_id, event):
+    await h.on_audio(SimpleNamespace(room_id=room_id), event)
+    await asyncio.gather(*h._tasks)
+
+
+def test_the_owners_voice_in_agora_becomes_one_transcript_reply(tmp_path, monkeypatch, caplog):
+    caplog.set_level(logging.DEBUG)
+    stt = FakeSTT(f"Адо, як ти? {SECRET}")
+    h, client, downloads = hearing(tmp_path, monkeypatch, stt=stt)
+    asyncio.run(heard(h, AGORA, voice(OWNER, "$voice")))
+    assert downloads == [("mxc://agora.lan/v1", herald_mod.TRANSCRIBE_MAX_BYTES)]
+    assert stt.calls == [(b"OggS-voice", "audio/ogg")]
+    assert client.sent == [(AGORA, {"msgtype": "m.text", "body": f"🎙 Ich: Адо, як ти? {SECRET}",
+                                    "m.relates_to": {"m.in_reply_to": {"event_id": "$voice"}}})]
+    assert h.new_count == 1                                            # it counts toward the next digest
+    usage = [json.loads(x) for x in (tmp_path / "hermes.usage.jsonl").read_text().splitlines()]
+    assert [(u["kind"], u["engine"], u["audio_ms"]) for u in usage] == [("stt", "deepgram", 2400)]
+    assert all(SECRET not in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.parametrize("room,sender,why", [
+    (AGORA, ADA, "audio-not-owner"), ("!other", OWNER, "foreign-room"),
+])
+def test_anyone_elses_voice_or_another_room_is_ignored(tmp_path, monkeypatch, caplog, room, sender, why):
+    caplog.set_level(logging.INFO)
+    h, client, downloads = hearing(tmp_path, monkeypatch)
+    asyncio.run(heard(h, room, voice(sender, "$v")))
+    assert client.sent == [] and downloads == [] and f"ignored: {why}" in caplog.text
+
+
+@pytest.mark.parametrize("case", ["over the cap", "nothing heard", "hearing off", "first sync"])
+def test_an_unhearable_voice_stays_silent(tmp_path, monkeypatch, caplog, case):
+    caplog.set_level(logging.INFO)
+    h, client, downloads = hearing(tmp_path, monkeypatch, stt=FakeSTT(text=None, ms=1500))
+    event = voice(OWNER, "$v", size=herald_mod.TRANSCRIBE_MAX_BYTES + 1 if case == "over the cap" else 9000)
+    if case == "hearing off":
+        h.stt = None
+    if case == "first sync":
+        h.started = False
+    asyncio.run(heard(h, AGORA, event))
+    assert client.sent == []
+    if case == "over the cap":
+        assert downloads == [] and "over the cap" in caplog.text
+    if case == "nothing heard":
+        assert "nothing heard" in caplog.text
+        usage = json.loads((tmp_path / "hermes.usage.jsonl").read_text())
+        assert (usage["kind"], usage["audio_ms"], usage["ok"]) == ("stt", 1500, True)   # Deepgram heard silence
+    if case == "hearing off":
+        assert downloads == [] and "hearing off" in caplog.text
+
+
+def test_every_agora_send_is_a_transcript_reply_to_an_owners_voice(tmp_path, monkeypatch):
+    """v5.2: his one kind of Agora message; everything else still goes only to his room."""
+    h, client, _ = hearing(tmp_path, monkeypatch, events=talk(6))
+    asyncio.run(heard(h, AGORA, voice(OWNER, "$v1")))
+    asyncio.run(h.digest(asked=True))
+    asyncio.run(h.answer("привіт"))
+    agora = [c for r, c in client.sent if r == AGORA]
+    assert agora and all(c["body"].startswith("🎙 Ich: ") and c["m.relates_to"]["m.in_reply_to"]["event_id"] == "$v1"
+                         for c in agora)
+    assert len(agora) == 1 and len(private(client)) >= 2
+
+
+def test_a_voice_question_in_his_room_is_answered_in_voice_and_a_typed_one_in_text(tmp_path, monkeypatch):
+    llm = FakeLLM("Вітаю, смертний.", "І тобі привіт.")
+    h, client, _ = hearing(tmp_path, monkeypatch, llm=llm, stt=FakeSTT("привіт, Гермесе"))
+    asyncio.run(heard(h, "!dm", voice(OWNER, "$q1")))
+    assert [c["msgtype"] for c in private(client)] == ["m.audio", "m.text"]
+    assert llm.calls[0].contents.endswith("Ich: привіт, Гермесе") and h._heard == {"$q1": "привіт, Гермесе"}
+    client.sent.clear()
+    asyncio.run(h.answer("а як справи?", "$q2"))
+    assert [c["msgtype"] for c in private(client)] == ["m.text"]
+
+
+def test_a_spoken_pidsumok_brings_a_digest(tmp_path, monkeypatch):
+    h, client, _ = hearing(tmp_path, monkeypatch, events=talk(6), stt=FakeSTT("Підсумок!"))
+    asyncio.run(heard(h, "!dm", voice(OWNER, "$q")))
+    sent = private(client)
+    assert [c["msgtype"] for c in sent] == ["m.audio", "m.text"] and sent[1]["body"].startswith("Агора, ")
+
+
+def test_his_readers_take_his_transcripts_as_the_owners_lines(tmp_path, monkeypatch):
+    room = [text_reply := RoomMessage.parse_event({
+        "event_id": "$tr", "sender": CFG.user_id, "origin_server_ts": ms(13), "type": "m.room.message",
+        "content": {"msgtype": "m.text", "body": "🎙 Ich: Адо, як ти?",
+                    "m.relates_to": {"m.in_reply_to": {"event_id": "$voice"}}}}), voice(OWNER, "$voice", ts=ms(12, 59))]
+    assert text_reply.body.startswith("🎙")
+    llm = FakeLLM()
+    h, _client = make(tmp_path, monkeypatch, events=[*room, *talk(5)], llm=llm, state=DigestState(room="!dm"))
+    asyncio.run(h.digest(asked=True))
+    assert llm.calls[0].contents.splitlines()[-1] == "13:00 Ich: Адо, як ти?"     # the owner's, not Гермес's
+
+
+def test_his_room_hears_the_voice_questions_he_heard_in_the_chat(tmp_path, monkeypatch):
+    llm = FakeLLM("Так, пам'ятаю.")
+    h, client = make(tmp_path, monkeypatch, llm=llm, state=DigestState(room="!dm"))
+    h._heard = {"$q1": "що казав Бруно?"}
+    client.private_events = [voice(OWNER, "$q1", ts=ms(14)), voice(OWNER, "$never-heard", ts=ms(13))]
+    asyncio.run(h.answer("а ще?", "$q2"))
+    assert "Ваша недавня розмова:\nIch: що казав Бруно?" in llm.calls[0].contents

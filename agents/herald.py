@@ -29,6 +29,7 @@ from nio import (
     MatrixRoom,
     MessageDirection,
     RoomCreateResponse,
+    RoomMessageAudio,
     RoomMessagesError,
     RoomMessageText,
     RoomPreset,
@@ -65,18 +66,30 @@ from agents.digest import (
     trim_digest,
 )
 from agents.llm import DIGEST_MODEL, GeminiClient
-from agents.logic import is_edit, should_join_invite, without_outing
-from agents.matrix import join_room, login
+from agents.logic import TRANSCRIPT_PREFIX, is_edit, should_join_invite, transcript_content, without_outing
+from agents.matrix import download, join_room, login
 from agents.nudge import parse_hours
 from agents.roster import Member, load_roster, speakers
 from agents.settings import VOICE_ID_RE
-from agents.usage import month_chars, parse_lines, tts_usage_line, usage_line
-from agents.voice import TTS_MODEL, ElevenLabsTTS, duration_ms, encode_opus, voice_content, waveform
+from agents.usage import month_chars, parse_lines, stt_usage_line, tts_usage_line, usage_line
+from agents.voice import (
+    STT_MODEL,
+    TTS_MODEL,
+    DeepgramSTT,
+    ElevenLabsTTS,
+    duration_ms,
+    encode_opus,
+    voice_content,
+    waveform,
+)
 from agents.world import local_now
 
 log = logging.getLogger("agent.herald")
 
 KEY_VAR = "ELEVENLABS_API_KEY"
+STT_KEY_VAR = "DEEPGRAM_API_KEY"  # v5.2: his hearing
+TRANSCRIBE_MAX_BYTES = 20_000_000  # a voice message is far smaller; anything over is never downloaded
+HEARD_KEPT = 50                    # the private room's voice questions he heard, by event id (RAM, for the chat)
 PAGE = 100              # the homeserver's cap on one /messages page
 MAX_PAGES = 40          # at most this many pages for one digest or question
 WATCH_S = 60.0          # the watcher's tick
@@ -100,6 +113,20 @@ def route(room_id: str, sender: str, text: str, cfg: AgentConfig, private_room: 
     return ("digest", "asked") if asks_digest(text) else ("ask", "question")
 
 
+def route_audio(room_id: str, sender: str, cfg: AgentConfig, private_room: str | None) -> tuple[str, str]:
+    """v5.2 — what a voice message means to the herald: ("agora", …) the owner's in the room — transcribed for every
+    speaker; ("private", …) the owner's in his room — heard as a message to him; ("ignored", reason) otherwise."""
+    if sender == cfg.user_id:
+        return "ignored", "own-audio"
+    if sender != cfg.owner:
+        return "ignored", "audio-not-owner"
+    if room_id == cfg.room_id:
+        return "agora", "owner-voice"
+    if private_room is not None and room_id == private_room:
+        return "private", "owner-voice"
+    return "ignored", "foreign-room"
+
+
 def needs_private_room(stored: str | None, rooms: dict[str, set[str]], agora: str, owner: str) -> bool:
     """Whether to make a new private room: none yet, or the stored one is no longer his (not joined) or no longer
     the owner's (he left and was not re-invited). `rooms` maps each joined room to its joined and invited members.
@@ -113,7 +140,7 @@ def needs_private_room(stored: str | None, rooms: dict[str, set[str]], agora: st
 class Herald:
     def __init__(self, cfg: AgentConfig, llm: GeminiClient | None = None, tts: ElevenLabsTTS | None = None,
                  roster: dict[str, Member] | None = None, client: AsyncClient | None = None,
-                 state_dir: Path = Path("state")) -> None:
+                 state_dir: Path = Path("state"), stt: DeepgramSTT | None = None) -> None:
         self.cfg = cfg
         roster = roster if roster is not None else load_roster(cfg.simulation, strict_for=cfg.localpart)
         self.personas = [m for m in roster.values() if m.type == "persona"]
@@ -141,6 +168,13 @@ class Herald:
                           else None if self.tts else f"no {KEY_VAR}")
         if self.text_only:
             log.warning("voice off: %s — the digests go out as text", self.text_only)
+        # v5.2 — his hearing: the Deepgram key stays in this process like the ElevenLabs one
+        stt_key = os.environ.pop(STT_KEY_VAR, "").strip()
+        self.stt: DeepgramSTT | None = stt if stt is not None else (
+            DeepgramSTT(stt_key) if stt_key and cfg.can("transcribe") else None)
+        if self.stt is None:
+            log.warning("hearing off: %s", f"no {STT_KEY_VAR}" if cfg.can("transcribe") else "no transcribe")
+        self._heard: dict[str, str] = {}  # the private room's voice questions he heard: event id → their words
         self.clock = lambda: int(time.time() * 1000)  # injectable
         self.state_file = state_dir / f"{cfg.localpart}.digest.json"
         self.usage_file = state_dir / f"{cfg.localpart}.usage.jsonl"
@@ -213,7 +247,7 @@ class Herald:
             for e in resp.chunk:
                 if not isinstance(e, RoomMessageText) or is_edit(e):  # an edit is not a new line (review #9)
                     continue
-                m = Message(str(e.event_id), e.sender, int(e.server_timestamp), e.body)
+                m = self._as_read(e)
                 out.append(m)
                 if (stop_event and m.event_id == stop_event or stop_ts is not None and m.ts < stop_ts
                         or since_ms is not None and m.ts < since_ms):
@@ -223,6 +257,12 @@ class Herald:
                 break
             token = end
         return out, True  # the stop, the room's start, or the bound (the newest are what a digest covers)
+
+    def _as_read(self, e) -> Message:
+        """A room line as he reads it: his own transcript of the owner's voice is the owner's line (v5.2)."""
+        if e.sender == self.cfg.user_id and e.body.startswith(TRANSCRIPT_PREFIX):
+            return Message(str(e.event_id), self.cfg.owner, int(e.server_timestamp), e.body[len(TRANSCRIPT_PREFIX):])
+        return Message(str(e.event_id), e.sender, int(e.server_timestamp), e.body)
 
     async def collect_since_point(self) -> tuple[list[Message], bool]:
         newest_first, complete = await self.fetch(
@@ -348,14 +388,18 @@ class Herald:
         if isinstance(resp, RoomMessagesError):
             log.warning("ask: the conversation could not be read (answering without it)")
             return []
-        out = [Message(str(e.event_id), e.sender, int(e.server_timestamp), e.body) for e in resp.chunk
-               if isinstance(e, RoomMessageText) and not is_edit(e) and e.sender in (self.cfg.owner, self.cfg.user_id)
+        out = [Message(str(e.event_id), e.sender, int(e.server_timestamp),
+                       e.body if isinstance(e, RoomMessageText) else self._heard[str(e.event_id)])
+               for e in resp.chunk
+               if (isinstance(e, RoomMessageText) and not is_edit(e) and e.sender in (self.cfg.owner, self.cfg.user_id)
+                   or isinstance(e, RoomMessageAudio) and str(e.event_id) in self._heard)  # v5.2: his heard voices
                and str(e.event_id) != current_event]
         return list(reversed(out[:CHAT_HISTORY_N]))
 
-    async def answer(self, question: str, event_id: str | None = None) -> bool:
+    async def answer(self, question: str, event_id: str | None = None, voice: bool = False) -> bool:
         """The owner wrote to him (not «підсумок»): a conversation — he answers what was written, briefly, with the
-        room's last days as reference and your recent lines as context (the owner, 2026-10-18)."""
+        room's last days as reference and your recent lines as context (the owner, 2026-10-18). Asked in voice
+        (v5.2), he answers in voice too, then the text."""
         async with self._busy:
             if await self.ensure_private_room() is None:
                 return False
@@ -372,9 +416,79 @@ class Herald:
             if text is None:
                 log.error("ask: no answer (%d messages read)", len(messages))
                 return False
-            ok = await self.send_text(text)
-            log.info("ask: %s (%d messages read)", "answered" if ok else "not sent", len(messages))
+            why = await self.send_voice(text, self.clock()) if voice else "asked in text"
+            ok = await self.send_text(text) or why is None
+            log.info("ask: %s (%d messages read, %s)", "answered" if ok else "not sent", len(messages),
+                     "voice" if why is None else f"text: {why}")
             return ok
+
+    # --- hearing (v5.2) -----------------------------------------------------------------------------------------------
+    async def send_transcript(self, voice_event_id: str, text: str) -> bool:
+        """His one and only kind of Agora message: the transcript of the owner's voice, «🎙 Ich: …», a reply to it —
+        every speaker reads it as the owner's own line (ARCHITECTURE §Message flow)."""
+        resp = await self.client.room_send(self.cfg.room_id, "m.room.message",
+                                           transcript_content(voice_event_id, text))
+        if not isinstance(resp, RoomSendResponse):
+            log.error("transcript not sent: %s", getattr(resp, "status_code", type(resp).__name__))
+            return False
+        return True
+
+    async def hear(self, event, where: str) -> str | None:
+        """The owner's voice message as words: the size cap, the authenticated download, Deepgram, a `stt` usage line.
+        None when it cannot be heard (logged by reason, never a word)."""
+        if self.stt is None:
+            log.info("ignored: audio (hearing off)")
+            return None
+        info = ((getattr(event, "source", None) or {}).get("content") or {}).get("info") or {}
+        size = info.get("size") if isinstance(info, dict) else None
+        if isinstance(size, int) and size > TRANSCRIBE_MAX_BYTES:
+            log.warning("hear: audio over the cap (%d bytes) — not heard", size)
+            return None
+        audio = await download(self.client, getattr(event, "url", ""), TRANSCRIBE_MAX_BYTES)
+        if audio is None:
+            log.error("hear: the audio could not be downloaded (%s)", where)
+            return None
+        mime = info.get("mimetype") if isinstance(info, dict) and isinstance(info.get("mimetype"), str) else "audio/ogg"
+        text, ms = await self.stt.transcribe(audio, mime)
+        self.record_stt(ms if ms is not None else info.get("duration") if isinstance(info.get("duration"), int)
+                        else None, ms is not None or text is not None)
+        if not text:
+            log.info("hear: nothing heard (%s)", where)
+            return None
+        log.info("hear: transcribed (%s, %.1f s audio, %d chars)", where, (ms or 0) / 1000, len(text))
+        return text
+
+    async def on_audio(self, room: MatrixRoom, event: RoomMessageAudio) -> None:
+        try:
+            if not self.started or is_edit(event):
+                return  # the first sync's backlog: never processed
+            where, why = route_audio(room.room_id, event.sender, self.cfg, self.state.room)
+            if where == "ignored":
+                if why != "own-audio":
+                    log.info("ignored: %s (room %s)", why, room.room_id)
+                return
+            self._spawn(self._heard_voice(event, where))
+        except Exception:
+            log.exception("audio handler failed (he keeps running)")
+
+    async def _heard_voice(self, event, where: str) -> None:
+        text = await self.hear(event, where)
+        if text is None:
+            return
+        eid = str(getattr(event, "event_id", "") or "")
+        if where == "agora":
+            if await self.send_transcript(eid, text):
+                self.new_count += 1  # the owner's spoken line counts toward the next digest
+            return
+        self._heard = {**self._heard, eid: text}
+        if len(self._heard) > HEARD_KEPT:
+            self._heard = dict(list(self._heard.items())[-HEARD_KEPT:])
+        if asks_digest(text):
+            log.info("digest: asked by the owner (in voice)")
+            await self.digest(asked=True)
+        else:
+            log.info("ask: a question from the owner (in voice)")
+            await self.answer(text, eid, voice=True)
 
     # --- the nio adapters -------------------------------------------------------------------------------------------
     async def on_message(self, room: MatrixRoom, event: RoomMessageText) -> None:
@@ -449,6 +563,9 @@ class Herald:
     def record_usage(self, kind: str, model: str, usage, ok: bool) -> None:
         self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok))
 
+    def record_stt(self, audio_ms: int | None, ok: bool) -> None:
+        self._append_usage(lambda ts: stt_usage_line(ts, self.cfg.localpart, STT_MODEL, audio_ms, ok))
+
     def record_tts(self, characters: int, ok: bool) -> None:
         self._append_usage(lambda ts: tts_usage_line(ts, self.cfg.localpart, TTS_MODEL, characters, ok))
 
@@ -483,6 +600,7 @@ class Herald:
         log.info("%s: %d new room messages since the last digest", self.cfg.localpart, self.new_count)
         self.started = True
         self.client.add_event_callback(self.on_message, RoomMessageText)
+        self.client.add_event_callback(self.on_audio, RoomMessageAudio)  # v5.2: he hears the owner's voice
         self.client.add_event_callback(self.on_invite, InviteMemberEvent)
 
     async def drain(self, timeout_s: float = 20.0) -> None:
