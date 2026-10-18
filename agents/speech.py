@@ -33,6 +33,18 @@ def voiceable(text: str) -> bool:
     return bool(t) and not (t.startswith("*") and t.endswith("*"))
 
 
+def text_under_voice(text: str, voice_event_id: str | None) -> dict:
+    """The words of a voiced line: a thread reply under its voice message, so the main timeline holds the voices one
+    after another — Element plays a voice message's successor only while no text message stands between them
+    (`PlaybackQueue`: «Stop automatic playback: next useful event is not a voice message»; the owner, 2026-10-18).
+    Without a voice, a plain line."""
+    content: dict = {"msgtype": "m.text", "body": text}
+    if voice_event_id:
+        content["m.relates_to"] = {"rel_type": "m.thread", "event_id": voice_event_id, "is_falling_back": True,
+                                   "m.in_reply_to": {"event_id": voice_event_id}}
+    return content
+
+
 def speakers_month_chars(records: Iterable[dict], month: str, heralds: Iterable[str]) -> int:
     """The month's spoken characters of every member but the heralds (Hermes keeps his own budget): their ok `tts`
     lines in `month` (`YYYY-MM`)."""
