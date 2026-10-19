@@ -911,7 +911,10 @@ own, and every member of the room has a friction with them.
 - **Compose:** services `leon`, `mia` and `irma` (the shared image; `voice.env` gets three more readers) and the env
   examples.
 - **The room's load:** five ranked people plus Claude. The turn weights, the wave limit, the moves and the
-  speakers' voice budget (`VOICE_MONTHLY_CHARS`, 100,000) are checked on `edge`; the owner decides the values.
+  speakers' voice budget are checked on `edge`; the owner decides the values. The budget
+  (`VOICE_MONTHLY_CHARS`) is **200,000** (the owner, 2026-10-20). It is live in `server/.env` at once, since the
+  speakers had used ~62,000 in three days. The phase makes it the code default, the env examples and the compose
+  default (pinned).
 - **Automatic from the roster:** Hermes's members, the recording's voices, the panel's cards and the moves'
   addressees.
 - **ARCHITECTURE:** the roster, the env names and the compose services. **VISION:** the newcomers rule — people who
