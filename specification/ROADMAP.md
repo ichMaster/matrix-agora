@@ -798,7 +798,7 @@ Hermes's text-to-speech pipeline from v5.1.
 
 ### v5.4 — The Agora recording, on request
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.4.0` on 2026-10-20 (the owner's changes: a skill Hermes understands from the conversation, not a command; no spoken time marks; media downloads read to the end).
 
 **Goal:** the owner listens to Agora as it happened: one audio file of a stretch of the room, each line in the voice
 of the one who said it, assembled by Hermes when the owner asks, sent to his private room.
