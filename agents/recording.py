@@ -72,9 +72,11 @@ class Piece:
     mime: str = "audio/ogg"
 
 
+# the mark anywhere — on its own line or after his sentence (v5.4 review #1), in stars, quotes or a code fence
 _MARK_RE = re.compile(
-    r"^[\s*`«\"']*ЗАПИС\s*:\s*(\d{4}-\d{2}-\d{2})[ T]+(\d{1,2})[:.](\d{2})\s*(?:—|–|-|до)\s*"
-    r"(\d{4}-\d{2}-\d{2})[ T]+(\d{1,2})[:.](\d{2})[\s*`»\"'.]*$", re.IGNORECASE | re.MULTILINE)
+    r"[*`«\"']*ЗАПИС\s*:\s*(\d{4}-\d{2}-\d{2})[ T]+(\d{1,2})[:.](\d{2})\s*(?:—|–|-|до)\s*"
+    r"(\d{4}-\d{2}-\d{2})[ T]+(\d{1,2})[:.](\d{2})[ \t*`»\"'.]*", re.IGNORECASE)
+_EMPTY_FENCE_RE = re.compile(r"```[A-Za-z]*\s*```")
 
 
 def _at(day: str, hour: str, minute: str, zone: ZoneInfo) -> int:
@@ -89,10 +91,11 @@ def recording_mark(text: str, now_ms: int, tz: str) -> tuple[str, tuple[int, int
     """His chat answer → (its words for Ich without the «ЗАПИС: … — …» line, the period that line asks for). The
     period is kept only when it parses, starts before it ends (its end never past now) and is at most a day;
     otherwise None (logged, never the text)."""
-    m = _MARK_RE.search(text or "")
-    if not m:
+    marks = list(_MARK_RE.finditer(text or ""))
+    if not marks:
         return (text or "").strip(), None
-    words = (text[: m.start()] + text[m.end():]).strip()
+    m = marks[-1]  # «останнім рядком»; any other mark is taken out too
+    words = _EMPTY_FENCE_RE.sub("", _MARK_RE.sub("", text)).strip()
     zone = ZoneInfo(tz)
     try:
         start, end = _at(m[1], m[2], m[3], zone), _at(m[4], m[5], m[6], zone)

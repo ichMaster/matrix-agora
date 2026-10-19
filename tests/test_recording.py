@@ -43,6 +43,16 @@ def test_the_period_line_is_read_and_never_sent(answer, words, period):
     assert recording_mark(answer, ms(20, 14), TZ) == (words, period)
 
 
+@pytest.mark.parametrize("answer,words", [
+    ("Зараз зберу тобі вечір. ЗАПИС: 2026-10-19 17:00 — 2026-10-19 19:00", "Зараз зберу тобі вечір."),
+    ("Лови вечір.\n```\nЗАПИС: 2026-10-19 17:00 — 2026-10-19 19:00\n```", "Лови вечір."),
+    ("Лови вечір. `ЗАПИС: 2026-10-19 17:00 — 2026-10-19 19:00`.", "Лови вечір."),
+])
+def test_the_period_line_after_his_sentence_or_in_a_fence_is_read_too(answer, words):
+    """v5.4 review #1: on the same line as his words the mark was sent to the owner as is, and nothing recorded."""
+    assert recording_mark(answer, ms(20, 14), TZ) == (words, (ms(19, 17), ms(19, 19)))
+
+
 @pytest.mark.parametrize("answer", [
     "Збираю.\nЗАПИС: 2026-10-19 19:00 — 2026-10-19 17:00",        # ends before it starts
     "Збираю.\nЗАПИС: 2026-10-17 10:00 — 2026-10-19 10:00",        # two days
