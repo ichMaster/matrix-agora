@@ -55,7 +55,8 @@ MXC_RE = re.compile(r"^mxc://([A-Za-z0-9.\-:\[\]]+)/([A-Za-z0-9_\-]+)$")
 async def download(client: AsyncClient, mxc: str, max_bytes: int) -> bytes | None:
     """v5.2 — a media file through the authenticated media API (`/_matrix/client/v1/media/download`, the Bearer
     token): None for a malformed `mxc://`, a failed request, or a file over `max_bytes` (by its Content-Length or
-    by what arrives — never more than `max_bytes + 1` read)."""
+    by what arrives — never more than `max_bytes + 1` read). Read to its end: one stream read returns only what
+    has arrived so far (the v5.4 DoD — the recording's voices were cut at the first chunk)."""
     m = MXC_RE.match(mxc or "")
     if not m:
         log.error("download refused: not an mxc:// uri")
@@ -74,14 +75,19 @@ async def download(client: AsyncClient, mxc: str, max_bytes: int) -> bytes | Non
         if length is not None and length.isdigit() and int(length) > max_bytes:
             log.error("download refused: %s bytes over the cap", length)
             return None
+        body = bytearray()
         try:
-            body = await resp.content.read(max_bytes + 1)
+            while len(body) <= max_bytes:
+                chunk = await resp.content.read(max_bytes + 1 - len(body))
+                if not chunk:
+                    break
+                body += chunk
         except Exception as exc:  # noqa: BLE001 — a body cut midway (review #1)
             log.error("download failed: %s", type(exc).__name__)
             return None
         if len(body) > max_bytes:
             log.error("download refused: over the cap")
             return None
-        return body
+        return bytes(body)
     finally:
         resp.release()

@@ -10,12 +10,16 @@ from agents.matrix import download
 
 
 class FakeContent:
-    def __init__(self, body):
-        self.body, self.asked = body, None
+    """Like aiohttp's stream: one read returns at most what has arrived — here `chunk` bytes at a time."""
+
+    def __init__(self, body, chunk=4):
+        self.body, self.chunk, self.asked = body, chunk, []
 
     async def read(self, n=-1):
-        self.asked = n
-        return self.body[:n] if n >= 0 else self.body
+        self.asked.append(n)
+        take = self.chunk if n < 0 else min(n, self.chunk)
+        out, self.body = self.body[:take], self.body[take:]
+        return out
 
 
 class FakeResp:
@@ -43,7 +47,17 @@ def test_the_download_uses_the_authenticated_media_api():
     assert asyncio.run(download(client, "mxc://agora.lan/AbC_d-9", 1000)) == b"OggS-voice"
     assert seen == {"method": "GET", "path": "/_matrix/client/v1/media/download/agora.lan/AbC_d-9",
                     "headers": {"Authorization": "Bearer tok-123"}}
-    assert resp.content.asked == 1001 and resp.released
+    assert resp.content.asked[0] == 1001 and resp.released
+
+
+def test_the_download_reads_to_the_end_not_the_first_chunk():
+    """The v5.4 DoD: a 23.6 s voice came down as its first 13 s — one read returns only what has arrived."""
+    voice = bytes(range(256)) * 400
+    resp = FakeResp(body=voice)
+    resp.content.chunk = 4096
+    client, _ = client_with(resp)
+    assert asyncio.run(download(client, "mxc://agora.lan/abc", 200_000)) == voice
+    assert len(resp.content.asked) > 2 and all(n <= 200_001 for n in resp.content.asked)
 
 
 @pytest.mark.parametrize("resp,why", [
