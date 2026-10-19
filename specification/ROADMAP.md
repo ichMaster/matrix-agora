@@ -796,6 +796,49 @@ Hermes's text-to-speech pipeline from v5.1.
 - the `m.audio` content and its relation;
 - no audio in the logs.
 
+### v5.4 — The Agora recording, on command
+
+**Status:** ⏳ planned.
+
+**Goal:** the owner listens to Agora as it happened: one audio file of a stretch of the room, each line in the voice
+of the one who said it, assembled by Hermes when the owner asks, sent to his private room.
+
+**Owner decisions** (2026-10-20):
+- **On command only:** «запис за сьогодні», «запис за вчора», «запис з 14:00» (typed or spoken) in Hermes's room;
+- **the owner's typed lines in his own cloned voice** (an ElevenLabs Instant Voice Clone, `OWNER_VOICE_ID`, given
+  2026-10-20); his voice messages go in as they are;
+- **into Hermes's private room**, as an audio file — not into Agora.
+
+**Tasks:**
+- **The command** (pure): the period from the owner's words; anything else stays the conversation or «підсумок».
+- **The plan** (pure): the Agora messages of the period in order, each line mapped to its sound:
+  - a member's voiced line (the labelled voice message and the text that follows it) → the voice as it is;
+  - the owner's voice message → as it is; Hermes's transcript of it → left out;
+  - the owner's typed line → spoken in `OWNER_VOICE_ID`;
+  - a member's text-only line → spoken in its own voice within the speakers' budget, else left out;
+  - an action purr (`*…*`) → left out.
+- **The assembly:** each piece downloaded (the authenticated media API) or spoken, decoded to PCM, the loudness
+  levelled (ffmpeg `loudnorm`), short pauses between lines and a longer one with a short spoken time mark after a
+  silence of over 15 minutes, Hermes's opening («Агора, <дата>, з … до …») and closing, encoded once to OGG/Opus;
+  split into parts when over the homeserver's upload limit.
+- **The delivery:** an `m.audio` file (not a voice message) named «Агора <дата>.ogg» in Hermes's room, with one line
+  of text — the length, the number of lines, the period; typing while he assembles; usage lines for every TTS call.
+- **No archive:** nothing is kept but the sent file in the homeserver's media store (the room already holds its
+  history); VISION's non-goal on raw archives notes that the recording is assembled from the room on demand.
+- **ARCHITECTURE:** the recording flow, `OWNER_VOICE_ID`, the command.
+
+**DoD:**
+- (Manual, owner) «запис за сьогодні» in Hermes's room brings one audio file of the day's Agora, each line in its
+  speaker's voice — Ada, Bruno, Кіт, Клод, and his own (typed lines in his cloned voice, voice messages as they were).
+- (Manual, owner) A period with no talk gets a short line, not a file.
+
+**Tests:** unit:
+- the command and its periods;
+- the plan: pairing a voice with its text, each kind of line, the left-out ones;
+- the assembly with ffmpeg and the downloads mocked (order, pauses, the split);
+- the delivery content;
+- no text or audio in the logs.
+
 ## v6 — Лілі: the Lumi bridge
 
 Лілі — Lumi's prod brain — joins the room through a bridge that is one of our agents: first when named, then under
