@@ -882,7 +882,8 @@ own, and every member of the room has a friction with them.
 - **The frictions:**
   - Леон ↔ Бруно: the microphones at «Наталка Полтавка», December 2025;
   - Леон ↔ Ада: the 2008 studio, and the text vs the stage;
-  - Леон ↔ Мія: «Мишоловка» vs «Лісова пісня», his stories against her archives;
+  - Леон ↔ Мія: «Мишоловка» vs «Лісова пісня», his stories against her archives — and his secret (the owner): a
+    KGB informer «Суфлер» in 1979–1989, which her archive work may one day uncover;
   - Мія ↔ Ада: Ada's hard notes on Mia's detective novel;
   - Мія ↔ Бруно: the past vs the future;
   - Ірма ↔ Леон: she typed his divorce in 1996 and remembers every word he said; his legends against her record;
