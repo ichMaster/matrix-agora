@@ -148,8 +148,9 @@ joins only the owner's invite into Agora and leaves any other.
   brings it back.
 - **His allowlist** (`route` for text, `route_audio` for voice — both pure; an edit — `m.replace` — is never a new line for him: not counted, digested or answered, `is_edit`, review #9): an Agora text message is **read, never answered** — it only counts toward the next
   digest (not his own, not a purr; no log line per message); in the private room only the owner's `RoomMessageText`
-  is handled — «підсумок» (`asks_digest`: at most three words holding «підсумок» / «підсумки» / «підсумуй») brings a
-  digest, anything else is a question; everything else is logged as `ignored`. **Every send goes through
+  is handled — from v5.4 «запис …» (`asks_recording`: at most six words holding «запис» / «записи» / «запиши»)
+  brings the recording, «підсумок» (`asks_digest`: at most three words holding «підсумок» / «підсумки» / «підсумуй»)
+  a digest, anything else is a question; everything else is logged as `ignored`. **Every send goes through
   `send_private`**, which refuses any room but the private one — Agora never hears a word of his own; from v5.2 his
   only Agora message is a transcript of the owner's voice (`send_transcript`, below).
 - **The schedule.** A watcher ticks every minute: `digest_due` — at least `HERMES_DIGEST_EVERY_S` (4 h) since the last
@@ -195,12 +196,37 @@ joins only the owner's invite into Agora and leaves any other.
   his own transcripts in Agora as the owner's lines (`_as_read`) and leave the raw audio out. Anything else's voice,
   or another room, is `ignored`; an over-cap, unheard or failed one is logged by reason and stays silent.
   `DEEPGRAM_API_KEY` leaves the environment at start like the ElevenLabs key; without it he logs `hearing off`.
+- **The recording (v5.4, on command only — the owner, 2026-10-20).** «запис» / «запис за сьогодні» (today until
+  now), «запис за вчора» (yesterday's whole local day), «запис з 14» / «з 14:30» (today from then) — typed or spoken
+  in his room (`recording_request`, `agents/recording.py`, pure) — bring one audio file of that stretch of Agora,
+  each line in the voice of the one who said it. Under the busy lock, typing on: he reads Agora's text and audio
+  events of the period (`fetch_events`, the same paging, at most `MAX_PAGES` × 2 pages; a failed page — no recording
+  and «Сувої Агори зараз не читаються — спробуй трохи згодом.»). `plan_recording` turns them into pieces: a member's
+  voice message as it is (its text from the same sender within 30 s is its words, left out; a voice with a caption
+  is its own words), the owner's voice message as it is, the owner's typed line spoken in his cloned voice
+  (`OWNER_VOICE_ID`), a member's text-only line in its own (`<NAME>_VOICE_ID`), an action purr, an edit, his own
+  transcripts and any other sender left out, and a time mark («О сімнадцятій.») after more than 15 minutes of
+  silence. Nothing in the period: «У цей час Агора мовчала.» and no file. Otherwise a line «Збираю запис — N
+  реплік, це кілька хвилин.» (the typing shows for 30 s only), then each voice is downloaded (the 20 MB cap) and
+  each spoken line synthesised — every TTS call his own (`tts` usage lines in his file, within
+  `HERMES_TTS_MONTHLY_CHARS`; past it, or with no voice id, a spoken line is left out; the speakers' budget is
+  untouched); his opening («Агора, 19 жовтня, з десятої до двадцять третьої.»), the time marks and the closing («Це
+  все з Агори. Гермес, ваш вісник.») in his voice, made in code. ffmpeg decodes each piece to 24 kHz mono PCM with
+  `loudnorm` (I=-18, TP=-2), so a phone and a synthesised voice sound alike; 0.5 s between lines, 1.5 s around a
+  time mark; a new part before 60 minutes (cut only between pieces — an hour of 32 kb/s Opus is ~14.4 MB, under
+  the homeserver's 20 MiB upload limit); each part encoded to OGG/Opus and uploaded as a plain `m.audio` **file**,
+  not a voice message — «Агора 2026-10-19.ogg» or «Агора 2026-10-19 (1 з 2).ogg», with `info.size` and
+  `info.duration` — then one text line «Агора, 10:05–23:40 · 42 хв · 186 реплік (озвучено зараз: 12, пропущено:
+  0)». No line voiced at all: «Запис не склався: жодної репліки не вдалося озвучити.»; a failed assembly or upload:
+  a short line too. Nothing of the room is kept: the events are read from the homeserver when asked, and only the
+  sent file remains.
 - **The key** (`ELEVENLABS_API_KEY`, his own env file) is taken out of the environment at start and never reaches a
   prompt, a log or the state; without it — or without a voice id — he logs `voice off` once and digests in text.
 - **His log** names events only: the private room created, `digest: sent (N messages, M chars, voice | text:
   <reason>)`, `digest: nothing new`, `digest: asked by the owner` (v5.2 «in voice»), `ask: answered (N messages read,
-  voice | text: <reason>)`, `hear: transcribed (agora | private, N s audio, M chars)`, `hear: nothing heard`, the
-  guard's drops, `ignored` lines — never a text.
+  voice | text: <reason>)`, `hear: transcribed (agora | private, N s audio, M chars)`, `hear: nothing heard`, v5.4
+  `recording: sent (N parts, M min, K lines, J spoken, L left out)` and `recording: nothing in the period`, the
+  guard's drops, `ignored` lines — never a text or a sound.
 
 ## Voice messages (v5.1)
 
@@ -330,7 +356,7 @@ The panel is the point of the whole project (VISION §The direction). One FastAP
 
 Changing any of these updates this document and the test that pins it, in the same commit:
 
-- The env var names in `.env.example` and `server/.env.example` (from v4.4 also `server/claude.env.example`: `CLAUDE_PASSWORD`, `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_MODEL`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, `CLAUDE_TIMEOUT_S`; `CLAUDE_CONFIG_DIR` and `HOME` are set by compose), from v5.1 also `server/hermes.env.example` (`HERMES_PASSWORD`; v5.2 `DEEPGRAM_API_KEY`) and from v5.3 `server/voice.env.example` (`ELEVENLABS_API_KEY`, moved there from Hermes's file) and `PRICE_MODELS` and the `HERMES_*` settings in both shared examples, and the **forbidden set** — any `ANTHROPIC_*`, any `CLAUDE_CODE_USE_*`, `CLAUDE_CODE_SIMPLE`, `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR`, `CLAUDE_CODE_MANAGED_SETTINGS_PATH`, `CLAUDE_CODE_API_BASE_URL`, `CLAUDE_CODE_HOST_CREDS_FILE` — never set anywhere in the stack (pinned by `tests/test_claude_sdk.py` and `tests/test_compose.py`).
+- The env var names in `.env.example` and `server/.env.example` (from v4.4 also `server/claude.env.example`: `CLAUDE_PASSWORD`, `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_MODEL`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS`, `CLAUDE_TIMEOUT_S`; `CLAUDE_CONFIG_DIR` and `HOME` are set by compose), from v5.1 also `server/hermes.env.example` (`HERMES_PASSWORD`; v5.2 `DEEPGRAM_API_KEY`) and from v5.3 `server/voice.env.example` (`ELEVENLABS_API_KEY`, moved there from Hermes's file) and `PRICE_MODELS` and the `HERMES_*` settings in both shared examples (v5.3 the speakers' `<NAME>_VOICE_ID`s, v5.4 `OWNER_VOICE_ID`, pinned by `tests/test_compose.py`), and the **forbidden set** — any `ANTHROPIC_*`, any `CLAUDE_CODE_USE_*`, `CLAUDE_CODE_SIMPLE`, `CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR`, `CLAUDE_CODE_MANAGED_SETTINGS_PATH`, `CLAUDE_CODE_API_BASE_URL`, `CLAUDE_CODE_HOST_CREDS_FILE` — never set anywhere in the stack (pinned by `tests/test_claude_sdk.py` and `tests/test_compose.py`).
 - The agent TOML schema (`name`, `user_id`, `canon`, `life`, `simulation`; from v4.1 `type` (`persona`; v4.2 `creature`; v4.4 `assistant` — no capabilities), `engine` (`gemini`; v4.4 `claude-sdk`), `name_forms` (the lowercase forms that address the agent), `[capabilities]` (overrides of the type's defaults: `canon`, `life`, `summary`, `chronicle`, `plans`, `today`, `world`, v4.2 `mood`, v4.3 `pastlife` and `nudge`, v4.5 `news` — a persona has all but `mood`, `pastlife`, `nudge` and `news`; a creature has `canon`, `life`, `world`, `mood`, `pastlife`, `nudge`; an assistant has `news`; v5.1 a `herald` has `canon` and `digest` (v5.2 also `transcribe`); v5.3 `voice` — a persona, a creature and an assistant may speak in their own voice, a herald never (his voice is his digest's); `pastlife` and `nudge` belong to the creature type only, `news` to the assistant type only, `digest` and `transcribe` to the herald type only, and a simulation holds at most one member with each initiative (`nudge`, `news`; v4.3 review #6) and at most one with `digest` and with `transcribe`; `canon` and `life` are required only when the type has them), v4.2 `natal` (the natal file, required with `mood`), v4.3 `memories` (the past-life theses file, required with `pastlife`) and `[turns]` (`mode` = `ranked` | `ambient` | `mention-only`, `weight` > 0; v5.1 `none` is a herald's alone and forced — a `[turns]` table on a herald is an error); and the panel-only `[panel] name` / `role` / `pronoun`), parsed by `agents/roster.py` (pinned by `tests/test_roster.py`), and the `agents/canon/` layout.
 - The simulation registry `simulations.toml` (repo root): per entry `kind` (`matrix-chat`), `title`, `description`, `services`, `agents`, `health {service, port, path}`, `endpoints {homeserver, room}` — the env names its agents connect with; an agent belongs to one simulation (pinned by `tests/test_registry.py`).
 - The plan file format: items plus hidden mutation tags, which never reach a conversational prompt (pinned by a test).
@@ -399,6 +425,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `CLAUDE_NEWS_EVERY_S`, `CLAUDE_NEWS_IDLE_S`, `CLAUDE_NEWS_PER_DAY`, `CLAUDE_NEWS_HOURS` | v4.5 | read only by an agent with `news` — Claude brings a Guardian item: every this many seconds, once the room has been quiet this long (never less than `BOT_WINDOW_S`), at most so many a day, within these local hours (3600 / 300 / 24 / `09-01`); interpolated into Claude's service from the shared file |
 | `HERMES_DIGEST_EVERY_S`, `HERMES_DIGEST_MIN_MESSAGES`, `HERMES_DIGEST_MAX_CHARS`, `HERMES_DIGEST_HOURS`, `HERMES_TTS_MONTHLY_CHARS`, `HERMES_VOICE_ID` | v5.1 | read only by the member with `digest` (Hermes; the Matrix chat's service settings) — a digest every so many seconds, after so many new messages, at most so many characters, within these local hours, at most so many spoken characters a month (0: text only), his ElevenLabs voice id (letters and digits; empty: text only) (14400 / 5 / 1500 / `09-23` / 150000 / empty) |
 | `VOICE_ID`, `VOICE_REPLY_P`, `VOICE_MONTHLY_CHARS`; `ADA_VOICE_ID`, `BRUNO_VOICE_ID`, `KIT_VOICE_ID`, `CLAUDE_VOICE_ID` | v5.3 | read only by an agent with `voice` — its own ElevenLabs voice (an agent setting whose base is the agent's `<NAME>_VOICE_ID`, aliased to `VOICE_ID` at its start, so the panel overrides it per agent; empty: text), the share of its lines other than answers to the owner's voice that go out in voice (an agent setting, 1.0 — the owner, 2026-10-18: always), and one monthly budget of spoken characters for all the speakers together (a service setting, 100,000 — the owner, 2026-10-18, raised from 50,000; 0: text only; Hermes keeps his own) |
+| `OWNER_VOICE_ID` | v5.4 | read only by the member with `digest` (Hermes): the owner's cloned ElevenLabs voice, in which the recording speaks his typed lines (letters and digits; empty: those lines are left out). Hermes also reads the speakers' `<NAME>_VOICE_ID`s for their text-only lines; not a panel setting |
 | `ELEVENLABS_API_KEY`, `HERMES_PASSWORD`, v5.2 `DEEPGRAM_API_KEY` | v5.1–v5.2 | Hermes's own env file `server/hermes.env` only (the key copied from Lumi's, the owner's decision 2026-10-13): taken out of the environment at start, never in a prompt or a log |
 | `GUARDIAN_API_KEY` | v4.5 | Claude's news source, a Guardian Open Platform key — `server/claude.env` only; taken out of the environment at start, never in a prompt or a log; unset: no news |
 | `CLAUDE_WORKSPACE`, `CLAUDE_TIMEOUT_S` | v4.5 | his own folder (`/workspace`, set by compose) and the bound on a reply with tool rounds (300 s from v4.5.2 — 180 s cut his web answers; the direct brief asks for at most 2–3 searches or pages); up to 8 turns per reply; the log names the tools a call used and how long it took (names only) |

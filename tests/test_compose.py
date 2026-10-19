@@ -252,13 +252,13 @@ def test_the_shared_server_example_never_invites_hermes_secrets():
 
 
 def test_the_voice_settings_are_in_both_env_examples_with_the_schema_defaults():
-    """v5.3: each agent's voice id name, the share and the speakers' budget."""
+    """v5.3: each agent's voice id name, the share and the speakers' budget; v5.4: the owner's cloned voice."""
     from agents.settings import BY_NAME
+    ids = ("ADA_VOICE_ID", "BRUNO_VOICE_ID", "KIT_VOICE_ID", "CLAUDE_VOICE_ID", "OWNER_VOICE_ID")
     for path in (ROOT / ".env.example", ROOT / "server" / ".env.example"):
         values = dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines()
                       if line and not line.startswith("#") and "=" in line)
-        assert {k: values[k] for k in ("ADA_VOICE_ID", "BRUNO_VOICE_ID", "KIT_VOICE_ID", "CLAUDE_VOICE_ID")} == dict.fromkeys(
-            ("ADA_VOICE_ID", "BRUNO_VOICE_ID", "KIT_VOICE_ID", "CLAUDE_VOICE_ID"), "")
+        assert {k: values[k] for k in ids} == dict.fromkeys(ids, "")
         assert values["VOICE_REPLY_P"] == BY_NAME["VOICE_REPLY_P"].default
         assert values["VOICE_MONTHLY_CHARS"] == BY_NAME["VOICE_MONTHLY_CHARS"].default
 

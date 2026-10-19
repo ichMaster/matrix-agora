@@ -68,13 +68,23 @@ def _local_midnight(day, tz: str) -> int:
     return int(datetime.combine(day, time(0, 0), ZoneInfo(tz)).timestamp() * 1000)
 
 
+def _words(text: str) -> list[str]:
+    return re.findall(r"[^\W_]+(?:['’][^\W_]+)?", (text or "").lower())
+
+
+def asks_recording(text: str) -> bool:
+    """A short owner message (at most six words) with «запис» / «записи» / «запиши»."""
+    words = _words(text)
+    return 0 < len(words) <= RECORD_MAX_WORDS and bool(RECORD_WORDS & set(words))
+
+
 def recording_request(text: str, now_ms: int, tz: str) -> tuple[int, int] | None:
-    """The owner's «запис …»: a short message (at most six words) with «запис» / «записи» / «запиши» — the period it
-    asks for: «за вчора» the whole of yesterday; «з HH» / «з HH:MM» today from then; otherwise today until now."""
-    low = (text or "").lower()
-    words = re.findall(r"[^\W_]+(?:['’][^\W_]+)?", low)
-    if not (0 < len(words) <= RECORD_MAX_WORDS) or not RECORD_WORDS & set(words):
+    """The owner's «запис …» (`asks_recording`) — the period it asks for: «за вчора» the whole of yesterday;
+    «з HH» / «з HH:MM» today from then; otherwise today until now. None for anything else."""
+    if not asks_recording(text):
         return None
+    low = (text or "").lower()
+    words = _words(text)
     now = datetime.fromtimestamp(now_ms / 1000, ZoneInfo(tz))
     today = _local_midnight(now.date(), tz)
     if "вчора" in words:

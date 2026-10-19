@@ -731,3 +731,135 @@ def test_his_digest_reads_the_speakers_voiced_lines_and_counts_them(tmp_path, mo
     assert h.new_count == 1 and client.sent == []
     asyncio.run(h.digest(asked=True))
     assert llm.calls[0].contents.splitlines()[-1] == "13:00 Ада: Я читаю Кальвіно."
+
+
+# --- v5.4: the Agora recording --------------------------------------------------------------------------------------
+SPOKEN: list = []   # (voice id, line) as the recording's TTS was asked
+
+
+class VoicedTTS:
+    def __init__(self, key, voice_id):
+        self.voice_id = voice_id
+
+    async def synth(self, text):
+        SPOKEN.append((self.voice_id, text))
+        return b"\x01\x00" * 2400
+
+
+def recording_herald(tmp_path, monkeypatch, events, budget="150000"):
+    from agents import recording as rec
+    SPOKEN.clear()
+    for k, v in {"OWNER_VOICE_ID": "OwnerVoice012345678", "ADA_VOICE_ID": "AdaVoice0123456789",
+                 "BRUNO_VOICE_ID": "BrunoVoice012345678", "ELEVENLABS_API_KEY": "sk-key-0123456789",
+                 "HERMES_TTS_MONTHLY_CHARS": budget}.items():
+        monkeypatch.setenv(k, v)
+    downloads = []
+
+    async def fake_download(client, mxc, max_bytes):
+        downloads.append(mxc)
+        return b"OggS-" + mxc.encode()
+
+    async def fake_decode(data, raw=False):
+        return b"\x02\x00" * 2400
+
+    async def fake_encode(pcm):
+        return b"OggS-recording"
+
+    monkeypatch.setattr(herald_mod, "download", fake_download)
+    monkeypatch.setattr(herald_mod, "decode_to_pcm", fake_decode)
+    monkeypatch.setattr(herald_mod, "ElevenLabsTTS", VoicedTTS)
+    monkeypatch.setattr(rec, "encode_opus", fake_encode)
+    h, client = make(tmp_path, monkeypatch, events=events, state=DigestState(room="!dm"))
+    h.started = True
+    return h, client, downloads
+
+
+def agora_voice(sender, eid, ts):
+    return RoomMessage.parse_event({"event_id": eid, "sender": sender, "origin_server_ts": ts, "type": "m.room.message",
+                                    "content": {"msgtype": "m.audio", "body": "Голосове повідомлення",
+                                                "url": f"mxc://agora.lan/{eid[1:]}", "org.matrix.msc3245.voice": {},
+                                                "info": {"mimetype": "audio/ogg", "size": 9, "duration": 900}}})
+
+
+def test_the_recording_command_routes_before_the_digest_and_the_chat():
+    assert route("!dm", OWNER, "запис за сьогодні", CFG, "!dm") == ("record", "asked")
+    assert route("!dm", OWNER, "Підсумок!", CFG, "!dm") == ("digest", "asked")
+    assert route(AGORA, OWNER, "запис", CFG, "!dm") == ("count", "agora")         # never in Agora
+
+
+def test_the_recording_speaks_each_line_in_its_voice_and_sends_one_file(tmp_path, monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
+    t = ms(10)
+    newest_first = list(reversed([
+        agora_voice(OWNER, "$ownervoice", t),
+        ev(CFG.user_id, f"🎙 Ich: Адо, як ти? {SECRET}", t + 2000, "$tr"),
+        agora_voice(ADA, "$adavoice", t + 5000),
+        ev(ADA, "Добре!", t + 6000, "$adatext"),
+        ev(OWNER, f"А ти, Бруно? {SECRET}", t + 9000, "$typed"),
+        ev(BRUNO, "Я в горах.", t + 12000, "$brunotext"),
+    ]))
+    h, client, downloads = recording_herald(tmp_path, monkeypatch, newest_first)
+    assert asyncio.run(h.record(ms(0), ms(14))) is True
+    assert downloads == ["mxc://agora.lan/ownervoice", "mxc://agora.lan/adavoice"]   # as they are
+    voices = [v for v, _ in SPOKEN]
+    assert ("OwnerVoice012345678", f"А ти, Бруно? {SECRET}") in SPOKEN   # his typed line: his clone
+    assert ("BrunoVoice012345678", "Я в горах.") in SPOKEN               # Bruno's text-only: his voice
+    assert voices[0] == voices[-1] == "VoiceId0123456789"                # Hermes opens and closes
+    assert len(SPOKEN) == 4                                              # Ada's text was her voice's words
+    started, audio, line = private(client)
+    assert started["body"] == "Збираю запис — 4 реплік, це кілька хвилин."
+    assert audio["msgtype"] == "m.audio" and "org.matrix.msc3245.voice" not in audio  # a file, not a voice
+    assert audio["body"] == f"Агора {datetime.fromtimestamp(t / 1000, ZoneInfo(TZ)):%Y-%m-%d}.ogg"
+    assert line["body"].startswith("Агора, 10:00–10:00 · ") and "4 реплік" in line["body"]
+    assert "recording: sent (1 parts" in caplog.text and all(SECRET not in r.getMessage() for r in caplog.records)
+
+
+def test_past_his_budget_the_spoken_lines_are_left_out(tmp_path, monkeypatch):
+    events = [ev(OWNER, "Привіт усім, це довгий рядок", ms(10, 5), "$x"), agora_voice(ADA, "$adavoice", ms(10))]
+    h, client, _ = recording_herald(tmp_path, monkeypatch, events, budget="20")
+    assert asyncio.run(h.record(ms(0), ms(14))) is True
+    assert SPOKEN == []                                  # the opening and the typed line pass the 20 characters
+    assert "пропущено: 1" in private(client)[-1]["body"] and len(client.uploads) == 1   # Ada's voice still in
+    h2, client2, _ = recording_herald(tmp_path / "b", monkeypatch, [events[0]], budget="5")
+    assert asyncio.run(h2.record(ms(0), ms(14))) is False
+    assert private(client2)[-1]["body"] == "Запис не склався: жодної репліки не вдалося озвучити."
+    assert client2.uploads == []
+
+
+def test_a_long_stretch_goes_out_in_parts(tmp_path, monkeypatch):
+    h, client, _ = recording_herald(tmp_path, monkeypatch, [ev(OWNER, "Привіт", ms(10), "$x")])
+
+    async def two_parts(sounds):
+        return [(b"OggS-1", 3_600_000), (b"OggS-2", 60_000)]
+
+    monkeypatch.setattr(herald_mod, "assemble", two_parts)
+    assert asyncio.run(h.record(ms(0), ms(14))) is True
+    day = f"{datetime.fromtimestamp(ms(10) / 1000, ZoneInfo(TZ)):%Y-%m-%d}"
+    assert [u[1] for u in client.uploads] == [f"Агора {day} (1 з 2).ogg", f"Агора {day} (2 з 2).ogg"]
+    assert [u[0] for u in client.uploads] == ["audio/ogg", "audio/ogg"]
+    files = [c for c in private(client) if c["msgtype"] == "m.audio"]
+    assert [f["info"] for f in files] == [{"mimetype": "audio/ogg", "size": 6, "duration": 3_600_000},
+                                          {"mimetype": "audio/ogg", "size": 6, "duration": 60_000}]
+    assert " · 61 хв · 1 реплік" in private(client)[-1]["body"]
+
+
+def test_an_empty_period_gets_a_short_line_and_a_partial_read_says_so(tmp_path, monkeypatch):
+    h, client, _ = recording_herald(tmp_path, monkeypatch, [ev(CFG.user_id, "🎙 Ich: x", ms(10), "$t")])
+    assert asyncio.run(h.record(ms(0), ms(14))) is True
+    assert private(client) == [{"msgtype": "m.text", "body": "У цей час Агора мовчала."}]
+    h2, client2, _ = recording_herald(tmp_path / "b", monkeypatch, [ev(OWNER, "x", ms(10), "$x")])
+    client2.fail_page = 0
+    assert asyncio.run(h2.record(ms(0), ms(14))) is False
+    assert private(client2)[0]["body"].startswith("Сувої Агори зараз не читаються")
+
+
+def test_a_spoken_recording_command_records(tmp_path, monkeypatch):
+    h, client, _ = recording_herald(tmp_path, monkeypatch, [ev(OWNER, "Привіт", ms(10), "$x")])
+    h.stt = FakeSTT("запис за сьогодні")
+
+    async def fake_download(client, mxc, max_bytes):
+        return b"OggS"
+
+    monkeypatch.setattr(herald_mod, "download", fake_download)
+    asyncio.run(heard(h, "!dm", voice(OWNER, "$q")))
+    assert [c["msgtype"] for c in private(client)] == ["m.text", "m.audio", "m.text"]

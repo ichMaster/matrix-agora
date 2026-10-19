@@ -13,6 +13,7 @@ digest or answer text ever reaches a log.
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 import os
@@ -35,6 +36,7 @@ from nio import (
     RoomSendResponse,
     RoomVisibility,
     SyncError,
+    UploadResponse,
 )
 
 from agents.config import AgentConfig
@@ -67,6 +69,17 @@ from agents.llm import DIGEST_MODEL, GeminiClient
 from agents.logic import TRANSCRIPT_PREFIX, is_edit, should_join_invite, transcript_content, without_outing
 from agents.matrix import download, join_room, login
 from agents.nudge import parse_hours
+from agents.recording import (
+    CLOSING,
+    Event,
+    asks_recording,
+    assemble,
+    decode_to_pcm,
+    gap_line,
+    opening_line,
+    plan_recording,
+    recording_request,
+)
 from agents.roster import Member, load_roster, speakers
 from agents.settings import VOICE_ID_RE
 from agents.speech import voice_message
@@ -106,6 +119,8 @@ def route(room_id: str, sender: str, text: str, cfg: AgentConfig, private_room: 
         return "ignored", "foreign-room"
     if sender != cfg.owner:
         return "ignored", "sender-not-owner"
+    if asks_recording(text):
+        return "record", "asked"  # v5.4: the Agora recording, before «підсумок» and the chat
     return ("digest", "asked") if asks_digest(text) else ("ask", "question")
 
 
@@ -143,6 +158,10 @@ class Herald:
         self.cfg = cfg
         roster = roster if roster is not None else load_roster(cfg.simulation, strict_for=cfg.localpart)
         self.personas = [m for m in roster.values() if m.type == "persona"]
+        # v5.4 — whose voice speaks a typed line in the recording: the owner's clone, each speaker's own
+        self.voice_ids = {cfg.owner: os.environ.get("OWNER_VOICE_ID", "").strip(),
+                          **{m.user_id: os.environ.get(f"{m.localpart.upper()}_VOICE_ID", "").strip()
+                             for m in speakers(roster.values()) if m.user_id != cfg.user_id}}
         self.member_ids = frozenset(m.user_id for m in roster.values())
         self.names = {cfg.owner: "Ich", **{m.user_id: m.name for m in roster.values()}}
         # who talks in the room, for the briefs — never himself
@@ -159,6 +178,7 @@ class Herald:
         self.voice_id = env("HERMES_VOICE_ID", "").strip()
         # the key stays in this process: out of the environment, never in a prompt, a log or the state
         key = os.environ.pop(KEY_VAR, "").strip()
+        self._voice_key = key  # v5.4: the recording speaks in every member's voice, the owner's cloned one too
         if tts is not None:
             self.tts: ElevenLabsTTS | None = tts
         else:
@@ -416,6 +436,142 @@ class Herald:
                      "voice" if why is None else f"text: {why}")
             return ok
 
+    # --- the recording (v5.4) -----------------------------------------------------------------------------------------
+    async def fetch_events(self, start_ms: int, end_ms: int) -> tuple[list[Event], bool]:
+        """Agora's text and audio messages in [start, end), oldest first, as the recording reads them — paged back
+        like `fetch`, bounded; and whether the read completed."""
+        token = getattr(self.client, "next_batch", None)
+        out: list[Event] = []
+        for _ in range(MAX_PAGES * 2):
+            resp = await self.client.room_messages(self.cfg.room_id, start=token, direction=MessageDirection.back,
+                                                   limit=PAGE)
+            if isinstance(resp, RoomMessagesError):
+                log.error("reading the room failed: %s", resp.status_code or "error")
+                return [], False
+            older = False
+            for e in resp.chunk:
+                ts = int(getattr(e, "server_timestamp", 0) or 0)
+                if ts < start_ms:
+                    older = True
+                    continue
+                if ts >= end_ms:
+                    continue
+                if isinstance(e, RoomMessageText):
+                    out.append(Event(str(e.event_id), e.sender, ts, "text", e.body, edit=is_edit(e)))
+                elif isinstance(e, RoomMessageAudio):
+                    info = ((getattr(e, "source", None) or {}).get("content") or {}).get("info") or {}
+                    mime = info.get("mimetype") if isinstance(info, dict) and isinstance(info.get("mimetype"), str) \
+                        else "audio/ogg"
+                    out.append(Event(str(e.event_id), e.sender, ts, "audio", e.body, mxc=getattr(e, "url", "") or "",
+                                     mime=mime, caption=voice_caption(e), edit=is_edit(e)))
+            end = getattr(resp, "end", None)
+            if older or not resp.chunk or not isinstance(end, str) or end == token:
+                return list(reversed(out)), True
+            token = end
+        return list(reversed(out)), True  # bounded: the newest of a very long stretch
+
+    async def record_command(self, text: str) -> bool:
+        period = recording_request(text, self.clock(), self.tz)
+        if period is None:
+            return False
+        return await self.record(*period)
+
+    def _tts_for(self, voice_id: str) -> ElevenLabsTTS | None:
+        if not self._voice_key or not VOICE_ID_RE.match(voice_id or ""):
+            return None
+        return ElevenLabsTTS(self._voice_key, voice_id)
+
+    async def record(self, start_ms: int, end_ms: int) -> bool:
+        """The Agora recording (v5.4): the stretch's lines in the voices of those who said them, one audio file (or
+        parts) in the private room, then one line of text. Every TTS call is his own budget's."""
+        async with self._busy:
+            if await self.ensure_private_room() is None:
+                return False
+            await self._typing(True)
+            try:
+                events, complete = await self.fetch_events(start_ms, end_ms)
+                if not complete:
+                    await self.send_text("Сувої Агори зараз не читаються — спробуй трохи згодом.")
+                    return False
+                speaking = {uid for uid in self.voice_ids if uid != self.cfg.owner}
+                plan = plan_recording(events, self.cfg.owner, speaking)
+                if not plan:
+                    await self.send_text("У цей час Агора мовчала.")
+                    log.info("recording: nothing in the period")
+                    return True
+                lines = [p for p in plan if p.kind != "gap"]
+                # a day's stretch takes minutes; the typing shows for 30 s only
+                await self.send_text(f"Збираю запис — {len(lines)} реплік, це кілька хвилин.")
+                used, budget = self.month_used(self.clock()), self.monthly_chars
+                sounds: list[tuple[bytes, bool]] = []
+                left_out = spoken = 0
+
+                async def speak(voice_id: str, line: str) -> bytes | None:
+                    nonlocal used, spoken
+                    tts = self._tts_for(voice_id)
+                    if tts is None or used + len(line) > budget:
+                        return None
+                    pcm = await tts.synth(line)
+                    self.record_tts(len(line), pcm is not None)
+                    if pcm is None:
+                        return None
+                    used, spoken = used + len(line), spoken + 1
+                    return await decode_to_pcm(pcm, raw=True)
+
+                opening = await speak(self.voice_id, opening_line(lines[0].ts, lines[-1].ts, self.tz))
+                if opening:
+                    sounds.append((opening, True))
+                for piece in plan:
+                    pcm = None
+                    if piece.kind == "audio":
+                        data = await download(self.client, piece.mxc, TRANSCRIBE_MAX_BYTES)
+                        pcm = await decode_to_pcm(data) if data else None
+                    elif piece.kind == "speak":
+                        pcm = await speak(self.voice_ids.get(piece.speaker, ""), piece.text)
+                    else:
+                        pcm = await speak(self.voice_id, gap_line(piece.ts, self.tz))
+                        if pcm:
+                            sounds.append((pcm, True))
+                        continue
+                    if pcm:
+                        sounds.append((pcm, False))
+                    else:
+                        left_out += 1
+                closing = await speak(self.voice_id, CLOSING)
+                if closing:
+                    sounds.append((closing, True))
+                if left_out == len(lines):
+                    await self.send_text("Запис не склався: жодної репліки не вдалося озвучити.")
+                    log.warning("recording: no line could be voiced (%d left out)", left_out)
+                    return False
+                parts = await assemble(sounds)
+                if not parts:
+                    await self.send_text("Запис не склався — спробуй трохи згодом.")
+                    log.error("recording: nothing could be assembled")
+                    return False
+                day = local_now(lines[0].ts, self.tz).strftime("%Y-%m-%d")
+                total_ms = 0
+                for i, (ogg, dur) in enumerate(parts, 1):
+                    name = f"Агора {day}.ogg" if len(parts) == 1 else f"Агора {day} ({i} з {len(parts)}).ogg"
+                    resp, _ = await self.client.upload(io.BytesIO(ogg), content_type="audio/ogg", filename=name,
+                                                       filesize=len(ogg))
+                    if not isinstance(resp, UploadResponse):
+                        log.error("recording upload failed: %s", getattr(resp, "status_code", type(resp).__name__))
+                        await self.send_text("Запис не вдалося надіслати — спробуй трохи згодом.")
+                        return False
+                    await self.send_private({"msgtype": "m.audio", "body": name, "url": resp.content_uri,
+                                             "info": {"mimetype": "audio/ogg", "size": len(ogg), "duration": dur}})
+                    total_ms += dur
+                first = local_now(lines[0].ts, self.tz)
+                last = local_now(lines[-1].ts, self.tz)
+                await self.send_text(f"Агора, {first:%H:%M}–{last:%H:%M} · {round(total_ms / 60000)} хв · "
+                                     f"{len(lines)} реплік (озвучено зараз: {spoken}, пропущено: {left_out})")
+                log.info("recording: sent (%d parts, %d min, %d lines, %d spoken, %d left out)", len(parts),
+                         round(total_ms / 60000), len(lines), spoken, left_out)
+                return True
+            finally:
+                await self._typing(False)
+
     # --- hearing (v5.2) -----------------------------------------------------------------------------------------------
     async def send_transcript(self, voice_event_id: str, text: str) -> bool:
         """His one and only kind of Agora message: the transcript of the owner's voice, «🎙 Ich: …», a reply to it —
@@ -488,7 +644,10 @@ class Herald:
         self._heard = {**self._heard, eid: text}
         if len(self._heard) > HEARD_KEPT:
             self._heard = dict(list(self._heard.items())[-HEARD_KEPT:])
-        if asks_digest(text):
+        if asks_recording(text):
+            log.info("recording: asked by the owner (in voice)")
+            await self.record_command(text)
+        elif asks_digest(text):
             log.info("digest: asked by the owner (in voice)")
             await self.digest(asked=True)
         else:
@@ -508,6 +667,9 @@ class Herald:
             elif what == "digest":
                 log.info("digest: asked by the owner")
                 self._spawn(self.digest(asked=True))
+            elif what == "record":
+                log.info("recording: asked by the owner")
+                self._spawn(self.record_command(event.body))
             elif what == "ask":
                 log.info("ask: a question from the owner")
                 self._spawn(self.answer(event.body, str(getattr(event, "event_id", "") or "")))
