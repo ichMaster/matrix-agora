@@ -8,12 +8,19 @@ reads it from the homeserver when asked, and the only thing that remains is the 
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import os
 import re
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+from agents.voice import RATE, encode_opus
 from agents.world import MONTHS_GEN
+
+log = logging.getLogger("agent.recording")
 
 RECORD_WORDS = frozenset({"запис", "записи", "запиши"})
 RECORD_MAX_WORDS = 6
@@ -137,3 +144,95 @@ def opening_line(first_ts: int, last_ts: int, tz: str) -> str:
     first = datetime.fromtimestamp(first_ts / 1000, ZoneInfo(tz))
     last = datetime.fromtimestamp(last_ts / 1000, ZoneInfo(tz))
     return f"Агора, {first.day} {MONTHS_GEN[first.month - 1]}, з {HOURS_GEN[first.hour]} до {HOURS_GEN[last.hour]}."
+
+
+# --- the assembly -----------------------------------------------------------------------------------------------------
+PAUSE_S = 0.5             # between two lines
+MARK_PAUSE_S = 1.5        # around a time mark
+PART_MAX_S = 3600         # a part at most an hour: ~14.4 MB of Opus at 32 kb/s, under the homeserver's 20 MiB
+DECODE_TIMEOUT_S = 120
+LOUDNORM = "loudnorm=I=-18:TP=-2:LRA=11"  # a phone's voice and an ElevenLabs voice equally loud
+_OUT = ("-af", LOUDNORM, "-f", "s16le", "-ar", str(RATE), "-ac", "1", "pipe:1")
+
+
+def decode_argv(path: str | None) -> list[str]:
+    """ffmpeg's fixed argv: a file (any format, seekable — an m4a needs it) or raw 24 kHz PCM from stdin, to
+    levelled s16le 24 kHz mono on stdout."""
+    head = ["ffmpeg", "-hide_banner", "-loglevel", "error"]
+    src = ["-i", path] if path else ["-f", "s16le", "-ar", str(RATE), "-ac", "1", "-i", "pipe:0"]
+    return [*head, *src, *_OUT]
+
+
+async def decode_to_pcm(data: bytes, raw: bool = False) -> bytes | None:
+    """A voice message's bytes (or a TTS's raw PCM) → levelled PCM; None on any failure (logged by its code)."""
+    path = None
+    try:
+        if not raw:
+            fd, path = tempfile.mkstemp(suffix=".audio")
+            with os.fdopen(fd, "wb") as f:
+                f.write(data)
+        proc = await asyncio.create_subprocess_exec(*decode_argv(path), stdin=asyncio.subprocess.PIPE,
+                                                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        try:
+            out, _ = await asyncio.wait_for(proc.communicate(input=data if raw else None), timeout=DECODE_TIMEOUT_S)
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
+            log.error("decode timed out")
+            return None
+        if proc.returncode != 0 or not out:
+            log.error("decode failed: ffmpeg exit %s", proc.returncode)
+            return None
+        return out[: len(out) - len(out) % 2]
+    except OSError as exc:
+        log.error("decode failed: %s", type(exc).__name__)
+        return None
+    finally:
+        if path:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+
+def silence(seconds: float) -> bytes:
+    return b"\x00\x00" * int(RATE * seconds)
+
+
+def pcm_seconds(pcm: bytes) -> float:
+    return len(pcm) / 2 / RATE
+
+
+def split_parts(durations: list[float], max_s: float = PART_MAX_S) -> list[list[int]]:
+    """The pieces' indices grouped into parts of at most `max_s` seconds, cut only between pieces (a piece longer
+    than a part is a part of its own)."""
+    parts: list[list[int]] = []
+    current: list[int] = []
+    total = 0.0
+    for i, d in enumerate(durations):
+        if current and total + d > max_s:
+            parts.append(current)
+            current, total = [], 0.0
+        current.append(i)
+        total += d
+    if current:
+        parts.append(current)
+    return parts
+
+
+async def assemble(sounds: list[tuple[bytes, bool]], max_s: float = PART_MAX_S) -> list[tuple[bytes, int]]:
+    """Levelled PCM pieces (each with whether it is a time mark) → the parts as OGG/Opus with their length in ms:
+    a short pause between lines, a longer one around a time mark, a new part before an hour is passed."""
+    blocks = []
+    for pcm, mark in sounds:
+        pad = silence(MARK_PAUSE_S if mark else PAUSE_S)
+        blocks.append(pad + pcm + (pad if mark else b""))
+    out = []
+    for part in split_parts([pcm_seconds(b) for b in blocks], max_s):
+        pcm = b"".join(blocks[i] for i in part) + silence(PAUSE_S)
+        ogg = await encode_opus(pcm)
+        if ogg is None:
+            log.error("recording: a part could not be encoded")
+            return []
+        out.append((ogg, int(pcm_seconds(pcm) * 1000)))
+    return out
