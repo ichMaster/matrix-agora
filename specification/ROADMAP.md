@@ -864,6 +864,9 @@ own, and every member of the room has a friction with them.
   Соломія).
 - **Two men and two women of different ages**, so their voices never blur in a recording.
 - **A conflict among all of them:** each pair has its own friction.
+- **A shared past.** Ada and Bruno already know Леон and Мія, and the frictions come with that history. VISION's
+  rule «the personas get no description of the newcomers» was written for non-human members and says it must
+  be revisited if people join. For people it becomes a shared past, written into every person's canon.
 - **The radio theatre** where they act is a version of its own in another chat, from the owner's concept document
   (later). In Agora they just talk.
 
@@ -899,7 +902,8 @@ own, and every member of the room has a friction with them.
   speakers' voice budget (`VOICE_MONTHLY_CHARS`, 100,000) are checked on `edge`; the owner decides the values.
 - **Automatic from the roster:** Hermes's members, the recording's voices, the panel's cards and the moves'
   addressees.
-- **ARCHITECTURE:** the roster, the env names and the compose services.
+- **ARCHITECTURE:** the roster, the env names and the compose services. **VISION:** the newcomers rule — people who
+  join come with a shared past.
 
 **DoD:**
 - (Manual, owner) Леон and Мія join Agora, talk in their own voices, ask and answer; Ada and Bruno know them.
