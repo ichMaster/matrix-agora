@@ -72,13 +72,14 @@ from agents.nudge import parse_hours
 from agents.recording import (
     CLOSING,
     GAP_PAUSE_S,
+    RECORD_SKILL,
     Event,
-    asks_recording,
     assemble,
     decode_to_pcm,
+    now_line,
     opening_line,
     plan_recording,
-    recording_request,
+    recording_mark,
     silence,
 )
 from agents.roster import Member, load_roster, speakers
@@ -120,8 +121,6 @@ def route(room_id: str, sender: str, text: str, cfg: AgentConfig, private_room: 
         return "ignored", "foreign-room"
     if sender != cfg.owner:
         return "ignored", "sender-not-owner"
-    if asks_recording(text):
-        return "record", "asked"  # v5.4: the Agora recording, before «підсумок» and the chat
     return ("digest", "asked") if asks_digest(text) else ("ask", "question")
 
 
@@ -414,7 +413,8 @@ class Herald:
     async def answer(self, question: str, event_id: str | None = None, voice: bool = False) -> bool:
         """The owner wrote to him (not «підсумок»): a conversation — he answers what was written, briefly, with the
         room's last days as reference and your recent lines as context (the owner, 2026-10-18). Asked in voice
-        (v5.2), he answers in voice too, then the text."""
+        (v5.2), he answers in voice too, then the text. v5.4: asked for a recording, his answer ends with the line
+        naming its period (`RECORD_SKILL`) — the line is never sent; the recording follows his words."""
         async with self._busy:
             if await self.ensure_private_room() is None:
                 return False
@@ -426,16 +426,23 @@ class Herald:
             messages = collect(newest_first, since_ms=since, limit=ASK_MAX)
             dialogue = await self.recent_dialogue(event_id)
             system, contents = chat_request(self.cfg.canon, digest_lines(messages, self.names, self.tz, True),
-                                            dialogue_lines(dialogue, self.names), question, self.members)
+                                            dialogue_lines(dialogue, self.names), question, self.members,
+                                            skills=RECORD_SKILL, now=now_line(self.clock(), self.tz))
             text, _ = await self._think(contents, system, "ask", ANSWER_MAX_CHARS, level=CHAT_THINKING)
             if text is None:
                 log.error("ask: no answer (%d messages read)", len(messages))
                 return False
-            why = await self.send_voice(text, self.clock()) if voice else "asked in text"
-            ok = await self.send_text(text) or why is None
+            text, period = recording_mark(text, self.clock(), self.tz)
+            ok, why = period is not None, "no words"
+            if text:
+                why = await self.send_voice(text, self.clock()) if voice else "asked in text"
+                ok = await self.send_text(text) or why is None or ok
             log.info("ask: %s (%d messages read, %s)", "answered" if ok else "not sent", len(messages),
                      "voice" if why is None else f"text: {why}")
-            return ok
+        if period is not None:  # after the lock: the recording takes it again
+            log.info("recording: asked by the owner (%d min)", round((period[1] - period[0]) / 60000))
+            return await self.record(*period, announce=not text) and ok
+        return ok
 
     # --- the recording (v5.4) -----------------------------------------------------------------------------------------
     async def fetch_events(self, start_ms: int, end_ms: int) -> tuple[list[Event], bool]:
@@ -471,20 +478,15 @@ class Herald:
             token = end
         return list(reversed(out)), True  # bounded: the newest of a very long stretch
 
-    async def record_command(self, text: str) -> bool:
-        period = recording_request(text, self.clock(), self.tz)
-        if period is None:
-            return False
-        return await self.record(*period)
-
     def _tts_for(self, voice_id: str) -> ElevenLabsTTS | None:
         if not self._voice_key or not VOICE_ID_RE.match(voice_id or ""):
             return None
         return ElevenLabsTTS(self._voice_key, voice_id)
 
-    async def record(self, start_ms: int, end_ms: int) -> bool:
+    async def record(self, start_ms: int, end_ms: int, announce: bool = True) -> bool:
         """The Agora recording (v5.4): the stretch's lines in the voices of those who said them, one audio file (or
-        parts) in the private room, then one line of text. Every TTS call is his own budget's."""
+        parts) in the private room, then one line of text. Every TTS call is his own budget's. `announce`: the
+        «Збираю запис…» line, when his answer said nothing first."""
         async with self._busy:
             if await self.ensure_private_room() is None:
                 return False
@@ -501,8 +503,8 @@ class Herald:
                     log.info("recording: nothing in the period")
                     return True
                 lines = [p for p in plan if p.kind != "gap"]
-                # a day's stretch takes minutes; the typing shows for 30 s only
-                await self.send_text(f"Збираю запис — {len(lines)} реплік, це кілька хвилин.")
+                if announce:  # a day's stretch takes minutes; the typing shows for 30 s only
+                    await self.send_text(f"Збираю запис — {len(lines)} реплік, це кілька хвилин.")
                 used, budget = self.month_used(self.clock()), self.monthly_chars
                 sounds: list[tuple[bytes, bool]] = []
                 left_out = spoken = 0
@@ -643,10 +645,7 @@ class Herald:
         self._heard = {**self._heard, eid: text}
         if len(self._heard) > HEARD_KEPT:
             self._heard = dict(list(self._heard.items())[-HEARD_KEPT:])
-        if asks_recording(text):
-            log.info("recording: asked by the owner (in voice)")
-            await self.record_command(text)
-        elif asks_digest(text):
+        if asks_digest(text):
             log.info("digest: asked by the owner (in voice)")
             await self.digest(asked=True)
         else:
@@ -666,9 +665,6 @@ class Herald:
             elif what == "digest":
                 log.info("digest: asked by the owner")
                 self._spawn(self.digest(asked=True))
-            elif what == "record":
-                log.info("recording: asked by the owner")
-                self._spawn(self.record_command(event.body))
             elif what == "ask":
                 log.info("ask: a question from the owner")
                 self._spawn(self.answer(event.body, str(getattr(event, "event_id", "") or "")))

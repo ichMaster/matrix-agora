@@ -746,7 +746,7 @@ class VoicedTTS:
         return b"\x01\x00" * 2400
 
 
-def recording_herald(tmp_path, monkeypatch, events, budget="150000"):
+def recording_herald(tmp_path, monkeypatch, events, budget="150000", llm=None):
     from agents import recording as rec
     SPOKEN.clear()
     for k, v in {"OWNER_VOICE_ID": "OwnerVoice012345678", "ADA_VOICE_ID": "AdaVoice0123456789",
@@ -769,7 +769,7 @@ def recording_herald(tmp_path, monkeypatch, events, budget="150000"):
     monkeypatch.setattr(herald_mod, "decode_to_pcm", fake_decode)
     monkeypatch.setattr(herald_mod, "ElevenLabsTTS", VoicedTTS)
     monkeypatch.setattr(rec, "encode_opus", fake_encode)
-    h, client = make(tmp_path, monkeypatch, events=events, state=DigestState(room="!dm"))
+    h, client = make(tmp_path, monkeypatch, events=events, state=DigestState(room="!dm"), llm=llm)
     h.started = True
     return h, client, downloads
 
@@ -781,10 +781,34 @@ def agora_voice(sender, eid, ts):
                                                 "info": {"mimetype": "audio/ogg", "size": 9, "duration": 900}}})
 
 
-def test_the_recording_command_routes_before_the_digest_and_the_chat():
-    assert route("!dm", OWNER, "запис за сьогодні", CFG, "!dm") == ("record", "asked")
+def test_a_recording_is_no_command_but_his_chat_understands_it():
+    """The owner, 2026-10-20: no command — a skill; any wording reaches the chat, «підсумок» still the digest."""
+    assert route("!dm", OWNER, "запис за сьогодні", CFG, "!dm") == ("ask", "question")
     assert route("!dm", OWNER, "Підсумок!", CFG, "!dm") == ("digest", "asked")
     assert route(AGORA, OWNER, "запис", CFG, "!dm") == ("count", "agora")         # never in Agora
+
+
+def test_asked_for_a_recording_he_answers_and_records_the_period_he_named(tmp_path, monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
+    llm = FakeLLM(f"Зараз зберу тобі ранок. {SECRET}\nЗАПИС: 2026-10-17 10:00 — 2026-10-17 12:00")
+    events = [ev(OWNER, "Пізніше", ms(13), "$late"), ev(OWNER, "Привіт усім", ms(10, 5), "$x")]
+    h, client, _ = recording_herald(tmp_path, monkeypatch, events, llm=llm)
+    assert asyncio.run(h.answer("збери мені Агору з десятої до дванадцятої", "$q")) is True
+    call = llm.calls[0]
+    assert "зібрати запис Агори" in call.system and "Зараз: субота, 17 жовтня 2026, 14:00." in call.contents
+    sent = private(client)
+    assert sent[0] == {"msgtype": "m.text", "body": f"Зараз зберу тобі ранок. {SECRET}"}    # the line never sent
+    assert [c["msgtype"] for c in sent[1:]] == ["m.audio", "m.text"] and "Збираю" not in str(sent)
+    assert ("OwnerVoice012345678", "Привіт усім") in SPOKEN and all("Пізніше" != t for _, t in SPOKEN)
+    assert "recording: asked by the owner (120 min)" in caplog.text
+    assert all(SECRET not in r.getMessage() for r in caplog.records)
+
+
+def test_a_plain_question_records_nothing(tmp_path, monkeypatch):
+    h, client, _ = recording_herald(tmp_path, monkeypatch, [ev(OWNER, "x", ms(10), "$x")],
+                                    llm=FakeLLM("Агора спить, як і належить."))
+    assert asyncio.run(h.answer("що там?", "$q")) is True
+    assert [c["msgtype"] for c in private(client)] == ["m.text"] and client.uploads == []
 
 
 def test_the_recording_speaks_each_line_in_its_voice_and_sends_one_file(tmp_path, monkeypatch, caplog):
@@ -870,13 +894,16 @@ def test_an_empty_period_gets_a_short_line_and_a_partial_read_says_so(tmp_path, 
     assert private(client2)[0]["body"].startswith("Сувої Агори зараз не читаються")
 
 
-def test_a_spoken_recording_command_records(tmp_path, monkeypatch):
-    h, client, _ = recording_herald(tmp_path, monkeypatch, [ev(OWNER, "Привіт", ms(10), "$x")])
-    h.stt = FakeSTT("запис за сьогодні")
+def test_asked_in_voice_he_answers_in_voice_then_records(tmp_path, monkeypatch):
+    llm = FakeLLM("Зараз.\nЗАПИС: 2026-10-17 00:00 — 2026-10-17 14:00")
+    h, client, _ = recording_herald(tmp_path, monkeypatch, [ev(OWNER, "Привіт", ms(10), "$x")], llm=llm)
+    h.stt = FakeSTT("запиши мені сьогоднішню Агору")
 
     async def fake_download(client, mxc, max_bytes):
         return b"OggS"
 
     monkeypatch.setattr(herald_mod, "download", fake_download)
     asyncio.run(heard(h, "!dm", voice(OWNER, "$q")))
-    assert [c["msgtype"] for c in private(client)] == ["m.text", "m.audio", "m.text"]
+    sent = private(client)
+    assert "org.matrix.msc3245.voice" in sent[0] and sent[1] == {"msgtype": "m.text", "body": "Зараз."}
+    assert [c["msgtype"] for c in sent[2:]] == ["m.audio", "m.text"]

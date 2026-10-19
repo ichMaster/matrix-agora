@@ -796,7 +796,7 @@ Hermes's text-to-speech pipeline from v5.1.
 - the `m.audio` content and its relation;
 - no audio in the logs.
 
-### v5.4 — The Agora recording, on command
+### v5.4 — The Agora recording, on request
 
 **Status:** ⏳ planned.
 
@@ -804,13 +804,17 @@ Hermes's text-to-speech pipeline from v5.1.
 of the one who said it, assembled by Hermes when the owner asks, sent to his private room.
 
 **Owner decisions** (2026-10-20):
-- **On command only:** «запис за сьогодні», «запис за вчора», «запис з 14:00» (typed or spoken) in Hermes's room;
+- **Only when asked** in Hermes's room, typed or spoken. First as a command («запис за сьогодні», «за вчора», «з
+  14:00»); the same day the owner made it **a skill, not a command**: Hermes understands the request from the
+  conversation («збери мені Агору з п'ятої до сьомої вчора») and names the period himself;
 - **the owner's typed lines in his own cloned voice** (an ElevenLabs Instant Voice Clone, `OWNER_VOICE_ID`, given
   2026-10-20); his voice messages go in as they are;
 - **into Hermes's private room**, as an audio file — not into Agora.
 
 **Tasks:**
-- **The command** (pure): the period from the owner's words; anything else stays the conversation or «підсумок».
+- **The skill:** his chat brief describes the recording; asked for one, his answer ends with one line «ЗАПИС:
+  РРРР-ММ-ДД ГГ:ХХ — РРРР-ММ-ДД ГГ:ХХ» (the time now is in the prompt), which code reads (pure: it parses, ends no
+  later than now, is at most a day) and never sends; anything else stays the conversation or «підсумок».
 - **The plan** (pure): the Agora messages of the period in order, each line mapped to its sound:
   - a member's voiced line (the labelled voice message and the text that follows it) → the voice as it is;
   - the owner's voice message → as it is; Hermes's transcript of it → left out;
@@ -819,21 +823,22 @@ of the one who said it, assembled by Hermes when the owner asks, sent to his pri
   - an action purr (`*…*`) → left out.
 - **The assembly:** each piece downloaded (the authenticated media API) or spoken, decoded to PCM, the loudness
   levelled (ffmpeg `loudnorm`), short pauses between lines and a longer one after a silence of over 15 minutes (no
-  spoken time — the owner, 2026-10-20), Hermes's opening («Агора, <дата>, з … до …») and closing, encoded once to OGG/Opus;
-  split into parts when over the homeserver's upload limit.
+  spoken time — the owner, 2026-10-20), Hermes's opening («Агора, <дата>, з … до …») and closing, encoded once
+  to OGG/Opus; split into parts when over the homeserver's upload limit.
 - **The delivery:** an `m.audio` file (not a voice message) named «Агора <дата>.ogg» in Hermes's room, with one line
   of text — the length, the number of lines, the period; typing while he assembles; usage lines for every TTS call.
 - **No archive:** nothing is kept but the sent file in the homeserver's media store (the room already holds its
   history); VISION's non-goal on raw archives notes that the recording is assembled from the room on demand.
-- **ARCHITECTURE:** the recording flow, `OWNER_VOICE_ID`, the command.
+- **ARCHITECTURE:** the recording flow, `OWNER_VOICE_ID`, the skill.
 
 **DoD:**
-- (Manual, owner) «запис за сьогодні» in Hermes's room brings one audio file of the day's Agora, each line in its
+- (Manual, owner) Asked for a recording in his own words in Hermes's room, he brings one audio file of that
+  stretch of Agora, each line in its
   speaker's voice — Ada, Bruno, Кіт, Клод, and his own (typed lines in his cloned voice, voice messages as they were).
 - (Manual, owner) A period with no talk gets a short line, not a file.
 
 **Tests:** unit:
-- the command and its periods;
+- the period line of his answer (parsed, bounded, never sent);
 - the plan: pairing a voice with its text, each kind of line, the left-out ones;
 - the assembly with ffmpeg and the downloads mocked (order, pauses, the split);
 - the delivery content;

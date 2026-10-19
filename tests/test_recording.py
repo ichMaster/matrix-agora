@@ -1,4 +1,4 @@
-"""v5.4 — the Agora recording: the command and its period, the plan of pieces, the spoken time words (pure)."""
+"""v5.4 — the Agora recording: the period his answer names, the plan of pieces, the opening (pure); the assembly."""
 
 import asyncio
 import os
@@ -9,13 +9,16 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from agents import recording as rec
+from agents.logic import BANNED_RE
 from agents.recording import (
     CLOSING,
+    RECORD_SKILL,
     Event,
     Piece,
+    now_line,
     opening_line,
     plan_recording,
-    recording_request,
+    recording_mark,
 )
 
 TZ = "Europe/Kyiv"
@@ -27,29 +30,44 @@ def ms(day, hour, minute=0, second=0):
     return int(datetime(2026, 10, day, hour, minute, second, tzinfo=ZoneInfo(TZ)).timestamp() * 1000)
 
 
-# --- the command ----------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("text,period", [
-    ("запис за сьогодні", (ms(20, 0), ms(20, 14))),
-    ("Запис!", (ms(20, 0), ms(20, 14))),
-    ("запиши мені Агору за вчора", (ms(19, 0), ms(20, 0))),
-    ("запис з 10", (ms(20, 10), ms(20, 14))),
-    ("запис з 9:30", (ms(20, 9, 30), ms(20, 14))),
-    ("запис з 23", (ms(20, 0), ms(20, 14))),          # later than now: the whole of today
+# --- the skill: the period his answer names ----------------------------------------------------------------------
+@pytest.mark.parametrize("answer,words,period", [
+    ("Зараз зберу тобі вечір.\nЗАПИС: 2026-10-19 17:00 — 2026-10-19 19:00", "Зараз зберу тобі вечір.",
+     (ms(19, 17), ms(19, 19))),
+    ("Лови.\n**ЗАПИС: 2026-10-19 17.30 – 2026-10-19 19:05**", "Лови.", (ms(19, 17, 30), ms(19, 19, 5))),
+    ("ЗАПИС: 2026-10-19 22:00 - 2026-10-20 02:00", "", (ms(19, 22), ms(20, 2))),            # across midnight
+    ("Увесь учорашній.\n«ЗАПИС: 2026-10-19 00:00 — 2026-10-19 24:00»", "Увесь учорашній.", (ms(19, 0), ms(20, 0))),
+    ("Збираю.\nЗАПИС: 2026-10-20 00:00 — 2026-10-20 23:59", "Збираю.", (ms(20, 0), ms(20, 14))),  # never past now
 ])
-def test_the_command_and_its_period(text, period):
-    assert recording_request(text, ms(20, 14), TZ) == period
+def test_the_period_line_is_read_and_never_sent(answer, words, period):
+    assert recording_mark(answer, ms(20, 14), TZ) == (words, period)
 
 
-@pytest.mark.parametrize("text", ["підсумок", "що Ада казала про запис у студії вчора ввечері коли ми говорили?", ""])
-def test_anything_else_is_not_a_recording(text):
-    assert recording_request(text, ms(20, 14), TZ) is None
+@pytest.mark.parametrize("answer", [
+    "Збираю.\nЗАПИС: 2026-10-19 19:00 — 2026-10-19 17:00",        # ends before it starts
+    "Збираю.\nЗАПИС: 2026-10-17 10:00 — 2026-10-19 10:00",        # two days
+    "Збираю.\nЗАПИС: 2026-10-21 10:00 — 2026-10-21 12:00",        # tomorrow
+    "Збираю.\nЗАПИС: 2026-13-40 10:00 — 2026-10-19 12:00",        # no such day
+])
+def test_a_wrong_period_records_nothing_and_the_line_is_still_never_sent(answer):
+    assert recording_mark(answer, ms(20, 14), TZ) == ("Збираю.", None)
+
+
+def test_an_answer_with_no_line_is_just_an_answer():
+    assert recording_mark("Привіт! Як ти?", ms(20, 14), TZ) == ("Привіт! Як ти?", None)
+    assert recording_mark("Про запис: Ада просила ЗАПИС у студії.", ms(20, 14), TZ)[1] is None
 
 
 def test_yesterday_across_the_dst_switch_is_its_whole_local_day():
-    """2026-10-25: Kyiv falls back an hour — that day is 25 hours long."""
+    """2026-10-25: Kyiv falls back an hour — that day is 25 hours long, and still a day."""
     now = int(datetime(2026, 10, 26, 12, 0, tzinfo=ZoneInfo(TZ)).timestamp() * 1000)
-    start, end = recording_request("запис за вчора", now, TZ)
-    assert (end - start) == 25 * 3600 * 1000
+    _, (start, end) = recording_mark("ЗАПИС: 2026-10-25 00:00 — 2026-10-26 00:00", now, TZ)
+    assert end - start == 25 * 3600 * 1000
+
+
+def test_the_skill_and_the_time_now():
+    assert "ЗАПИС: РРРР-ММ-ДД ГГ:ХХ — РРРР-ММ-ДД ГГ:ХХ" in RECORD_SKILL and not BANNED_RE.search(RECORD_SKILL)
+    assert now_line(ms(20, 1, 5), TZ) == "Зараз: вівторок, 20 жовтня 2026, 01:05."
 
 
 # --- the plan -------------------------------------------------------------------------------------------------------

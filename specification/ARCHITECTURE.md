@@ -148,9 +148,8 @@ joins only the owner's invite into Agora and leaves any other.
   brings it back.
 - **His allowlist** (`route` for text, `route_audio` for voice — both pure; an edit — `m.replace` — is never a new line for him: not counted, digested or answered, `is_edit`, review #9): an Agora text message is **read, never answered** — it only counts toward the next
   digest (not his own, not a purr; no log line per message); in the private room only the owner's `RoomMessageText`
-  is handled — from v5.4 «запис …» (`asks_recording`: at most six words holding «запис» / «записи» / «запиши»)
-  brings the recording, «підсумок» (`asks_digest`: at most three words holding «підсумок» / «підсумки» / «підсумуй»)
-  a digest, anything else is a question; everything else is logged as `ignored`. **Every send goes through
+  is handled — «підсумок» (`asks_digest`: at most three words holding «підсумок» / «підсумки» / «підсумуй») brings a
+  digest, anything else is a question (from v5.4 a request for a recording too — a skill, not a command); everything else is logged as `ignored`. **Every send goes through
   `send_private`**, which refuses any room but the private one — Agora never hears a word of his own; from v5.2 his
   only Agora message is a transcript of the owner's voice (`send_transcript`, below).
 - **The schedule.** A watcher ticks every minute: `digest_due` — at least `HERMES_DIGEST_EVERY_S` (4 h) since the last
@@ -196,18 +195,23 @@ joins only the owner's invite into Agora and leaves any other.
   his own transcripts in Agora as the owner's lines (`_as_read`) and leave the raw audio out. Anything else's voice,
   or another room, is `ignored`; an over-cap, unheard or failed one is logged by reason and stays silent.
   `DEEPGRAM_API_KEY` leaves the environment at start like the ElevenLabs key; without it he logs `hearing off`.
-- **The recording (v5.4, on command only — the owner, 2026-10-20).** «запис» / «запис за сьогодні» (today until
-  now), «запис за вчора» (yesterday's whole local day), «запис з 14» / «з 14:30» (today from then) — typed or spoken
-  in his room (`recording_request`, `agents/recording.py`, pure) — bring one audio file of that stretch of Agora,
-  each line in the voice of the one who said it. Under the busy lock, typing on: he reads Agora's text and audio
+- **The recording (v5.4, only when asked — the owner, 2026-10-20: a skill, not a command).** His chat brief
+  carries `RECORD_SKILL` (`agents/recording.py`) and the contents the time now (`now_line`, «Зараз: вівторок, 20
+  жовтня 2026, 01:05.»): asked in any words, typed or spoken, for a recording of Agora («збери мені Агору з п'ятої
+  до сьомої вчора»), he answers with a short sentence and a last line «ЗАПИС: РРРР-ММ-ДД ГГ:ХХ — РРРР-ММ-ДД ГГ:ХХ»
+  (with no time named: today from midnight until now; «вчора»: yesterday's whole day; an hour not yet reached today:
+  yesterday's). `recording_mark` (pure) takes that line out — it is never sent — and keeps its period only when it
+  parses, starts before it ends (the end never past now) and is at most a day (25 h across the autumn switch). His
+  words go out as any answer (in voice when asked in voice); after the chat's lock, the recording of that period —
+  one audio file, each line in the voice of the one who said it. Under the busy lock, typing on: he reads Agora's text and audio
   events of the period (`fetch_events`, the same paging, at most `MAX_PAGES` × 2 pages; a failed page — no recording
   and «Сувої Агори зараз не читаються — спробуй трохи згодом.»). `plan_recording` turns them into pieces: a member's
   voice message as it is (its text from the same sender within 30 s is its words, left out; a voice with a caption
   is its own words), the owner's voice message as it is, the owner's typed line spoken in his cloned voice
   (`OWNER_VOICE_ID`), a member's text-only line in its own (`<NAME>_VOICE_ID`), an action purr, an edit, his own
   transcripts and any other sender left out, and 1.5 s more of quiet after more than 15 minutes of silence — no
-  spoken time (the owner, 2026-10-20). Nothing in the period: «У цей час Агора мовчала.» and no file. Otherwise a line «Збираю запис — N
-  реплік, це кілька хвилин.» (the typing shows for 30 s only), then each voice is downloaded (the 20 MB cap, read to its end) and
+  spoken time (the owner, 2026-10-20). Nothing in the period: «У цей час Агора мовчала.» and no file. Otherwise, when his answer said nothing
+  first, a line «Збираю запис — N реплік, це кілька хвилин.» (the typing shows for 30 s only), then each voice is downloaded (the 20 MB cap, read to its end) and
   each spoken line synthesised — every TTS call his own (`tts` usage lines in his file, within
   `HERMES_TTS_MONTHLY_CHARS`; past it, or with no voice id, a spoken line is left out; the speakers' budget is
   untouched); his opening («Агора, 19 жовтня, з десятої до двадцять третьої.») and the closing («Це
@@ -225,7 +229,8 @@ joins only the owner's invite into Agora and leaves any other.
 - **His log** names events only: the private room created, `digest: sent (N messages, M chars, voice | text:
   <reason>)`, `digest: nothing new`, `digest: asked by the owner` (v5.2 «in voice»), `ask: answered (N messages read,
   voice | text: <reason>)`, `hear: transcribed (agora | private, N s audio, M chars)`, `hear: nothing heard`, v5.4
-  `recording: sent (N parts, M min, K lines, J spoken, L left out)` and `recording: nothing in the period`, the
+  `recording: asked by the owner (N min)`, `recording: sent (N parts, M min, K lines, J spoken, L left out)`,
+  `recording: nothing in the period` and `recording: the asked period is not valid`, the
   guard's drops, `ignored` lines — never a text or a sound.
 
 ## Voice messages (v5.1)

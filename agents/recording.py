@@ -1,9 +1,12 @@
-"""v5.4 — the Agora recording, on command: a stretch of the room as one audio file, each line in the voice of the one
+"""v5.4 — the Agora recording, on request: a stretch of the room as one audio file, each line in the voice of the one
 who said it (ROADMAP §v5.4, ARCHITECTURE §The herald).
 
-The decisions are pure: the command and its period, and the plan — the room's events turned into pieces (a voice
-message as it is, a line to be spoken in its speaker's voice, a time mark). Nothing of the room is kept: Hermes
-reads it from the homeserver when asked, and the only thing that remains is the file he sends.
+No command (the owner, 2026-10-20): it is Hermes's skill. His chat brief describes it (`RECORD_SKILL`), he
+understands the request from the conversation, and his answer ends with one line naming the period
+(`recording_mark`). The decisions are pure: the period that line asks for, and the plan — the room's events turned
+into pieces (a voice message as it is, a line to be spoken in its speaker's voice, a long silence's pause). Nothing
+of the room is kept: Hermes reads it from the homeserver when asked, and the only thing that remains is the file he
+sends.
 """
 
 from __future__ import annotations
@@ -14,18 +17,17 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from agents.voice import RATE, encode_opus
-from agents.world import MONTHS_GEN
+from agents.world import MONTHS_GEN, WEEKDAYS
 
 log = logging.getLogger("agent.recording")
 
-RECORD_WORDS = frozenset({"запис", "записи", "запиши"})
-RECORD_MAX_WORDS = 6
+RECORD_MAX_MS = 25 * 3600 * 1000   # at most a day (the autumn day is 25 hours long)
 VOICE_TEXT_S = 30          # a member's text within this many seconds after its voice message is that voice's words
-GAP_MS = 15 * 60 * 1000    # a silence longer than this gets a spoken time mark
+GAP_MS = 15 * 60 * 1000    # a silence longer than this gets a longer pause
 
 # «першої» … — the genitive of an hour, for the opening's «з … до …»
 HOURS_GEN = ["опівночі", "першої", "другої", "третьої", "четвертої", "п'ятої", "шостої", "сьомої", "восьмої",
@@ -33,6 +35,15 @@ HOURS_GEN = ["опівночі", "першої", "другої", "третьої
              "шістнадцятої", "сімнадцятої", "вісімнадцятої", "дев'ятнадцятої", "двадцятої", "двадцять першої",
              "двадцять другої", "двадцять третьої"]
 CLOSING = "Це все з Агори. Гермес, ваш вісник."
+# the skill, in his chat brief: the request understood from the conversation, the period named in one line
+RECORD_SKILL = (
+    "Ти вмієш ще одне: зібрати запис Агори — один аудіофайл, де кожна репліка звучить голосом того, хто її сказав, "
+    "а рядки, які Ich набрав, — його власним голосом. Коли Ich просить запис, аудіо чи послухати розмову Агори за "
+    "якийсь час, відповідай одним коротким реченням, а останнім рядком напиши рівно: ЗАПИС: РРРР-ММ-ДД ГГ:ХХ — "
+    "РРРР-ММ-ДД ГГ:ХХ — початок і кінець за місцевим часом. Коли він не каже, за який час, — від півночі сьогодні "
+    "до тепер; «вчора» — увесь учорашній день, від півночі до півночі; година, що сьогодні ще не настала, — "
+    "учорашня. Не довше доби. Цей рядок пиши лише тоді, коли він справді просить запис, і ніколи його не пояснюй."
+)
 
 
 @dataclass(frozen=True)
@@ -61,37 +72,44 @@ class Piece:
     mime: str = "audio/ogg"
 
 
-def _local_midnight(day, tz: str) -> int:
-    return int(datetime.combine(day, time(0, 0), ZoneInfo(tz)).timestamp() * 1000)
+_MARK_RE = re.compile(
+    r"^[\s*`«\"']*ЗАПИС\s*:\s*(\d{4}-\d{2}-\d{2})[ T]+(\d{1,2})[:.](\d{2})\s*(?:—|–|-|до)\s*"
+    r"(\d{4}-\d{2}-\d{2})[ T]+(\d{1,2})[:.](\d{2})[\s*`»\"'.]*$", re.IGNORECASE | re.MULTILINE)
 
 
-def _words(text: str) -> list[str]:
-    return re.findall(r"[^\W_]+(?:['’][^\W_]+)?", (text or "").lower())
+def _at(day: str, hour: str, minute: str, zone: ZoneInfo) -> int:
+    d = date.fromisoformat(day)
+    h, m = int(hour), int(minute)
+    if h == 24 and m == 0:  # «24:00» — the next midnight
+        d, h = d + timedelta(days=1), 0
+    return int(datetime.combine(d, time(h, m), zone).timestamp() * 1000)
 
 
-def asks_recording(text: str) -> bool:
-    """A short owner message (at most six words) with «запис» / «записи» / «запиши»."""
-    words = _words(text)
-    return 0 < len(words) <= RECORD_MAX_WORDS and bool(RECORD_WORDS & set(words))
+def recording_mark(text: str, now_ms: int, tz: str) -> tuple[str, tuple[int, int] | None]:
+    """His chat answer → (its words for Ich without the «ЗАПИС: … — …» line, the period that line asks for). The
+    period is kept only when it parses, starts before it ends (its end never past now) and is at most a day;
+    otherwise None (logged, never the text)."""
+    m = _MARK_RE.search(text or "")
+    if not m:
+        return (text or "").strip(), None
+    words = (text[: m.start()] + text[m.end():]).strip()
+    zone = ZoneInfo(tz)
+    try:
+        start, end = _at(m[1], m[2], m[3], zone), _at(m[4], m[5], m[6], zone)
+    except ValueError:
+        log.warning("recording: the asked period does not parse")
+        return words, None
+    end = min(end, now_ms)
+    if not start < end or end - start > RECORD_MAX_MS:
+        log.warning("recording: the asked period is not valid")
+        return words, None
+    return words, (start, end)
 
 
-def recording_request(text: str, now_ms: int, tz: str) -> tuple[int, int] | None:
-    """The owner's «запис …» (`asks_recording`) — the period it asks for: «за вчора» the whole of yesterday;
-    «з HH» / «з HH:MM» today from then; otherwise today until now. None for anything else."""
-    if not asks_recording(text):
-        return None
-    low = (text or "").lower()
-    words = _words(text)
+def now_line(now_ms: int, tz: str) -> str:
+    """«Зараз: вівторок, 20 жовтня 2026, 01:05.» — so he can name the period he is asked for."""
     now = datetime.fromtimestamp(now_ms / 1000, ZoneInfo(tz))
-    today = _local_midnight(now.date(), tz)
-    if "вчора" in words:
-        return _local_midnight(now.date() - timedelta(days=1), tz), today
-    m = re.search(r"\bз\s+(\d{1,2})(?:[:.](\d{2}))?\b", low)
-    if m and int(m[1]) < 24 and int(m[2] or 0) < 60:
-        start = int(datetime.combine(now.date(), time(int(m[1]), int(m[2] or 0)), ZoneInfo(tz)).timestamp() * 1000)
-        if start < now_ms:
-            return start, now_ms
-    return today, now_ms
+    return f"Зараз: {WEEKDAYS[now.weekday()]}, {now.day} {MONTHS_GEN[now.month - 1]} {now.year}, {now:%H:%M}."
 
 
 def _action(text: str) -> bool:

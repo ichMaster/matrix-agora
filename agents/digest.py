@@ -245,12 +245,16 @@ def dialogue_lines(messages: list[Message], names: dict[str, str]) -> list[str]:
 
 
 def chat_request(canon: str, agora: list[str], dialogue: list[str], message: str,
-                 members: list[str]) -> tuple[str, str]:
-    """(system instruction, contents) of his answer to the owner: his canon and the chat brief; the room's last
-    days as reference, your recent conversation, then what Ich just wrote."""
+                 members: list[str], skills: str = "", now: str = "") -> tuple[str, str]:
+    """(system instruction, contents) of his answer to the owner: his canon, the chat brief and his skills (v5.4 the
+    recording); the room's last days as reference, your recent conversation, the time now, then what Ich just
+    wrote."""
     brief = CHAT_BRIEF.format(members=members_line(members))
     parts = ["Агора за останні дні:\n" + ("\n".join(agora) or "(тиша)")]
     if dialogue:
         parts.append("Ваша недавня розмова:\n" + "\n".join(dialogue))
+    if now:
+        parts.append(now)
     parts.append(f"Ich: {message}")
-    return f"{canon}\n\n{brief}", "\n\n".join(parts)
+    system = f"{canon}\n\n{brief}" + (f"\n\n{skills}" if skills else "")
+    return system, "\n\n".join(parts)
