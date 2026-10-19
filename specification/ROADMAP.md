@@ -859,7 +859,8 @@ own, and every member of the room has a friction with them.
     he tells theatre stories and argues with Bruno about sound; on stage he plays fathers, stepfathers and
     villains;
   - **Мія**, 22, a history student who works as a barista and reads detective novels by the dozen; she brings
-    a young view; on stage she plays heroines, maids and heiresses;
+    a young view; on stage she plays heroines, maids and heiresses; she speaks surzhyk, and her boyfriend was
+    killed by a Shahed in 2025 (the owner);
   - **пані Ірма**, 61, a former court stenographer who typed hundreds of trials and now works half-time in the
     city archive; in Agora she has a dry humour and an exact memory of who said what (added the same day; the
     owner's «Стефа» is Ada's late grandmother in her life story, so the name became Ірма).
