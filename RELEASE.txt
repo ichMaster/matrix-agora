@@ -1,3 +1,28 @@
+Version 5.4.0 (2026-10-20)
+---------------------------
+- Phase v5.4 - The Agora recording, on request (AGORA-095...098)
+- The plan (AGORA-095): a stretch of Agora as pieces - a member's voice
+  message as it is (its text within 30 s is its words), the owner's voice as
+  it is, the owner's typed lines and members' text-only lines to be spoken
+  in their own voices; purrs, edits, Hermes's transcripts and strangers left
+  out; a longer pause after 15 minutes of silence
+- The assembly (AGORA-096): each piece decoded and levelled (ffmpeg
+  loudnorm), short pauses, parts under an hour (under the homeserver's
+  20 MiB upload limit), OGG/Opus
+- Hermes records (AGORA-097): the room read on demand, the owner's typed
+  lines in his cloned voice (OWNER_VOICE_ID), every TTS call within
+  Hermes's own budget, an m.audio file in his room and one counts line;
+  short lines for an empty period or a partial read; nothing kept
+- Live with the owner (AGORA-098): media downloads read to the end (a v5.2
+  bug cut voices at their first chunk - in the recording and in long
+  transcripts); no spoken time marks; the recording is a skill Hermes
+  understands from the conversation ("zbery meni Ahoru z 17 do 19"), not a
+  command - his answer names the period in one line that is never sent
+- Code review: the period line read after his sentence or in a code fence;
+  five low findings left in the backlog
+- Released at the owner's word; the empty-period line was not seen live
+  (covered by tests)
+
 Version 5.3.0 (2026-10-19)
 ---------------------------
 - Phase v5.3 - The agents answer in voice (AGORA-091...094)

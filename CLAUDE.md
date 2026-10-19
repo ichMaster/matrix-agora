@@ -18,7 +18,7 @@ Read these before planning work; they are the project's contract with itself.
 
 Proof of concept: a private Matrix room where the owner and two LLM agents ("Ada" and "Bruno", Gemini 2.5 Flash) talk together. So far the repo holds only the specification. The panel is the point of the project: it will grow into an admin panel for simulations and agents like Lili; the chat is the first simulation (VISION §The direction).
 
-Latest release: v5.3.0 (phase v5.3 — the agents answer in voice: Ada, Bruno, the cat and Claude, each in their own ElevenLabs voice). Versions v0–v5 are complete (v5 Voice: phases v5.1–v5.3); v6 Лілі (the Lumi bridge) is planned, designed in the draft [specification/features/more-agents.md](specification/features/more-agents.md) (Ukrainian copy: `more-agents-UA.md`).
+Latest release: v5.4.0 (phase v5.4 — the Agora recording, on request: one audio file of a stretch of Agora, each line in the voice of the one who said it, a skill Hermes understands from the conversation). Versions v0–v5 are complete (v5 Voice: phases v5.1–v5.4); v6 Лілі (the Lumi bridge) is planned, designed in the draft [specification/features/more-agents.md](specification/features/more-agents.md) (Ukrainian copy: `more-agents-UA.md`).
 
 | Version | Phases | What it delivers |
 |---|---|---|
