@@ -45,7 +45,6 @@ def voiced_agent(tmp_path, monkeypatch, voice_id="AdaVoice0123456789", key=KEY, 
     agent = make_agent(llm)
     agent.memory_file = tmp_path / "ada.memory.md"                 # its usage file and the budget read here
     agent.client.upload = AsyncMock(return_value=(UploadResponse(content_uri="mxc://agora.lan/ada"), None))
-    agent.client.room_send = AsyncMock(return_value=SimpleNamespace(event_id="$ada-voice"))
     if agent.tts is not None:
         agent.tts = FakeTTS()
     agent.started = True
@@ -70,11 +69,9 @@ def test_an_answer_to_the_owners_voice_is_a_labelled_voice_then_its_text(tmp_pat
     asyncio.run(run_with_tasks(agent, ROOM, transcript("Адо, як ти?", eid="$tr")))
     audio, text = sent(agent)                                          # the iPhone shows no caption (2026-10-18)
     assert audio["msgtype"] == "m.audio" and audio["org.matrix.msc3245.voice"] == {}
-    assert "m.relates_to" not in audio                                 # never a reply to the owner's voice
+    assert "m.relates_to" not in audio and "m.relates_to" not in text  # never a reply
     assert audio["body"] == "Голосове повідомлення" and "filename" not in audio   # a label: the words only once
-    assert text["body"] == f"Привіт, Ich! {SECRET}" and text["msgtype"] == "m.text"
-    assert text["m.relates_to"] == {"rel_type": "m.thread", "event_id": "$ada-voice", "is_falling_back": True,
-                                    "m.in_reply_to": {"event_id": "$ada-voice"}}  # under its voice: voices stay in a row
+    assert text == {"msgtype": "m.text", "body": f"Привіт, Ich! {SECRET}"}
     usage = json.loads((tmp_path / "ada.usage.jsonl").read_text().splitlines()[-1])
     assert (usage["kind"], usage["characters"]) == ("tts", len(text["body"]))
     assert all(SECRET not in r.getMessage() for r in caplog.records) and "voice: sent" in caplog.text
@@ -174,13 +171,3 @@ def test_every_speaker_reads_a_members_voiced_line_by_its_caption(tmp_path, monk
     seeded = make_agent()
     assert seeded.seed_context([member_voice("@bruno:agora.lan", "$b3", "Привіт усім.")]) == 1
     assert seeded.history == [("Бруно", "Привіт усім.")]
-
-
-
-def test_a_text_only_line_is_a_plain_message(tmp_path, monkeypatch):
-    """Only a voiced line's words go under their voice; a line that stays text is a plain message."""
-    from agents.speech import text_under_voice
-    assert text_under_voice("так", None) == {"msgtype": "m.text", "body": "так"}
-    agent = voiced_agent(tmp_path, monkeypatch, p="0.0")
-    asyncio.run(agent.send_line("!room", "Мені добре.", "$e"))
-    assert sent(agent) == [{"msgtype": "m.text", "body": "Мені добре."}]

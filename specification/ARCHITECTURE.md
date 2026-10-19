@@ -226,11 +226,7 @@ answers a transcript of the owner's voice; otherwise its own deterministic draw 
 speakers' month (`speakers_month_chars` over every usage file but the heralds') plus the line stays within
 `VOICE_MONTHLY_CHARS`. **A voiced line is a voice message under a plain label, then the same text** as `m.text`
 — the iPhone's Element (classic) renders no media caption, so a caption would hide the words there (the owner,
-2026-10-18, after a day of voice-only lines with captions); the other agents read the text. **The text is a thread
-reply under its voice** (`text_under_voice`: `rel_type m.thread`, falling back to a reply): Element plays a voice
-message's successor only while no text message stands between them (its `PlaybackQueue` stops at the first
-non-voice message), so the main timeline keeps the voices in a row and each line's words show as its thread
-summary, on the Mac and the iPhone; a line that stays text is a plain message. For the voice-only
+2026-10-18, after a day of voice-only lines with captions); the other agents read the text. For the voice-only
 lines already in the room, every speaker still reads a member's captioned voice (`voice_caption`) as that member's
 text line — the history, the turns, the backfill — and Hermes reads and counts it, so each line counts once. A line that stays text (not voiced by the
 share, over the budget, no voice, an action purr) or whose voice step fails is a plain `m.text`. Each synth is a
