@@ -844,25 +844,29 @@ of the one who said it, assembled by Hermes when the owner asks, sent to his pri
 - the delivery content;
 - no text or audio in the logs.
 
-### v5.5 — Two more people: пан Леон and Мія
+### v5.5 — Three more people: пан Леон, Мія and пані Ірма
 
 **Status:** ⏳ planned — the two people drafted, under discussion with the owner
 ([features/v5.5-people.md](features/v5.5-people.md)).
 
-**Goal:** Agora gains two more human members, built like Ada and Bruno: a canon, a life story with hidden future
+**Goal:** Agora gains three more human members, built like Ada and Bruno: a canon, a life story with hidden future
 chapters, memories, plans, the today block and their own voices. Their characters, stories and memories are their
 own, and every member of the room has a friction with them.
 
 **Owner decisions** (2026-10-20):
-- **Two people**, both `persona`, so they believe they are human:
+- **Three people**, all `persona`, so they believe they are human:
   - **пан Леон**, 67, a former actor of the Lviv drama theatre who leads the amateur theatre «Ліхтар»; in Agora
     he tells theatre stories and argues with Bruno about sound; on stage he plays fathers, stepfathers and
     villains;
   - **Мія**, 22, a history student who works as a barista and reads detective novels by the dozen; she brings
-    a young view; on stage she plays heroines, maids and heiresses.
+    a young view; on stage she plays heroines, maids and heiresses;
+  - **пані Ірма**, 61, a former court stenographer who typed hundreds of trials and now works half-time in the
+    city archive; in Agora she has a dry humour and an exact memory of who said what (added the same day; the
+    owner's «Стефа» is Ada's late grandmother in her life story, so the name became Ірма).
 - **Names in the style of Ada and Bruno**, not markedly Ukrainian: Леон and Мія (first drafted as Орест and
   Соломія).
-- **Two men and two women of different ages**, so their voices never blur in a recording.
+- **Two men and three women of different ages** (22, 32, 61 and 35, 67), so their voices never blur in a
+  recording.
 - **A conflict among all of them:** each pair has its own friction.
 - **A shared past.** Ada and Bruno already know Леон and Мія, and the frictions come with that history. VISION's
   rule «the personas get no description of the newcomers» was written for non-human members and says it must
@@ -870,35 +874,43 @@ own, and every member of the room has a friction with them.
 - **The radio theatre** where they act is a version of its own in another chat, from the owner's concept document
   (later). In Agora they just talk.
 
-**The people** (drafts: `agents/canon/leon.md`, `leon.life.md`, `mia.md`, `mia.life.md`):
+**The people** (drafts: `agents/canon/leon.md`, `leon.life.md`, `mia.md`, `mia.life.md`, `irma.md`,
+`irma.life.md`):
 - **The views.** Ада (inside, slow) ↔ Бруно (outside, fast) stays. Пан Леон (tradition, feeling, legend, the
-  living voice) ↔ Мія (facts, patterns, her generation).
+  living voice) ↔ Мія (facts, patterns, her generation); пані Ірма (the exact record: who said what, when) ↔
+  пан Леон as well.
 - **The frictions:**
   - Леон ↔ Бруно: the microphones at «Наталка Полтавка», December 2025;
   - Леон ↔ Ада: the 2008 studio, and the text vs the stage;
   - Леон ↔ Мія: «Мишоловка» vs «Лісова пісня», his stories against her archives;
   - Мія ↔ Ада: Ada's hard notes on Mia's detective novel;
-  - Мія ↔ Бруно: the past vs the future.
+  - Мія ↔ Бруно: the past vs the future;
+  - Ірма ↔ Леон: she typed his divorce in 1996 and remembers every word he said; his legends against her record;
+  - Ірма ↔ Ада: the mother of Ada's school friend Соломія, who quotes Ada's teenage vows; Ada edits words, Ірма
+    never changed one;
+  - Ірма ↔ Бруно: «Музика — це не шум, ваша честь», the 2016 noise trial he forgot and she quotes;
+  - Ірма ↔ Мія: the archive's reading-room rules («Цербер»), the record against her theories — and a 1997 case
+    Ірма has kept in a shoebox.
 
 **Tasks:**
 - **The people:**
-  - their TOMLs: `leon` and `mia`, `type = "persona"`, `ranked`, name forms, the panel's name, role and
+  - their TOMLs: `leon`, `mia` and `irma`, `type = "persona"`, `ranked`, name forms, the panel's name, role and
     pronoun;
   - the canons and life stories, finalised with the owner;
-  - both in `simulations.toml`.
+  - all three in `simulations.toml`.
 - **The people already there:**
   - `common.md`, `ada.md` and `bruno.md` gain the new members, their ties and curiosity lines;
   - Ada's and Bruno's life stories gain them as well.
 - **Name forms:** no form of one member is a form of another (pinned).
 - **Owner steps:**
-  - the two Matrix accounts (`!admin users create-user leon`, `mia`);
-  - `LEON_PASSWORD` and `MIA_PASSWORD` in `server/.env`;
+  - the three Matrix accounts (`!admin users create-user leon`, `mia`, `irma`);
+  - `LEON_PASSWORD`, `MIA_PASSWORD` and `IRMA_PASSWORD` in `server/.env`;
   - the invites into Agora;
-  - two ElevenLabs voices (`LEON_VOICE_ID`, `MIA_VOICE_ID`) from the Voice Design prompts, added to
+  - three ElevenLabs voices (`LEON_VOICE_ID`, `MIA_VOICE_ID`, `IRMA_VOICE_ID`) from the Voice Design prompts, added to
     `docs/elevenlabs-voices.md`.
-- **Compose:** services `leon` and `mia` (the shared image; `voice.env` gets two more readers) and the env
+- **Compose:** services `leon`, `mia` and `irma` (the shared image; `voice.env` gets three more readers) and the env
   examples.
-- **The room's load:** four ranked people plus Claude. The turn weights, the wave limit, the moves and the
+- **The room's load:** five ranked people plus Claude. The turn weights, the wave limit, the moves and the
   speakers' voice budget (`VOICE_MONTHLY_CHARS`, 100,000) are checked on `edge`; the owner decides the values.
 - **Automatic from the roster:** Hermes's members, the recording's voices, the panel's cards and the moves'
   addressees.
@@ -906,13 +918,13 @@ own, and every member of the room has a friction with them.
   join come with a shared past.
 
 **DoD:**
-- (Manual, owner) Леон and Мія join Agora, talk in their own voices, ask and answer; Ada and Bruno know them.
+- (Manual, owner) Леон, Мія and Ірма join Agora, talk in their own voices, ask and answer; Ada and Bruno know them.
 - (Manual, owner) Over an evening the frictions surface and are argued with respect: Леон and Бруно about sound,
-  Мія and пан Леон about the play and the facts, Ада and Мія about the manuscript.
+  Мія and пан Леон about the play and the facts, Ада and Мія about the manuscript, Ірма quoting who said what.
 - (Manual, owner) Their stories agree with their life files, and neither knows the future.
 
 **Tests:** unit:
-- the roster with seven members, and the name forms distinct;
+- the roster with eight members, and the name forms distinct;
 - the new canons and life stories: no banned word, chapters in order, the death never shown;
 - the compose services and the env names.
 
