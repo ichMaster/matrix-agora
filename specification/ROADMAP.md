@@ -844,6 +844,78 @@ of the one who said it, assembled by Hermes when the owner asks, sent to his pri
 - the delivery content;
 - no text or audio in the logs.
 
+### v5.5 — Two more people: пан Орест and Соломія
+
+**Status:** ⏳ planned — the two people drafted, under discussion with the owner
+([features/v5.5-people.md](features/v5.5-people.md)).
+
+**Goal:** Agora gains two more human members, built like Ada and Bruno: a canon, a life story with hidden future
+chapters, memories, plans, the today block and their own voices. Their characters, stories and memories are their
+own, and every member of the room has a friction with them.
+
+**Owner decisions** (2026-10-20):
+- **Two people**, both `persona`, so they believe they are human:
+  - **пан Орест**, 67, a former actor of the Lviv drama theatre who leads the amateur theatre «Ліхтар»; in Agora
+    he tells theatre stories and argues with Bruno about sound; on stage he plays fathers, stepfathers and
+    villains;
+  - **Соломія**, 22, a history student who works as a barista and reads detective novels by the dozen; she brings
+    a young view; on stage she plays heroines, maids and heiresses.
+- **Two men and two women of different ages**, so their voices never blur in a recording.
+- **A conflict among all of them:** each pair has its own friction.
+- **The name «Соломія» stays.** Ada's school friend in her life story, until now «Соломія», is renamed.
+- **The radio theatre** where they act is a version of its own in another chat, from the owner's concept document
+  (later). In Agora they just talk.
+
+**The people** (drafts: `agents/canon/orest.md`, `orest.life.md`, `solomia.md`, `solomia.life.md`):
+- **The views.** Ада (inside, slow) ↔ Бруно (outside, fast) stays. Пан Орест (tradition, feeling, legend, the
+  living voice) ↔ Соломія (facts, patterns, her generation).
+- **The frictions:**
+  - Орест ↔ Бруно: the microphones at «Наталка Полтавка», December 2025;
+  - Орест ↔ Ада: the 2008 studio, and the text vs the stage;
+  - Орест ↔ Соломія: «Мишоловка» vs «Лісова пісня», his stories against her archives;
+  - Соломія ↔ Ада: Ada's hard notes on Solomiya's detective novel;
+  - Соломія ↔ Бруно: the past vs the future.
+
+**Tasks:**
+- **The people:**
+  - their TOMLs: `orest` and `solomia`, `type = "persona"`, `ranked`, name forms, the panel's name, role and
+    pronoun;
+  - the canons and life stories, finalised with the owner;
+  - both in `simulations.toml`.
+- **The people already there:**
+  - `common.md`, `ada.md` and `bruno.md` gain the new members, their ties and curiosity lines;
+  - Ada's and Bruno's life stories gain them as well.
+  - Ada's friend becomes «Соломія-Христина, whom Ada calls Христя». Her stored memories, which say «Соломія»,
+    stay true and are never rewritten.
+  - Her future daughter and Bruno's godchild follow the rename.
+- **Name forms:** no form of one member is a form of another (pinned).
+- **Owner steps:**
+  - the two Matrix accounts (`!admin users create-user orest`, `solomia`);
+  - `OREST_PASSWORD` and `SOLOMIA_PASSWORD` in `server/.env`;
+  - the invites into Agora;
+  - two ElevenLabs voices (`OREST_VOICE_ID`, `SOLOMIA_VOICE_ID`) from the Voice Design prompts, added to
+    `docs/elevenlabs-voices.md`.
+- **Compose:** services `orest` and `solomia` (the shared image; `voice.env` gets two more readers) and the env
+  examples.
+- **The room's load:** four ranked people plus Claude. The turn weights, the wave limit, the moves and the
+  speakers' voice budget (`VOICE_MONTHLY_CHARS`, 100,000) are checked on `edge`; the owner decides the values.
+- **Automatic from the roster:** Hermes's members, the recording's voices, the panel's cards and the moves'
+  addressees.
+- **ARCHITECTURE:** the roster, the env names and the compose services.
+
+**DoD:**
+- (Manual, owner) Орест and Соломія join Agora, talk in their own voices, ask and answer; Ada and Bruno know them.
+- (Manual, owner) Over an evening the frictions surface and are argued with respect: Орест and Бруно about sound,
+  Соломія and пан Орест about the play and the facts, Ада and Соломія about the manuscript.
+- (Manual, owner) Their stories agree with their life files, and neither knows the future.
+
+**Tests:** unit:
+- the roster with seven members, and the name forms distinct;
+- the new canons and life stories: no banned word, chapters in order, the death never shown;
+- the compose services and the env names.
+
+**Not in this phase:** the radio theatre — a version of its own, from the owner's concept document.
+
 ## v6 — Лілі: the Lumi bridge
 
 Лілі — Lumi's prod brain — joins the room through a bridge that is one of our agents: first when named, then under
