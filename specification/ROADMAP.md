@@ -766,7 +766,7 @@ posts «🎙 Ich: …» as a reply to the voice event. The agents answer **the o
 
 ### v5.3 — The agents answer in voice
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.3.0` on 2026-10-19 (the owner's changes: Claude speaks too; always voiced, `VOICE_REPLY_P` 1.0; a 100,000-character monthly budget; a labelled voice followed by its text).
 
 **Goal:** an agent answers in its own voice: to the owner's voice message in voice, otherwise by a setting. It uses
 Hermes's text-to-speech pipeline from v5.1.

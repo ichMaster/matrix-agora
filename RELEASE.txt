@@ -1,3 +1,23 @@
+Version 5.3.0 (2026-10-19)
+---------------------------
+- Phase v5.3 - The agents answer in voice (AGORA-091...094)
+- The voice capability and settings (AGORA-091): persona, creature and
+  assistant may speak; each agent's own ElevenLabs voice (its <NAME>_VOICE_ID,
+  overridable per agent in the panel), VOICE_REPLY_P 1.0 (the owner: always)
+  and one monthly budget for all the speakers, VOICE_MONTHLY_CHARS 100,000
+- The voiced line (AGORA-092): every reply, purr, nudge and news item goes
+  through send_line - a voice message labelled "Holosove povidomlennia"
+  first, then the same text as a plain message (the iPhone shows no media
+  caption); the shared voice pipeline with Hermes; the key out of the
+  environment before Claude's CLI starts; Claude speaks too
+- server/voice.env (AGORA-093): the ElevenLabs key for exactly the members
+  who speak
+- Live with the owner (AGORA-094): no reply quote on the voices, the words
+  never twice, Ada's livelier voice; HISTORY_N 150 and each persona reminded
+  of its own questions of the session, so it never asks the owner twice
+- Code review: no high or medium finding; R3's re-check before the voice
+  step and an unused parameter left in the backlog
+
 Version 5.2.0 (2026-10-18)
 ---------------------------
 - Phase v5.2 - The agents hear voice messages (AGORA-087...090)

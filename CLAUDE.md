@@ -18,7 +18,7 @@ Read these before planning work; they are the project's contract with itself.
 
 Proof of concept: a private Matrix room where the owner and two LLM agents ("Ada" and "Bruno", Gemini 2.5 Flash) talk together. So far the repo holds only the specification. The panel is the point of the project: it will grow into an admin panel for simulations and agents like Lili; the chat is the first simulation (VISION §The direction).
 
-Latest release: v5.2.0 (phase v5.2 — the agents hear voice messages: Hermes transcribes the owner's voice for the room and hears his own room). Versions v0–v4 are complete (v4 Ensemble: phases v4.1–v4.7); v5 Voice is in progress (v5.1–v5.2 done; v5.3 speaking planned); v6 Лілі (the Lumi bridge) is planned, designed in the draft [specification/features/more-agents.md](specification/features/more-agents.md) (Ukrainian copy: `more-agents-UA.md`).
+Latest release: v5.3.0 (phase v5.3 — the agents answer in voice: Ada, Bruno, the cat and Claude, each in their own ElevenLabs voice). Versions v0–v5 are complete (v5 Voice: phases v5.1–v5.3); v6 Лілі (the Lumi bridge) is planned, designed in the draft [specification/features/more-agents.md](specification/features/more-agents.md) (Ukrainian copy: `more-agents-UA.md`).
 
 | Version | Phases | What it delivers |
 |---|---|---|
@@ -27,7 +27,7 @@ Latest release: v5.2.0 (phase v5.2 — the agents hear voice messages: Hermes tr
 | `v2` Persona & memory | v2.1 canons + session memory · v2.2 a life story, world awareness, plans (with mutations) + day memories + the hourly today block | code + canon files |
 | `v3` Operations | v3.1 token accounting · v3.2 agent images + CI/CD + server deployment · v3.3 the panel: viewing (read-only) · v3.4 the panel: control | code |
 | `v4` Ensemble | v4.1 roster, agent types, N-agent turn-taking · v4.2 the cat in the room · v4.3 the cat's past life and initiative · v4.4 Claude on the subscription, when asked · v4.5 Claude the philosopher · v4.6 Ada and Bruno: curiosity, plans, stories · v4.7 agent settings and Claude's files in the panel |
-| `v5` Voice (in progress) | v5.1 Hermes: voice digests for the owner (done) · v5.2 the agents hear voice messages (done) · v5.3 the agents answer in voice | code + canon files |
+| `v5` Voice | v5.1 Hermes: voice digests for the owner · v5.2 the agents hear voice messages · v5.3 the agents answer in voice | code + canon files |
 | `v6` Лілі (planned) | v6.1 the Lumi bridge, when named · v6.2 Лілі under the full rules | code + canon files | code + canon files |
 
 ## Layout and commands
