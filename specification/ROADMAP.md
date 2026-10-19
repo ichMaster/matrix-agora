@@ -818,8 +818,8 @@ of the one who said it, assembled by Hermes when the owner asks, sent to his pri
   - a member's text-only line → spoken in its own voice within the speakers' budget, else left out;
   - an action purr (`*…*`) → left out.
 - **The assembly:** each piece downloaded (the authenticated media API) or spoken, decoded to PCM, the loudness
-  levelled (ffmpeg `loudnorm`), short pauses between lines and a longer one with a short spoken time mark after a
-  silence of over 15 minutes, Hermes's opening («Агора, <дата>, з … до …») and closing, encoded once to OGG/Opus;
+  levelled (ffmpeg `loudnorm`), short pauses between lines and a longer one after a silence of over 15 minutes (no
+  spoken time — the owner, 2026-10-20), Hermes's opening («Агора, <дата>, з … до …») and closing, encoded once to OGG/Opus;
   split into parts when over the homeserver's upload limit.
 - **The delivery:** an `m.audio` file (not a voice message) named «Агора <дата>.ogg» in Hermes's room, with one line
   of text — the length, the number of lines, the period; typing while he assembles; usage lines for every TTS call.

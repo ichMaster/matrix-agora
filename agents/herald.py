@@ -71,14 +71,15 @@ from agents.matrix import download, join_room, login
 from agents.nudge import parse_hours
 from agents.recording import (
     CLOSING,
+    GAP_PAUSE_S,
     Event,
     asks_recording,
     assemble,
     decode_to_pcm,
-    gap_line,
     opening_line,
     plan_recording,
     recording_request,
+    silence,
 )
 from agents.roster import Member, load_roster, speakers
 from agents.settings import VOICE_ID_RE
@@ -528,10 +529,8 @@ class Herald:
                         pcm = await decode_to_pcm(data) if data else None
                     elif piece.kind == "speak":
                         pcm = await speak(self.voice_ids.get(piece.speaker, ""), piece.text)
-                    else:
-                        pcm = await speak(self.voice_id, gap_line(piece.ts, self.tz))
-                        if pcm:
-                            sounds.append((pcm, True))
+                    else:  # a long silence: a longer pause, no spoken time (the owner, 2026-10-20)
+                        sounds.append((silence(GAP_PAUSE_S), False))
                         continue
                     if pcm:
                         sounds.append((pcm, False))

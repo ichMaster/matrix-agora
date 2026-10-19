@@ -27,11 +27,7 @@ RECORD_MAX_WORDS = 6
 VOICE_TEXT_S = 30          # a member's text within this many seconds after its voice message is that voice's words
 GAP_MS = 15 * 60 * 1000    # a silence longer than this gets a spoken time mark
 
-# «о першій» … — the locative ordinal of an hour (a time mark), and the genitive (the opening's «з … до …»)
-HOURS_AT = ["опівночі", "о першій", "о другій", "о третій", "о четвертій", "о п'ятій", "о шостій", "о сьомій",
-            "о восьмій", "о дев'ятій", "о десятій", "об одинадцятій", "о дванадцятій", "о тринадцятій",
-            "о чотирнадцятій", "о п'ятнадцятій", "о шістнадцятій", "о сімнадцятій", "о вісімнадцятій",
-            "о дев'ятнадцятій", "о двадцятій", "о двадцять першій", "о двадцять другій", "о двадцять третій"]
+# «першої» … — the genitive of an hour, for the opening's «з … до …»
 HOURS_GEN = ["опівночі", "першої", "другої", "третьої", "четвертої", "п'ятої", "шостої", "сьомої", "восьмої",
              "дев'ятої", "десятої", "одинадцятої", "дванадцятої", "тринадцятої", "чотирнадцятої", "п'ятнадцятої",
              "шістнадцятої", "сімнадцятої", "вісімнадцятої", "дев'ятнадцятої", "двадцятої", "двадцять першої",
@@ -55,8 +51,9 @@ class Event:
 
 @dataclass(frozen=True)
 class Piece:
-    """One sound of the recording: an existing voice message, a line to speak in its speaker's voice, a time mark."""
-    kind: str                    # "audio" | "speak" | "gap"
+    """One sound of the recording: an existing voice message, a line to speak in its speaker's voice, a long
+    silence's pause."""
+    kind: str                    # "audio" | "speak" | "gap" (a longer pause, no words)
     speaker: str = ""
     ts: int = 0
     text: str = ""
@@ -106,7 +103,7 @@ def plan_recording(events: list[Event], owner: str, members: set[str], gap_ms: i
     """The room's events (oldest first) as the recording's pieces: a member's voice message as it is, its text
     within `VOICE_TEXT_S` consumed; the owner's voice as it is; the owner's typed line and a member's text-only line
     to be spoken in their voices; an action purr, an edit, Hermes's transcript and any other sender left out; a
-    time mark before a line that follows more than `gap_ms` of silence."""
+    longer pause before a line that follows more than `gap_ms` of silence — no spoken time (the owner, 2026-10-20)."""
     pieces: list[Piece] = []
     last_voice: dict[str, int] = {}     # sender → the ts of its latest voice whose words are not yet seen
     last_ts: int | None = None
@@ -139,16 +136,6 @@ def plan_recording(events: list[Event], owner: str, members: set[str], gap_ms: i
     return pieces
 
 
-def hour_words(hour: int) -> str:
-    return HOURS_AT[hour % 24]
-
-
-def gap_line(ts: int, tz: str) -> str:
-    """A time mark after a long silence, spoken by Hermes: «О сімнадцятій.»"""
-    words = hour_words(datetime.fromtimestamp(ts / 1000, ZoneInfo(tz)).hour)
-    return words[0].upper() + words[1:] + "."
-
-
 def opening_line(first_ts: int, last_ts: int, tz: str) -> str:
     """«Агора, 19 жовтня, з десятої до двадцять третьої.» — the day of the first line, its hour and the last one's."""
     first = datetime.fromtimestamp(first_ts / 1000, ZoneInfo(tz))
@@ -158,7 +145,8 @@ def opening_line(first_ts: int, last_ts: int, tz: str) -> str:
 
 # --- the assembly -----------------------------------------------------------------------------------------------------
 PAUSE_S = 0.5             # between two lines
-MARK_PAUSE_S = 1.5        # around a time mark
+MARK_PAUSE_S = 1.5        # around the opening and the closing
+GAP_PAUSE_S = 1.5         # a long silence in the room: this much more quiet before the next line
 PART_MAX_S = 3600         # a part at most an hour: ~14.4 MB of Opus at 32 kb/s, under the homeserver's 20 MiB
 DECODE_TIMEOUT_S = 120
 LOUDNORM = "loudnorm=I=-18:TP=-2:LRA=11"  # a phone's voice and an ElevenLabs voice equally loud

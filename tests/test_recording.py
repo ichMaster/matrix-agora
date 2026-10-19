@@ -13,8 +13,6 @@ from agents.recording import (
     CLOSING,
     Event,
     Piece,
-    gap_line,
-    hour_words,
     opening_line,
     plan_recording,
     recording_request,
@@ -94,7 +92,7 @@ def test_a_voice_with_no_text_and_a_late_text_and_a_caption():
     assert [(p.kind, p.speaker) for p in plan] == [("audio", ADA), ("audio", BRUNO), ("speak", BRUNO)]
 
 
-def test_a_long_silence_gets_a_time_mark():
+def test_a_long_silence_gets_a_pause():
     plan = plan_recording([text(OWNER, "Привіт", ms(19, 10)), text(OWNER, "Я тут", ms(19, 10, 10)),
                            text(OWNER, "Знову я", ms(19, 17, 5))], OWNER, MEMBERS)
     assert [p.kind for p in plan] == ["speak", "speak", "gap", "speak"] and plan[2].ts == ms(19, 17, 5)
@@ -105,12 +103,11 @@ def test_an_empty_stretch_is_an_empty_plan():
 
 
 # --- the spoken words ------------------------------------------------------------------------------------------------
-def test_hours_and_the_opening():
-    assert [hour_words(h) for h in (0, 1, 11, 17, 23)] == ["опівночі", "о першій", "об одинадцятій", "о сімнадцятій",
-                                                          "о двадцять третій"]
-    assert gap_line(ms(19, 17, 5), TZ) == "О сімнадцятій."
+def test_the_opening_and_the_closing():
     assert opening_line(ms(19, 10, 5), ms(19, 23, 40), TZ) == "Агора, 19 жовтня, з десятої до двадцять третьої."
+    assert opening_line(ms(19, 0, 5), ms(19, 1, 0), TZ) == "Агора, 19 жовтня, з опівночі до першої."
     assert CLOSING and Piece("gap").kind == "gap"
+    assert not hasattr(rec, "gap_line")                  # no spoken time before a line (the owner, 2026-10-20)
 
 
 # --- the assembly (ffmpeg mocked) -----------------------------------------------------------------------------------

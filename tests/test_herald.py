@@ -826,6 +826,23 @@ def test_past_his_budget_the_spoken_lines_are_left_out(tmp_path, monkeypatch):
     assert client2.uploads == []
 
 
+def test_a_long_silence_is_a_pause_with_no_spoken_time(tmp_path, monkeypatch):
+    """The owner, 2026-10-20: no time before a line in Hermes's voice — only his opening and closing."""
+    events = [agora_voice(ADA, "$late", ms(17, 5)), agora_voice(ADA, "$early", ms(10))]   # newest first
+    h, _, _ = recording_herald(tmp_path, monkeypatch, events)
+    seen = []
+
+    async def keep(sounds):
+        seen.extend(sounds)
+        return [(b"OggS", 1000)]
+
+    monkeypatch.setattr(herald_mod, "assemble", keep)
+    assert asyncio.run(h.record(ms(0), ms(18))) is True
+    assert [t for _, t in SPOKEN] == [SPOKEN[0][1], herald_mod.CLOSING]                  # the opening, the closing
+    assert [mark for _, mark in seen] == [True, False, False, False, True]
+    assert seen[2][0] == herald_mod.silence(herald_mod.GAP_PAUSE_S)                      # the gap: quiet only
+
+
 def test_a_long_stretch_goes_out_in_parts(tmp_path, monkeypatch):
     h, client, _ = recording_herald(tmp_path, monkeypatch, [ev(OWNER, "Привіт", ms(10), "$x")])
 

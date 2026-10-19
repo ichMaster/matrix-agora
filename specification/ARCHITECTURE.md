@@ -205,15 +205,15 @@ joins only the owner's invite into Agora and leaves any other.
   voice message as it is (its text from the same sender within 30 s is its words, left out; a voice with a caption
   is its own words), the owner's voice message as it is, the owner's typed line spoken in his cloned voice
   (`OWNER_VOICE_ID`), a member's text-only line in its own (`<NAME>_VOICE_ID`), an action purr, an edit, his own
-  transcripts and any other sender left out, and a time mark («О сімнадцятій.») after more than 15 minutes of
-  silence. Nothing in the period: «У цей час Агора мовчала.» and no file. Otherwise a line «Збираю запис — N
-  реплік, це кілька хвилин.» (the typing shows for 30 s only), then each voice is downloaded (the 20 MB cap) and
+  transcripts and any other sender left out, and 1.5 s more of quiet after more than 15 minutes of silence — no
+  spoken time (the owner, 2026-10-20). Nothing in the period: «У цей час Агора мовчала.» and no file. Otherwise a line «Збираю запис — N
+  реплік, це кілька хвилин.» (the typing shows for 30 s only), then each voice is downloaded (the 20 MB cap, read to its end) and
   each spoken line synthesised — every TTS call his own (`tts` usage lines in his file, within
   `HERMES_TTS_MONTHLY_CHARS`; past it, or with no voice id, a spoken line is left out; the speakers' budget is
-  untouched); his opening («Агора, 19 жовтня, з десятої до двадцять третьої.»), the time marks and the closing («Це
+  untouched); his opening («Агора, 19 жовтня, з десятої до двадцять третьої.») and the closing («Це
   все з Агори. Гермес, ваш вісник.») in his voice, made in code. ffmpeg decodes each piece to 24 kHz mono PCM with
-  `loudnorm` (I=-18, TP=-2), so a phone and a synthesised voice sound alike; 0.5 s between lines, 1.5 s around a
-  time mark; a new part before 60 minutes (cut only between pieces — an hour of 32 kb/s Opus is ~14.4 MB, under
+  `loudnorm` (I=-18, TP=-2), so a phone and a synthesised voice sound alike; 0.5 s between lines, 1.5 s around the
+  opening and the closing; a new part before 60 minutes (cut only between pieces — an hour of 32 kb/s Opus is ~14.4 MB, under
   the homeserver's 20 MiB upload limit); each part encoded to OGG/Opus and uploaded as a plain `m.audio` **file**,
   not a voice message — «Агора 2026-10-19.ogg» or «Агора 2026-10-19 (1 з 2).ogg», with `info.size` and
   `info.duration` — then one text line «Агора, 10:05–23:40 · 42 хв · 186 реплік (озвучено зараз: 12, пропущено:
