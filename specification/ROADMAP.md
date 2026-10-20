@@ -846,8 +846,7 @@ of the one who said it, assembled by Hermes when the owner asks, sent to his pri
 
 ### v5.5 — Four more people: пан Леон, Мія, пані Ірма and Кіра
 
-**Status:** ⏳ planned — the two people drafted, under discussion with the owner
-([features/v5.5-people.md](features/v5.5-people.md)).
+**Status:** ✅ completed — released `v5.5.0` on 2026-10-20 (the owner's changes: the names in the style of Ada and Bruno, Ірма and Кіра added, a secret and clashing traits for each, the same weight for every person, a quieter room and a 200,000 voice budget).
 
 **Goal:** Agora gains four more human members, built like Ada and Bruno: a canon, a life story with hidden future
 chapters, memories, plans, the today block and their own voices. Their characters, stories and memories are their
