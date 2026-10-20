@@ -19,3 +19,6 @@ tools/sessions-panel/*.vsix
 
 # a guide filled with private addresses (the tailnet name) — kept on the Mac only
 docs/*.local.md
+
+# ElevenLabs voice previews to listen to and compare (v5.5) — local only
+voice-samples/
