@@ -16,7 +16,7 @@
 **Зовнішність (канон).** Дуже гарна, виглядає молодшою за свої 23. 172 см, струнка і спортивна; густе блискуче
 хвилясте волосся темно-медового кольору з мідними відблисками, недбалий вузол, проткнутий олівцем; великі
 сіро-зелені очі з прямим поглядом і довгими віями, темні брови, високі вилиці, ніжна шкіра з ледь помітним
-ластовинням, майже непомітний шрам над лівою бровою; широка світла усмішка. Дідів механічний годинник,
+ластовинням, майже непомітний шрам над лівою бровою; широка світла усмішка. Без макіяжу — ніколи не фарбується. Дідів механічний годинник,
 темно-зелений шотландський светр, на кінчиках пальців — сліди золотого лаку кінцуґі.
 
 **1. Аватарка (1:1):**
@@ -27,7 +27,7 @@ freckles across the nose; large grey-green eyes with long lashes and a warm, dir
 dark eyebrows; high cheekbones; full lips. Thick, glossy, wavy dark-honey hair with warm copper highlights, loosely
 twisted into a messy bun held with a pencil, soft strands framing her face. A radiant, bright, genuine smile, as if
 she is about to laugh. She wears a dark green Scottish wool sweater. Soft warm golden light from the side, a dark
-blue night sky behind her with a few stars. Fashion-editorial beauty portrait, natural and fresh, 85mm lens,
+blue night sky behind her with a few stars. No makeup at all, bare natural face, natural beauty, candid portrait, 85mm lens,
 shallow depth of field, cinematic, subtle film grain. Square 1:1 aspect ratio. No text, no watermark.
 ```
 
@@ -39,7 +39,7 @@ athletic, with thick glossy wavy dark-honey hair in a messy bun with a pencil th
 long lashes, glowing skin with a few faint freckles, laughing radiantly while she adjusts a small refractor
 telescope. A dark green wool sweater with the sleeves pushed up, an old mechanical wristwatch on a worn leather
 strap, faint traces of gold lacquer on her fingertips. Warm red observatory work lights, cold blue starlight, a
-thermos and a notebook on the wooden floor. Cinematic, natural and fresh, 35mm lens, subtle film grain. 3:2 aspect
+thermos and a notebook on the wooden floor. No makeup at all, bare natural face. Cinematic, natural and fresh, 35mm lens, subtle film grain. 3:2 aspect
 ratio. No text, no watermark.
 ```
 
@@ -50,6 +50,6 @@ kitchen table at night, mending a broken ceramic cup with gold lacquer (kintsugi
 falling loose over her shoulders, large grey-green eyes with long lashes focused on her work, a soft half-smile,
 glowing skin with a few faint freckles. A dark green wool sweater, thin gloves, a fine brush, gold powder, a shelf
 behind her full of cups and bowls mended with gold seams, a small telescope on the balcony beyond the window, Lviv
-rooftops in the dark. Warm lamplight, shallow depth of field, natural and fresh, 50mm lens, subtle film grain. 4:5
+rooftops in the dark. No makeup at all, bare natural face. Warm lamplight, shallow depth of field, natural and fresh, 50mm lens, subtle film grain. 4:5
 aspect ratio. No text, no watermark.
 ```
