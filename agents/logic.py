@@ -148,9 +148,14 @@ class Verdict:
     reason: str  # "ok" when handle is True, otherwise why it was ignored
 
 
-def should_handle(room_id: str, sender: str, cfg: AgentConfig, others: Iterable[str] = ()) -> Verdict:
-    """The message filter: only the Agora room, never self, allowlisted senders only — the owner and the other
-    members of the roster (their user ids)."""
+def should_handle(room_id: str, sender: str, cfg: AgentConfig, others: Iterable[str] = (),
+                  private_room: str | None = None) -> Verdict:
+    """The message filter: the Agora room, never self, allowlisted senders only — the owner and the other members of
+    the roster (their user ids). v5.6: the agent's own private room too, from the owner only (`private`)."""
+    if private_room is not None and room_id == private_room and room_id != cfg.room_id:
+        if sender == cfg.user_id:
+            return Verdict(False, "own-message")
+        return Verdict(True, "private") if sender == cfg.owner else Verdict(False, "sender-not-allowlisted")
     if room_id != cfg.room_id:
         return Verdict(False, "foreign-room")
     if sender == cfg.user_id:
@@ -161,9 +166,14 @@ def should_handle(room_id: str, sender: str, cfg: AgentConfig, others: Iterable[
     return Verdict(True, "ok")
 
 
-def should_join_invite(room_id: str, inviter: str, cfg: AgentConfig) -> bool:
-    """Join only the owner's invite into the Agora room."""
-    return room_id == cfg.room_id and inviter == cfg.owner
+def should_join_invite(room_id: str, inviter: str, cfg: AgentConfig, private_room: str | None = None) -> bool:
+    """Join only the owner's invites: into the Agora room, and (v5.6, `private`) into one private room besides it —
+    a first one, or the same one again."""
+    if inviter != cfg.owner:
+        return False
+    if room_id == cfg.room_id:
+        return True
+    return cfg.can("private") and (private_room is None or room_id == private_room)
 
 
 def append_history(history: list[tuple[str, str]], name: str, text: str, cap: int) -> list[tuple[str, str]]:
@@ -252,16 +262,21 @@ def build_instruction(
     rules_extra: str | None = None,
     move: str | None = None,
     asked: str | None = None,
+    private: str | None = None,
+    discretion: str | None = None,
 ) -> str:
     """The system instruction, in contract order (ARCHITECTURE §Prompt assembly):
     canon → life so far → place and time → memories → plans → today →
     (v4.2) the mood of the day → (v4.3) a past-life memory → (v4.3) a nudge's material and rule →
-    last-session memory → (v4.6) the persona's move → (v5.3) its own questions of this session → rules. Empty
-    sections are skipped. Nothing here may say a persona is a model or a bot."""
+    last-session memory → (v5.6) the private chat's situation → (v4.6) the persona's move → (v5.3) its own
+    questions of this session → rules (v5.6: with the discretion line in Agora). Empty sections are skipped. Nothing
+    here may say a persona is a model or a bot."""
     parts = [canon]
     parts += [s for s in (life, world, memories, plans, today, mood, pastlife, nudge) if s]  # «Настрій дня», …
     if summary:
         parts.append(f"Що ти пам'ятаєш з минулої розмови: {summary}")
+    if private:
+        parts.append(private)  # v5.6: a private reply, or writing first in the private chat
     if move:
         parts.append(move)  # the freshest instruction: how to reply this time (v4.6)
     if asked:
@@ -270,7 +285,8 @@ def build_instruction(
         f"Ти — {name}. Відповідай лише від себе, коротко, без префікса з іменем. "
         "Якщо тобі нема чого додати — відповідай рівно PASS."
     )
-    parts.append(f"{rules} {rules_extra}" if rules_extra else rules)
+    rules = " ".join(r for r in (rules, rules_extra, discretion) if r)  # v5.6: the discretion line, in Agora
+    parts.append(rules)
     return "\n\n".join(parts)
 
 

@@ -226,6 +226,13 @@ class Agent:
             if self.nudge_idle_ms < self.bot_window_ms:  # the silence must empty the wave window
                 log.warning("CAT_NUDGE_IDLE_S below BOT_WINDOW_S — using %d s", self.bot_window_ms // 1000)
                 self.nudge_idle_ms = self.bot_window_ms
+        # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.
+        # Only a person with `private` reads them (a typo never takes the others down).
+        self.private_idle_ms, self.private_per_day, self.private_hours = 0, 0, (0, 0)
+        if cfg.can("private"):
+            self.private_hours = parse_hours(os.environ.get("PRIVATE_HOURS", "10-22"))
+            self.private_per_day = int(os.environ.get("PRIVATE_NUDGES_PER_DAY", "2"))
+            self.private_idle_ms = int(float(os.environ.get("PRIVATE_IDLE_S", "21600")) * 1000)
         # v4.6 — a persona's move weights (read only by a persona)
         self.move_weights: dict[str, float] = {}
         if cfg.type == "persona":

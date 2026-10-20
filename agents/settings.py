@@ -117,6 +117,12 @@ SCHEMA: tuple[Setting, ...] = (
     _s("VOICE_ID", "id", "", "voice", "cap:voice", None, "Голос (ElevenLabs voice id; порожньо — текст)"),
     _s("VOICE_REPLY_P", "float", "1.0", "voice", "cap:voice", None,
        "Частка реплік голосом (на голос Ich — завжди)", "", 0, 1),
+    # v5.6 — the private chat with the owner: writing first after a long silence
+    _s("PRIVATE_IDLE_S", "int", "21600", "private", "cap:private", None,
+       "Тиша в особистому чаті, після якої пише першою", "s", 1800, 604800),
+    _s("PRIVATE_NUDGES_PER_DAY", "int", "2", "private", "cap:private", None,
+       "Скільки разів на день може написати першою", "", 0, 10),
+    _s("PRIVATE_HOURS", "hours", "10-22", "private", "cap:private", None, "Години, коли може написати першою (HH-HH)"),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
        choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),
@@ -131,7 +137,7 @@ SERVICE_GROUPS = (("turns", "Room & turns"), ("moves", "Ада і Бруно: х
                   ("claude", "Клод у кімнаті"), ("hermes", "Гермес"), ("voice", "Голоси агентів"),
                   ("session", "Сесії розмови"))
 AGENT_GROUPS = (("memory", "Пам'ять"), ("plans", "Плани"), ("life", "Життя"), ("model", "Модель"),
-                ("voice", "Голос"))
+                ("voice", "Голос"), ("private", "Особистий чат"))
 
 
 def validate(name: str, raw: object) -> tuple[str | None, str | None]:
