@@ -925,9 +925,15 @@ own, and every member of the room has a friction with them.
     `docs/elevenlabs-voices.md`.
 - **Compose:** services `leon`, `mia`, `irma` and `kira` (the shared image; `voice.env` gets four more readers) and the env
   examples.
-- **The room's load:** six ranked people plus Claude. The turn weights, the wave limit, the moves and the
-  speakers' voice budget are checked on `edge`; the owner decides the values. The budget
-  (`VOICE_MONTHLY_CHARS`) is **200,000** (the owner, 2026-10-20). It is live in `server/.env` at once, since the
+- **The room's load:** six ranked people plus Claude.
+  - **Equal weight for every person** (the owner, 2026-10-20): Ада, Бруно, Леон, Мія, Ірма and Кіра all
+    `ranked` with weight 1.0; Claude stays 0.4.
+  - **A quieter room, live since 2026-10-20 before the phase** (`server/.env`): `MAX_BOT_TURNS` 4 per
+    `BOT_WINDOW_S` 900, `BOT_REPLY_P` 0.45, `PERSONA_ASK_P` 0.12, `CAT_REACT_P` 0.12, the cat's nudge after
+    3,600 s of silence, Claude's news every 3 h (at most 4 a day, after 30 minutes of quiet). The wave limit is
+    room-wide, so the newcomers share this volume rather than multiply it.
+  - Checked on `edge`.
+  - The speakers' voice budget (`VOICE_MONTHLY_CHARS`) is **200,000** (the owner, 2026-10-20). It is live in `server/.env` at once, since the
   speakers had used ~62,000 in three days. The phase makes it the code default, the env examples and the compose
   default (pinned).
 - **Automatic from the roster:** Hermes's members, the recording's voices, the panel's cards and the moves'
