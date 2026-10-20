@@ -141,7 +141,21 @@ stars twinkling behind her. Static camera. Photorealistic, natural skin, no make
 subtle film grain.
 ```
 
-**Negative prompt (для обох):**
+**C. Відео 10 с англійською — трек `kira-en-10s` (7,6 с): «Hey, listen. Tonight you can see Jupiter right from the
+High Castle! Grab a thermos, and I will show you its moons. Well... almost.»** Kling розпізнає англійське мовлення
+(українське — ні: «No speech detected»).
+```
+The woman in the photo talks warmly and playfully to a close friend, lip-synced to the audio, natural English
+speech. 0-1s: "Hey, listen" - she leans slightly toward the camera, eyebrows lifting, a conspiratorial little smile.
+1-4s: "Tonight you can see Jupiter right from the High Castle" - her eyes glance up toward the night sky with
+delight, then come back to the camera, sparkling. 4-6s: "Grab a thermos, and I will show you its moons" - a small
+inviting nod, playful and warm. 6-8s: "Well... almost." - a knowing pause, then a bright genuine laugh with a radiant
+smile, which lingers to the end. Subtle natural blinking and breathing, loose strands of hair moving in a light night
+breeze, stars faintly twinkling behind her. Static camera with a very slow gentle push-in. Photorealistic, natural
+skin, no makeup, cinematic warm side light, subtle film grain.
+```
+
+**Negative prompt (для всіх):**
 ```
 makeup, lipstick, distorted face, warped mouth, extra teeth, morphing features, changing face identity, blurry eyes,
 jittery head, camera shake, fast motion, text, subtitles, watermark, logo, cartoon, plastic skin
