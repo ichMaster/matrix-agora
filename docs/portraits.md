@@ -118,17 +118,34 @@ Kling робить ролики на 5 або 10 секунд, і звук дл�
 у WAV і MP3: `voice-samples/kling/kira-10s.*` (9,9 с) і `voice-samples/kling/kira-5s.*` (3,2 с). Фото — аватарка
 з промпту 1, пропорції 1:1, якісний режим.
 
-**A. Відео 10 с — трек `kira-10s` («Слухай, сьогодні Юпітер видно просто з Високого Замку! Бери термос — я покажу
-тобі його супутники. Ну... майже.»):**
+**A. Відео українською, повний текст — трек `kira-ua.wav` (18,9 с; для Hedra, HeyGen та інших без обмеження в
+10 с): «Слухай, сьогодні Юпітер видно просто з Високого Замку! Бери термос — покажу тобі його супутники. Чотири
+цятки, і вони танцюють. По-чесному, це красивіше за будь-який гороскоп. Ну... майже.»** Таймінг — за мітками
+ElevenLabs.
 ```
 The woman in the photo talks warmly and playfully to a close friend, lip-synced to the audio, natural Ukrainian
-speech. 0-1s: "Слухай" - she leans slightly toward the camera, eyebrows lifting, a conspiratorial little smile.
-1-5s: telling that Jupiter is visible tonight from the High Castle, her eyes glance up toward the night sky with
-delight, then come back to the camera, sparkling. 5-8s: "Бери термос" - a small inviting nod, playful and warm.
-8-10s: "Ну... майже." - a knowing pause, then a bright genuine laugh with a radiant smile. Subtle natural blinking
-and breathing, loose strands of hair moving in a light night breeze, stars faintly twinkling behind her. Static
-camera with a very slow gentle push-in. Photorealistic, natural skin, no makeup, cinematic warm side light, subtle
-film grain.
+speech. 0-5s: "Слухай, сьогодні Юпітер видно просто з Високого Замку!" - she leans slightly toward the camera,
+eyebrows lifting with a conspiratorial smile, then her eyes glance up toward the night sky with delight and come
+back to the camera, sparkling. 5-9s: "Бери термос — покажу тобі його супутники." - a small inviting nod, playful and
+warm. 9-12.5s: "Чотири цятки, і вони танцюють." - her eyes light up, a gentle sway of the head as if following the
+dancing dots. 12.5-16s: "По-чесному, це красивіше за будь-який гороскоп." - softer and sincere, a slight head tilt,
+a warm direct gaze. 16-19s: "Ну... майже." - a knowing pause, then a bright genuine laugh, she glances down for a
+moment and back up with a radiant smile. Subtle natural blinking and breathing, loose strands of hair moving in a
+light night breeze, stars faintly twinkling behind her. Static camera with a very slow gentle push-in.
+Photorealistic, natural skin, no makeup, cinematic warm side light, subtle film grain.
+```
+
+**A2. Відео українською 10 с — трек `kira-ua-10s.wav` (10,0 с): «Слухай, сьогодні Юпітер видно з Високого Замку!
+Бери термос — покажу супутники. Красивіше за будь-який гороскоп... ну, майже.»**
+```
+The woman in the photo talks warmly and playfully to a close friend, lip-synced to the audio, natural Ukrainian
+speech. 0-4s: "Слухай, сьогодні Юпітер видно з Високого Замку!" - she leans slightly toward the camera, eyebrows
+lifting with a conspiratorial smile, then glances up toward the night sky with delight and back to the camera.
+4-6.5s: "Бери термос — покажу супутники." - a small inviting nod, playful and warm. 6.5-8.5s: "Красивіше за
+будь-який гороскоп..." - softer and sincere, a slight head tilt. 8.5-10s: "...ну, майже." - a knowing look, then a
+bright genuine laugh with a radiant smile. Subtle natural blinking and breathing, loose strands of hair moving in a
+light night breeze, stars faintly twinkling behind her. Static camera with a very slow gentle push-in.
+Photorealistic, natural skin, no makeup, cinematic warm side light, subtle film grain.
 ```
 
 **B. Відео 5 с — трек `kira-5s` («Привіт, я Кіра! Підеш зі мною дивитися на Юпітер?»):**
@@ -142,8 +159,8 @@ subtle film grain.
 ```
 
 **C. Відео 10 с англійською — трек `kira-en-10s` (7,6 с): «Hey, listen. Tonight you can see Jupiter right from the
-High Castle! Grab a thermos, and I will show you its moons. Well... almost.»** Kling розпізнає англійське мовлення
-(українське — ні: «No speech detected»).
+High Castle! Grab a thermos, and I will show you its moons. Well... almost.»** Kling розпізнає англійське мовлення; українське
+зі звуку він не взяв («No speech detected»), тож українські версії A і A2 — для Hedra або HeyGen.
 ```
 The woman in the photo talks warmly and playfully to a close friend, lip-synced to the audio, natural English
 speech. 0-1s: "Hey, listen" - she leans slightly toward the camera, eyebrows lifting, a conspiratorial little smile.
