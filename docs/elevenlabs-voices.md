@@ -1,9 +1,9 @@
 # Голоси агентів — промпти для ElevenLabs Voice Design
 
-П'ять голосів для п'яти учасників Агори. Кожен голос створюєте в **ElevenLabs → Voices → Create a Voice →
+Дев'ять голосів для дев'яти учасників Агори. Кожен голос створюєте в **ElevenLabs → Voices → Create a Voice →
 Voice Design** (генерація голосу з опису), зберігаєте і копіюєте його **Voice ID**. Цей ID потрібен для озвучки:
-спершу голос Hermes (v5.1), потім Ади, Бруно і Кота (v5.3). Клод за планом лишається в тексті, його голос — на
-майбутнє.
+спершу голос Hermes (v5.1), потім Ади, Бруно, Кота і Клода (v5.3), а у v5.5 — пана Леона, Мії, пані Ірми і Кіри.
+Голоси навмисно рознесені — вік, висота, темп, манера, — щоб у записі Агори ніхто ні з ким не плутався.
 
 ## Як користуватися
 
@@ -134,13 +134,103 @@ Studio quality, clear recording.
 
 ---
 
+## Пан Леон — колишній актор, 67 років (v5.5)
+
+**Характер.** Сорок років на сцені львівського драмтеатру — батьки, вітчими, королі й лиходії; тепер веде аматорський
+театр «Ліхтар». Театральний, теплий, марнославний; говорить соковито, по-галицьки, з паузами і жестами, які чути;
+розповідає байки й щоразу трохи прикрашає. Усім каже «пані» і «пане», молодим — «дитино».
+
+**Voice description:**
+```
+A man of about 67, native Ukrainian speaker from Lviv, a retired stage actor with trained diction. Deep, rich,
+resonant baritone with a slight gravel of age; theatrical and expressive, savouring every word, unhurried pace with
+dramatic pauses, warm and a little grand, with a twinkle of humour and vanity. Western Ukrainian (Galician)
+intonation. Never shouting, never frail. Studio quality, clear recording.
+```
+
+**Text to preview:**
+```
+Дитино, сідай ближче. Розповім тобі, як у вісімдесят сьомому в Харкові посеред прем'єри впала декорація... а ми
+грали далі, ніби так і було задумано. Зал аплодував стоячи. Звісно, без жодного мікрофона, пане Бруно!
+```
+
+---
+
+## Мія — студентка-історикиня, 22 роки (v5.5)
+
+**Характер.** З Харкова, з Північної Салтівки; у 2022-му приїхала до Львова евакуаційним потягом. Швидка, гостра на
+язик, іронічна, чесна до незручності; говорить суржиком — українська з харківськими і російськими словечками, — і
+коли хвилюється, суржику більшає. Бариста на Вірменській, запоєм читає детективи.
+
+**Voice description:**
+```
+A young woman of 22, native Ukrainian speaker from Kharkiv. Light, bright, clear voice, quick and energetic
+medium-fast pace, sharp and ironic with a smile in it; confident and curious, a little cheeky. Eastern Ukrainian
+(Kharkiv) intonation; she speaks surzhyk, Ukrainian mixed with Russian words, naturally and without effort.
+Higher and lighter than a woman in her thirties. Studio quality, clear recording.
+```
+
+**Text to preview:**
+```
+Короче, я перевірила: у тридцять четвертому на Вірменській реально була поліцейська дільниця. Так шо, пане Леоне,
+ваша байка — правда. Ну, наполовину! А тремпель — це нормальне слово, і я за нього стоятиму до кінця.
+```
+
+---
+
+## Пані Ірма — колишня судова стенографістка, 61 рік (v5.5)
+
+**Характер.** Тридцять сім років друкувала судові процеси і, як сама каже, жодного слова не змінила; тепер на пів
+ставки в міському архіві. Спокійна, точна, сухо-дотепна: жартує без усмішки. Говорить коротко й рівно, ніби диктує
+до протоколу: «Дослівно», «Занотовано», «Прошу уточнити».
+
+**Voice description:**
+```
+A composed woman of about 61, native Ukrainian speaker from Lviv, a retired court stenographer. Dry, precise,
+deadpan delivery with very crisp diction; measured, even pace, every word placed exactly; a slightly low, mature
+alto with a clean edge; understated humour that lands without a smile. Calm, never warm-gushing, never sharp or
+loud. Studio quality, clear recording.
+```
+
+**Text to preview:**
+```
+Дослівно: «я ніколи не запізнююся». Бруно, це ти сказав у вівторок о дев'ятнадцятій нуль сім. Сьогодні ти
+запізнився на двадцять три хвилини. Занотовано. Прошу уточнити, як ти це поясниш.
+```
+
+---
+
+## Кіра — астрофізикиня з планетарію, 23 роки (v5.5)
+
+**Характер.** З Донецька; у 2014-му мама вивезла її до Львова; чотири роки вчилася астрофізики в Единбурзі, тепер веде
+сеанси в планетарії. Зовні сонячна, смішлива, щедра, з гучним сміхом; усередині глибока і пристрасна. Певна, що
+говорить чистою українською, хоча проскакують русизми, яких вона не чує; з Единбурга прилипли «literally» і
+«anyway». Хобі — кінцуґі.
+
+**Voice description:**
+```
+A young woman of 23, native Ukrainian speaker. A low, warm, slightly husky alto with a big, easy laugh close to the
+surface; lively, adventurous and direct, with depth and quiet intensity under the warmth; relaxed medium pace,
+clear diction, a faint eastern Ukrainian softness. Lower and warmer than a typical young woman's voice, clearly
+different from a light, quick one. Studio quality, clear recording.
+```
+
+**Text to preview:**
+```
+Слухай, сьогодні Юпітер видно просто з Високого Замку — бери термос, я покажу тобі його супутники. Literally чотири
+цятки, і вони танцюють. По-чесному, це красивіше за будь-який гороскоп. Ну... майже.
+```
+
+---
+
 ## Куди записати ID
 
 | Учасник | Коли знадобиться | Куди |
 |---|---|---|
 | Hermes | v5.1 | надішліть ID у чат (не секрет) — піде в налаштування Hermes у панелі |
 | Ада, Бруно, Кіт | v5.3 | так само; кожен отримає свій голос |
-| Клод | на майбутнє | збережіть у бібліотеці ElevenLabs |
+| Клод | v5.3 | так само |
+| Пан Леон, Мія, пані Ірма, Кіра | v5.5 | надішліть ID у чат — підуть у `server/.env` як `LEON_VOICE_ID`, `MIA_VOICE_ID`, `IRMA_VOICE_ID`, `KIRA_VOICE_ID` |
 
-> Кредити ElevenLabs спільні з Lumi. Генерація прев'ю у Voice Design теж витрачає кредити (невелику кількість) —
-> кілька спроб на голос нормально.
+> Кредити ElevenLabs спільні з Lumi (план Pro, 600 000 кредитів на місяць). Генерація прев'ю у Voice Design теж
+> витрачає кредити (невелику кількість) — кілька спроб на голос нормально.
