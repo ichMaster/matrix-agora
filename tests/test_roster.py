@@ -56,7 +56,7 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
 
 @pytest.mark.parametrize("name,shown,forms", [
     ("leon", "Леон", ("леон", "леона", "леонові", "леону", "леоном", "леоне", "leon")),
-    ("mia", "Мія", ("мія", "мії", "мію", "мією", "міє", "мійко", "mia")),
+    ("mia", "Мія", ("мія", "мії", "мію", "мією", "міє", "мійко")),
     ("irma", "Ірма", ("ірма", "ірми", "ірмі", "ірму", "ірмою", "ірмо", "irma")),
     ("kira", "Кіра", ("кіра", "кіри", "кірі", "кіру", "кірою", "кіро", "kira")),
 ])
@@ -79,6 +79,14 @@ def test_a_persons_canon_and_life_never_hold_a_banned_word(name):
     for path in (f"agents/canon/{name}.md", f"agents/canon/{name}.life.md"):
         text = Path(path).read_text(encoding="utf-8")
         assert not BANNED_RE.search(text), (path, BANNED_RE.search(text))
+
+
+def test_an_italian_line_never_names_mia():
+    """v5.5 review #1: Ada studies Italian — «la mia città» must not choose Mia, who would then always answer."""
+    from agents.turns import mentions
+    mia = load_roster("agora")["mia"]
+    assert not mentions("Це la mia città, і край", mia.name_forms, mia.user_id)
+    assert mentions("Міє, а ти що скажеш?", mia.name_forms, mia.user_id)
 
 
 def test_a_name_form_shared_by_two_members_is_refused(tmp_path):
