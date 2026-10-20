@@ -108,3 +108,34 @@ a soft, slightly shy, warm smile, as if someone just paid her a compliment. Warm
 string lights, blurred guitarist on stage behind her. No makeup at all, bare natural face, natural beauty. Cinematic,
 85mm lens, shallow depth of field, subtle film grain. 4:5 aspect ratio. No text, no watermark.
 ```
+
+---
+
+### Відео — Кіра говорить (Kling AI, Avatar / Lip Sync)
+
+**Що завантажити:** фото з промпту 1 (аватарка) і аудіо `voice-samples/kira-1.mp3` (16,6 с; або
+`voice-samples/1-final-kira.mp3`, 13,4 с — той самий голос моделлю, якою озвучує Агора). Пропорції 1:1, якісний
+(professional) режим, тривалість — за довжиною аудіо.
+
+Текст треку: «Слухай, сьогодні Юпітер видно просто з Високого Замку — бери термос, я покажу тобі його супутники.
+Literally чотири цятки, і вони танцюють. По-чесному, це красивіше за будь-який гороскоп. Ну... майже.»
+
+**Prompt:**
+```
+The woman in the photo talks warmly and playfully to a close friend, lip-synced to the audio, natural Ukrainian
+speech. 0-2s: on "Слухай" she leans slightly toward the camera, eyebrows lifting, a conspiratorial little smile.
+2-6s: telling that Jupiter is visible tonight, her eyes glance up and to the side toward the night sky, then come
+back to the camera, sparkling. 6-8s: "бери термос" - a small inviting nod, playful. 8-11s: "чотири цятки, і вони
+танцюють" - her eyes light up, a gentle sway of the head as if following the dancing dots. 11-14s: "По-чесному" -
+softer and sincere, a slight head tilt, warm direct gaze. 14-16s: "Ну... майже." - a knowing pause, then a bright
+genuine laugh, she glances down for a moment and back up with a radiant smile. Subtle natural blinking and breathing,
+a few loose strands of hair moving in a light night breeze, stars faintly twinkling in the dark blue sky behind her.
+Static camera with a very slow gentle push-in. Photorealistic, natural skin, no makeup, cinematic warm side light,
+subtle film grain.
+```
+
+**Negative prompt:**
+```
+makeup, lipstick, distorted face, warped mouth, extra teeth, morphing features, changing face identity, blurry eyes,
+jittery head, camera shake, fast motion, text, subtitles, watermark, logo, cartoon, plastic skin
+```
