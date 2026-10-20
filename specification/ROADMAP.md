@@ -862,7 +862,8 @@ own, and every member of the room has a friction with them.
     a young view; on stage she plays heroines, maids and heiresses; she speaks surzhyk, and her boyfriend was
     killed by a Shahed in 2025 (the owner);
   - **пані Ірма**, 61, a former court stenographer who typed hundreds of trials and now works half-time in the
-    city archive; in Agora she has a dry humour and an exact memory of who said what (added the same day; the
+    city archive; in Agora she has a dry humour and an exact memory of who said what; she says she never changed a
+    word in a protocol, but once did, in 1997, under pressure (the owner) (added the same day; the
     owner's «Стефа» is Ada's late grandmother in her life story, so the name became Ірма).
 - **Names in the style of Ada and Bruno**, not markedly Ukrainian: Леон and Мія (first drafted as Орест and
   Соломія).
