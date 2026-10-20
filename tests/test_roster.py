@@ -421,3 +421,17 @@ def test_transcribe_belongs_to_the_herald_and_one_member(tmp_path):
     (agents / "bruno.toml").write_text('name = "Бруно"\nuser_id = "@bruno:agora.lan"\ntype = "herald"\n')
     with pytest.raises(RosterError, match="only one member may transcribe the owner with 'transcribe'"):
         load_roster("sim", reg, agents)
+
+
+def test_the_shared_canon_and_hermes_name_the_newcomers():
+    """v5.5: the people already in the room know the four — the shared canon names them with their ties, Hermes's
+    canon names every member, and Ada's and Bruno's canons hold a line for each."""
+    from pathlib import Path
+    common = Path("agents/canon/common.md").read_text(encoding="utf-8")
+    hermes = Path("agents/canon/hermes.md").read_text(encoding="utf-8")
+    ada = Path("agents/canon/ada.md").read_text(encoding="utf-8")
+    bruno = Path("agents/canon/bruno.md").read_text(encoding="utf-8")
+    for forms in (("Леон", "Леона"), ("Мія", "Мії"), ("Ірма", "Ірми"), ("Кіра", "Кіри", "Кірою")):
+        assert any(f in common for f in forms) and any(f in hermes for f in forms), forms
+        assert any(f in ada for f in forms) and any(f in bruno for f in forms), forms
+    assert "«Ліхтар»" in common and "планетарії" in common

@@ -476,9 +476,9 @@ def test_an_answer_to_the_owner_picks_its_mode_from_his_message(monkeypatch, own
     asyncio.run(agent.reply("!room"))
     turn = agent.responder.turns[0]
     if mode == "direct":
-        assert (turn.instruction, len(turn.lines), turn.effort) == (CLAUDE_BRIEF_DIRECT, 1, None)
+        assert (turn.instruction, len(turn.lines), turn.effort) == (agent.brief(CLAUDE_BRIEF_DIRECT), 1, None)
     else:
-        assert (turn.instruction, len(turn.lines), turn.effort) == (CLAUDE_BRIEF_PHILOSOPHER, 101, "high")
+        assert (turn.instruction, len(turn.lines), turn.effort) == (agent.brief(CLAUDE_BRIEF_PHILOSOPHER), 101, "high")
 
 
 def test_an_agent_trigger_that_names_him_is_answered_directly(monkeypatch):
@@ -489,7 +489,7 @@ def test_an_agent_trigger_that_names_him_is_answered_directly(monkeypatch):
     agent.timeline = [("Бруно", 1, "$b", False)]
     agent._current = lambda trigger, at_ms=None: True
     asyncio.run(agent.reply("!room", "$b"))
-    assert agent.responder.turns[0].instruction == CLAUDE_BRIEF_DIRECT
+    assert agent.responder.turns[0].instruction == agent.brief(CLAUDE_BRIEF_DIRECT)
 
 
 def test_the_wider_window_is_seeded_and_bounded(monkeypatch):
@@ -620,7 +620,7 @@ def test_claude_brings_news_with_the_news_brief_and_the_guardians_tools(monkeypa
     agent = news_agent(monkeypatch, tmp_path)
     assert asyncio.run(agent.maybe_news()) is True
     turn = agent.responder.turns[0]
-    assert turn.instruction == CLAUDE_NEWS_BRIEF and turn.lines == [("Ich", "говорили про зорі")]
+    assert turn.instruction == agent.brief(CLAUDE_NEWS_BRIEF) and turn.lines == [("Ich", "говорили про зорі")]
     assert turn.toolset == "news" and "The Guardian" in CLAUDE_NEWS_BRIEF
     assert "https://example.com/a" in agent.client.room_send.await_args.kwargs["content"]["body"]
     state = json.loads(agent.news_file.read_text())

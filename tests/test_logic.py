@@ -219,7 +219,7 @@ def test_claudes_brief_answers_in_ukrainian_and_says_nothing_about_anyones_natur
     from agents.roster import load_roster
     personas = [m for m in load_roster("agora").values() if m.type == "persona"]
     assert "Клод" in CLAUDE_BRIEF_DIRECT and "українською" in CLAUDE_BRIEF_DIRECT and "PASS" in CLAUDE_BRIEF_DIRECT
-    assert "1–3 речення" in CLAUDE_BRIEF_DIRECT and all(n in CLAUDE_BRIEF_DIRECT for n in ("Ich", "Ада", "Бруно", "Кіт"))
+    assert "1–3 речення" in CLAUDE_BRIEF_DIRECT and "{members}" in CLAUDE_BRIEF_DIRECT   # v5.5: from the roster
     assert not BANNED_RE.search(CLAUDE_BRIEF_DIRECT) and not outs_a_persona(CLAUDE_BRIEF_DIRECT, personas)
 
 
@@ -230,7 +230,33 @@ def test_an_assistants_instruction_is_its_brief():
     from tests.test_first_sync import CFG, FakeLLM
     cfg = AgentConfig(**{**CFG.__dict__, "name": "Клод", "user_id": "@claude:agora.lan", "type": "assistant",
                          "capabilities": frozenset(), "canon": ""})
-    assert Agent(cfg, llm=FakeLLM()).build_prompt() == CLAUDE_BRIEF_DIRECT
+    agent = Agent(cfg, llm=FakeLLM())
+    assert agent.build_prompt() == CLAUDE_BRIEF_DIRECT.format(members=agent.members_phrase)
+
+
+def test_claudes_briefs_name_the_rooms_speakers_from_the_roster():
+    """v5.5: the briefs list the room's members from the roster — Ich, then every speaker but Claude himself (never
+    Hermes, who takes no part in the talk) — so the four newcomers are named the day they join."""
+    from agents.agent import Agent
+    from agents.config import AgentConfig
+    from agents.logic import (
+        BANNED_RE,
+        CLAUDE_BRIEF_DIRECT,
+        CLAUDE_BRIEF_PHILOSOPHER,
+        CLAUDE_NEWS_BRIEF,
+        outs_a_persona,
+    )
+    from agents.roster import load_roster
+    from tests.test_first_sync import CFG, FakeLLM
+    cfg = AgentConfig(**{**CFG.__dict__, "name": "Клод", "user_id": "@claude:agora.lan", "type": "assistant",
+                         "capabilities": frozenset(), "canon": ""})
+    agent = Agent(cfg, llm=FakeLLM())
+    assert agent.members_phrase == "Ich, Ада, Бруно, Леон, Мія, Ірма, Кіра і Кіт"
+    personas = [m for m in load_roster("agora").values() if m.type == "persona"]
+    for template in (CLAUDE_BRIEF_DIRECT, CLAUDE_BRIEF_PHILOSOPHER, CLAUDE_NEWS_BRIEF):
+        brief = agent.brief(template)
+        assert agent.members_phrase in brief and "Гермес" not in brief and "Клод" in brief
+        assert not BANNED_RE.search(brief) and not outs_a_persona(brief, personas)
 
 
 def test_a_personas_move_comes_after_the_summary_and_before_the_rules():

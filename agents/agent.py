@@ -67,6 +67,7 @@ from agents.logic import (
     asked_section,
     build_instruction,
     clean_reply,
+    members_phrase,
     outs_a_persona,
     own_questions,
     replied_to,
@@ -167,6 +168,8 @@ class Agent:
         self.me = self.roster.get(cfg.localpart) or Member(cfg.localpart, cfg.user_id, cfg.name, (cfg.name.lower(),))
         # the members it talks with — never a herald (v5.1): he is not allowlisted and takes no turn
         self.others = {m.user_id: m for m in speakers(self.roster.values()) if m.user_id != cfg.user_id}
+        # v5.5: who an assistant's brief says is in the room — Ich, then every other speaker, from the roster
+        self.members_phrase = members_phrase(["Ich", *[m.name for m in self.others.values()]])
         self.personas = [m for m in self.others.values() if m.type == "persona"]
         # v5.2 — the member who hears the owner's voice (Hermes); his transcript of it is the owner's line
         self.transcriber = next((m.user_id for m in self.roster.values() if m.can("transcribe")), None)
@@ -680,12 +683,16 @@ class Agent:
         return still_current(self.timeline, trigger, "Ich", now, self.bot_window_ms, self.max_bot_turns,
                              self.reserved(now))
 
+    def brief(self, template: str) -> str:
+        """An assistant's brief with the room's members filled in (v5.5)."""
+        return template.format(members=self.members_phrase)
+
     def build_prompt(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None) -> str:
         """The full system instruction for a reply, in contract order; `pastlife` is a chosen thesis, `nudge` a
         nudge's material and rule (v4.3), `move` a persona's move line (v4.6). An assistant (v4.4, Claude) has no
         canon: its brief is the instruction."""
         if self.cfg.type == "assistant":
-            return CLAUDE_BRIEF_DIRECT
+            return self.brief(CLAUDE_BRIEF_DIRECT)
         can = self.cfg.can
         now = local_now(self.clock(), self.tz)
         world = None
@@ -1182,7 +1189,7 @@ class Agent:
                 answered = (self._texts.get(trigger, "") if trigger
                             else self.last_owner[1] if self.last_owner else "")
                 if claude_mode(answered, self.me.name_forms, self.cfg.user_id) == "philosopher":
-                    prompt, lines, effort = CLAUDE_BRIEF_PHILOSOPHER, self.wide_history, "high"
+                    prompt, lines, effort = self.brief(CLAUDE_BRIEF_PHILOSOPHER), self.wide_history, "high"
                     log.info("claude mode: philosopher")
             self._owner_seen = self._owner_coalesced  # the owner's messages so far are in this reply's context
             text = await self._compose(prompt, lines=lines, effort=effort)
@@ -1327,7 +1334,7 @@ class Agent:
         room_id = self.cfg.room_id
         try:
             await self.client.room_typing(room_id, True)
-            text = await self._compose(CLAUDE_NEWS_BRIEF, toolset="news")
+            text = await self._compose(self.brief(CLAUDE_NEWS_BRIEF), toolset="news")
             if text is None:
                 log.info("news silent")
                 return False
