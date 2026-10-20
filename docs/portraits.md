@@ -113,29 +113,39 @@ string lights, blurred guitarist on stage behind her. No makeup at all, bare nat
 
 ### Відео — Кіра говорить (Kling AI, Avatar / Lip Sync)
 
-**Що завантажити:** фото з промпту 1 (аватарка) і аудіо `voice-samples/kira-1.mp3` (16,6 с; або
-`voice-samples/1-final-kira.mp3`, 13,4 с — той самий голос моделлю, якою озвучує Агора). Пропорції 1:1, якісний
-(professional) режим, тривалість — за довжиною аудіо.
+Kling робить ролики на 5 або 10 секунд, і звук для lip sync має вкластися у відео: довгий трек (16,6 с) він не
+бере. Тому для Kling — окремі короткі треки Кіриним голосом, чисті, з вирівняною гучністю і без тиші на початку,
+у WAV і MP3: `voice-samples/kling/kira-10s.*` (9,9 с) і `voice-samples/kling/kira-5s.*` (3,2 с). Фото — аватарка
+з промпту 1, пропорції 1:1, якісний режим.
 
-Текст треку: «Слухай, сьогодні Юпітер видно просто з Високого Замку — бери термос, я покажу тобі його супутники.
-Literally чотири цятки, і вони танцюють. По-чесному, це красивіше за будь-який гороскоп. Ну... майже.»
-
-**Prompt:**
+**A. Відео 10 с — трек `kira-10s` («Слухай, сьогодні Юпітер видно просто з Високого Замку! Бери термос — я покажу
+тобі його супутники. Ну... майже.»):**
 ```
 The woman in the photo talks warmly and playfully to a close friend, lip-synced to the audio, natural Ukrainian
-speech. 0-2s: on "Слухай" she leans slightly toward the camera, eyebrows lifting, a conspiratorial little smile.
-2-6s: telling that Jupiter is visible tonight, her eyes glance up and to the side toward the night sky, then come
-back to the camera, sparkling. 6-8s: "бери термос" - a small inviting nod, playful. 8-11s: "чотири цятки, і вони
-танцюють" - her eyes light up, a gentle sway of the head as if following the dancing dots. 11-14s: "По-чесному" -
-softer and sincere, a slight head tilt, warm direct gaze. 14-16s: "Ну... майже." - a knowing pause, then a bright
-genuine laugh, she glances down for a moment and back up with a radiant smile. Subtle natural blinking and breathing,
-a few loose strands of hair moving in a light night breeze, stars faintly twinkling in the dark blue sky behind her.
-Static camera with a very slow gentle push-in. Photorealistic, natural skin, no makeup, cinematic warm side light,
+speech. 0-1s: "Слухай" - she leans slightly toward the camera, eyebrows lifting, a conspiratorial little smile.
+1-5s: telling that Jupiter is visible tonight from the High Castle, her eyes glance up toward the night sky with
+delight, then come back to the camera, sparkling. 5-8s: "Бери термос" - a small inviting nod, playful and warm.
+8-10s: "Ну... майже." - a knowing pause, then a bright genuine laugh with a radiant smile. Subtle natural blinking
+and breathing, loose strands of hair moving in a light night breeze, stars faintly twinkling behind her. Static
+camera with a very slow gentle push-in. Photorealistic, natural skin, no makeup, cinematic warm side light, subtle
+film grain.
+```
+
+**B. Відео 5 с — трек `kira-5s` («Привіт, я Кіра! Підеш зі мною дивитися на Юпітер?»):**
+```
+The woman in the photo greets the viewer warmly, lip-synced to the audio, natural Ukrainian speech. 0-1.5s: "Привіт,
+я Кіра!" - a bright friendly smile and a small nod. 1.5-3.5s: she asks with a playful, hopeful look, eyebrows
+slightly raised, a quick glance up toward the stars and back to the camera. 3.5-5s: she waits for the answer with a
+warm, slightly shy smile and sparkling eyes. Subtle blinking and breathing, hair strands moving in a light breeze,
+stars twinkling behind her. Static camera. Photorealistic, natural skin, no makeup, cinematic warm side light,
 subtle film grain.
 ```
 
-**Negative prompt:**
+**Negative prompt (для обох):**
 ```
 makeup, lipstick, distorted face, warped mouth, extra teeth, morphing features, changing face identity, blurry eyes,
 jittery head, camera shake, fast motion, text, subtitles, watermark, logo, cartoon, plastic skin
 ```
+
+Якщо Kling і далі не бере звук: спершу згенеруйте відео з фото (Image to Video, 10 с, промпт A без слів про
+lip-sync), а потім у тому відео — **Lip Sync** з завантаженням `kira-10s.wav`.
