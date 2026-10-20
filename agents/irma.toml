@@ -1,0 +1,17 @@
+name = "Ірма"
+user_id = "@irma:agora.lan"
+canon = "agents/canon/irma.md"
+life = "agents/canon/irma.life.md"
+simulation = "agora"
+type = "persona"         # v5.5: one of the four newcomers — a person, like Ada and Bruno
+engine = "gemini"
+name_forms = ["ірма", "ірми", "ірмі", "ірму", "ірмою", "ірмо", "irma"]  # what addresses this agent in the room (any case, a whole word)
+
+[turns]
+mode = "ranked"         # ranked | ambient | mention-only
+weight = 1.0            # the owner, 2026-10-20: every person the same
+
+[panel]                 # shown by the panel only — never part of a prompt
+name = "Irma"
+role = "former court stenographer, 61, Lviv"
+pronoun = "she"

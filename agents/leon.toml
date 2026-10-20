@@ -1,0 +1,17 @@
+name = "Леон"
+user_id = "@leon:agora.lan"
+canon = "agents/canon/leon.md"
+life = "agents/canon/leon.life.md"
+simulation = "agora"
+type = "persona"         # v5.5: one of the four newcomers — a person, like Ada and Bruno
+engine = "gemini"
+name_forms = ["леон", "леона", "леонові", "леону", "леоном", "леоне", "leon"]  # what addresses this agent in the room (any case, a whole word)
+
+[turns]
+mode = "ranked"         # ranked | ambient | mention-only
+weight = 1.0            # the owner, 2026-10-20: every person the same
+
+[panel]                 # shown by the panel only — never part of a prompt
+name = "Leon"
+role = "former actor, 67, Lviv"
+pronoun = "he"

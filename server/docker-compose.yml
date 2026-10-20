@@ -58,6 +58,86 @@ services:
     stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
 
 
+  leon:
+    # v5.5 — one of the four newcomers, a person like Ada and Bruno: the same image, the TOML picks the agent
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
+    command: ["agents/leon.toml"]
+    restart: unless-stopped
+    init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
+    depends_on: [homeserver]
+    env_file:
+      - path: .env
+        required: false
+      - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
+        required: false
+    environment:
+      HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
+      TZ: ${TIMEZONE:-Europe/Kyiv}
+    user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
+    volumes:
+      - ../state:/app/state
+    stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
+
+  mia:
+    # v5.5 — one of the four newcomers, a person like Ada and Bruno: the same image, the TOML picks the agent
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
+    command: ["agents/mia.toml"]
+    restart: unless-stopped
+    init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
+    depends_on: [homeserver]
+    env_file:
+      - path: .env
+        required: false
+      - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
+        required: false
+    environment:
+      HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
+      TZ: ${TIMEZONE:-Europe/Kyiv}
+    user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
+    volumes:
+      - ../state:/app/state
+    stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
+
+  irma:
+    # v5.5 — one of the four newcomers, a person like Ada and Bruno: the same image, the TOML picks the agent
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
+    command: ["agents/irma.toml"]
+    restart: unless-stopped
+    init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
+    depends_on: [homeserver]
+    env_file:
+      - path: .env
+        required: false
+      - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
+        required: false
+    environment:
+      HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
+      TZ: ${TIMEZONE:-Europe/Kyiv}
+    user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
+    volumes:
+      - ../state:/app/state
+    stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
+
+  kira:
+    # v5.5 — one of the four newcomers, a person like Ada and Bruno: the same image, the TOML picks the agent
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
+    command: ["agents/kira.toml"]
+    restart: unless-stopped
+    init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
+    depends_on: [homeserver]
+    env_file:
+      - path: .env
+        required: false
+      - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
+        required: false
+    environment:
+      HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
+      TZ: ${TIMEZONE:-Europe/Kyiv}
+    user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
+    volumes:
+      - ../state:/app/state
+    stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
+
   kit:
     # one container per agent, the same image (v3.2); the TOML picks the agent
     image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}

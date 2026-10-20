@@ -1,0 +1,17 @@
+name = "Кіра"
+user_id = "@kira:agora.lan"
+canon = "agents/canon/kira.md"
+life = "agents/canon/kira.life.md"
+simulation = "agora"
+type = "persona"         # v5.5: one of the four newcomers — a person, like Ada and Bruno
+engine = "gemini"
+name_forms = ["кіра", "кіри", "кірі", "кіру", "кірою", "кіро", "kira"]  # what addresses this agent in the room (any case, a whole word)
+
+[turns]
+mode = "ranked"         # ranked | ambient | mention-only
+weight = 1.0            # the owner, 2026-10-20: every person the same
+
+[panel]                 # shown by the panel only — never part of a prompt
+name = "Kira"
+role = "astrophysicist, 23, Lviv"
+pronoun = "she"

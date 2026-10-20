@@ -15,7 +15,8 @@ def env_keys(path: Path) -> set[str]:
 
 
 def test_the_service_set():
-    assert set(SERVICES) == {"homeserver", "ada", "bruno", "kit", "claude", "hermes", "usage-report", "panel"}  # v5.1
+    assert set(SERVICES) == {"homeserver", "ada", "bruno", "leon", "mia", "irma", "kira", "kit", "claude", "hermes",
+                             "usage-report", "panel"}  # v5.1, v5.5
 
 
 def test_the_homeserver_stays_closed():
@@ -27,7 +28,7 @@ def test_the_homeserver_stays_closed():
 
 
 def test_one_container_per_agent_from_one_image():
-    for name in ("ada", "bruno", "kit"):
+    for name in ("ada", "bruno", "leon", "mia", "irma", "kira", "kit"):  # v5.5: the four newcomers too
         svc = SERVICES[name]
         assert svc["image"] == IMAGE and svc["command"] == [f"agents/{name}.toml"]
         assert svc["environment"]["HOMESERVER"] == "http://homeserver:8008"  # the compose network
@@ -269,7 +270,7 @@ def test_the_voice_key_reaches_exactly_the_members_who_speak():
     the report; synced privately."""
     readers = {n for n, svc in SERVICES.items()
                if any((e.get("path") if isinstance(e, dict) else e) == "voice.env" for e in svc.get("env_file", []))}
-    assert readers == {"ada", "bruno", "kit", "claude", "hermes"}
+    assert readers == {"ada", "bruno", "leon", "mia", "irma", "kira", "kit", "claude", "hermes"}  # v5.5
     assert env_keys(ROOT / "server" / "voice.env.example") == {"ELEVENLABS_API_KEY"}
     deploy = (ROOT / "server" / "deploy.sh").read_text()
     assert 'VOICE_ENV="$REPO_DIR/server/voice.env"' in deploy and "chmod 600 ~/$REMOTE_DIR/voice.env" in deploy

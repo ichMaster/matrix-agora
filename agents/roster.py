@@ -162,6 +162,11 @@ def load_roster(sim_id: str, registry_path: Path = REGISTRY_PATH, agents_dir: Pa
         if len(holders) > 1:
             what = {"digest": "digest the room", "transcribe": "transcribe the owner"}.get(single, "start conversations")
             raise RosterError(f"{sim_id}: only one member may {what} with '{single}', got {', '.join(holders)}")
+    owners: dict[str, str] = {}  # v5.5: a form that names two members would choose the wrong one
+    for name, member in roster.items():
+        for form in member.name_forms:
+            if owners.setdefault(form, name) != name:
+                raise RosterError(f"{sim_id}: the name form {form!r} belongs to both {owners[form]} and {name}")
     return roster
 
 

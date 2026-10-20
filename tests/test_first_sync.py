@@ -26,10 +26,11 @@ class FakeLLM:
 
 
 def v44_room():
-    """The room these mechanics tests were written for — Ada, Bruno and the cat; Claude (ranked from v4.5) would
-    reshuffle their pinned R1/R2 draws, and his own turns are pinned in tests/test_turns.py."""
+    """The room these mechanics tests were written for — Ada, Bruno and the cat (and Hermes, who takes no turn);
+    Claude (ranked from v4.5) and the v5.5 newcomers would reshuffle their pinned R1/R2 draws — the full room's
+    turns are pinned in tests/test_turns.py."""
     from agents.roster import load_roster
-    return {k: m for k, m in load_roster("agora").items() if k != "claude"}
+    return {k: m for k, m in load_roster("agora").items() if k in ("ada", "bruno", "kit", "hermes")}
 
 
 def make_agent(llm=None) -> Agent:

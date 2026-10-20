@@ -427,13 +427,13 @@ def test_claude_is_chosen_by_r1_and_r2_like_the_others():
     from agents.roster import load_roster
     roster = load_roster("agora")
     ranked = {n for n, m in roster.items() if m.mode == "ranked"}
-    assert ranked == {"ada", "bruno", "claude"}
+    assert ranked == {"ada", "bruno", "leon", "mia", "irma", "kira", "claude"}           # v5.5: six people + Claude
     picks = [tuple(sorted(owner_repliers(f"$o{i}", "як вам вечір?", roster, 2))) for i in range(600)]
     assert all(len(p) == 2 and set(p) <= ranked for p in picks)
     share = sum("claude" in p for p in picks) / len(picks)
-    assert 0.33 < share < 0.48                                   # weight 0.4 (2026-10-13): in the top two ~40 %
-    nexts = {next_speaker(f"$a{i}", roster["ada"].user_id, "думка", roster) for i in range(200)}
-    assert nexts == {"bruno", "claude"}                           # never the sender, never the ambient cat
+    assert 0.06 < share < 0.17                                   # weight 0.4 against six people at 1.0: ~11 %
+    nexts = {next_speaker(f"$a{i}", roster["ada"].user_id, "думка", roster) for i in range(400)}
+    assert nexts == ranked - {"ada"}                              # never the sender, never the ambient cat
 
 
 @pytest.mark.parametrize("text", ["як справи?", "всім привіт", "Клоде, а ти?"])
@@ -502,14 +502,16 @@ def test_named_by_an_agent_the_cat_reacts_mostly_with_a_purr_and_to_the_owner_in
 
 
 def test_claudes_lower_weight_leaves_ada_and_bruno_more_first_places():
-    """The owner, 2026-10-13: «зменш пріоритет Клоду, щоб Ада і Бруно більше говорили» — weight 0.4: about 1 first
-    place in 6 for Claude, the rest shared by Ada and Bruno."""
+    """The owner, 2026-10-13: «зменш пріоритет Клоду, щоб Ада і Бруно більше говорили» — weight 0.4. From v5.5 the
+    six people share the room at 1.0 each (the owner, 2026-10-20): Claude about 1 first place in 16, each person ~1 in
+    6.4."""
     from agents.roster import load_roster
     from agents.turns import rank
     ranked = [m for m in load_roster("agora").values() if m.mode == "ranked"]
     firsts = [rank(f"$w{i}", ranked)[0] for i in range(6000)]
-    assert 0.14 < firsts.count("claude") / 6000 < 0.20
-    assert firsts.count("ada") > 2 * firsts.count("claude") and firsts.count("bruno") > 2 * firsts.count("claude")
+    assert 0.04 < firsts.count("claude") / 6000 < 0.09
+    for person in ("ada", "bruno", "leon", "mia", "irma", "kira"):
+        assert 0.12 < firsts.count(person) / 6000 < 0.19 and firsts.count(person) > 2 * firsts.count("claude")
 
 
 # --- v5.1: the herald takes no turn ----------------------------------------------------------------------------------

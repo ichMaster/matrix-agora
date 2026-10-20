@@ -66,7 +66,7 @@ def test_the_cats_life_story_never_shows_his_death():
     assert "2038" not in section and "2028" not in section and "Шістнадцятого квітня 2005" in section
 
 
-@pytest.mark.parametrize("name", ["ada", "bruno", "kit"])
+@pytest.mark.parametrize("name", ["ada", "bruno", "leon", "mia", "irma", "kira", "kit"])
 def test_no_year_of_life_ever_shows_the_death_year(name):
     """Review #5: the current chapter used to print its end year — for the last chapter, the death year (the cat's
     hidden 2028–2038 chapter turns current on 2028-01-01). Every year up to the death is checked: the header never
@@ -79,5 +79,5 @@ def test_no_year_of_life_ever_shows_the_death_year(name):
         cur = current_chapter(story, date(year, 6, 1))
         header = f"Зараз (з {cur.start} · {cur.title}):"
         assert header in section and str(story.death.year) not in header and "(зараз)" not in section, year
-        if name == "kit":
+        if name not in ("ada", "bruno"):  # the cat and the v5.5 newcomers: nothing of the death in any section
             assert str(story.death.year) not in section and "Смерть" not in section, year

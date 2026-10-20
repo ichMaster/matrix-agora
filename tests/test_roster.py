@@ -43,7 +43,7 @@ def write_roster(tmp_path, kit_toml: str):
 
 def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
     roster = load_roster("agora")
-    assert list(roster) == ["ada", "bruno", "kit", "claude", "hermes"]  # v5.1: the herald
+    assert list(roster) == ["ada", "bruno", "leon", "mia", "irma", "kira", "kit", "claude", "hermes"]  # v5.1 the herald, v5.5 four people
     ada = roster["ada"]
     assert (ada.user_id, ada.name, ada.type, ada.engine, ada.mode, ada.weight) == (
         "@ada:agora.lan", "Ада", "persona", "gemini", "ranked", 1.0)
@@ -52,6 +52,43 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
     assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES) - {"mood", "pastlife", "nudge", "news",
                                                                               "digest", "transcribe"}
     assert ada.panel["name"] == "Ada"
+
+
+@pytest.mark.parametrize("name,shown,forms", [
+    ("leon", "Леон", ("леон", "леона", "леонові", "леону", "леоном", "леоне", "leon")),
+    ("mia", "Мія", ("мія", "мії", "мію", "мією", "міє", "мійко", "mia")),
+    ("irma", "Ірма", ("ірма", "ірми", "ірмі", "ірму", "ірмою", "ірмо", "irma")),
+    ("kira", "Кіра", ("кіра", "кіри", "кірі", "кіру", "кірою", "кіро", "kira")),
+])
+def test_the_four_newcomers_are_people_like_ada_and_bruno(name, shown, forms):
+    """v5.5 (the owner, 2026-10-20): four more persons, ranked with the same weight as Ada and Bruno, who speak."""
+    m = load_roster("agora")[name]
+    assert (m.user_id, m.name, m.type, m.engine, m.mode, m.weight) == (
+        f"@{name}:agora.lan", shown, "persona", "gemini", "ranked", 1.0)
+    assert m.name_forms == forms and m.capabilities == TYPES["persona"] and m.can("voice")
+    assert m.panel["name"] == name.capitalize()
+
+
+@pytest.mark.parametrize("name", ["ada", "bruno", "leon", "mia", "irma", "kira"])
+def test_a_persons_canon_and_life_never_hold_a_banned_word(name):
+    """The persons believe they are human: neither their canon nor their life story says a model or a bot (v5.5:
+    the newcomers' drafts are checked like Ada's and Bruno's)."""
+    from pathlib import Path
+
+    from agents.logic import BANNED_RE
+    for path in (f"agents/canon/{name}.md", f"agents/canon/{name}.life.md"):
+        text = Path(path).read_text(encoding="utf-8")
+        assert not BANNED_RE.search(text), (path, BANNED_RE.search(text))
+
+
+def test_a_name_form_shared_by_two_members_is_refused(tmp_path):
+    """v5.5: a form that names two members would choose the wrong one — the roster refuses it."""
+    reg, agents = write_roster(tmp_path, 'name = "Кіт"\nuser_id = "@kit:agora.lan"\nname_forms = ["кіт", "адо"]\n')
+    with pytest.raises(RosterError, match="'адо' belongs to both ada and kit"):
+        load_roster("sim", reg, agents)
+    real = load_roster("agora")
+    forms = [f for m in real.values() for f in m.name_forms]
+    assert len(forms) == len(set(forms))
 
 
 def test_defaults_and_registry_order(tmp_path):
@@ -171,7 +208,8 @@ def test_world_tick_does_nothing_without_chronicle_or_plans():
 
 def test_the_agent_reads_its_members_from_the_roster():
     agent = Agent(CFG, llm=FakeLLM())
-    assert set(agent.others) == {"@bruno:agora.lan", "@kit:agora.lan", "@claude:agora.lan"}
+    assert set(agent.others) == {"@bruno:agora.lan", "@leon:agora.lan", "@mia:agora.lan", "@irma:agora.lan",
+                                 "@kira:agora.lan", "@kit:agora.lan", "@claude:agora.lan"}
     assert agent.names["@bruno:agora.lan"] == "Бруно" and agent.names["@ich:agora.lan"] == "Ich"
     assert "адо" in agent.me.name_forms
     injected = {"ada": Member("ada", "@ada:agora.lan", "Ада", ("ада",)),
@@ -181,7 +219,7 @@ def test_the_agent_reads_its_members_from_the_roster():
 
 def test_the_launcher_lists_the_registry_agents():
     out = subprocess.run([sys.executable, "-m", "agents.roster"], capture_output=True, text=True, check=True).stdout
-    assert out.split() == ["ada", "bruno", "kit", "claude", "hermes"]
+    assert out.split() == ["ada", "bruno", "leon", "mia", "irma", "kira", "kit", "claude", "hermes"]
 
 
 def test_an_unreadable_toml_is_a_roster_error_not_a_crash(tmp_path):

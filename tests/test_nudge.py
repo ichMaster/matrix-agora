@@ -234,9 +234,10 @@ def test_a_nudge_after_silence_opens_a_fresh_wave_with_one_next_speaker():
                 ("Кіт", now, "$nudge", False)]
     assert wave_count(timeline, "Ich", now, 600_000) == 1                               # the window emptied
     chosen = next_speaker("$nudge", kit.user_id, "рядок", roster)
-    assert chosen in ("ada", "bruno")
+    people = ("ada", "bruno", "leon", "mia", "irma", "kira")                               # v5.5: six people
+    assert chosen in (*people, "claude")
     answers = []
-    for name in ("ada", "bruno"):
+    for name in (*people, "claude"):
         me = roster[name]
         cfg = AgentConfig(**{**CFG.__dict__, "name": me.name, "user_id": me.user_id})
         d = decide_reply(kit.user_id, "рядок", "$nudge", 1, cfg, me, roster, owner_repliers_k=2, max_bot_turns=3,

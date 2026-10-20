@@ -55,7 +55,8 @@ def test_the_service_view_holds_the_rooms_settings_and_the_agents_view_its_own(r
                                                  "session"]  # v5.1, v5.3
     assert "MEMORY_DAYS" not in rows and "GEMINI_MODEL" not in rows                     # the agents' own
     mbt = rows["MAX_BOT_TURNS"]
-    assert (mbt["default"], mbt["override"], sorted(mbt["agents"])) == ("3", "8", ["ada", "bruno", "claude", "kit"])
+    assert (mbt["default"], mbt["override"], sorted(mbt["agents"])) == (
+        "3", "8", ["ada", "bruno", "claude", "irma", "kira", "kit", "leon", "mia"])  # v5.5: four more speakers
     assert mbt["effective"]["ada"] == {"value": "8", "source": "panel"} and mbt["effective"]["kit"] is None
     ada = {r["name"] for r in client.get("/api/agents/ada/settings", headers=AUTH).json()["settings"]}
     claude = {r["name"] for r in client.get("/api/agents/claude/settings", headers=AUTH).json()["settings"]}

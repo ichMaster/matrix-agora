@@ -1,0 +1,17 @@
+name = "Мія"
+user_id = "@mia:agora.lan"
+canon = "agents/canon/mia.md"
+life = "agents/canon/mia.life.md"
+simulation = "agora"
+type = "persona"         # v5.5: one of the four newcomers — a person, like Ada and Bruno
+engine = "gemini"
+name_forms = ["мія", "мії", "мію", "мією", "міє", "мійко", "mia"]  # what addresses this agent in the room (any case, a whole word)
+
+[turns]
+mode = "ranked"         # ranked | ambient | mention-only
+weight = 1.0            # the owner, 2026-10-20: every person the same
+
+[panel]                 # shown by the panel only — never part of a prompt
+name = "Mia"
+role = "history student, 22, Lviv"
+pronoun = "she"

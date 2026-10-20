@@ -70,10 +70,13 @@ def test_validate(name, raw, ok, value):
     assert (v is not None) is ok and v == value and (why is None) is ok
 
 
+PEOPLE = {"ada", "bruno", "leon", "mia", "irma", "kira"}  # v5.5: the six persons
+
+
 @pytest.mark.parametrize("name,who", [
-    ("MAX_BOT_TURNS", {"ada", "bruno", "kit", "claude"}), ("CAT_REACT_P", {"ada", "bruno", "kit", "claude"}),
-    ("PERSONA_ASK_P", {"ada", "bruno"}), ("MEMORY_DAYS", {"ada", "bruno"}), ("CAT_NUDGE_IDLE_S", {"kit"}),
-    ("CLAUDE_TIMEOUT_S", {"claude"}), ("CLAUDE_NEWS_EVERY_S", {"claude"}), ("GEMINI_MODEL", {"ada", "bruno", "kit"}),
+    ("MAX_BOT_TURNS", {*PEOPLE, "kit", "claude"}), ("CAT_REACT_P", {*PEOPLE, "kit", "claude"}),
+    ("PERSONA_ASK_P", PEOPLE), ("MEMORY_DAYS", PEOPLE), ("CAT_NUDGE_IDLE_S", {"kit"}),
+    ("CLAUDE_TIMEOUT_S", {"claude"}), ("CLAUDE_NEWS_EVERY_S", {"claude"}), ("GEMINI_MODEL", {*PEOPLE, "kit"}),
 ])
 def test_a_setting_concerns_exactly_the_agents_it_changes(name, who):
     assert {k for k, m in ROOM.items() if concerns(BY_NAME[name], m)} == who
