@@ -1,3 +1,27 @@
+Version 5.5.0 (2026-10-20)
+---------------------------
+- Phase v5.5 - Four more people in Agora (AGORA-099...102)
+- The four (AGORA-099): pan Leon (67, a former actor who leads the amateur
+  theatre "Lihtar"), Mia (22, a history student from Kharkiv, a barista,
+  speaks surzhyk), pani Irma (61, a former court stenographer, now in the
+  city archive) and Kira (23, an astrophysicist from Donetsk, educated in
+  Edinburgh, the most detailed life story) - persons ranked with the same
+  weight as Ada and Bruno, each with a canon, a life story with a hidden
+  future, a secret and traits that clash; the roster refuses a name form
+  shared by two members
+- The room knows them (AGORA-100): a shared past with everyone - the shared
+  canon, Ada's and Bruno's canons and lives, Hermes's canon; Claude's briefs
+  now take the room's members from the roster; VISION's newcomers rule
+  revisited for people
+- Compose, env and the voice budget (AGORA-101): four services, their
+  passwords and voice ids, the speakers' budget 200,000 by default
+- Live (AGORA-102): the owner created the accounts and invited the four;
+  they joined, replied and spoke in their own voices (chosen by the owner
+  from Voice Design previews)
+- Before the phase, live: a quieter room (shorter waves, fewer self-starts)
+- Code review: Mia has no Latin name form ("mia" is Italian, and Ada
+  studies Italian); four low findings left in the backlog
+
 Version 5.4.0 (2026-10-20)
 ---------------------------
 - Phase v5.4 - The Agora recording, on request (AGORA-095...098)
