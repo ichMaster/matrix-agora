@@ -7,6 +7,9 @@ type = "persona"         # v5.5: one of the four newcomers — a person, like Ad
 engine = "gemini"
 name_forms = ["кіра", "кіри", "кірі", "кіру", "кірою", "кіро", "kira"]  # what addresses this agent in the room (any case, a whole word)
 
+[capabilities]
+private = true          # v5.6: a private chat with the owner (the owner, 2026-10-20: Кіра first)
+
 [turns]
 mode = "ranked"         # ranked | ambient | mention-only
 weight = 1.0            # the owner, 2026-10-20: every person the same

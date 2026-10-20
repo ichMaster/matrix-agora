@@ -13,7 +13,8 @@ from typing import Any
 
 KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
          "digest_voice", "ask", "tts",  # v5.1: Hermes's digest and answers (Gemini Pro), his voice (ElevenLabs)
-         "stt")                         # v5.2: his hearing (Deepgram)
+         "stt",                         # v5.2: his hearing (Deepgram)
+         "private", "private_nudge")    # v5.6: a person's private chat — an answer, a line written first
 # v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan; v5.1 also the ElevenLabs
 # plan's credits), `external` (Lumi's own)
 BILLING = ("api", "subscription", "external")

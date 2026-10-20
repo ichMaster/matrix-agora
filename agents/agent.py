@@ -67,6 +67,7 @@ from agents.logic import (
     asked_section,
     build_instruction,
     clean_reply,
+    is_edit,
     members_phrase,
     outs_a_persona,
     own_questions,
@@ -114,6 +115,16 @@ from agents.plans import (
     roll_mutations,
     split_summary,
     strip_tags,
+)
+from agents.private import (
+    PRIVATE_BRIEF,
+    PRIVATE_DISCRETION,
+    PRIVATE_NUDGE,
+    load_private_state,
+    private_label,
+    private_nudge_due,
+    rediscover,
+    save_private_state,
 )
 from agents.responder import Turn, responder_for, trim_to_sentence
 from agents.roster import Member, load_roster, speakers
@@ -296,6 +307,13 @@ class Agent:
         self._mood_lock = asyncio.Lock()
         self._mood_retry_ms = 0
         self.told: set[int] = set()  # v4.3: the theses retold this run — RAM only, like the context window
+        # v5.6 — the private chat with the owner (a person with `private`): its room, its own history (never
+        # Agora's), and the pending answer; the room is kept in state/<name>.private.json
+        self.private_file = self.memory_file.parent / f"{cfg.localpart}.private.json"
+        self.private_room: str | None = load_private_state(self.private_file, "").room if cfg.can("private") else None
+        self.private_history: list[tuple[str, str]] = []
+        self.last_private_ms: int | None = None
+        self._private_pending = self._private_again = False
         # v5.3 — its own voice (VOICE_ID: the agent's <NAME>_VOICE_ID unless the panel says otherwise), how often it
         # speaks in it, and the speakers' monthly budget; read only by an agent with `voice`
         self.voice_id, self.voice_reply_p, self.voice_monthly_chars = "", 0.0, 0
@@ -406,9 +424,10 @@ class Agent:
         callback never sees them, so they are handled here once."""
         for room_id, room in list(self.client.invited_rooms.items()):
             inviter = getattr(room, "inviter", None)
-            if inviter and should_join_invite(room_id, inviter, self.cfg):
+            if inviter and should_join_invite(room_id, inviter, self.cfg, self.private_room):
                 log.info("joining %s (pending invite from owner)", room_id)
-                await self.join_room(room_id)
+                if await self.join_room(room_id) and room_id != self.cfg.room_id:
+                    self._set_private_room(room_id)
             else:
                 log.info("ignored: pending invite to %s from %s", room_id, inviter)
                 await self.client.room_leave(room_id)
@@ -417,9 +436,10 @@ class Agent:
         try:
             if event.state_key != self.cfg.user_id or event.membership != "invite":
                 return
-            if should_join_invite(room.room_id, event.sender, self.cfg):
+            if should_join_invite(room.room_id, event.sender, self.cfg, self.private_room):
                 log.info("joining %s (invited by owner)", room.room_id)
-                await self.join_room(room.room_id)
+                if await self.join_room(room.room_id) and room.room_id != self.cfg.room_id:
+                    self._set_private_room(room.room_id)
             else:
                 log.info("ignored: invite to %s from %s", room.room_id, event.sender)
                 await self.client.room_leave(room.room_id)
@@ -430,6 +450,9 @@ class Agent:
         try:
             if not self.started:
                 return  # first-sync backlog: never replay history
+            if self.private_room is not None and room.room_id == self.private_room:
+                self.on_private(event)  # v5.6: the private chat — outside Agora's turn-taking
+                return
             if room.room_id == self.cfg.room_id:
                 event = self._heard(event)  # v5.2: Hermes's transcript of the owner's voice is the owner's line
             now_ms = int(getattr(event, "server_timestamp", 0) or time.time() * 1000)
@@ -490,6 +513,134 @@ class Agent:
             self._spawn(self.reply_later(room.room_id, decision.delay_s))
         except Exception:
             log.exception("message handler failed (bot keeps running)")
+
+    # --- v5.6: the private chat with the owner --------------------------------------------------------------------
+    def _set_private_room(self, room_id: str) -> None:
+        state = load_private_state(self.private_file, local_now(self.clock(), self.tz).date().isoformat())
+        state.room = room_id
+        save_private_state(self.private_file, state)
+        self.private_room = room_id
+        log.info("private chat: room joined")
+
+    async def start_private(self, from_token: str | None) -> None:
+        """At start: the private room (the stored one, or rediscovered from the joined rooms) and its last lines as
+        the private history — never Agora's."""
+        if self.private_room is None:
+            rooms = {rid: list(getattr(r, "users", {}) or {}) for rid, r in (getattr(self.client, "rooms", {}) or {}).items()}
+            found = rediscover(rooms, self.cfg.room_id, self.cfg.user_id, self.cfg.owner)
+            if found is None:
+                return
+            self._set_private_room(found)
+            log.info("private chat: rediscovered")
+        resp = await self.client.room_messages(self.private_room, start=from_token, direction=MessageDirection.back,
+                                               limit=max(self.history_n, 1))
+        if isinstance(resp, RoomMessagesError):
+            log.warning("private chat: history unreadable (starting without it)")
+            return
+        lines, last = [], None
+        for e in reversed(resp.chunk):
+            if isinstance(e, RoomMessageText) and not is_edit(e) and e.sender in (self.cfg.owner, self.cfg.user_id):
+                lines.append(("Ich" if e.sender == self.cfg.owner else self.cfg.name, e.body))
+                last = int(getattr(e, "server_timestamp", 0) or 0) or last
+        self.private_history = lines[-max(self.history_n, 1):]
+        self.last_private_ms = last
+        log.info("private chat: %d lines of history", len(self.private_history))
+
+    def on_private(self, event) -> None:
+        """A message in the private room: the owner's is answered — no wave, no roll — and joins the one memory,
+        labelled; anything else is ignored. Never a word in a log."""
+        verdict = should_handle(self.private_room or "", event.sender, self.cfg, self.others, self.private_room)
+        if not verdict.handle:
+            if verdict.reason != "own-message":
+                log.info("ignored: %s (private chat)", verdict.reason)
+            return
+        if is_edit(event):
+            log.info("ignored: edit (private chat)")
+            return
+        self.private_history = append_history(self.private_history, "Ich", event.body, max(self.history_n, 1))
+        self.last_private_ms = int(getattr(event, "server_timestamp", 0) or self.clock())
+        self.last_activity_ms = self.clock()  # a private talk is a conversation too: no summary mid-way
+        if self.cfg.can("summary"):
+            self.session.append((private_label("Ich"), event.body))
+        if self._private_pending:
+            self._private_again = True
+            log.info("private: coalesced into the pending answer")
+            return
+        self._private_pending = True
+        delay = 1.0 + self.rng() * max(self.reply_delay_s - 1.0, 0.0)
+        log.info("private: answering (in %.1fs)", delay)
+        self._spawn(self.private_later(delay))
+
+    async def private_later(self, delay_s: float) -> None:
+        try:
+            if delay_s > 0:
+                await asyncio.sleep(delay_s)
+            for _ in range(3):  # a message that arrived while answering gets its own pass
+                self._private_again = False
+                await self.private_reply()
+                if not self._private_again:
+                    return
+                log.info("private: the owner wrote again while answering — answering it")
+        except Exception:
+            log.exception("private answer failed (bot keeps running)")
+        finally:
+            self._private_pending = False
+
+    async def private_reply(self, nudge: bool = False) -> bool:
+        """Typing on → her own prompt with the private brief (or the writing-first rule) and the private history →
+        a line in the private room, voiced under the speakers' rules → typing off in a finally."""
+        room = self.private_room
+        if room is None:
+            return False
+        try:
+            await self.client.room_typing(room, True)
+            if self.cfg.can("today"):
+                try:
+                    await self.ensure_today(local_now(self.clock(), self.tz))
+                except Exception:
+                    log.exception("today block refresh failed (the private answer continues)")
+            prompt = self.build_prompt(private=PRIVATE_NUDGE if nudge else PRIVATE_BRIEF)
+            text = await self._compose(prompt, lines=self.private_history,
+                                       kind="private_nudge" if nudge else "private")
+            if text is None:
+                return False
+            await self.send_line(room, text, f"private:{self.clock()}")
+            self.private_history = append_history(self.private_history, self.cfg.name, text, max(self.history_n, 1))
+            self.last_private_ms = self.clock()
+            if self.cfg.can("summary"):
+                self.session.append((private_label(self.cfg.name), text))
+            log.info("private: %s", "wrote first" if nudge else "answered")
+            return True
+        finally:
+            await self.client.room_typing(room, False)
+
+    async def maybe_private_nudge(self) -> bool:
+        """After a long private silence, in the owner's hours, under the day's cap: one line of her own — never
+        while an answer is on its way, never before they have talked there, never at once after a restart."""
+        if not (self.started and self.cfg.can("private") and self.private_room) or self._private_pending:
+            return False
+        if not self.private_history:
+            return False
+        now_ms = self.clock()
+        now = local_now(now_ms, self.tz)
+        state = load_private_state(self.private_file, now.date().isoformat())
+        state.room = state.room or self.private_room
+        last = max([t for t in (self.last_private_ms, self.started_ms) if t is not None], default=None)
+        if not private_nudge_due(now_ms, now, last, state, self.private_idle_ms, self.private_per_day,
+                                 self.private_hours):
+            return False
+        self._private_pending = True
+        try:
+            state.last_ms = now_ms  # every attempt spaces the next one; only a sent line counts
+            save_private_state(self.private_file, state)
+            sent = await self.private_reply(nudge=True)
+            if sent:
+                state.count += 1
+                state.sent_ms = now_ms
+                save_private_state(self.private_file, state)
+            return sent
+        finally:
+            self._private_pending = False
 
     async def send_line(self, room_id: str, text: str, event_key: str, answering: str | None = None) -> None:
         """v5.3 — every line the agent says: a voice message under a plain label when it should and can (`voice_due`,
@@ -694,10 +845,12 @@ class Agent:
         """An assistant's brief with the room's members filled in (v5.5)."""
         return template.format(members=self.members_phrase)
 
-    def build_prompt(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None) -> str:
+    def build_prompt(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None,
+                     private: str | None = None) -> str:
         """The full system instruction for a reply, in contract order; `pastlife` is a chosen thesis, `nudge` a
-        nudge's material and rule (v4.3), `move` a persona's move line (v4.6). An assistant (v4.4, Claude) has no
-        canon: its brief is the instruction."""
+        nudge's material and rule (v4.3), `move` a persona's move line (v4.6), `private` the private chat's situation
+        (v5.6; an Agora reply of a person with `private` closes its rules with the discretion line). An assistant
+        (v4.4, Claude) has no canon: its brief is the instruction."""
         if self.cfg.type == "assistant":
             return self.brief(CLAUDE_BRIEF_DIRECT)
         can = self.cfg.can
@@ -721,6 +874,8 @@ class Agent:
             move=move if self.cfg.type == "persona" else None,
             # v5.3 (the owner): its own questions of this session outlast the context window — never asked twice
             asked=asked_section(own_questions(self.session, self.cfg.name)) if self.cfg.type == "persona" else None,
+            private=private if can("private") else None,
+            discretion=PRIVATE_DISCRETION if can("private") and private is None else None,
         )
 
     def draw_move(self, event_id: str, now) -> str | None:
@@ -1229,11 +1384,11 @@ class Agent:
             await self.client.room_typing(room_id, False)
 
     async def _compose(self, prompt: str, max_words: int | None = None, lines: list | None = None,
-                       effort: str | None = None, toolset: str | None = None) -> str | None:
+                       effort: str | None = None, toolset: str | None = None, kind: str = "reply") -> str | None:
         """One model call → the line as it would be sent, or None (logged): never half a sentence, never another's
         words, PASS honoured, the creature's word cap applied (`max_words` overrides it: a telegram's joke)."""
         reply = await self.responder.respond(Turn(list(self.history if lines is None else lines), prompt,
-                                                  self.reply_max_tokens, "reply", effort, toolset))
+                                                  self.reply_max_tokens, kind, effort, toolset))
         if reply is None:
             return None  # already logged
         text = reply.text
@@ -1469,6 +1624,11 @@ class Agent:
                     await self.maybe_news()
                 except Exception:
                     log.exception("news failed (bot keeps running)")
+            if self.cfg.can("private"):  # v5.6: she writes first in the private chat
+                try:
+                    await self.maybe_private_nudge()
+                except Exception:
+                    log.exception("private: writing first failed (bot keeps running)")
             now = self.clock()
             if (
                 self.cfg.can("summary")
@@ -1506,6 +1666,11 @@ class Agent:
         self.started = True
         self.started_ms = self.clock()
         await self.join_pending_invites()
+        if self.cfg.can("private"):
+            try:
+                await self.start_private(first.next_batch)
+            except Exception:
+                log.exception("private chat start failed (starting without its history)")
         self._spawn(self.world_tick(force=True))  # startup kick: catch up memories and today's plans
         if self.cfg.can("mood"):
             self._spawn(self.ensure_mood(local_now(self.clock(), self.tz)))  # the day's horoscope, early

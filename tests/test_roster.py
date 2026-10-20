@@ -65,7 +65,8 @@ def test_the_four_newcomers_are_people_like_ada_and_bruno(name, shown, forms):
     m = load_roster("agora")[name]
     assert (m.user_id, m.name, m.type, m.engine, m.mode, m.weight) == (
         f"@{name}:agora.lan", shown, "persona", "gemini", "ranked", 1.0)
-    assert m.name_forms == forms and m.capabilities == TYPES["persona"] and m.can("voice")
+    assert m.name_forms == forms and m.can("voice")
+    assert m.capabilities == TYPES["persona"] | ({"private"} if name == "kira" else set())  # v5.6: Кіра's chat
     assert m.panel["name"] == name.capitalize()
 
 
