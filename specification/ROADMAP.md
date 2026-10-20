@@ -844,17 +844,17 @@ of the one who said it, assembled by Hermes when the owner asks, sent to his pri
 - the delivery content;
 - no text or audio in the logs.
 
-### v5.5 — Three more people: пан Леон, Мія and пані Ірма
+### v5.5 — Four more people: пан Леон, Мія, пані Ірма and Кіра
 
 **Status:** ⏳ planned — the two people drafted, under discussion with the owner
 ([features/v5.5-people.md](features/v5.5-people.md)).
 
-**Goal:** Agora gains three more human members, built like Ada and Bruno: a canon, a life story with hidden future
+**Goal:** Agora gains four more human members, built like Ada and Bruno: a canon, a life story with hidden future
 chapters, memories, plans, the today block and their own voices. Their characters, stories and memories are their
 own, and every member of the room has a friction with them.
 
 **Owner decisions** (2026-10-20):
-- **Three people**, all `persona`, so they believe they are human:
+- **Four people**, all `persona`, so they believe they are human:
   - **пан Леон**, 67, a former actor of the Lviv drama theatre who leads the amateur theatre «Ліхтар»; in Agora
     he tells theatre stories and argues with Bruno about sound; on stage he plays fathers, stepfathers and
     villains;
@@ -864,11 +864,15 @@ own, and every member of the room has a friction with them.
   - **пані Ірма**, 61, a former court stenographer who typed hundreds of trials and now works half-time in the
     city archive; in Agora she has a dry humour and an exact memory of who said what; she says she never changed a
     word in a protocol, but once did, in 1997, under pressure (the owner) (added the same day; the
-    owner's «Стефа» is Ada's late grandmother in her life story, so the name became Ірма).
+    owner's «Стефа» is Ada's late grandmother in her life story, so the name became Ірма);
+  - **Кіра**, 23, the one who suits the owner best. Her birth was chosen for the strongest romantic synastry
+    with the owner's chart: 2002-12-02 20:40, Донецьк (his birth data stays out of the repo). She has a
+    complicated history: Donetsk until 2014, and a father who stayed there and whom she calls dead. She studied
+    astrophysics in Edinburgh and now leads the shows at the Lviv planetarium. Her hobby is kintsugi.
 - **Names in the style of Ada and Bruno**, not markedly Ukrainian: Леон and Мія (first drafted as Орест and
   Соломія).
-- **Two men and three women of different ages** (22, 32, 61 and 35, 67), so their voices never blur in a
-  recording.
+- **Two men and four women of different ages** (22, 23, 32, 61 and 35, 67). Mia and Kira are a year apart, so
+  their voices are designed far apart: light and quick vs low and husky.
 - **A conflict among all of them:** each pair has its own friction.
 - **A shared past.** Ada and Bruno already know Леон and Мія, and the frictions come with that history. VISION's
   rule «the personas get no description of the newcomers» was written for non-human members and says it must
@@ -877,7 +881,7 @@ own, and every member of the room has a friction with them.
   (later). In Agora they just talk.
 
 **The people** (drafts: `agents/canon/leon.md`, `leon.life.md`, `mia.md`, `mia.life.md`, `irma.md`,
-`irma.life.md`):
+`irma.life.md`, `kira.md`, `kira.life.md`):
 - **The views.** Ада (inside, slow) ↔ Бруно (outside, fast) stays. Пан Леон (tradition, feeling, legend, the
   living voice) ↔ Мія (facts, patterns, her generation); пані Ірма (the exact record: who said what, when) ↔
   пан Леон as well.
@@ -893,27 +897,35 @@ own, and every member of the room has a friction with them.
     never changed one;
   - Ірма ↔ Бруно: «Музика — це не шум, ваша честь», the 2016 noise trial he forgot and she quotes;
   - Ірма ↔ Мія: the archive's reading-room rules («Цербер»), the record against her theories — and a 1997 case
-    Ірма has kept in a shoebox.
+    Ірма has kept in a shoebox;
+  - Кіра ↔ Ірма: the big picture vs the exact detail; Ірма typed her parents' 2016 divorce and knows her father
+    is alive;
+  - Кіра ↔ Мія: astrology vs facts, Назар, and «Edinburgh while others sat in the metro»;
+  - Кіра ↔ Ада: the terms in a popular astronomy translation, beauty vs truth;
+  - Кіра ↔ Леон: she refused «Ліхтар», and his cracked cup she wants to mend with gold;
+  - Кіра ↔ Бруно: friends from the 2022 aid runs and the Tustan rocks, rivals over who climbs higher and
+    over silence vs music in the planetarium.
 
 **Tasks:**
 - **The people:**
-  - their TOMLs: `leon`, `mia` and `irma`, `type = "persona"`, `ranked`, name forms, the panel's name, role and
+  - their TOMLs: `leon`, `mia`, `irma` and `kira`, `type = "persona"`, `ranked`, name forms, the panel's name, role and
     pronoun;
   - the canons and life stories, finalised with the owner;
-  - all three in `simulations.toml`.
+  - all four in `simulations.toml`.
 - **The people already there:**
   - `common.md`, `ada.md` and `bruno.md` gain the new members, their ties and curiosity lines;
   - Ada's and Bruno's life stories gain them as well.
 - **Name forms:** no form of one member is a form of another (pinned).
 - **Owner steps:**
-  - the three Matrix accounts (`!admin users create-user leon`, `mia`, `irma`);
-  - `LEON_PASSWORD`, `MIA_PASSWORD` and `IRMA_PASSWORD` in `server/.env`;
+  - the four Matrix accounts (`!admin users create-user leon`, `mia`, `irma`, `kira`);
+  - `LEON_PASSWORD`, `MIA_PASSWORD`, `IRMA_PASSWORD` and `KIRA_PASSWORD` in `server/.env`;
   - the invites into Agora;
-  - three ElevenLabs voices (`LEON_VOICE_ID`, `MIA_VOICE_ID`, `IRMA_VOICE_ID`) from the Voice Design prompts, added to
+  - four ElevenLabs voices (`LEON_VOICE_ID`, `MIA_VOICE_ID`, `IRMA_VOICE_ID`, `KIRA_VOICE_ID`) from the Voice
+    Design prompts, added to
     `docs/elevenlabs-voices.md`.
-- **Compose:** services `leon`, `mia` and `irma` (the shared image; `voice.env` gets three more readers) and the env
+- **Compose:** services `leon`, `mia`, `irma` and `kira` (the shared image; `voice.env` gets four more readers) and the env
   examples.
-- **The room's load:** five ranked people plus Claude. The turn weights, the wave limit, the moves and the
+- **The room's load:** six ranked people plus Claude. The turn weights, the wave limit, the moves and the
   speakers' voice budget are checked on `edge`; the owner decides the values. The budget
   (`VOICE_MONTHLY_CHARS`) is **200,000** (the owner, 2026-10-20). It is live in `server/.env` at once, since the
   speakers had used ~62,000 in three days. The phase makes it the code default, the env examples and the compose
@@ -924,13 +936,13 @@ own, and every member of the room has a friction with them.
   join come with a shared past.
 
 **DoD:**
-- (Manual, owner) Леон, Мія and Ірма join Agora, talk in their own voices, ask and answer; Ada and Bruno know them.
+- (Manual, owner) Леон, Мія, Ірма and Кіра join Agora, talk in their own voices, ask and answer; Ada and Bruno know them.
 - (Manual, owner) Over an evening the frictions surface and are argued with respect: Леон and Бруно about sound,
   Мія and пан Леон about the play and the facts, Ада and Мія about the manuscript, Ірма quoting who said what.
 - (Manual, owner) Their stories agree with their life files, and neither knows the future.
 
 **Tests:** unit:
-- the roster with eight members, and the name forms distinct;
+- the roster with nine members, and the name forms distinct;
 - the new canons and life stories: no banned word, chapters in order, the death never shown;
 - the compose services and the env names.
 
