@@ -199,7 +199,7 @@ services:
       CLAUDE_NEWS_HOURS: ${CLAUDE_NEWS_HOURS:-09-01}    # …in these local hours
       CLAUDE_VOICE_ID: ${CLAUDE_VOICE_ID:-}        # v5.3: his voice and the speakers' share and budget
       VOICE_REPLY_P: ${VOICE_REPLY_P:-1.0}
-      VOICE_MONTHLY_CHARS: ${VOICE_MONTHLY_CHARS:-100000}
+      VOICE_MONTHLY_CHARS: ${VOICE_MONTHLY_CHARS:-200000}
     tmpfs:
       - /tmp/claude:uid=1000,gid=1000,mode=0700,size=64m   # bounded (review #7)
     user: "1000:1000"

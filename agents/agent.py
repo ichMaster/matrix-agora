@@ -297,7 +297,7 @@ class Agent:
         if cfg.can("voice"):
             self.voice_id = os.environ.get("VOICE_ID", "").strip()
             self.voice_reply_p = float(os.environ.get("VOICE_REPLY_P", "1.0"))
-            self.voice_monthly_chars = int(os.environ.get("VOICE_MONTHLY_CHARS", "100000"))
+            self.voice_monthly_chars = int(os.environ.get("VOICE_MONTHLY_CHARS", "200000"))
             self.voice_off = ("no voice id" if not self.voice_id
                               else "voice id malformed" if not VOICE_ID_RE.match(self.voice_id)
                               else "no ELEVENLABS_API_KEY" if not voice_key else None)

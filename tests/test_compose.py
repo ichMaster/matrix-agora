@@ -253,9 +253,12 @@ def test_the_shared_server_example_never_invites_hermes_secrets():
 
 
 def test_the_voice_settings_are_in_both_env_examples_with_the_schema_defaults():
-    """v5.3: each agent's voice id name, the share and the speakers' budget; v5.4: the owner's cloned voice."""
+    """v5.3: each agent's voice id name, the share and the speakers' budget; v5.4: the owner's cloned voice; v5.5:
+    the four newcomers' voices and passwords."""
     from agents.settings import BY_NAME
-    ids = ("ADA_VOICE_ID", "BRUNO_VOICE_ID", "KIT_VOICE_ID", "CLAUDE_VOICE_ID", "OWNER_VOICE_ID")
+    ids = ("ADA_VOICE_ID", "BRUNO_VOICE_ID", "KIT_VOICE_ID", "CLAUDE_VOICE_ID", "OWNER_VOICE_ID", "LEON_VOICE_ID",
+           "MIA_VOICE_ID", "IRMA_VOICE_ID", "KIRA_VOICE_ID", "LEON_PASSWORD", "MIA_PASSWORD", "IRMA_PASSWORD",
+           "KIRA_PASSWORD")
     for path in (ROOT / ".env.example", ROOT / "server" / ".env.example"):
         values = dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines()
                       if line and not line.startswith("#") and "=" in line)
@@ -266,8 +269,8 @@ def test_the_voice_settings_are_in_both_env_examples_with_the_schema_defaults():
 
 
 def test_the_voice_key_reaches_exactly_the_members_who_speak():
-    """v5.3: server/voice.env — the ElevenLabs key alone, for ada, bruno, kit, claude and hermes; never the panel or
-    the report; synced privately."""
+    """v5.3: server/voice.env — the ElevenLabs key alone, for every speaker (v5.5: the four newcomers too) and hermes;
+    never the panel or the report; synced privately."""
     readers = {n for n, svc in SERVICES.items()
                if any((e.get("path") if isinstance(e, dict) else e) == "voice.env" for e in svc.get("env_file", []))}
     assert readers == {"ada", "bruno", "leon", "mia", "irma", "kira", "kit", "claude", "hermes"}  # v5.5
@@ -276,4 +279,4 @@ def test_the_voice_key_reaches_exactly_the_members_who_speak():
     assert 'VOICE_ENV="$REPO_DIR/server/voice.env"' in deploy and "chmod 600 ~/$REMOTE_DIR/voice.env" in deploy
     env = SERVICES["claude"]["environment"]
     assert env["CLAUDE_VOICE_ID"] == "${CLAUDE_VOICE_ID:-}" and env["VOICE_REPLY_P"] == "${VOICE_REPLY_P:-1.0}"
-    assert env["VOICE_MONTHLY_CHARS"] == "${VOICE_MONTHLY_CHARS:-100000}"
+    assert env["VOICE_MONTHLY_CHARS"] == "${VOICE_MONTHLY_CHARS:-200000}"  # v5.5: the owner
