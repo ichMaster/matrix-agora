@@ -53,3 +53,58 @@ behind her full of cups and bowls mended with gold seams, a small telescope on t
 rooftops in the dark. No makeup at all, bare natural face. Warm lamplight, shallow depth of field, natural and fresh, 50mm lens, subtle film grain. 4:5
 aspect ratio. No text, no watermark.
 ```
+
+---
+
+### Інші ситуації, настрої й одяг
+
+До кожного промпту додавайте обране фото як **референс** — перша фраза тримає те саме обличчя.
+
+**4. Скелі Тустані, сонячний осінній день — зосереджена й щаслива (4:5):**
+```
+The same woman as in the reference image (keep her face, hair and eyes exactly), rock climbing on the sandstone cliffs of Tustan in the Carpathians on a sunny autumn day. She hangs from a
+ledge, looking back over her shoulder at the camera with a bright, triumphant smile, slightly out of breath, strands
+of glossy dark-honey hair escaping a high ponytail. Fitted charcoal climbing t-shirt, harness, chalk bag, chalk on her
+hands and a smudge on her cheek. Golden and red autumn forest far below, blue sky, warm sunlight. No makeup at all,
+bare natural face, natural beauty. Action photography, 35mm lens, crisp detail, subtle film grain. 4:5 aspect ratio.
+No text, no watermark.
+```
+
+**5. Сеанс у планетарії — натхненна, говорить до залу (3:2):**
+```
+The same woman as in the reference image (keep her face, hair and eyes exactly), presenting a show inside a planetarium dome, standing in the dark with the projected Milky Way and a glowing
+Saturn across the dome above her. She speaks with inspiration, one hand raised toward the stars holding a small
+laser pointer, eyes shining, a delighted smile; silhouettes of children in the front rows look up. Dark navy shirt
+with the sleeves rolled up and a small enamel Saturn pin on the collar, an old mechanical wristwatch, hair in a
+messy bun with a pencil. Cool blue starlight on her face, a soft warm rim light. No makeup at all, bare natural face.
+Cinematic, 35mm lens, low light, subtle film grain. 3:2 aspect ratio. No text, no watermark.
+```
+
+**6. Дощовий ранок у кав'ярні на Вірменській — задумлива, трохи сумна (4:5):**
+```
+The same woman as in the reference image (keep her face, hair and eyes exactly), sitting alone by a rain-streaked window in a small old café in Lviv on a grey morning, holding a cup of tea
+with both hands, looking out at the wet cobblestones with a quiet, faraway, slightly melancholic expression, as if
+thinking of a home she cannot return to. Loose damp wavy dark-honey hair, a beige trench coat over a dark green
+sweater. Soft diffused window light, warm café lamps behind her, reflections on the glass. No makeup at all, bare
+natural face, natural beauty. Moody, cinematic, 50mm lens, shallow depth of field, subtle film grain. 4:5 aspect
+ratio. No text, no watermark.
+```
+
+**7. Перший сніг на Високому Замку — радісна, сміється (3:2):**
+```
+The same woman as in the reference image (keep her face, hair and eyes exactly), on the High Castle hill in Lviv on the night of the first snow, laughing with her head tilted back, snowflakes
+in her hair and on her eyelashes, her breath visible in the cold air. Long chunky knitted scarf, a dark puffer jacket,
+a woollen beanie, binoculars on a strap around her neck, a steaming thermos cup of mulled wine in her hand. The lit
+city and its towers far below, falling snow lit by a street lamp. No makeup at all, bare natural face, rosy cheeks
+from the cold. Joyful, candid, cinematic, 35mm lens, subtle film grain. 3:2 aspect ratio. No text, no watermark.
+```
+
+**8. Вечір на концерті Бруно — ошатна, трохи сором'язлива (4:5):**
+```
+The same woman as in the reference image (keep her face, hair and eyes exactly), at a small crowded live-music club in Lviv in the evening, standing near the stage with a glass of wine,
+dressed up for once: a simple elegant black slip dress with thin straps under an open oversized vintage denim
+jacket, small silver earrings, her glossy dark-honey hair loose over her shoulders. She looks toward the camera with
+a soft, slightly shy, warm smile, as if someone just paid her a compliment. Warm amber stage lights, bokeh of
+string lights, blurred guitarist on stage behind her. No makeup at all, bare natural face, natural beauty. Cinematic,
+85mm lens, shallow depth of field, subtle film grain. 4:5 aspect ratio. No text, no watermark.
+```
