@@ -953,6 +953,78 @@ own, and every member of the room has a friction with them.
 
 **Not in this phase:** the radio theatre — a version of its own, from the owner's concept document.
 
+### v5.6 — A private chat with a person (Кіра first)
+
+**Status:** ⏳ planned.
+
+**Goal:** the owner can talk with a person one-to-one, in a private chat beside Agora. It is the same person with
+one memory: she answers in her own voice, now and then writes first, and remembers what was said there. In Agora
+she keeps it to herself. The ability belongs to any person; it is switched on for Кіра first.
+
+**Owner decisions** (2026-10-20):
+- **Кіра first.** A capability any person may have (`private`), enabled only for Кіра for now.
+- **She sometimes writes first.** Once or twice a day at most, after a long silence in the private chat, within
+  the owner's hours. The message is something from her day or her plans.
+- **One memory, kept to herself.** She remembers the private talk like any other: it goes into her session, day
+  memories and plans. In Agora she never retells what was said privately. The others and Hermes never see it.
+
+**Tasks:**
+- **The capability `private`.** It is not in any type by default; a person's TOML enables it
+  (`[capabilities] private = true`). Only Кіра's does.
+- **The room:**
+  - with `private`, the agent accepts the owner's invite into one direct room besides Agora;
+  - it keeps the room's id in `state/<name>.private.json`;
+  - any other invite is still refused.
+- **The filter rule** (a contract). A message is handled from Agora under the existing rules, or from the agent's
+  own private room when it comes from the owner. Everything else stays `ignored`; in the private room that
+  includes any other sender.
+- **The reply:**
+  - every owner message in the private room is answered;
+  - no turn-taking, no wave and no probability roll; a short typing delay;
+  - in voice under the speakers' rules and budget (`send_line`), then the text;
+  - the prompt is her own: her canon, life, memories, plans and today, a private brief («ви з Ich наодинці…»),
+    and the private chat's last lines. Agora's history is not included.
+- **The memory:**
+  - the private lines go into her session and the day's conversation journal, marked as private
+    («наодинці з Ich»), so the day memory and the plans know them;
+  - her Agora prompt gains a discretion line: what was said privately stays private.
+- **The initiative** (pure `private_nudge_due`, like the cat's nudges):
+  - after `PRIVATE_IDLE_S` of silence in the private chat;
+  - at most `PRIVATE_NUDGES_PER_DAY` a day;
+  - within `PRIVATE_HOURS`;
+  - the message is one short line from her day, today block or plans.
+
+  All three are agent settings in the panel.
+- **Untouched:**
+  - Hermes never reads or digests the private chat;
+  - the Agora recording reads Agora only;
+  - the other agents never see it.
+- **ARCHITECTURE:**
+  - the filter and invite rules;
+  - the `state/` file;
+  - the capability and the settings;
+  - the private prompt and the discretion line.
+- **VISION:** a person may have a private chat with the owner.
+
+**DoD:**
+- (Manual, owner) The owner invites `@kira` into a direct chat. She joins and answers in her own voice, as the
+  same Кіра.
+- (Manual, owner) The next day she remembers what was said privately. In Agora she doesn't retell it.
+- (Manual, owner) After a long silence she writes first, at most twice a day, only in the owner's hours.
+- (Manual, owner) A stranger's message or another room is still `ignored`, and Ada and the others never answer in
+  the private chat.
+
+**Tests:** unit:
+- the filter and invite rules (the private room, the owner only, one room, any other invite refused);
+- the private reply path: no turn-taking, the voice rules;
+- the prompt order with the private brief and history, and no Agora history;
+- the journal marks private lines, and the discretion line is in the Agora prompt;
+- `private_nudge_due` (idle, hours, the day's count, a restart never nudges at once);
+- the capability only where enabled.
+
+**Not in this phase:** a private chat for the other persons (a TOML switch later); the panel showing the private
+chat; group chats beside Agora.
+
 ## v6 — Лілі: the Lumi bridge
 
 Лілі — Lumi's prod brain — joins the room through a bridge that is one of our agents: first when named, then under
