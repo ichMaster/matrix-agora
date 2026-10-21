@@ -120,6 +120,7 @@ from agents.private import (
     PRIVATE_BRIEF,
     PRIVATE_DISCRETION,
     PRIVATE_NUDGE,
+    live_room,
     load_private_state,
     private_label,
     private_nudge_due,
@@ -424,10 +425,10 @@ class Agent:
         callback never sees them, so they are handled here once."""
         for room_id, room in list(self.client.invited_rooms.items()):
             inviter = getattr(room, "inviter", None)
-            if inviter and should_join_invite(room_id, inviter, self.cfg, self.private_room):
+            if inviter and should_join_invite(room_id, inviter, self.cfg, self._live_private_room()):
                 log.info("joining %s (pending invite from owner)", room_id)
                 if await self.join_room(room_id) and room_id != self.cfg.room_id:
-                    self._set_private_room(room_id)
+                    await self._move_private_room(room_id)
             else:
                 log.info("ignored: pending invite to %s from %s", room_id, inviter)
                 await self.client.room_leave(room_id)
@@ -436,10 +437,10 @@ class Agent:
         try:
             if event.state_key != self.cfg.user_id or event.membership != "invite":
                 return
-            if should_join_invite(room.room_id, event.sender, self.cfg, self.private_room):
+            if should_join_invite(room.room_id, event.sender, self.cfg, self._live_private_room()):
                 log.info("joining %s (invited by owner)", room.room_id)
                 if await self.join_room(room.room_id) and room.room_id != self.cfg.room_id:
-                    self._set_private_room(room.room_id)
+                    await self._move_private_room(room.room_id)
             else:
                 log.info("ignored: invite to %s from %s", room.room_id, event.sender)
                 await self.client.room_leave(room.room_id)
@@ -522,12 +523,31 @@ class Agent:
         self.private_room = room_id
         log.info("private chat: room joined")
 
+    def _members(self) -> dict:
+        return {rid: list(getattr(r, "users", {}) or {}) for rid, r in (getattr(self.client, "rooms", {}) or {}).items()}
+
+    def _live_private_room(self) -> str | None:
+        """The stored private room while the owner is still in it — else None, so a new invite of his replaces it
+        (v5.6 review #2)."""
+        return live_room(self.private_room, self._members(), self.cfg.owner) if self.private_room else None
+
+    async def _move_private_room(self, room_id: str) -> None:
+        """Joined the owner's private room: store it; a stale one he left is left too."""
+        old = self.private_room
+        self._set_private_room(room_id)
+        if old and old != room_id:
+            self.private_history = []
+            log.info("private chat: moved to a new room (the owner left the old one)")
+            try:
+                await self.client.room_leave(old)
+            except Exception:  # noqa: BLE001 — leaving the stale room is a courtesy
+                log.warning("private chat: leaving the old room failed")
+
     async def start_private(self, from_token: str | None) -> None:
         """At start: the private room (the stored one, or rediscovered from the joined rooms) and its last lines as
         the private history — never Agora's."""
         if self.private_room is None:
-            rooms = {rid: list(getattr(r, "users", {}) or {}) for rid, r in (getattr(self.client, "rooms", {}) or {}).items()}
-            found = rediscover(rooms, self.cfg.room_id, self.cfg.user_id, self.cfg.owner)
+            found = rediscover(self._members(), self.cfg.room_id, self.cfg.user_id, self.cfg.owner)
             if found is None:
                 return
             self._set_private_room(found)

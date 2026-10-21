@@ -14,6 +14,7 @@ from agents.private import (
     PRIVATE_DISCRETION,
     PRIVATE_NUDGE,
     PrivateState,
+    live_room,
     load_private_state,
     private_label,
     private_nudge_due,
@@ -109,6 +110,12 @@ def test_the_state_round_trips_privately_and_starts_fresh_when_corrupt(tmp_path)
     assert load_private_state(path, "2026-10-20") == PrivateState(day="2026-10-20")
     assert load_private_state(tmp_path / "missing.json", "2026-10-20") == PrivateState(day="2026-10-20")
     assert "текст" not in path.read_text(encoding="utf-8")
+
+
+def test_the_stored_room_counts_only_while_the_owner_is_in_it():
+    assert live_room(DM, {DM: [OWNER, KIRA]}, OWNER) == DM
+    assert live_room(DM, {DM: [KIRA]}, OWNER) is None                     # he left: a new invite replaces it
+    assert live_room(DM, {}, OWNER) is None and live_room(None, {DM: [OWNER]}, OWNER) is None
 
 
 def test_the_room_is_rediscovered_from_the_joined_rooms():

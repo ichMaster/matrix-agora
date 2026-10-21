@@ -89,6 +89,14 @@ def private_nudge_due(now_ms: int, local_now: datetime, last_private_ms: int | N
     return nudge_due(now_ms, local_now, last_private_ms, state.last_ms, state.count, idle_ms, per_day, hours)
 
 
+def live_room(stored: str | None, rooms: dict, owner: str) -> str | None:
+    """The stored private room while the owner is still in it (`rooms`: room id → member user ids); None when he left
+    it or it is gone, so a new invite of his replaces it (v5.6 review #2 — like Hermes's `needs_private_room`)."""
+    if stored is None or owner not in set(rooms.get(stored) or ()):
+        return None
+    return stored
+
+
 def rediscover(rooms: dict, agora: str, me: str, owner: str) -> str | None:
     """The private room from the joined rooms when the state lost it: the one room besides Agora whose members are
     exactly this agent and the owner (`rooms`: room id → member user ids). Two such rooms — none is chosen."""

@@ -71,6 +71,7 @@ def test_the_owners_invite_opens_the_private_chat_and_a_second_room_is_refused(t
         SimpleNamespace(room_id=room), SimpleNamespace(state_key=KIRA, membership="invite", sender=who)))
     invite(DM, OWNER)
     assert agent.private_room == DM and load_private_state(agent.private_file, "").room == DM
+    agent.client.rooms = {DM: SimpleNamespace(users={OWNER: 1, KIRA: 1})}  # he is in it
     invite(OTHER, OWNER)                                                   # one private room per person
     invite("!x:agora.lan", ADA)                                            # never a member's invite
     assert agent.private_room == DM and agent.client.room_leave.await_count == 2
@@ -78,6 +79,22 @@ def test_the_owners_invite_opens_the_private_chat_and_a_second_room_is_refused(t
     asyncio.run(plain.on_invite(SimpleNamespace(room_id=DM),
                                 SimpleNamespace(state_key=KIRA, membership="invite", sender=OWNER)))
     assert plain.private_room is None and plain.client.room_leave.await_count == 1
+
+
+def test_a_new_private_chat_replaces_one_the_owner_left(tmp_path, monkeypatch):
+    """v5.6 review #2: the owner left the old direct chat and started a new one — the invite was refused for good."""
+    agent = kira(tmp_path, monkeypatch)
+    invite = lambda room: asyncio.run(agent.on_invite(
+        SimpleNamespace(room_id=room), SimpleNamespace(state_key=KIRA, membership="invite", sender=OWNER)))
+    invite(DM)
+    agent.private_history = [("Ich", "старе")]
+    agent.client.rooms = {DM: SimpleNamespace(users={OWNER: 1, KIRA: 1})}
+    invite(OTHER)                                                          # he is still in the old one: refused
+    assert agent.private_room == DM
+    agent.client.rooms = {DM: SimpleNamespace(users={KIRA: 1})}            # he left it
+    invite(OTHER)
+    assert agent.private_room == OTHER and load_private_state(agent.private_file, "").room == OTHER
+    assert agent.private_history == [] and agent.client.room_leave.await_args_list[-1].args == (DM,)
 
 
 def test_at_start_the_room_is_rediscovered_and_its_history_read(tmp_path, monkeypatch):
