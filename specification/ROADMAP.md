@@ -1025,6 +1025,85 @@ she keeps it to herself. The ability belongs to any person; it is switched on fo
 **Not in this phase:** a private chat for the other persons (a TOML switch later); the panel showing the private
 chat; group chats beside Agora.
 
+### v5.7 — Кіра in Telegram
+
+**Status:** ⏳ planned.
+
+**Goal:** the owner talks with Кіра from Telegram too. Her private chat gets a second door: her own Telegram bot,
+the same conversation as the Element private chat (one history, one memory). Voice goes both ways: she answers
+with Telegram voice notes and then the text, and she hears the owner's voice notes.
+
+**Owner decisions** (2026-10-21):
+- **In addition to Element, one conversation.** Telegram and the Element private chat share one private history
+  and one memory. She writes first in the channel the owner used last.
+- **Voice both ways.** Her answers are voice notes; the owner's voice notes are heard (Deepgram, as Hermes hears
+  them) and always answered in voice.
+- **Voice, then the text,** as two messages, like in Agora.
+- **Not a full Matrix↔Telegram bridge** (mautrix-telegram with an appservice): for one person's private chat, her
+  own bot is the simpler and safer door.
+
+**How it works:**
+- **The bot.** The owner creates it in @BotFather (the name «Кіра», her avatar as its photo, groups disabled) and
+  gets its token. The token and the owner's numeric Telegram id go into `server/kira.env`: gitignored, 0600, read
+  only by Кіра's container. Deepgram's key is copied there for her hearing.
+- **No open port.** Кіра's process polls the Bot API itself (`getUpdates`, long polling) beside the Matrix sync —
+  outbound HTTPS only, no webhook. A small client over `aiohttp` (`agents/telegram.py`, no new dependency), with the
+  offset kept in `state/kira.telegram.json` so a restart never answers old updates.
+- **The allowlist.** Only the owner's numeric id is handled. A stranger who finds the bot gets no answer, and is
+  logged by update type only.
+- **One private chat, two channels:**
+  - A Telegram text, or a voice note heard by Deepgram, goes into the same private path as a message in the Element
+    private chat: the private brief, the shared private history, her one memory labelled «наодинці».
+  - The answer goes back to the channel it came from: `sendVoice` with the same OGG/Opus pipeline, then
+    `sendMessage` with the text, and «typing…» / «recording voice…» while she composes.
+  - Writing first goes to the channel the owner used last.
+- **Accounting.** Telegram itself costs nothing. Voice uses the speakers' budget and the `stt` lines for hearing.
+  The logs never carry a word, a token or the owner's id.
+
+**Tasks:**
+- **`agents/telegram.py`.** The Bot API client:
+  - `getUpdates` with the offset, `sendMessage`, `sendVoice` (multipart OGG), `sendChatAction`, `getFile` and the
+    download (capped);
+  - errors by status and never the token;
+  - the pure parts: update parsing (text, voice, other), the allowlist, the offset.
+- **The capability `telegram`** (a person with `private`), `[capabilities] telegram = true` for Кіра.
+- **The runtime:**
+  - the polling task beside the sync;
+  - the shared private path, generalised to channels (`matrix` / `telegram`) with the reply going back to its
+    channel;
+  - hearing a voice note (download, Deepgram, an `stt` usage line);
+  - `last_channel` in `state/kira.private.json` for writing first.
+- **Config and deploy:**
+  - `server/kira.env` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_ID`, `DEEPGRAM_API_KEY`) and its example;
+  - compose: `kira` reads it;
+  - `deploy.sh` syncs it at 0600.
+- **ARCHITECTURE and VISION:**
+  - Network: outbound HTTPS to `api.telegram.org`;
+  - the private chat's channels;
+  - the state file;
+  - Security: the token, the allowlist, and Telegram is not end-to-end encrypted.
+
+**DoD:**
+- (Manual, owner) The owner writes Кіра's bot in Telegram: she answers with a voice note and then the text.
+- (Manual, owner) The owner sends a voice note: she hears it and answers in voice.
+- (Manual, owner) One conversation: what was said in Telegram she knows in the Element private chat, and back.
+  In Agora she still keeps it to herself.
+- (Manual, owner) Another Telegram account writing the bot gets no answer.
+
+**Tests:** unit, with aiohttp, Deepgram and ElevenLabs mocked:
+- update parsing, the allowlist and the offset across a restart;
+- the routing of an answer back to its channel, and writing first to the last channel;
+- `sendVoice`'s multipart content, then the text;
+- a voice note heard and answered in voice;
+- no token, id or text in a log;
+- the env file read only by `kira` (compose).
+
+**Not in this phase:**
+- a full Matrix↔Telegram bridge;
+- Telegram for the other persons;
+- Agora in Telegram;
+- group chats.
+
 ## v6 — Лілі: the Lumi bridge
 
 Лілі — Lumi's prod brain — joins the room through a bridge that is one of our agents: first when named, then under
