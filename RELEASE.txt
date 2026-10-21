@@ -1,3 +1,23 @@
+Version 5.6.0 (2026-10-21)
+---------------------------
+- Phase v5.6 - A private chat with a person, Kira first (AGORA-103...105)
+- The rules (AGORA-103): a persona-only capability "private"; the owner's
+  invites only (Agora, and one private room); the private room is handled
+  from the owner only; a private section and a discretion line in the
+  prompt; settings PRIVATE_IDLE_S (6 h), PRIVATE_NUDGES_PER_DAY (2) and
+  PRIVATE_HOURS (10-22); state/<name>.private.json, rediscovered at start
+- Kira in her private chat (AGORA-104): joins the owner's direct chat,
+  answers every message outside the turn-taking in her own voice, keeps
+  one memory (private lines labelled), keeps it to herself in Agora, and
+  now and then writes first after a long silence; usage kinds private and
+  private_nudge, shown in the panel
+- Live (AGORA-105): deployed, the owner talked with her privately;
+  waived by the owner's release word: the next-day memory and writing
+  first after six hours of silence
+- Code review fixes: an owner message that arrives while she writes first
+  is answered (#1); a new private chat replaces one the owner left (#2)
+- ROADMAP v5.7 (Kira in Telegram, voice notes in her own voice) planned
+
 Version 5.5.0 (2026-10-20)
 ---------------------------
 - Phase v5.5 - Four more people in Agora (AGORA-099...102)

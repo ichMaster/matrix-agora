@@ -955,7 +955,7 @@ own, and every member of the room has a friction with them.
 
 ### v5.6 — A private chat with a person (Кіра first)
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.6.0` on 2026-10-21 (the owner's choices: the ability is a capability switched on for Кіра; she sometimes writes first; one memory, kept to herself in Agora; the next-day memory and writing-first checks waived by the release word).
 
 **Goal:** the owner can talk with a person one-to-one, in a private chat beside Agora. It is the same person with
 one memory: she answers in her own voice, now and then writes first, and remembers what was said there. In Agora
