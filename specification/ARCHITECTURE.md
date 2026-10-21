@@ -90,7 +90,9 @@ The invariants every reply path must honor:
 1. **Login once, then the token.** First run logs in with the password and saves `access_token` + `device_id` to `state/<name>.json`; later runs restore them. Logging in with the password on every start would create a new device on the server each time.
 2. **Invites:** join only invites from `OWNER` into `ROOM_ID`. Ignore or leave every other invite. **From v5.6** a
    person with the `private` capability also joins the owner's invite into **one** private room besides Agora — the
-   first, or the same one again (`should_join_invite`); its id is kept in `state/<name>.private.json`.
+   first, or the same one again (`should_join_invite`); its id is kept in `state/<name>.private.json`. The stored
+   room counts only while the owner is still in it (`live_room`, v5.6 review #2): when he left it, a new invite
+   of his replaces it and the old room is left.
 3. **Start without the past:** the first `sync` is used only to obtain `next_batch` and its events are **not processed** — otherwise a restarted bot replies to the whole room history. After that, `sync_forever`. **Context survives a restart (from v2.2):** right after the first sync the agent fetches the last `HISTORY_N` messages of `ROOM_ID` once from the server (`/messages`, backwards) and seeds its context window and the turn-taking timeline (with event ids, and the owner's latest message) with them, in chronological order — **never replying to any of them** and never adding them to the session timeline (they were already summarized). Nothing is stored locally; the room itself is the source.
 4. **Message filter** (`RoomMessageText` only — edits, notices and other event types never trigger a reply). Handle a message only if all hold:
    - `room.room_id == ROOM_ID`;
