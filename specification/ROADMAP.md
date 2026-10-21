@@ -1038,6 +1038,9 @@ with Telegram voice notes and then the text, and she hears the owner's voice not
   and one memory. She writes first in the channel the owner used last.
 - **Voice both ways.** Her answers are voice notes; the owner's voice notes are heard (Deepgram, as Hermes hears
   them) and always answered in voice.
+- **Her own voice.** Every voice note is Кіра's own ElevenLabs voice (`KIRA_VOICE_ID`, the one the owner chose,
+  kira-1), from the same text-to-speech pipeline as in Agora and the Element private chat — never another voice
+  and never Telegram's.
 - **Voice, then the text,** as two messages, like in Agora.
 - **Not a full Matrix↔Telegram bridge** (mautrix-telegram with an appservice): for one person's private chat, her
   own bot is the simpler and safer door.
@@ -1054,7 +1057,8 @@ with Telegram voice notes and then the text, and she hears the owner's voice not
 - **One private chat, two channels:**
   - A Telegram text, or a voice note heard by Deepgram, goes into the same private path as a message in the Element
     private chat: the private brief, the shared private history, her one memory labelled «наодинці».
-  - The answer goes back to the channel it came from: `sendVoice` with the same OGG/Opus pipeline, then
+  - The answer goes back to the channel it came from: `sendVoice` with the same pipeline (her own voice, the
+    agent's TTS on `VOICE_ID` = `KIRA_VOICE_ID`, OGG/Opus), then
     `sendMessage` with the text, and «typing…» / «recording voice…» while she composes.
   - Writing first goes to the channel the owner used last.
 - **Accounting.** Telegram itself costs nothing. Voice uses the speakers' budget and the `stt` lines for hearing.
@@ -1084,7 +1088,8 @@ with Telegram voice notes and then the text, and she hears the owner's voice not
   - Security: the token, the allowlist, and Telegram is not end-to-end encrypted.
 
 **DoD:**
-- (Manual, owner) The owner writes Кіра's bot in Telegram: she answers with a voice note and then the text.
+- (Manual, owner) The owner writes Кіра's bot in Telegram: she answers with a voice note and then the text. The
+  voice is hers, the same as in Agora.
 - (Manual, owner) The owner sends a voice note: she hears it and answers in voice.
 - (Manual, owner) One conversation: what was said in Telegram she knows in the Element private chat, and back.
   In Agora she still keeps it to herself.
@@ -1093,7 +1098,8 @@ with Telegram voice notes and then the text, and she hears the owner's voice not
 **Tests:** unit, with aiohttp, Deepgram and ElevenLabs mocked:
 - update parsing, the allowlist and the offset across a restart;
 - the routing of an answer back to its channel, and writing first to the last channel;
-- `sendVoice`'s multipart content, then the text;
+- `sendVoice`'s multipart content, then the text; the note is synthesised by the agent's own TTS with Кіра's
+  voice id;
 - a voice note heard and answered in voice;
 - no token, id or text in a log;
 - the env file read only by `kira` (compose).
