@@ -640,7 +640,11 @@ class Agent:
                 save_private_state(self.private_file, state)
             return sent
         finally:
+            again = self._private_again
             self._private_pending = False
+            if again:  # the owner wrote while she was writing first: answer him (v5.6 review #1)
+                self._private_pending = True
+                self._spawn(self.private_later(0))
 
     async def send_line(self, room_id: str, text: str, event_key: str, answering: str | None = None) -> None:
         """v5.3 — every line the agent says: a voice message under a plain label when it should and can (`voice_due`,

@@ -196,6 +196,27 @@ def test_she_never_writes_first_out_of_hours_while_answering_after_a_restart_or_
         assert agent.client.room_send.await_count == 0
 
 
+def test_an_owner_message_while_she_writes_first_is_answered(tmp_path, monkeypatch):
+    """v5.6 review #1: «привіт!» while her line is composed was marked coalesced and never answered."""
+    agent = nudger(tmp_path, monkeypatch)
+    spawned = []
+    agent._spawn = lambda coro: spawned.append(coro)
+    original = agent.private_reply
+
+    async def write_and_hear_him(nudge=False):
+        sent = await original(nudge)
+        if nudge:
+            agent.on_private(text(OWNER, "привіт!", ms(18), "$h"))          # he writes meanwhile
+        return sent
+
+    agent.private_reply = write_and_hear_him
+    assert asyncio.run(agent.maybe_private_nudge()) is True
+    assert len(spawned) == 1 and agent._private_pending is True             # his message gets its answer
+    spawned[0].close()
+    asyncio.run(agent.private_later(0))
+    assert agent.llm.kinds == ["private_nudge", "private"] and agent.client.room_send.await_count == 2
+
+
 # --- who has it ------------------------------------------------------------------------------------------------------
 def test_only_kira_has_a_private_chat():
     assert [n for n, m in load_roster("agora").items() if m.can("private")] == ["kira"]
