@@ -5,6 +5,10 @@ A person with the `private` capability accepts the owner's invite into one room 
 message there, outside Agora's turn-taking. What is said there joins the person's one memory, labelled as private,
 and in Agora the person keeps it to herself. After a long silence she writes first, at most a few times a day,
 within the owner's hours. The decisions here are pure; the runtime is in `agents/agent.py`.
+
+v5.7 — the chat has two doors (channels): the Element private room (`matrix`) and her own Telegram bot (`telegram`).
+One history, one memory; an answer goes back to the channel the owner wrote from, and writing first goes to the one
+he used last.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ from pathlib import Path
 from agents.nudge import nudge_due
 
 PRIVATE_MARK = "наодинці"  # how the session, the summary and the day's journal tell a private line apart
+CHANNELS = ("matrix", "telegram")  # v5.7: the private chat's two doors
 
 # the situation of a private reply: the freshest instruction, after the memory (ARCHITECTURE §Prompt assembly)
 PRIVATE_BRIEF = (
@@ -37,6 +42,20 @@ PRIVATE_NUDGE = (
 )
 
 
+# v5.7 — a voice note she could not hear: a fixed line, no model call (a person's words, never a machine's)
+PRIVATE_NOT_HEARD = "Ой, не розчула. Скажеш ще раз або напишеш?"
+PRIVATE_CANT_LISTEN = "Зараз не можу послухати голосове — напишеш мені?"
+
+
+def pick_door(wanted: str, matrix_open: bool, telegram_open: bool) -> str | None:
+    """v5.7 — the channel a private line goes to: the wanted one when it is open, else the other open one, else
+    none (the owner never opened the Element chat, or Telegram is off)."""
+    open_ = {"matrix": matrix_open, "telegram": telegram_open}
+    if open_.get(wanted):
+        return wanted
+    return next((c for c in CHANNELS if open_[c]), None)
+
+
 def private_label(name: str) -> str:
     """«Кіра (наодинці)» — a private line's speaker in the session and the summary."""
     return f"{name} ({PRIVATE_MARK})"
@@ -50,6 +69,7 @@ class PrivateState:
     day: str = ""
     count: int = 0                 # lines written first that day
     sent_ms: int | None = None     # the last one sent
+    last_channel: str = "matrix"   # v5.7: the door the owner used last — writing first goes there
 
 
 def load_private_state(path: Path, day: str) -> PrivateState:
@@ -63,19 +83,22 @@ def load_private_state(path: Path, day: str) -> PrivateState:
         last = int(last) if last is not None else None
         sent = int(sent) if sent is not None else None
         stored_day, count = str(data.get("day", "")), int(data.get("count", 0))
+        channel = data.get("last_channel")
     except (OSError, ValueError, TypeError, AttributeError):
         return PrivateState(day=day)
-    return PrivateState(room, last, day, count if stored_day == day else 0, sent)
+    return PrivateState(room, last, day, count if stored_day == day else 0, sent,
+                        channel if channel in CHANNELS else "matrix")
 
 
 def save_private_state(path: Path, state: PrivateState) -> None:
-    """Atomic, private from birth (0600) — a room id, times and a count, never a text."""
+    """Atomic, private from birth (0600) — a room id, times, a count and a channel, never a text."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
         os.write(fd, json.dumps({"room": state.room, "last_ms": state.last_ms, "day": state.day,
-                                 "count": state.count, "sent_ms": state.sent_ms}).encode())
+                                 "count": state.count, "sent_ms": state.sent_ms,
+                                 "last_channel": state.last_channel}).encode())
     finally:
         os.close(fd)
     os.chmod(tmp, 0o600)

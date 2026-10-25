@@ -11,11 +11,14 @@ from agents.config import AgentConfig
 from agents.logic import BANNED_RE, build_instruction, should_handle, should_join_invite
 from agents.private import (
     PRIVATE_BRIEF,
+    PRIVATE_CANT_LISTEN,
     PRIVATE_DISCRETION,
+    PRIVATE_NOT_HEARD,
     PRIVATE_NUDGE,
     PrivateState,
     live_room,
     load_private_state,
+    pick_door,
     private_label,
     private_nudge_due,
     rediscover,
@@ -108,6 +111,24 @@ def test_the_private_lines_never_say_what_anyone_is(text):
     assert not BANNED_RE.search(text) and "Ich" in text
 
 
+@pytest.mark.parametrize("text", [PRIVATE_NOT_HEARD, PRIVATE_CANT_LISTEN])
+def test_her_fixed_lines_about_a_voice_note_are_a_persons(text):
+    """v5.7: what she says when she could not hear him is a person's line, never a machine's."""
+    assert not BANNED_RE.search(text) and text.endswith("?")
+
+
+@pytest.mark.parametrize(("wanted", "matrix", "telegram", "door"), [
+    ("telegram", True, True, "telegram"),
+    ("matrix", True, True, "matrix"),
+    ("telegram", True, False, "matrix"),    # Telegram is off: the Element room
+    ("matrix", False, True, "telegram"),    # he never opened the Element chat
+    ("matrix", False, False, None),
+    ("fax", True, True, "matrix"),
+])
+def test_the_door_a_private_line_goes_through(wanted, matrix, telegram, door):
+    assert pick_door(wanted, matrix, telegram) == door
+
+
 def test_a_private_line_is_labelled():
     assert private_label("Кіра") == "Кіра (наодинці)" and private_label("Ich") == "Ich (наодинці)"
 
@@ -123,6 +144,16 @@ def test_the_state_round_trips_privately_and_starts_fresh_when_corrupt(tmp_path)
     assert load_private_state(path, "2026-10-20") == PrivateState(day="2026-10-20")
     assert load_private_state(tmp_path / "missing.json", "2026-10-20") == PrivateState(day="2026-10-20")
     assert "текст" not in path.read_text(encoding="utf-8")
+
+
+def test_the_last_door_survives_a_restart(tmp_path):
+    """v5.7: `last_channel` — where writing first goes; matrix by default, an unknown value read as matrix."""
+    path = tmp_path / "kira.private.json"
+    save_private_state(path, PrivateState(DM, day="2026-10-20", last_channel="telegram"))
+    assert load_private_state(path, "2026-10-21").last_channel == "telegram"
+    path.write_text('{"room": "!dm:agora.lan", "last_channel": "fax"}', encoding="utf-8")
+    assert load_private_state(path, "2026-10-21").last_channel == "matrix"
+    assert PrivateState().last_channel == "matrix"
 
 
 def test_the_stored_room_counts_only_while_the_owner_is_in_it():

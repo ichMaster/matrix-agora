@@ -118,10 +118,13 @@ from agents.plans import (
 )
 from agents.private import (
     PRIVATE_BRIEF,
+    PRIVATE_CANT_LISTEN,
     PRIVATE_DISCRETION,
+    PRIVATE_NOT_HEARD,
     PRIVATE_NUDGE,
     live_room,
     load_private_state,
+    pick_door,
     private_label,
     private_nudge_due,
     rediscover,
@@ -134,6 +137,18 @@ from agents.settings import VOICE_ID_RE
 from agents.settings import start as settings_start
 from agents.sky import SKY_MAX_TOKENS, clean_sky, load_sky, save_sky, sky_query
 from agents.speech import speakers_month_chars, voice_due, voice_message, voiceable
+from agents.telegram import (
+    ACTION_EVERY_S,
+    VOICE_MAX_BYTES,
+    TelegramBot,
+    Update,
+    allowed,
+    backoff_s,
+    load_telegram_state,
+    next_offset,
+    parse_update,
+    save_telegram_state,
+)
 from agents.turns import (
     claude_mode,
     decide_reply,
@@ -150,8 +165,16 @@ from agents.turns import (
     wave_count,
     wave_frees_at,
 )
-from agents.usage import parse_lines, sdk_usage_line, tts_usage_line, usage_line
-from agents.voice import TTS_MODEL, ElevenLabsTTS, voice_caption
+from agents.usage import parse_lines, sdk_usage_line, stt_usage_line, tts_usage_line, usage_line
+from agents.voice import (
+    STT_MODEL,
+    TTS_MODEL,
+    DeepgramSTT,
+    ElevenLabsTTS,
+    duration_ms,
+    encode_opus,
+    voice_caption,
+)
 from agents.world import (
     MONTHS_NOM,
     day_label,
@@ -175,6 +198,10 @@ class Agent:
         self.cfg = cfg
         # v5.3 — the voice key stays in this process: out of the environment before anything (Claude's CLI) can inherit it
         voice_key = os.environ.pop("ELEVENLABS_API_KEY", "").strip()
+        # v5.7 — her bot's token, the owner's Telegram id and Deepgram's key: out of the environment the same way
+        tg_token = os.environ.pop("TELEGRAM_BOT_TOKEN", "").strip()
+        tg_owner = os.environ.pop("TELEGRAM_OWNER_ID", "").strip()
+        stt_key = os.environ.pop("DEEPGRAM_API_KEY", "").strip()
         # the room's members come from the registry (v4.1): nothing in the code names them
         self.roster = roster if roster is not None else load_roster(cfg.simulation, strict_for=cfg.localpart)
         self.me = self.roster.get(cfg.localpart) or Member(cfg.localpart, cfg.user_id, cfg.name, (cfg.name.lower(),))
@@ -331,6 +358,24 @@ class Agent:
                 log.warning("voice off: %s — every line goes out as text", self.voice_off)
             else:
                 self.tts = ElevenLabsTTS(voice_key, self.voice_id)
+        # v5.7 — her own Telegram bot (`telegram`): a second door to the private chat, polled beside the sync; the
+        # private chat answers to the door the owner wrote from (`private_channel`)
+        self.telegram: TelegramBot | None = None
+        self.telegram_owner = 0
+        self.telegram_file = self.memory_file.parent / f"{cfg.localpart}.telegram.json"
+        self.stt: DeepgramSTT | None = None
+        self.private_channel = "matrix"
+        if cfg.can("telegram"):
+            off = ("no TELEGRAM_BOT_TOKEN" if not tg_token else "no TELEGRAM_OWNER_ID" if not tg_owner
+                   else "TELEGRAM_OWNER_ID is not a number" if not tg_owner.isdigit() else None)
+            if off:
+                log.warning("telegram off: %s", off)
+            else:
+                self.telegram, self.telegram_owner = TelegramBot(tg_token), int(tg_owner)
+                if stt_key:
+                    self.stt = DeepgramSTT(stt_key)
+                else:
+                    log.warning("telegram: hearing off (no DEEPGRAM_API_KEY)")
         self.heralds = [m.localpart for m in self.roster.values() if m.type == "herald"]
         self.member_ids = frozenset(m.user_id for m in self.roster.values())
         self._transcript_voice: dict[str, str] = {}  # a transcript's event id → the owner's voice it answers (RAM)
@@ -577,11 +622,21 @@ class Agent:
         if is_edit(event):
             log.info("ignored: edit (private chat)")
             return
-        self.private_history = append_history(self.private_history, "Ich", event.body, max(self.history_n, 1))
-        self.last_private_ms = int(getattr(event, "server_timestamp", 0) or self.clock())
+        self.private_line(event.body, int(getattr(event, "server_timestamp", 0) or self.clock()), "matrix")
+
+    def private_line(self, body: str, ts_ms: int, channel: str) -> None:
+        """v5.7 — the owner's line from either door (`matrix` / `telegram`): one history, one memory, labelled; the
+        answer goes back to this door, and it is remembered as the one he used last."""
+        self.private_history = append_history(self.private_history, "Ich", body, max(self.history_n, 1))
+        self.last_private_ms = ts_ms
         self.last_activity_ms = self.clock()  # a private talk is a conversation too: no summary mid-way
         if self.cfg.can("summary"):
-            self.session.append((private_label("Ich"), event.body))
+            self.session.append((private_label("Ich"), body))
+        self.private_channel = channel
+        state = load_private_state(self.private_file, local_now(self.clock(), self.tz).date().isoformat())
+        if state.last_channel != channel:
+            state.last_channel = channel
+            save_private_state(self.private_file, state)
         if self._private_pending:
             self._private_again = True
             log.info("private: coalesced into the pending answer")
@@ -606,14 +661,22 @@ class Agent:
         finally:
             self._private_pending = False
 
-    async def private_reply(self, nudge: bool = False) -> bool:
+    async def private_reply(self, nudge: bool = False, channel: str | None = None) -> bool:
         """Typing on → her own prompt with the private brief (or the writing-first rule) and the private history →
-        a line in the private room, voiced under the speakers' rules → typing off in a finally."""
+        a line through the door (v5.7: the Element room, voiced under the speakers' rules, or her Telegram bot, a
+        voice note and then the text) → typing off in a finally."""
         room = self.private_room
-        if room is None:
+        door = pick_door(channel or self.private_channel, room is not None, self.telegram is not None)
+        if door is None:
             return False
+        action = None
         try:
-            await self.client.room_typing(room, True)
+            if door == "matrix":
+                await self.client.room_typing(room, True)
+            else:
+                act = "record_voice" if self.tts else "typing"
+                await self.telegram.send_chat_action(self.telegram_owner, act)
+                action = asyncio.create_task(self._telegram_action(act))
             if self.cfg.can("today"):
                 try:
                     await self.ensure_today(local_now(self.clock(), self.tz))
@@ -624,20 +687,27 @@ class Agent:
                                        kind="private_nudge" if nudge else "private")
             if text is None:
                 return False
-            await self.send_line(room, text, f"private:{self.clock()}")
+            if door == "matrix":
+                await self.send_line(room, text, f"private:{self.clock()}")
+            else:
+                await self.send_telegram(text)
             self.private_history = append_history(self.private_history, self.cfg.name, text, max(self.history_n, 1))
             self.last_private_ms = self.clock()
             if self.cfg.can("summary"):
                 self.session.append((private_label(self.cfg.name), text))
-            log.info("private: %s", "wrote first" if nudge else "answered")
+            log.info("private: %s%s", "wrote first" if nudge else "answered", " (telegram)" if door == "telegram" else "")
             return True
         finally:
-            await self.client.room_typing(room, False)
+            if action is not None:
+                action.cancel()
+            if door == "matrix":
+                await self.client.room_typing(room, False)
 
     async def maybe_private_nudge(self) -> bool:
         """After a long private silence, in the owner's hours, under the day's cap: one line of her own — never
         while an answer is on its way, never before they have talked there, never at once after a restart."""
-        if not (self.started and self.cfg.can("private") and self.private_room) or self._private_pending:
+        if (not (self.started and self.cfg.can("private") and (self.private_room or self.telegram))
+                or self._private_pending):
             return False
         if not self.private_history:
             return False
@@ -653,7 +723,7 @@ class Agent:
         try:
             state.last_ms = now_ms  # every attempt spaces the next one; only a sent line counts
             save_private_state(self.private_file, state)
-            sent = await self.private_reply(nudge=True)
+            sent = await self.private_reply(nudge=True, channel=state.last_channel)  # v5.7: his last door
             if sent:
                 state.count += 1
                 state.sent_ms = now_ms
@@ -665,6 +735,117 @@ class Agent:
             if again:  # the owner wrote while she was writing first: answer him (v5.6 review #1)
                 self._private_pending = True
                 self._spawn(self.private_later(0))
+
+    # --- v5.7: her Telegram bot, a second door to the private chat --------------------------------------------------
+    async def telegram_poll(self) -> None:
+        """Long polling from the stored offset, beside the sync. A refused token stops only this; a 429 waits as
+        told; anything else backs off. The offset is saved after every batch: an update is never answered twice."""
+        state = load_telegram_state(self.telegram_file)
+        failures = 0
+        while True:
+            try:
+                reply = await self.telegram.get_updates(state.offset)
+                if not reply.ok:
+                    if reply.status in (401, 404):
+                        log.error("telegram off: refused (HTTP %s)", reply.status)
+                        return
+                    failures += 1
+                    wait = reply.retry_after if reply.status == 429 and reply.retry_after else backoff_s(failures)
+                    log.warning("telegram: polling again in %ss", wait)
+                    await asyncio.sleep(wait)
+                    continue
+                failures = 0
+                if reply.result:
+                    await self.on_telegram(reply.result)
+                    state.offset = next_offset(reply.result, state.offset)
+                    save_telegram_state(self.telegram_file, state)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                failures += 1
+                log.exception("telegram: poll failed (bot keeps running)")
+                await asyncio.sleep(backoff_s(failures))
+
+    async def on_telegram(self, raw_updates: list) -> None:
+        """A batch: only the owner's private chat; what he wrote before this start is context, never answered (the
+        first-sync rule, as the Element room's backlog); a text joins the private chat, a voice note is heard first.
+        Logged by reason and kind only — never an id or a word."""
+        backlog = 0
+        for raw in raw_updates:
+            update = parse_update(raw)
+            if update is None:
+                log.info("ignored: malformed (telegram)")
+                continue
+            verdict = allowed(update, self.telegram_owner)
+            if not verdict.handle:
+                log.info("ignored: %s (telegram %s)", verdict.reason, update.kind)
+                continue
+            if self.started_ms is not None and update.date_ms < self.started_ms:
+                if update.kind == "text":
+                    self.private_history = append_history(self.private_history, "Ich", update.text,
+                                                          max(self.history_n, 1))
+                backlog += 1
+                continue
+            if update.kind == "voice":
+                await self.telegram_hear(update)
+            else:
+                self.private_line(update.text, update.date_ms, "telegram")
+        if backlog:
+            log.info("telegram: %d messages from before the start read as context", backlog)
+
+    async def telegram_hear(self, update: Update) -> None:
+        """The owner's voice note as words: the capped download (in memory only), Deepgram, a `stt` usage line —
+        then his line in the private chat. Not heard → a fixed short line; never a word in a log."""
+        if self.stt is None:
+            log.info("telegram: a voice note, hearing off")
+            await self.telegram.send_message(self.telegram_owner, PRIVATE_CANT_LISTEN)
+            return
+        audio = None
+        if update.file_size is None or update.file_size <= VOICE_MAX_BYTES:
+            path = await self.telegram.get_file(update.file_id)
+            audio = await self.telegram.download(path, VOICE_MAX_BYTES) if path else None
+        if audio is None:
+            log.error("telegram: the voice note could not be downloaded")
+            await self.telegram.send_message(self.telegram_owner, PRIVATE_NOT_HEARD)
+            return
+        heard, audio_ms = await self.stt.transcribe(audio, update.mime or "audio/ogg")
+        self._append_usage(lambda ts: stt_usage_line(ts, self.cfg.localpart, STT_MODEL, audio_ms,
+                                                     audio_ms is not None))
+        if not heard:
+            log.info("telegram: nothing heard")
+            await self.telegram.send_message(self.telegram_owner, PRIVATE_NOT_HEARD)
+            return
+        log.info("telegram: heard (%s ms)", audio_ms)
+        self.private_line(heard, update.date_ms, "telegram")
+
+    async def _telegram_action(self, action: str) -> None:
+        """«recording voice…» / «typing…» kept up while she composes — Telegram shows one for about five seconds."""
+        while True:
+            await asyncio.sleep(ACTION_EVERY_S)
+            await self.telegram.send_chat_action(self.telegram_owner, action)
+
+    async def send_telegram(self, text: str) -> None:
+        """Every answer in Telegram is a voice note in her own voice, then the text (the owner, 2026-10-21) — the
+        speakers' monthly budget and `voiceable` still hold; when the voice cannot be made, the text goes alone."""
+        why = self.voice_off
+        if self.tts is not None:
+            if not voiceable(text):
+                why = "not voiceable"
+            elif self._speakers_month_used() + len(text) > self.voice_monthly_chars:
+                why = "monthly cap"
+            else:
+                pcm = await self.tts.synth(text)
+                self.record_tts(len(text), pcm is not None)
+                ogg = await encode_opus(pcm) if pcm is not None else None
+                why = ("tts failed" if pcm is None else "encode failed" if ogg is None
+                       else None if await self.telegram.send_voice(self.telegram_owner, ogg,
+                                                                   round(duration_ms(pcm) / 1000))
+                       else "send failed")
+            if why is None:
+                log.info("voice: sent (%d chars, telegram)", len(text))
+            elif why != "not voiceable":
+                log.info("voice: text only (%s, telegram)", why)
+        await self.telegram.send_message(self.telegram_owner, text)
 
     async def send_line(self, room_id: str, text: str, event_key: str, answering: str | None = None) -> None:
         """v5.3 — every line the agent says: a voice message under a plain label when it should and can (`voice_due`,
@@ -1709,9 +1890,13 @@ class Agent:
         sync_task = asyncio.create_task(self.client.sync_forever(timeout=30000))
         watcher = asyncio.create_task(self.idle_watcher())
         stop_task = asyncio.create_task(stop.wait())
+        tasks = [sync_task, watcher, stop_task]
+        if self.telegram is not None:  # v5.7: her bot, polled beside the sync
+            log.info("telegram: polling")
+            tasks.append(asyncio.create_task(self.telegram_poll()))
         await asyncio.wait({sync_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
         log.info("%s: stopping — writing the session summary", self.cfg.localpart)
-        for t in (sync_task, watcher, stop_task):
+        for t in tasks:
             t.cancel()
         await self.shutdown()
         await self.client.close()

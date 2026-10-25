@@ -220,8 +220,8 @@ def test_an_owner_message_while_she_writes_first_is_answered(tmp_path, monkeypat
     agent._spawn = lambda coro: spawned.append(coro)
     original = agent.private_reply
 
-    async def write_and_hear_him(nudge=False):
-        sent = await original(nudge)
+    async def write_and_hear_him(nudge=False, channel=None):
+        sent = await original(nudge, channel)
         if nudge:
             agent.on_private(text(OWNER, "привіт!", ms(18), "$h"))          # he writes meanwhile
         return sent

@@ -30,6 +30,9 @@ POLL_TIMEOUT_S = 30   # long polling: the server holds the request this long whe
 CALL_TIMEOUT_S = 60   # every other call — a voice note's upload included
 TEXT_MAX = 4096       # Telegram's limit for one message's text
 CHUNK = 65_536
+VOICE_MAX_BYTES = 20_000_000  # Hermes's cap (and the Bot API's own for a download): a voice note is far smaller
+ACTION_EVERY_S = 4.0  # a chat action shows about five seconds: repeated while she composes
+BACKOFF_FIRST_S, BACKOFF_MAX_S = 5, 300
 
 
 @dataclass(frozen=True)
@@ -96,6 +99,11 @@ def next_offset(raw_updates: list, offset: int | None) -> int | None:
     batch holds none)."""
     ids = [u["update_id"] for u in raw_updates if isinstance(u, dict) and isinstance(u.get("update_id"), int)]
     return max(ids) + 1 if ids else offset
+
+
+def backoff_s(failures: int) -> int:
+    """The wait before polling again after `failures` failed polls in a row: 5 s, doubling, at most 5 min."""
+    return min(BACKOFF_FIRST_S * 2 ** max(failures - 1, 0), BACKOFF_MAX_S)
 
 
 def fit_text(text: str, limit: int = TEXT_MAX) -> str:

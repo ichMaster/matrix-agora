@@ -108,6 +108,20 @@ The invariants every reply path must honor:
    never retold or hinted at). After `PRIVATE_IDLE_S` of private silence, within `PRIVATE_HOURS`, at most
    `PRIVATE_NUDGES_PER_DAY` a day, she writes first (`private_nudge_due` — the cat's `nudge_due`). Hermes, the
    recording and the other agents never see the private room (`agents/private.py`).
+   **Telegram, the private chat's second door (v5.7, `telegram`):** the person's own bot, polled by her own process
+   beside the sync (`agents/telegram.py`: `getUpdates` long polling from the offset in `state/<name>.telegram.json`,
+   saved after every batch, so an update is never answered twice; outbound HTTPS only). Only the owner's numeric id
+   (`TELEGRAM_OWNER_ID`) in a private chat is handled (`allowed`); a stranger, a group, an edit or another kind is
+   logged `ignored: <reason> (telegram <kind>)`, never an id or a word. **The first-sync rule holds there too:** what
+   the owner wrote before this start is read into the private history as context and never answered. A text, or a
+   voice note heard by her own Deepgram client (capped download, in memory only, an `stt` usage line; not heard → a
+   fixed short line, no model call), takes the same path as an Element private message (`private_line`): **one
+   history, one memory** labelled «наодинці», one pending answer that coalesces across both doors. The answer goes
+   back to the door of the owner's latest message (`pick_door`; the other open door when that one is closed): in
+   Telegram always a voice note in her own voice (`send_voice`, OGG/Opus), then the same text (`send_message`), under
+   the speakers' monthly budget, with «recording voice…» kept up while she composes. She writes first through the door
+   he used last (`last_channel` in `state/<name>.private.json`). A refused token (401/404) stops only the poller; 429
+   waits `retry_after`; anything else backs off from 5 s, doubling, to 5 min — Agora and Element never notice.
    **Voice (v5.2): one transcript, shared by every agent.** No agent answers audio: an owner's `RoomMessageAudio` in
    `ROOM_ID` is remembered (its event id, RAM, the last 200) and logged as `ignored: audio (transcribed by Hermes)`;
    any other audio is `ignored`. The roster's `transcribe` member (Hermes) posts «🎙 Ich: …» as a reply
@@ -429,7 +443,7 @@ There is no database, and nothing the agents lived is ever deleted: all durable 
 | `state/<name>.sky.json` | the day's first sky lookup (v4.5, an agent with `mood`) | `day`, `sky` (the looked-up astrological line — world data, no room text); atomic, 0600 |
 | `state/<name>.ratelimit.json` | every SDK limit event and the init check (v4.4, the `claude-sdk` engine) | `status`, `utilization`, `resets_at`, `rate_limit_type`, `muted_until`, `auth` (`oauth` / `blocked: …` / `refused: <variable names>`), `model`, `last_error` (a subtype and http status, a timeout, an exception's type), `updated_at` — no texts, no token; atomic, 0600; refreshed at the agent's start, a running mute kept (v4.4 review #6) |
 | `state/<name>.digest.json` | the herald's private room created, each digest sent (v5.1, an agent with `digest`) | `room` (the private room's id), `point_event` / `point_ts` (the newest Agora message the last digest covered), `last_ms` (the last digest sent), `day`, `count` (digests sent that day) — no texts; atomic, 0600; a corrupt file starts fresh |
-| `state/<name>.private.json` | the private room joined, each time a person writes first (v5.6, a person with `private`) | `room` (the private room's id), `last_ms` (the last attempt to write first), `day`, `count` (lines written first that day), `sent_ms` — no texts; atomic, 0600; a corrupt file starts fresh and the room is rediscovered from the joined rooms (the one besides Agora whose members are the agent and the owner) |
+| `state/<name>.private.json` | the private room joined, each time a person writes first (v5.6, a person with `private`); v5.7 when the owner writes from the other door | `room` (the private room's id), `last_ms` (the last attempt to write first), `day`, `count` (lines written first that day), `sent_ms`, v5.7 `last_channel` (`matrix` / `telegram`: the door the owner used last, where writing first goes; an unknown value reads as `matrix`) — no texts; atomic, 0600; a corrupt file starts fresh and the room is rediscovered from the joined rooms (the one besides Agora whose members are the agent and the owner) |
 | `state/<name>.telegram.json` | every batch of updates polled (v5.7, a person with `telegram`) | `offset` (the next update to fetch, so a restart never answers an update twice) — no text, no token, no id; atomic, 0600; a corrupt file starts fresh (`agents/telegram.py`, pinned by `tests/test_telegram.py`) |
 | `state/<name>.lock` | startup (`flock`) | the PID of the running instance |
 | `state/logs/<name>.log` | continuously | rotating log, 1 MB × 3 — no tokens, passwords or texts |
