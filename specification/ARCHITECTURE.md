@@ -121,7 +121,7 @@ The invariants every reply path must honor:
    back to the door of the owner's latest message (`pick_door`; the other open door when that one is closed): in
    Telegram always a voice note in her own voice (`send_voice`, OGG/Opus), then the same text (`send_message`), under
    the speakers' monthly budget, with «recording voice…» kept up while she composes. She writes first through the door
-   he used last (`last_channel` in `state/<name>.private.json`). A refused token (401/404) stops only the poller; 429
+   he used last (`last_channel` in `state/<name>.private.json`), or always through one door when `PRIVATE_FIRST_DOOR` says so (v5.8.2, the owner: Кіра — always Telegram; a closed door falls back to the other). A refused token (401/404) stops only the poller; 429
    waits `retry_after`; anything else backs off from 5 s, doubling, to 5 min — Agora and Element never notice.
    **Voice (v5.2): one transcript, shared by every agent.** No agent answers audio: an owner's `RoomMessageAudio` in
    `ROOM_ID` is remembered (its event id, RAM, the last 200) and logged as `ignored: audio (transcribed by Hermes)`;
@@ -484,6 +484,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `OWNER_VOICE_ID` | v5.4 | read only by the member with `digest` (Hermes): the owner's cloned ElevenLabs voice, in which the recording speaks his typed lines (letters and digits; empty: those lines are left out). Hermes also reads the speakers' `<NAME>_VOICE_ID`s for their text-only lines; not a panel setting |
 | `FACTS_MAX`, `FACTS_IN_PROMPT`, `FACT_MAX_CHARS` | v5.8 | read only by a person with `facts` (agent settings): the store's size (100), how many facts reach her private prompt (25), a fact's length (240) |
 | `RECALL_N`, `PRIVATE_AGORA_N` | v5.8 | read only by a person with `recall` (agent settings): how many recalled lines enter a prompt (6, 0–20), and how many of Agora's lines of today her private prompt carries (20, 0–60) |
+| `PRIVATE_FIRST_DOOR` | v5.8.2 | read only by a person with `private` (an agent setting): where she writes first — `last` (the door he used last; the default), `telegram` or `matrix`; a closed door falls back to the other. Кіра's `kira.env`: `telegram` (the owner, 2026-10-25) |
 | `PRIVATE_IDLE_S`, `PRIVATE_NUDGES_PER_DAY`, `PRIVATE_HOURS` | v5.6 | read only by a person with `private` (agent settings, the panel's «Особистий чат») — writing first in the private chat after so much silence, at most so many a day, in these local hours (21600 / 2 / `10-22`) |
 | `ELEVENLABS_API_KEY`, `HERMES_PASSWORD`, v5.2 `DEEPGRAM_API_KEY` | v5.1–v5.2 | Hermes's own env file `server/hermes.env` only (the key copied from Lumi's, the owner's decision 2026-10-13): taken out of the environment at start, never in a prompt or a log |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_ID`, Кіра's `DEEPGRAM_API_KEY` | v5.7 | Кіра's own env file `server/kira.env` only (gitignored, 0600, read by her container alone; the Deepgram key copied from Hermes's): taken out of the environment at start, never in a prompt, a log or the panel; the bot's token is in every Bot API URL, so no URL is ever logged; the owner's numeric id is not a secret to Telegram but stays out of the logs and the repo; without the token or the id Telegram is off, without the key she does not hear voice notes |

@@ -294,10 +294,13 @@ class Agent:
         # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.
         # Only a person with `private` reads them (a typo never takes the others down).
         self.private_idle_ms, self.private_per_day, self.private_hours = 0, 0, (0, 0)
+        self.private_first_door = "last"
         if cfg.can("private"):
             self.private_hours = parse_hours(os.environ.get("PRIVATE_HOURS", "10-22"))
             self.private_per_day = int(os.environ.get("PRIVATE_NUDGES_PER_DAY", "2"))
             self.private_idle_ms = int(float(os.environ.get("PRIVATE_IDLE_S", "21600")) * 1000)
+            first = os.environ.get("PRIVATE_FIRST_DOOR", "last").strip()  # v5.8.2: last | telegram | matrix
+            self.private_first_door = first if first in ("last", "telegram", "matrix") else "last"
         # v4.6 — a persona's move weights (read only by a persona)
         self.move_weights: dict[str, float] = {}
         if cfg.type == "persona":
@@ -797,7 +800,9 @@ class Agent:
         try:
             state.last_ms = now_ms  # every attempt spaces the next one; only a sent line counts
             save_private_state(self.private_file, state)
-            sent = await self.private_reply(nudge=True, channel=state.last_channel)  # v5.7: his last door
+            # v5.7: his last door — or the one the owner chose (v5.8.2); a closed door falls back to the other
+            door = state.last_channel if self.private_first_door == "last" else self.private_first_door
+            sent = await self.private_reply(nudge=True, channel=door)
             if sent:  # read again: the owner may have changed door, or the room moved, while she wrote (review #1)
                 fresh = load_private_state(self.private_file, now.date().isoformat())
                 fresh.count += 1

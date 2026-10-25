@@ -445,3 +445,34 @@ def test_after_a_week_of_silence_the_poller_asks_without_the_offset(tmp_path, mo
     poll(agent, monkeypatch, Reply(True, [tg(9, "після тижня")]), Reply(True, []), Reply(False, status=401))
     assert [c.args[0] for c in agent.telegram.get_updates.await_args_list] == [None, 10, 10]
     assert load_telegram_state(agent.telegram_file) == TelegramState(10, ms(18))
+
+
+def test_she_writes_first_always_in_telegram_when_the_owner_chose_it(tmp_path, monkeypatch, ogg):
+    """v5.8.2 (the owner): PRIVATE_FIRST_DOOR=telegram — writing first goes to Telegram whatever door he used last."""
+    monkeypatch.setenv("PRIVATE_FIRST_DOOR", "telegram")
+    agent = kira(tmp_path, monkeypatch)
+    agent.private_room = DM
+    agent.private_history, agent.last_private_ms = [("Ich", "раніше")], ms(10)
+    agent.private_idle_ms, agent.private_per_day, agent.private_hours = 3_600_000, 4, (10, 22)
+    save_private_state(agent.private_file, PrivateState(room=DM, day="2026-10-20", last_channel="matrix"))
+    assert asyncio.run(agent.maybe_private_nudge()) is True
+    assert texts_sent(agent) == ["Привіт, сонце."] and agent.client.room_send.await_count == 0
+
+
+def test_a_closed_chosen_door_falls_back_to_element(tmp_path, monkeypatch, ogg):
+    monkeypatch.setenv("PRIVATE_FIRST_DOOR", "telegram")
+    agent = kira(tmp_path, monkeypatch)
+    agent.private_room, agent.telegram_open = DM, False                        # the bot refused: Element takes it
+    agent.voice_reply_p = 0.0
+    agent.private_history, agent.last_private_ms = [("Ich", "раніше")], ms(10)
+    agent.private_idle_ms, agent.private_per_day, agent.private_hours = 3_600_000, 4, (10, 22)
+    save_private_state(agent.private_file, PrivateState(room=DM, day="2026-10-20", last_channel="telegram"))
+    assert asyncio.run(agent.maybe_private_nudge()) is True
+    assert agent.client.room_send.await_args.kwargs["room_id"] == DM
+
+
+@pytest.mark.parametrize(("value", "door"), [("telegram", "telegram"), ("matrix", "matrix"), ("last", "last"),
+                                             ("fax", "last"), ("", "last")])
+def test_the_first_door_setting(tmp_path, monkeypatch, value, door):
+    monkeypatch.setenv("PRIVATE_FIRST_DOOR", value)
+    assert kira(tmp_path, monkeypatch).private_first_door == door

@@ -123,6 +123,9 @@ SCHEMA: tuple[Setting, ...] = (
     _s("PRIVATE_NUDGES_PER_DAY", "int", "2", "private", "cap:private", None,
        "Скільки разів на день може написати першою", "", 0, 10),
     _s("PRIVATE_HOURS", "hours", "10-22", "private", "cap:private", None, "Години, коли може написати першою (HH-HH)"),
+    # v5.8.2 (the owner, 2026-10-25): where she writes first — `last`: the door he used last; or always one door
+    _s("PRIVATE_FIRST_DOOR", "choice", "last", "private", "cap:private", None,
+       "Куди пише першою (last — туди, де він писав останнім)", choices=("last", "telegram", "matrix")),
     # v5.8 — the archive (`recall`): how many recalled lines enter a prompt, and Agora's lines of today in the private
     # chat
     _s("RECALL_N", "int", "6", "memory", "cap:recall", None, "Скільки рядків пригадує перед відповіддю", "lines", 0, 20),
