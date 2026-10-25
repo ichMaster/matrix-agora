@@ -19,6 +19,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from agents.facts import remove_fact, set_pin
 from panel.actions import ActionError, ComposeRunner, Supervisor
 from panel.docker_read import DockerReader
 from panel.files import (
@@ -205,7 +206,34 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
         theses = Path(found.memories) if found.memories and "pastlife" in found.capabilities else None
         return memory_view(state_dir, found.name, local_today(), natal, "mood" in found.capabilities, theses,
                            "nudge" in found.capabilities, found.engine == "claude-sdk", "news" in found.capabilities,
-                           "digest" in found.capabilities)
+                           "digest" in found.capabilities, "facts" in found.capabilities, "recall" in found.capabilities)
+
+    # ── v5.8: a person's facts about the owner — re-pin or delete one; the id resolves only inside her own folder ──
+    def facts_folder(name: str) -> Path:
+        found = reg.agent(name)
+        if found is None or "facts" not in found.capabilities:
+            raise HTTPException(404, "not found")
+        return state_dir / f"{found.name}.facts"
+
+    @app.put("/api/agents/{name}/facts/{fact_id}")
+    async def fact_pin(name: str, fact_id: str, request: Request) -> dict:
+        folder = facts_folder(name)
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        pin = body.get("pin") if isinstance(body, dict) else None
+        if isinstance(pin, bool) or pin not in (0, 1, 2):
+            raise HTTPException(422, "pin must be 0, 1 or 2")
+        if not set_pin(folder, fact_id, pin):
+            raise HTTPException(404, "not found")
+        return {"id": fact_id, "pin": pin}
+
+    @app.delete("/api/agents/{name}/facts/{fact_id}")
+    def fact_delete(name: str, fact_id: str) -> dict:
+        if not remove_fact(facts_folder(name), fact_id):
+            raise HTTPException(404, "not found")
+        return {"id": fact_id, "deleted": True}
 
     @app.get("/api/usage")
     def usage(days: int = 7, agent: str | None = None) -> dict:

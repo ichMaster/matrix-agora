@@ -8,9 +8,10 @@ const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today",
 // review #11: a kind not listed above still shows, after the listed ones — a tab's rows always add up to its total
 function kindsOf(byKind) { return [...KIND_ORDER.filter((k) => byKind[k]), ...Object.keys(byKind).filter((k) => !KIND_ORDER.includes(k)).sort()]; }
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
-              ["today", "Today"], ["mood", "Mood"], ["tokens", "Tokens"], ["files", "Files"], ["settings", "Settings"]];
+              ["today", "Today"], ["mood", "Mood"], ["facts", "Facts"], ["tokens", "Tokens"], ["files", "Files"],
+              ["settings", "Settings"]];
 // v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
-const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood"};
+const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", facts: "facts"};
 const SERIES = ["a", "b", "c", "d", "e"];  // stacked token bars: one tint of the accent per agent (v4.2: N agents)
 const PRONOUN = {she: "She", he: "He", it: "It"};
 function can(a, cap) { return !a.capabilities || a.capabilities.includes(cap); }
@@ -195,6 +196,7 @@ function dialogText(d) {
     return [`Save ${names.length} setting${names.length === 1 ? "" : "s"}?`,
       `${names.join(", ")}. ${who.length ? `Restarts: ${who.join(", ")} — each writes its session summary first.` : "No agent needs a restart."}`];
   }
+  if (d.kind === "fact") return ["Delete this fact?", "She stops knowing it at her next answer — it is not kept anywhere else."];
   if (d.kind === "file") {
     return d.action === "delete" ? [`Delete ${d.id}?`, "Claude loses this note — it is not kept anywhere else."]
       : [`Replace ${d.id}?`, "The file in Claude's folder is overwritten with the one you chose."];
@@ -402,6 +404,7 @@ function agentCardHtml(a) {
     ${can(a, "pastlife") || can(a, "nudge") ? `<div class="muted" style="font-size:12px">${pastLifeLine(mem)}</div>` : ""}
     ${a.engine === "claude-sdk" ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Subscription</div>${claudeLines(mem)}</div>` : ""}
     ${can(a, "digest") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Digests</div>${digestLine(mem)}</div>` : ""}
+    ${a.capabilities && can(a, "recall") ? `<div class="muted" style="font-size:12px">${archiveLine(mem)}</div>` : ""}
     <div class="card-foot rule-t"><div class="meta">${tokens == null ? `${icon("database", 13)} Memory unavailable` : `7 days · ${esc(tokens)}`}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${actionButtons({kind: "agent", id: a.name, state: d.health.docker ? c.state : "unknown", big: true})}</div>
       <button class="btn btn-primary" data-act="agent" data-id="${esc(a.name)}">Details${icon("arrow-right", 14)}</button></div>
@@ -576,6 +579,40 @@ function digestLine(mem) {
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${full ? pill("warn", "monthly cap reached") : ""}<span class="muted" style="font-size:12px">${esc(voice)}</span></div>`;
 }
 
+// v5.8 — Кіра's archive: «archive: 1,820 lines · 1,790 embedded»
+function archiveLine(mem) {
+  if (!mem.available) return "Memory unavailable";
+  const g = mem.archive;
+  if (!g) return "Archive unreadable";
+  return `archive: ${fmtInt(g.lines)} lines · ${fmtInt(g.embedded)} embedded`;
+}
+
+// v5.8 — what she knows about the owner: pin 1 always in her private prompt, pin 2 while there is room, pin 0 only
+// for a recall; re-pin at once, delete after a confirmation
+const PIN_LABEL = {1: "always", 2: "if room", 0: "recall only"};
+function factsTabHtml(a, mem) {
+  const facts = mem.facts;
+  if (!facts) return `<p class="muted">Facts unreadable.</p>`;
+  if (!facts.length) return `<p class="muted">${esc(a.display)} knows no facts about you yet.</p>`;
+  const rows = facts.map((f) => `<div class="rule-b" style="padding:10px 0;display:flex;gap:12px;align-items:flex-start">
+      <div style="flex:1;min-width:0"><div lang="uk">${esc(f.text)}</div>
+        <div class="muted mono" style="font-size:11.5px;margin-top:3px">${esc(f.source)} · ${esc(f.added || "—")}</div></div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">${[1, 2, 0].map((p) => `<button class="btn ${p === f.pin ? "btn-primary" : "btn-ghost"}" data-act="fact-pin" data-id="${esc(f.id)}" data-pin="${p}" ${p === f.pin ? "disabled" : ""}>${PIN_LABEL[p]}</button>`).join("")}
+        <button class="btn btn-ghost btn-icon" data-act="fact-delete" data-id="${esc(f.id)}" title="Delete" aria-label="Delete this fact">${icon("trash", 14)}</button></div></div>`).join("");
+  return `<div class="muted" style="font-size:12.5px;margin-bottom:12px">${facts.length} facts · only her private chat sees them · a change counts at her next answer</div>${rows}`;
+}
+async function changeFact(agent, id, pin) {
+  try {
+    if (pin === null) await send("DELETE", `/api/agents/${encodeURIComponent(agent)}/facts/${encodeURIComponent(id)}`);
+    else await send("PUT", `/api/agents/${encodeURIComponent(agent)}/facts/${encodeURIComponent(id)}`, {pin});
+    showToast("ok", pin === null ? "Fact deleted" : "Fact re-pinned");
+  } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    showToast("err", `Change failed: ${err.message}`);
+  }
+  await refreshMemory();
+}
+
 // v4.3 — the cat's past life and initiative: «93 theses · last nudge 14:05 · 2 today»
 function pastLifeLine(mem) {
   if (!mem.available) return "";
@@ -608,6 +645,7 @@ function agentTabHtml(a, mem, tab) {
   if (tab === "settings") return `<div class="muted" style="font-size:12.5px;margin-bottom:12px">${esc(a.display)}'s own settings, whatever the service · a save restarts ${esc(a.display)}</div>${settingsHtml()}`;
   if (!mem.available) return unavailableBox();
   if (tab === "mood") return moodTabHtml(mem);
+  if (tab === "facts") return factsTabHtml(a, mem);
   if (tab === "session") {
     const state = a.container_state?.state;
     const stopped = S.data.health.docker && ["stopped", "missing"].includes(state) && !S.busy[a.container];
@@ -986,6 +1024,8 @@ document.addEventListener("click", (e) => {
   else if (act === "file-close") { S.files.open = null; render(); }
   else if (act === "file-download") downloadFile(S.drawer.id, id);
   else if (act === "file-delete") { S.dialog = {action: "delete", kind: "file", id, fresh: true}; render(); }
+  else if (act === "fact-pin") changeFact(S.drawer.id, id, Number(el.dataset.pin));
+  else if (act === "fact-delete") { S.dialog = {action: "delete", kind: "fact", id, fresh: true}; render(); }
   else if (act === "file-pick") filePicker().click();
   else if (act === "follow") { S.log.follow = !S.log.follow; render(); if (S.log.follow) loadLog(); }
   else if (act === "ufilter") { S.usageFilter = id; render(); }
@@ -1001,6 +1041,7 @@ document.addEventListener("click", (e) => {
   else if (act === "dialog-ok") {
     const d = S.dialog; S.dialog = null;
     if (d.kind === "settings") saveSettings();
+    else if (d.kind === "fact") changeFact(S.drawer.id, d.id, null);
     else if (d.kind === "file") (d.action === "delete" ? deleteFile(S.drawer.id, d.id) : uploadFile(S.drawer.id, d.file, d.id, true));
     else perform(d.action, d.kind, d.id, d.sim);
   }

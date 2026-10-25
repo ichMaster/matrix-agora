@@ -11,10 +11,12 @@ import json
 import logging
 import os
 import re
+import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from agents.facts import load_facts
 from agents.usage import Row, aggregate, cost, month_chars, parse_lines, parse_model_prices
 
 DAYS_SHOWN = 60
@@ -156,9 +158,39 @@ def digest_view(state_dir: Path, name: str, today: date, tz: str | None = None) 
     return {"last": last, "today": count, "month_chars": spoken, "cap": cap, "voice": voice}
 
 
+def facts_view(state_dir: Path, name: str) -> list[dict] | None:
+    """v5.8 — a person's facts about the owner (`<name>.facts/`): pin 1 first, then 2, then 0, oldest first; an
+    unreadable folder is None, never a 500."""
+    try:
+        facts = load_facts(state_dir / f"{name}.facts")
+    except Exception:  # noqa: BLE001
+        return None
+    order = {1: 0, 2: 1, 0: 2}
+    return [{"id": f.id, "pin": f.pin, "source": f.source, "added": f.added, "text": f.text}
+            for f in sorted(facts, key=lambda f: (order[f.pin], f.added, f.id))]
+
+
+def archive_view(state_dir: Path, name: str) -> dict | None:
+    """v5.8 — the archive's size (`<name>.archive.db`, opened read-only): lines and how many are embedded. No file
+    yet is zero; an unreadable one is None, never a 500."""
+    path = state_dir / f"{name}.archive.db"
+    if not path.exists():
+        return {"lines": 0, "embedded": 0}
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            lines, embedded = con.execute("SELECT COUNT(*), COUNT(emb) FROM lines").fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    return {"lines": int(lines), "embedded": int(embedded)}
+
+
 def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = None, with_mood: bool = False,
                 memories: Path | None = None, with_nudge: bool = False, with_ratelimit: bool = False,
-                with_news: bool = False, with_digest: bool = False) -> dict:
+                with_news: bool = False, with_digest: bool = False, with_facts: bool = False,
+                with_archive: bool = False) -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -200,6 +232,8 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "ratelimit": ratelimit_view(state_dir, name) if with_ratelimit else None,
         "news": nudge_view(state_dir, name, today, kind="news") if with_news else None,  # v4.5: Claude's news
         "digest": digest_view(state_dir, name, today) if with_digest else None,           # v5.1: Hermes
+        "facts": facts_view(state_dir, name) if with_facts else None,                    # v5.8: Кіра's facts
+        "archive": archive_view(state_dir, name) if with_archive else None,              # v5.8: her archive
     }
 
 

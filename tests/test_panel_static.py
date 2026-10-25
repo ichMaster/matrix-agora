@@ -72,7 +72,8 @@ def test_the_page_follows_capabilities():
     """v4.1: tabs, the today field, the summary wording and the busy label need their capability; `it` is a
     pronoun; with every capability on (Ada, Bruno) the page is unchanged."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert 'const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood"};' in js
+    assert ('const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", '
+            'facts: "facts"};') in js                                       # v5.8: the Facts tab needs `facts`
     assert 'PRONOUN = {she: "She", he: "He", it: "It"}' in js
     assert "agentTabs(a)" in js and 'dr.tab = "log"' in js
     assert 'can(a, "today") ?' in js                                   # the card's Today field
@@ -246,3 +247,13 @@ def test_every_kind_shows_in_the_agents_tokens_tab():
     assert all(f'"{k}"' in order for k in (*KINDS, "sky"))
     assert "function kindsOf(byKind)" in js and "${kindsOf(byKind).map((k) =>" in js
     assert "KIND_ORDER.filter((k) => byKind[k]).map" not in js
+
+
+def test_the_facts_tab_and_the_archive_line():
+    """v5.8: Кіра's facts — re-pin at once, delete after a confirmation; her card shows the archive's size."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert '["facts", "Facts"]' in js and "function factsTabHtml(a, mem)" in js
+    assert 'data-act="fact-pin"' in js and 'data-act="fact-delete"' in js
+    assert '{action: "delete", kind: "fact", id, fresh: true}' in js            # a delete is confirmed first
+    assert 'send("DELETE", `/api/agents/${encodeURIComponent(agent)}/facts/${encodeURIComponent(id)}`)' in js
+    assert "function archiveLine(mem)" in js and 'can(a, "recall")' in js

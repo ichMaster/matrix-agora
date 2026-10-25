@@ -79,3 +79,20 @@ add no new token; there are four new icons drawn in the same grid (sliders, fold
   <path>? Claude loses this note.»
 - **Upload:** a file picker with an optional folder path. Replacing an existing file asks «Replace <path>?» first.
   The cap is 5 MB, and a refusal shows the server's reason.
+
+## Addendum (v5.8): Кіра's facts and her archive
+
+The screens reuse the drawer, card, button, dialog and toast components and the Nocturne tokens; no new token or
+icon (the trash icon is v4.7's).
+
+**A Facts tab on the drawer of a person with `facts` (Кіра).**
+- **The list:** one row per fact, pin 1 first, then pin 2, then pin 0; the text in Ukrainian, then a 11.5 px mono
+  line `source · added` (`asked`, `private`, `agora` or `noos`). Above it a muted line: «n facts · only her private
+  chat sees them · a change counts at her next answer». With none: «Кіра knows no facts about you yet.»
+- **Re-pin:** three buttons per row — **always** (pin 1), **if room** (pin 2), **recall only** (pin 0); the current
+  one is primary and disabled. A click saves at once and shows «Fact re-pinned».
+- **Delete:** the trash button asks «Delete this fact? She stops knowing it at her next answer — it is not kept
+  anywhere else.», then «Fact deleted».
+
+**Her card (`recall`):** a 12 px muted line under the other fields, «archive: 1,820 lines · 1,790 embedded»
+(«Archive unreadable» when it cannot be read).
