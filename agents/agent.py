@@ -656,8 +656,12 @@ class Agent:
         lines, last = [], None
         for e in reversed(resp.chunk):
             if isinstance(e, RoomMessageText) and not is_edit(e) and e.sender in (self.cfg.owner, self.cfg.user_id):
-                lines.append(("Ich" if e.sender == self.cfg.owner else self.cfg.name, e.body))
+                speaker = "Ich" if e.sender == self.cfg.owner else self.cfg.name
+                lines.append((speaker, e.body))
                 last = int(getattr(e, "server_timestamp", 0) or 0) or last
+                # v5.8 review #1: a line sent while she was down is archived before the archive seeds her history
+                self._archive(str(getattr(e, "event_id", "")) or f"private:{last}", last or 0, "private", "matrix",
+                              speaker, e.body)
         self.private_history = lines[-max(self.history_n, 1):]
         self.last_private_ms = last
         log.info("private chat: %d lines of history", len(self.private_history))
@@ -748,15 +752,17 @@ class Agent:
                                        kind="private_nudge" if nudge else "private")
             if text is None:
                 return False
+            sent_id = None
             if door == "matrix":
-                await self.send_line(room, text, f"private:{self.clock()}")
+                sent_id = await self.send_line(room, text, f"private:{self.clock()}")
             elif not await self.send_telegram(text):  # never said: not in the history, not counted (review #2)
                 log.warning("private: not delivered (telegram)")
                 return False
             self.private_history = append_history(self.private_history, self.cfg.name, text, max(self.history_n, 1))
             self.last_private_ms = self.clock()
             self._own_seq += 1
-            self._archive(f"own:{door}:{self.clock()}:{self._own_seq}", self.clock(), "private", door, self.cfg.name, text)
+            self._archive(sent_id or f"own:{door}:{self.clock()}:{self._own_seq}", self.clock(), "private", door,
+                          self.cfg.name, text)
             if self.cfg.can("summary"):
                 self.session.append((private_label(self.cfg.name), text))
             log.info("private: %s%s", "wrote first" if nudge else "answered", " (telegram)" if door == "telegram" else "")
@@ -1099,7 +1105,7 @@ class Agent:
                 log.info("voice: text only (%s, telegram)", why)
         return await self.telegram.send_message(self.telegram_owner, text)
 
-    async def send_line(self, room_id: str, text: str, event_key: str, answering: str | None = None) -> None:
+    async def send_line(self, room_id: str, text: str, event_key: str, answering: str | None = None) -> str | None:
         """v5.3 — every line the agent says: a voice message under a plain label when it should and can (`voice_due`,
         a voice, a voiceable line, under the speakers' monthly budget), never a reply; then always the same text as
         `m.text` — the only form the iPhone's Element shows the words in (it renders no media caption; the owner,
@@ -1127,8 +1133,10 @@ class Agent:
                 log.info("voice: sent (%d chars)", len(text))
             elif why not in ("share", "not voiceable"):
                 log.info("voice: text only (%s)", why)
-        await self.client.room_send(room_id=room_id, message_type="m.room.message",
-                                    content={"msgtype": "m.text", "body": text})
+        resp = await self.client.room_send(room_id=room_id, message_type="m.room.message",
+                                           content={"msgtype": "m.text", "body": text})
+        event_id = getattr(resp, "event_id", None)  # v5.8 review #1: the text's own id, so a re-read deduplicates
+        return event_id if isinstance(event_id, str) and event_id else None
 
     def _speakers_month_used(self) -> int:
         """This month's spoken characters of every speaker (their usage files in state/), the heralds left out."""

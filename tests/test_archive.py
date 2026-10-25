@@ -224,3 +224,28 @@ def test_the_embedding_call(monkeypatch, caplog, embeddings, fail, out, ok):
     assert seen["config"].task_type == "RETRIEVAL_QUERY" and usage == [("embed", "gemini-embedding-001", ok)]
     assert SECRET not in caplog.text
     assert asyncio.run(client.embed([])) == []
+
+
+def test_a_line_sent_while_she_was_down_survives_the_restart_seed(tmp_path, monkeypatch):
+    """v5.8 review #1: start_private read it, the archive's seed replaced the history, and it was never archived."""
+    agent = kira(tmp_path, monkeypatch)
+    agent.archive.append("$old", ms(9), "private", "matrix", "Ich", "давнє")
+    newest_first = [text(OWNER, "Поки тебе не було", ms(12), "$new"), text(OWNER, "давнє", ms(9), "$old")]
+    agent.client.room_messages = AsyncMock(return_value=SimpleNamespace(chunk=newest_first))
+    asyncio.run(agent.start_private("s1"))
+    agent.seed_private_from_archive()
+    assert agent.private_history == [("Ich", "давнє"), ("Ich", "Поки тебе не було")]
+    assert [line.text for line in agent.archive.latest("private", 10)] == ["давнє", "Поки тебе не було"]
+
+
+def test_her_element_line_is_archived_under_its_event_id_so_a_re_read_dedupes(tmp_path, monkeypatch):
+    agent = kira(tmp_path, monkeypatch)
+    agent.client.room_send = AsyncMock(return_value=SimpleNamespace(event_id="$mine"))
+    agent.private_history = [("Ich", "привіт")]
+    asyncio.run(agent.private_reply())
+    keys = [r[0] for r in agent.archive.db.execute("SELECT key FROM lines WHERE place = 'private'")]
+    assert keys == ["$mine"]
+    agent.client.room_messages = AsyncMock(return_value=SimpleNamespace(
+        chunk=[text(KIRA, "Привіт, сонце.", ms(18), "$mine")]))
+    asyncio.run(agent.start_private("s1"))
+    assert agent.archive.db.execute("SELECT COUNT(*) FROM lines WHERE place = 'private'").fetchone()[0] == 1
