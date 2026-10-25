@@ -25,6 +25,11 @@ KIRA = "@kira:agora.lan"
      "Я стояла з термосом... з термосом, розумієш! Як пані на екскурсії."),
     ("Ну от [deep belly laugh] і все.", "Ну от і все."),                      # an invented tag goes too
     ("Дивись [1] і arr[i] = 3, і [ОСТРІВ 3].", "Дивись [1] і arr[i] = 3, і [ОСТРІВ 3]."),  # not tags: stay
+    ("Глянь [тут](https://x.ua).", "Глянь [тут](https://x.ua)."),            # a link's text stays
+    # review #3: a capital, a tag glued to a word, punctuation or an apostrophe inside — all tags
+    ("[Laughs] Так[laughs] і [LAUGHS] все.", "Так і все."),
+    ("[sighs.] Ну, [laughs softly, then sighs] добре.", "Ну, добре."),
+    ("Я [зам’ялася] не знаю.", "Я не знаю."),
     ("Тихо [whispers] , так?", "Тихо, так?"),                                  # no space before the comma
     ("[sighs]\n[thoughtful] Може, завтра.", "Може, завтра."),
     ("[laughs] [laughs harder]", ""),                                          # tags only: no words at all

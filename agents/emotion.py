@@ -15,9 +15,10 @@ from typing import Self
 # measured on her voice on 2026-10-25: these perform the tags; `eleven_turbo_v2_5` (and the other v2 models) read them
 # aloud as words
 TAG_MODELS = frozenset({"eleven_v3", "eleven_v3_conversational", "eleven_v4", "eleven_v4_turbo"})
-# a tag: a bracket of lower-case words (Latin or Cyrillic), 2–40 characters, not right after a word — `[1]`,
-# `arr[i]` and `[ОСТРІВ 3]` stay
-TAG_RE = re.compile(r"(?<!\w)\[([a-zа-яіїєґ][a-zа-яіїєґ '\-]{1,39})\]")  # never an index: `arr[i]`
+# a tag: a bracket that opens with a letter of any case and holds 2–40 characters, none a digit, and is not a link's
+# text — `[Laughs]`, `Так[laughs]`, `[sighs.]`, `[зам’ялася]` go (review #3); `[1]`, `arr[i]`, `[ОСТРІВ 3]` and
+# `[тут](url)` stay. Her palette puts nothing else in square brackets.
+TAG_RE = re.compile(r"\[([^\W\d_][^\[\]\n\d]{1,39})\](?!\()")
 
 
 def split_tags(reply: str) -> tuple[str, str]:

@@ -85,7 +85,8 @@ follows from it.
 - **`speech`** keeps the reply as written, tags and all, for the synthesiser.
 - **`text`** is the reply with every tag removed and nothing in its place (the owner, 2026-10-25: no emote, no emoji),
   the spaces tidied:
-  - a known tag, or an invented one (lower-case words, at most 40 characters), is removed;
+  - a known tag, or an invented one (a bracket that opens with a letter of any case, 2–40 characters, no digit, not a
+    link's text — v5.9 review #3), is removed;
   - a bracket that is not a tag (`[1]`, `arr[i]`, `[ОСТРІВ 3]`) stays.
 - **Where the text goes:** where it goes today. It stays a plain `m.text` in Matrix and plain text in Telegram, with no
   formatting and no parse mode.

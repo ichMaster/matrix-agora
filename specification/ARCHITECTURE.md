@@ -296,11 +296,11 @@ thing at an agent's start, so Claude's CLI never inherits it.
 from her palette (`voice_spec`, verified on her voice — `[starts laughing]`, `[laughs]`, `[laughs harder]`,
 `[wheezing]`, `[chuckles]`, `[surprised]`, `[thoughtful]`, `[hesitant]`, `[whispers]`, `[sighs]`), inline, in her own
 reply — one pass, no second call. `_compose` splits the reply (`agents/emotion.py` `split_tags`, pure): **her words**
-— every tag removed, nothing in its place, a bracket that is not a tag (`[1]`, `arr[i]`) kept — are the line every
+— every tag removed (a bracket that opens with a letter of any case, 2–40 characters, no digit, not a link's text — v5.9 review #3), nothing in its place, a name prefix read past the tags before it (review #1), a bracket that is not a tag (`[1]`, `arr[i]`) kept — are the line every
 caller stores, compares and sends as text (a `Spoken`, a `str` that also carries `.speech`), so the message, her
 history, the session, the summary, the archive, the facts' extraction and the other members never see a bracket (the
 owner: no emote, no emoji); **the speech** — the reply as written — is what `send_line` and `send_telegram` hand the
-synthesiser, and what the speakers' monthly budget counts. A reply of tags only is silence. **The safety rule:** a model
+synthesiser, and what the speakers' monthly budget counts. A reply of tags only, or of tags and punctuation (review #2), is silence. **The safety rule:** a model
 that does not perform tags (only `TAG_MODELS` do: `eleven_v3`, `eleven_v3_conversational`, `eleven_v4`,
 `eleven_v4_turbo`) gets her words alone. Her voice runs on `eleven_v4_turbo` at stability 0.3 (her `kira.env`); every
 other voice is unchanged. Measured on her voice before the phase (features/voice-emotion.md): tags read aloud on
