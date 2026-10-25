@@ -1,10 +1,14 @@
 """v5.9 — emotion in Кіра's voice: the palette, the split of a reply into her words and the speech, the capability
 and its prompt block (nio and Gemini mocked)."""
 
+import asyncio
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
+from agents import agent as agent_mod
 from agents.config import ConfigError, load_config
 from agents.emotion import TAG_MODELS, TAG_RE, speech_for, split_tags
 from agents.logic import BANNED_RE, build_instruction
@@ -88,3 +92,116 @@ def test_the_palette_reaches_both_of_her_prompts_and_no_one_elses(tmp_path, monk
     assert "ПАЛІТРА" in kira.build_prompt() and "ПАЛІТРА" in kira.build_prompt(private="НАОДИНЦІ")
     plain = Agent(AgentConfig(**base, capabilities=frozenset({"canon", "voice"})), llm=KindLLM())
     assert "ПАЛІТРА" not in plain.build_prompt()
+
+
+# --- AGORA-119: tags to the voice, words to the text, on every path ----------------------------------------------
+
+TAGGED = "[starts laughing] Я стояла з термосом! [laughs] З термосом, розумієш."
+WORDS = "Я стояла з термосом! З термосом, розумієш."
+
+
+class TaggedLLM:
+    def __init__(self, text=TAGGED):
+        self.text, self.calls = text, []
+
+    async def generate(self, transcript, system_instruction, max_output_tokens=400, kind="reply"):
+        self.calls.append((transcript, system_instruction))
+        return self.text
+
+
+class FakeTTS:
+    def __init__(self, model="eleven_v4_turbo"):
+        self.model, self.voice_id, self.spoken = model, "KiraVoice0123456789x", []
+
+    async def synth(self, text):
+        self.spoken.append(text)
+        return b"\x01\x00" * 24_000
+
+
+def her(tmp_path, monkeypatch, llm=None, model="eleven_v4_turbo"):
+    from agents.agent import Agent
+    from agents.config import AgentConfig
+    monkeypatch.setenv("TIMEZONE", "Europe/Kyiv")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:abc")
+    monkeypatch.setenv("TELEGRAM_OWNER_ID", "424242")
+    caps = frozenset({"canon", "voice", "summary", "private", "telegram", "recall", "emotion"})
+    cfg = AgentConfig(name="Кіра", user_id=KIRA, canon="К.", homeserver="http://hs", room_id="!room",
+                      owner="@ich:agora.lan", password="pw", capabilities=caps, voice_spec="ПАЛІТРА")
+    agent = Agent(cfg, llm=llm or TaggedLLM())
+    agent.private_file = tmp_path / "kira.private.json"
+    agent.private_room = "!dm"
+    sent = []
+
+    async def room_send(room_id, message_type, content):
+        sent.append((room_id, content))
+        return SimpleNamespace(event_id=f"$e{len(sent)}")
+
+    agent.client = SimpleNamespace(room_send=room_send, room_typing=AsyncMock(), rooms={}, invited_rooms={})
+    agent.tts, agent.voice_off, agent.voice_monthly_chars, agent.voice_reply_p = FakeTTS(model), None, 1_000_000, 1.0
+    agent.telegram = SimpleNamespace(send_message=AsyncMock(return_value=True), send_voice=AsyncMock(return_value=True),
+                                     send_chat_action=AsyncMock(return_value=True))
+    agent.started, agent.started_ms = True, 0
+    agent.clock = lambda: 1_761_400_000_000
+    agent._spawn = lambda coro: coro.close()
+
+    async def voice_message(client, tts, text, filename, reply_to=None, on_synth=None, caption=False):
+        await tts.synth(text)
+        on_synth(True)
+        return {"msgtype": "m.audio", "body": "Голосове повідомлення", "url": "mxc://x"}, None
+
+    async def encode(pcm, timeout_s=60.0):
+        return b"OggS"
+    monkeypatch.setattr(agent_mod, "voice_message", voice_message)
+    monkeypatch.setattr(agent_mod, "encode_opus", encode)
+    return agent, sent
+
+
+def test_compose_gives_her_words_carrying_the_speech(tmp_path, monkeypatch):
+    agent, _ = her(tmp_path, monkeypatch)
+    line = asyncio.run(agent._compose(agent.build_prompt()))
+    assert line == WORDS and line.speech == TAGGED
+
+
+def test_element_the_voice_gets_the_tags_and_the_message_her_words(tmp_path, monkeypatch):
+    agent, sent = her(tmp_path, monkeypatch)
+    agent.private_channel = "matrix"
+    agent.private_history = [("Ich", "Розкажи щось смішне")]
+    assert asyncio.run(agent.private_reply()) is True
+    assert agent.tts.spoken == [TAGGED]
+    assert [c["body"] for _, c in sent if c["msgtype"] == "m.text"] == [WORDS]
+    assert agent.private_history[-1] == ("Кіра", WORDS) and agent.session[-1] == ("Кіра (наодинці)", WORDS)
+    stored = [r[0] for r in agent.archive.db.execute("SELECT text FROM lines WHERE speaker = 'Кіра'")]
+    assert stored == [WORDS]                                                    # no bracket kept anywhere
+
+
+def test_telegram_the_voice_note_gets_the_tags_and_the_text_her_words(tmp_path, monkeypatch):
+    agent, _ = her(tmp_path, monkeypatch)
+    agent.private_channel = "telegram"
+    agent.private_history = [("Ich", "Розкажи щось смішне")]
+    assert asyncio.run(agent.private_reply()) is True
+    assert agent.tts.spoken == [TAGGED]
+    assert agent.telegram.send_message.await_args.args[1] == WORDS
+
+
+def test_agora_the_room_reads_her_words(tmp_path, monkeypatch):
+    agent, sent = her(tmp_path, monkeypatch)
+    asyncio.run(agent.send_line("!room", asyncio.run(agent._compose(agent.build_prompt())), "$t"))
+    assert agent.tts.spoken == [TAGGED] and [c["body"] for _, c in sent if c["msgtype"] == "m.text"] == [WORDS]
+
+
+def test_a_model_that_reads_tags_aloud_never_gets_one(tmp_path, monkeypatch):
+    agent, _ = her(tmp_path, monkeypatch, model="eleven_turbo_v2_5")
+    asyncio.run(agent.send_line("!room", asyncio.run(agent._compose(agent.build_prompt())), "$t"))
+    assert agent.tts.spoken == [WORDS]
+
+
+def test_a_reply_of_tags_only_is_silence(tmp_path, monkeypatch):
+    agent, _ = her(tmp_path, monkeypatch, llm=TaggedLLM("[laughs] [sighs]"))
+    assert asyncio.run(agent._compose(agent.build_prompt())) is None
+
+
+def test_the_monthly_budget_counts_the_speech(tmp_path, monkeypatch):
+    agent, sent = her(tmp_path, monkeypatch)
+    agent.voice_monthly_chars = len(WORDS) + 1                                 # the words fit, the speech does not
+    asyncio.run(agent.send_line("!room", asyncio.run(agent._compose(agent.build_prompt())), "$t"))
+    assert agent.tts.spoken == [] and [c["body"] for _, c in sent] == [WORDS]  # text only: her words

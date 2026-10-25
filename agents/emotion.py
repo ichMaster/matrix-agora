@@ -10,6 +10,7 @@ them aloud, so it never receives one. The split is pure.
 from __future__ import annotations
 
 import re
+from typing import Self
 
 # measured on her voice on 2026-10-25: these perform the tags; `eleven_turbo_v2_5` (and the other v2 models) read them
 # aloud as words
@@ -26,6 +27,22 @@ def split_tags(reply: str) -> tuple[str, str]:
     text = re.sub(r"[ \t]+([,.!?…:;])", r"\1", text)
     text = "\n".join(line.strip() for line in text.split("\n")).strip()
     return text, reply or ""
+
+
+class Spoken(str):
+    """Her words — the `str` every caller stores, compares and sends as text — carrying the speech for her voice."""
+
+    speech: str
+
+    def __new__(cls, words: str, speech: str) -> Self:
+        obj = super().__new__(cls, words)
+        obj.speech = speech
+        return obj
+
+
+def spoken(line: str) -> tuple[str, str]:
+    """(the words, what the synthesiser gets) of a line — a plain `str` is both."""
+    return str(line), getattr(line, "speech", None) or str(line)
 
 
 def speech_for(model: str, text: str, speech: str) -> str:

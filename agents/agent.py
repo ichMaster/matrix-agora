@@ -63,6 +63,7 @@ from agents.claude_sdk import (
     write_status,
 )
 from agents.config import AgentConfig, load_config
+from agents.emotion import Spoken, speech_for, split_tags, spoken
 from agents.facts import (
     REMEMBER_SKILL,
     add_fact,
@@ -1114,15 +1115,16 @@ class Agent:
         """Every answer in Telegram is a voice note in her own voice, then the text (the owner, 2026-10-21) — the
         speakers' monthly budget and `voiceable` still hold; when the voice cannot be made, the text goes alone.
         True when the text went out."""
+        text, speech = spoken(text)  # v5.9: her voice gets the tags, the message her words
         why = self.voice_off
         if self.tts is not None:
             if not voiceable(text):
                 why = "not voiceable"
-            elif self._speakers_month_used() + len(text) > self.voice_monthly_chars:
+            elif self._speakers_month_used() + len(speech) > self.voice_monthly_chars:
                 why = "monthly cap"
             else:
-                pcm = await self.tts.synth(text)
-                self.record_tts(len(text), pcm is not None)
+                pcm = await self.tts.synth(speech)
+                self.record_tts(len(speech), pcm is not None)
                 ogg = await encode_opus(pcm) if pcm is not None else None
                 why = ("tts failed" if pcm is None else "encode failed" if ogg is None
                        else None if await self.telegram.send_voice(self.telegram_owner, ogg,
@@ -1140,19 +1142,20 @@ class Agent:
         `m.text` — the only form the iPhone's Element shows the words in (it renders no media caption; the owner,
         2026-10-18). The other agents read the text. Never a word in a log."""
         voice_of = self._transcript_voice.get(answering or "") or None
+        text, speech = spoken(text)  # v5.9: her voice gets the tags, the message her words
         why = self.voice_off
         if self.tts is not None:
             if not voiceable(text):
                 why = "not voiceable"
             elif not voice_due(voice_of is not None, event_key or "", self.cfg.localpart, self.voice_reply_p):
                 why = "share"
-            elif self._speakers_month_used() + len(text) > self.voice_monthly_chars:
+            elif self._speakers_month_used() + len(speech) > self.voice_monthly_chars:
                 why = "monthly cap"
             else:
                 name = f"{self.cfg.localpart}-{local_now(self.clock(), self.tz):%Y%m%d-%H%M%S}.ogg"
                 # never a reply (the owner, 2026-10-18: «забери ці реплаї») — it is voiced, not quoted
-                content, why = await voice_message(self.client, self.tts, text, name,
-                                                   on_synth=lambda ok: self.record_tts(len(text), ok))
+                content, why = await voice_message(self.client, self.tts, speech, name,
+                                                   on_synth=lambda ok: self.record_tts(len(speech), ok))
                 if content is not None:
                     try:
                         await self.client.room_send(room_id=room_id, message_type="m.room.message", content=content)
@@ -1920,6 +1923,12 @@ class Agent:
             return None
         if self.cfg.type == "creature":  # v4.2: a small vocabulary, enforced
             text = cap_words(text, max_words or self.cat_max_words)
+        if self.cfg.can("emotion"):  # v5.9: her words for every text, the tags only for her voice
+            words, speech = split_tags(text)
+            if not words:
+                log.info("silent: only voice tags")
+                return None
+            return Spoken(words, speech_for(getattr(self.tts, "model", None) or TTS_MODEL, words, speech))
         return text
 
     def _pick_thesis(self) -> int | None:

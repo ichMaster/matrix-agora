@@ -292,6 +292,22 @@ share, over the budget, no voice, an action purr) or whose voice step fails is a
 `tts` usage line; a member's voice is never logged as ignored. `ELEVENLABS_API_KEY` leaves the environment first
 thing at an agent's start, so Claude's CLI never inherits it.
 
+**Emotion in her voice (v5.9, `emotion`; Кіра; the owner, 2026-10-25).** ElevenLabs audio tags: she writes one or two
+from her palette (`voice_spec`, verified on her voice — `[starts laughing]`, `[laughs]`, `[laughs harder]`,
+`[wheezing]`, `[chuckles]`, `[surprised]`, `[thoughtful]`, `[hesitant]`, `[whispers]`, `[sighs]`), inline, in her own
+reply — one pass, no second call. `_compose` splits the reply (`agents/emotion.py` `split_tags`, pure): **her words**
+— every tag removed, nothing in its place, a bracket that is not a tag (`[1]`, `arr[i]`) kept — are the line every
+caller stores, compares and sends as text (a `Spoken`, a `str` that also carries `.speech`), so the message, her
+history, the session, the summary, the archive, the facts' extraction and the other members never see a bracket (the
+owner: no emote, no emoji); **the speech** — the reply as written — is what `send_line` and `send_telegram` hand the
+synthesiser, and what the speakers' monthly budget counts. A reply of tags only is silence. **The safety rule:** a model
+that does not perform tags (only `TAG_MODELS` do: `eleven_v3`, `eleven_v3_conversational`, `eleven_v4`,
+`eleven_v4_turbo`) gets her words alone. Her voice runs on `eleven_v4_turbo` at stability 0.3 (her `kira.env`); every
+other voice is unchanged. Measured on her voice before the phase (features/voice-emotion.md): tags read aloud on
+`eleven_turbo_v2_5`, performed on `eleven_v4_turbo`, which takes `language_code: "uk"`; the same cost. Hermes's
+recording needs no change: her voiced lines come as audio with the tags performed, and her text has none. Pinned by
+`tests/test_emotion.py`.
+
 **Hearing (v5.2).** `DeepgramSTT` (ported from Lumi's `voice/stt.py`): `POST https://api.deepgram.com/v1/listen`
 with `model=nova-2`, `language=uk`, `smart_format=true`, `Authorization: Token …` and the audio's own content type
 (Element's voice messages are OGG/Opus, sent as they are), 30 s; the transcript is
