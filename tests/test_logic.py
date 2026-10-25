@@ -182,6 +182,15 @@ def test_reply_speaking_only_for_others_is_dropped():
     assert clean_reply("Ада: так\nIch: ні", "Бруно", ["Ада", "Ich"]) is None
 
 
+def test_a_prefix_is_read_past_the_voice_tags_before_it():
+    """v5.9 review #1: a tag before a sentence hid the name after it, so another's line was sent."""
+    from agents.logic import clean_reply
+    assert clean_reply("Ну так.\n[sighs] Ада: а я думала інакше.", "Кіра", ["Ада", "Ich"]) == "Ну так."
+    assert clean_reply("[sighs] Ich: ти де?", "Кіра", ["Ада", "Ich"]) is None
+    assert clean_reply("[laughs] Кіра: ну… [sighs] добре", "Кіра", ["Ich"]) == "[laughs] ну… [sighs] добре"
+    assert clean_reply("[sighs] Ада: так\n[laughs] Кіра: ой", "Кіра", ["Ада"]) == "[laughs] ой"
+
+
 def test_near_duplicates_are_detected():
     from agents.logic import same_message
     assert same_message("Саме так. Йому потрібен провідник.", "саме так! Йому потрібен \"провідник\"")

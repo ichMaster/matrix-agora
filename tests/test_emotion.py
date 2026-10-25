@@ -195,6 +195,13 @@ def test_a_model_that_reads_tags_aloud_never_gets_one(tmp_path, monkeypatch):
     assert agent.tts.spoken == [WORDS]
 
 
+def test_a_tag_never_hides_anothers_line(tmp_path, monkeypatch):
+    """v5.9 review #1: `[sighs] Ich: …` was sent as her words and spoken in her voice."""
+    agent, _ = her(tmp_path, monkeypatch, llm=TaggedLLM("[laughs] Ну так.\n[sighs] Ich: ти де?"))
+    line = asyncio.run(agent._compose(agent.build_prompt()))
+    assert line == "Ну так." and line.speech == "[laughs] Ну так."
+
+
 def test_a_reply_of_tags_only_is_silence(tmp_path, monkeypatch):
     agent, _ = her(tmp_path, monkeypatch, llm=TaggedLLM("[laughs] [sighs]"))
     assert asyncio.run(agent._compose(agent.build_prompt())) is None

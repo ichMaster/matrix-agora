@@ -10,6 +10,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from agents.config import AgentConfig
+from agents.emotion import TAG_RE
 
 # v4.2 — the cat's extra reply rules (a creature): one short line, few words, the sky or a shell line as text only
 CREATURE_RULES = (
@@ -190,26 +191,29 @@ def build_transcript(history: list[tuple[str, str]]) -> str:
     return "\n".join(f"{name}: {text}" for name, text in history)
 
 
+LEAD_TAGS_RE = re.compile(rf"(?:{TAG_RE.pattern}\s*)+")  # the voice tags a line opens with (v5.9)
+
+
 def clean_reply(text: str, own_name: str, other_names: list[str]) -> str | None:
     """The model sometimes continues the "Name: text" script: it prefixes its own
     name, or writes other speakers' lines (even the owner's). Keep only this
     agent's own words: strip its prefix, stop at the first other speaker's line;
     if the reply opens with someone else's line, take the first own-prefixed block.
-    Returns None when nothing of its own remains."""
+    Returns None when nothing of its own remains. A prefix is read past any voice tags before it (v5.9 review #1:
+    `[sighs] Ада: …` is still Ада's line); the tags of an own line stay for the voice."""
     own = f"{own_name}:"
     others = tuple(f"{n}:" for n in other_names)
-    lines = [ln.rstrip() for ln in text.strip().splitlines()]
+    lines = [ln.strip() for ln in text.strip().splitlines()]
+    tags = [m.group() if (m := LEAD_TAGS_RE.match(ln)) else "" for ln in lines]
+    bare = [ln[len(t):] for ln, t in zip(lines, tags, strict=True)]
     start = 0
-    if lines and lines[0].lstrip().startswith(others):
-        start = next((i for i, ln in enumerate(lines) if ln.lstrip().startswith(own)), len(lines))
+    if bare and bare[0].startswith(others):
+        start = next((i for i, b in enumerate(bare) if b.startswith(own)), len(bare))
     kept: list[str] = []
-    for ln in lines[start:]:
-        s = ln.lstrip()
-        if s.startswith(others):
+    for i in range(start, len(lines)):
+        if bare[i].startswith(others):
             break
-        if s.startswith(own):
-            s = s[len(own):].lstrip()
-        kept.append(s)
+        kept.append(tags[i] + bare[i][len(own):].lstrip() if bare[i].startswith(own) else lines[i])
     out = "\n".join(kept).strip()
     return out or None
 
