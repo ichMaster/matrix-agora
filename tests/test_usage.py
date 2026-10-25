@@ -38,7 +38,8 @@ def test_missing_metadata_gives_nulls():
 def test_kind_list_is_the_contract():
     assert KINDS == ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
                      "digest_voice", "ask", "tts", "stt",  # v5.1–v5.2: Hermes
-                     "private", "private_nudge")           # v5.6: a person's private chat
+                     "private", "private_nudge",           # v5.6: a person's private chat
+                     "embed")                              # v5.8: the archive's embeddings
 
 
 # --- the seam reports every call ---

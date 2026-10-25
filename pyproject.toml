@@ -9,6 +9,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "tzdata>=2024.1",  # zoneinfo in slim images has no system tz database (v3.2)
     "aiohttp>=3.9",  # v5.1: the ElevenLabs call (agents/voice.py); already installed with matrix-nio
+    "numpy>=2.0",  # v5.8: the cosine over the archive's stored vectors (agents/archive.py)
 ]
 
 [dependency-groups]

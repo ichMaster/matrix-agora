@@ -22,6 +22,8 @@ DIGEST_MODEL = "gemini-3.1-pro-preview"  # v5.1: Hermes's digests and answers �
 THINK_MAX_TOKENS = 16384  # the cap counts the thinking too: room for it and a ~1,500-character digest
 # v5.8 — models that refuse a zero thinking budget: an answer on one of them goes through the thinking path
 THINKING_MODELS = frozenset({"gemini-3.1-pro-preview"})
+EMBED_MODEL = "gemini-embedding-001"  # v5.8: the archive's meaning search (the owner, 2026-10-25: Gemini's)
+EMBED_DIM = 768
 
 UsageSink = Callable[[str, str, Any, bool], None]  # (kind, model, usage_metadata | None, ok)
 
@@ -113,6 +115,27 @@ class GeminiClient:
             return None
         return text, finish_of(resp)
 
+
+    async def embed(self, texts: list[str], task: str = "RETRIEVAL_DOCUMENT", kind: str = "embed") -> list | None:
+        """v5.8 — the texts' embeddings (`EMBED_DIM` floats each), in one call: `RETRIEVAL_DOCUMENT` for the archive's
+        lines, `RETRIEVAL_QUERY` for a recall's question. None on failure or a short answer (logged by type)."""
+        if not texts:
+            return []
+        try:
+            resp = await self._client.aio.models.embed_content(
+                model=EMBED_MODEL, contents=texts,
+                config=types.EmbedContentConfig(task_type=task, output_dimensionality=EMBED_DIM))
+        except Exception as exc:  # noqa: BLE001 — a failed embedding is retried later, never a blocked reply
+            log.error("gemini embed failed: %s", type(exc).__name__)
+            self._report(kind, None, False, EMBED_MODEL)
+            return None
+        vectors = [list(getattr(e, "values", None) or []) for e in (getattr(resp, "embeddings", None) or [])]
+        ok = len(vectors) == len(texts) and all(vectors)
+        self._report(kind, getattr(resp, "metadata", None), ok, EMBED_MODEL)
+        if not ok:
+            log.error("gemini embed returned %d of %d vectors", len(vectors), len(texts))
+            return None
+        return vectors
 
     async def search(self, question: str, max_output_tokens: int = 800, kind: str = "sky") -> str | None:
         """A grounded answer — Gemini with Google Search, as Lumi's web lookup (core/weblookup.py): the question is

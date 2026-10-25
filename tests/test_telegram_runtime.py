@@ -416,11 +416,11 @@ def test_one_failing_update_never_replays_the_batch(tmp_path, monkeypatch, caplo
     calls = []
     original = agent.private_line
 
-    def flaky(body, ts_ms, channel):
+    def flaky(body, ts_ms, channel, key=None):
         calls.append(body)
         if body == "друге":
             raise OSError("disk full")
-        original(body, ts_ms, channel)
+        original(body, ts_ms, channel, key)
 
     agent.private_line = flaky
     agent._spawn = lambda coro: coro.close()

@@ -10,6 +10,7 @@ name_forms = ["кіра", "кіри", "кірі", "кіру", "кірою", "к�
 [capabilities]
 private = true          # v5.6: a private chat with the owner (the owner, 2026-10-20: Кіра first)
 telegram = true         # v5.7: her own Telegram bot — the same private chat, a second door (server/kira.env)
+recall = true           # v5.8: an archive of every line she sees, recalled before each answer (the owner: as Noos)
 
 [turns]
 mode = "ranked"         # ranked | ambient | mention-only

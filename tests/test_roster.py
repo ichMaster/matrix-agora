@@ -51,7 +51,7 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
     assert roster["bruno"].name_forms == ("бруно", "bruno")  # v4.4 review #8: the Latin form too
     assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES) - {"mood", "pastlife", "nudge", "news",
                                                                               "digest", "transcribe", "private",
-                                                                              "telegram"}
+                                                                              "telegram", "recall"}
     assert ada.panel["name"] == "Ada"
 
 
@@ -67,7 +67,7 @@ def test_the_four_newcomers_are_people_like_ada_and_bruno(name, shown, forms):
     assert (m.user_id, m.name, m.type, m.engine, m.mode, m.weight) == (
         f"@{name}:agora.lan", shown, "persona", "gemini", "ranked", 1.0)
     assert m.name_forms == forms and m.can("voice")
-    assert m.capabilities == TYPES["persona"] | ({"private", "telegram"} if name == "kira" else set())  # v5.6, v5.7
+    assert m.capabilities == TYPES["persona"] | ({"private", "telegram", "recall"} if name == "kira" else set())
     assert m.panel["name"] == name.capitalize()
 
 

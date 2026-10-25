@@ -1,0 +1,174 @@
+"""v5.8 — the archive: every line a person with `recall` sees, searchable by words and by meaning (ROADMAP §v5.8,
+ARCHITECTURE §Memory).
+
+Modelled on Noos's `memory/sessions.db` (`~/claude-home`): SQLite with an FTS5 index over the text (BM25) and, per
+line, an embedding (here Gemini's `gemini-embedding-001`, added later in batches by the idle watcher); a recall merges
+the two ranked lists by reciprocal rank fusion, so both a literal match and a paraphrase are found.
+
+`state/<name>.archive.db` holds texts, so it is created 0600, stays in `state/`, and is read by no other agent. It is
+append-only and never pruned; a line's `key` (the Matrix event id, `tg:<update_id>`, or the agent's own) makes a
+second append of it a no-op. The fusion and the pick are pure; only the class touches the file.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import sqlite3
+from collections.abc import Iterable
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+
+PLACES = ("agora", "private", "facts")  # facts (v5.8, `facts`): searchable by a private recall only
+RRF_K = 60       # Noos's reciprocal rank fusion constant
+CANDIDATES = 50  # each ranked list's length before the fusion
+_WORD_RE = re.compile(r"\w+", re.UNICODE)
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS lines (
+    id INTEGER PRIMARY KEY, key TEXT UNIQUE NOT NULL, ts_ms INTEGER NOT NULL, place TEXT NOT NULL,
+    channel TEXT NOT NULL, speaker TEXT NOT NULL, text TEXT NOT NULL, emb BLOB);
+CREATE INDEX IF NOT EXISTS lines_place_ts ON lines (place, ts_ms);
+CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(text, content='lines', content_rowid='id', tokenize='unicode61');
+"""
+
+
+@dataclass(frozen=True)
+class Line:
+    id: int
+    key: str
+    ts_ms: int
+    place: str
+    channel: str
+    speaker: str
+    text: str
+
+
+def words_query(text: str) -> str | None:
+    """An FTS5 query from free text: its words longer than 2 characters, each quoted, joined with OR (Noos's);
+    None when no word is left."""
+    words = [w for w in _WORD_RE.findall(text or "") if len(w) > 2]
+    return " OR ".join(f'"{w}"' for w in dict.fromkeys(words)) or None
+
+
+def fuse(*ranked: list[int], k: int = RRF_K) -> list[int]:
+    """Reciprocal rank fusion: every list adds 1 / (k + rank) to its ids; the best first (ties by first seen)."""
+    score: dict[int, float] = {}
+    for ids in ranked:
+        for rank, i in enumerate(ids):
+            score[i] = score.get(i, 0.0) + 1.0 / (k + rank)
+    return sorted(score, key=lambda i: -score[i])
+
+
+def cosine_top(query: list[float] | np.ndarray, ids: list[int], matrix: np.ndarray | None, n: int = CANDIDATES) -> list[int]:
+    """The `n` ids whose vectors are closest to the query's by cosine."""
+    if matrix is None or not ids:
+        return []
+    q = np.asarray(query, dtype="float32")
+    sims = matrix @ q / (np.linalg.norm(matrix, axis=1) * np.linalg.norm(q) + 1e-9)
+    return [ids[j] for j in np.argsort(-sims)[:n]]
+
+
+def pick_recall(ranked: list[int], lines: dict[int, Line], exclude: set[tuple[str, str]], n: int) -> list[Line]:
+    """The best `n` lines not already in the prompt's history window (`exclude`: its (speaker, text) pairs)."""
+    out = []
+    for i in ranked:
+        line = lines.get(i)
+        if line is None or (line.speaker, line.text) in exclude:
+            continue
+        out.append(line)
+        if len(out) >= n:
+            break
+    return out
+
+
+class Archive:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():  # private from birth: the owner's words are inside
+            os.close(os.open(path, os.O_WRONLY | os.O_CREAT, 0o600))
+        os.chmod(path, 0o600)
+        self.db = sqlite3.connect(path)
+        self.db.executescript(SCHEMA)
+
+    def close(self) -> None:
+        self.db.close()
+
+    def append(self, key: str, ts_ms: int, place: str, channel: str, speaker: str, text: str) -> bool:
+        """A line once: False for an empty text or a key already held."""
+        if not text or not text.strip() or place not in PLACES:
+            return False
+        try:
+            with self.db:
+                cur = self.db.execute(
+                    "INSERT INTO lines(key, ts_ms, place, channel, speaker, text) VALUES (?,?,?,?,?,?)",
+                    (key, int(ts_ms), place, channel, speaker, text))
+                self.db.execute("INSERT INTO fts(rowid, text) VALUES (?,?)", (cur.lastrowid, text))
+        except sqlite3.IntegrityError:
+            return False
+        return True
+
+    def counts(self) -> tuple[int, int]:
+        """(lines, embedded)."""
+        lines, embedded = self.db.execute("SELECT COUNT(*), COUNT(emb) FROM lines").fetchone()
+        return int(lines), int(embedded)
+
+    def unembedded(self, limit: int) -> list[tuple[int, str]]:
+        return self.db.execute("SELECT id, text FROM lines WHERE emb IS NULL ORDER BY id LIMIT ?", (limit,)).fetchall()
+
+    def set_embeddings(self, pairs: Iterable[tuple[int, list[float]]]) -> None:
+        with self.db:
+            self.db.executemany("UPDATE lines SET emb = ? WHERE id = ?",
+                                [(np.asarray(v, dtype="float32").tobytes(), i) for i, v in pairs])
+
+    def search_words(self, query: str, places: Iterable[str], limit: int = CANDIDATES) -> list[int]:
+        """BM25 over FTS5 within `places`, the best first; no usable word → nothing."""
+        match = words_query(query)
+        places = tuple(places)
+        if match is None or not places:
+            return []
+        marks = ",".join("?" * len(places))
+        try:
+            return [r[0] for r in self.db.execute(
+                f"SELECT l.id FROM fts JOIN lines l ON l.id = fts.rowid WHERE fts MATCH ? AND l.place IN ({marks}) "
+                "ORDER BY bm25(fts) LIMIT ?", (match, *places, limit))]
+        except sqlite3.OperationalError:
+            return []
+
+    def vectors(self, places: Iterable[str]) -> tuple[list[int], np.ndarray | None]:
+        """The embedded lines of `places`: their ids and their vectors as one matrix."""
+        places = tuple(places)
+        if not places:
+            return [], None
+        rows = self.db.execute(f"SELECT id, emb FROM lines WHERE emb IS NOT NULL AND place IN "
+                               f"({','.join('?' * len(places))})", places).fetchall()
+        if not rows:
+            return [], None
+        return [r[0] for r in rows], np.vstack([np.frombuffer(r[1], dtype="float32") for r in rows])
+
+    def lines(self, ids: Iterable[int]) -> dict[int, Line]:
+        ids = list(ids)
+        if not ids:
+            return {}
+        rows = self.db.execute(f"SELECT id, key, ts_ms, place, channel, speaker, text FROM lines WHERE id IN "
+                               f"({','.join('?' * len(ids))})", ids).fetchall()
+        return {r[0]: Line(*r) for r in rows}
+
+    def around(self, line: Line, n: int = 1) -> list[Line]:
+        """The line with its `n` neighbours before and after, in its own place, oldest first."""
+        cols = "id, key, ts_ms, place, channel, speaker, text"
+        before = self.db.execute(f"SELECT {cols} FROM lines WHERE place = ? AND (ts_ms, id) < (?, ?) "
+                                 "ORDER BY ts_ms DESC, id DESC LIMIT ?", (line.place, line.ts_ms, line.id, n)).fetchall()
+        after = self.db.execute(f"SELECT {cols} FROM lines WHERE place = ? AND (ts_ms, id) > (?, ?) "
+                                "ORDER BY ts_ms, id LIMIT ?", (line.place, line.ts_ms, line.id, n)).fetchall()
+        return [Line(*r) for r in reversed(before)] + [line] + [Line(*r) for r in after]
+
+    def latest(self, place: str, limit: int, since_ms: int | None = None) -> list[Line]:
+        """The last `limit` lines of a place (from `since_ms` on), oldest first."""
+        rows = self.db.execute(
+            "SELECT id, key, ts_ms, place, channel, speaker, text FROM lines WHERE place = ? AND ts_ms >= ? "
+            "ORDER BY ts_ms DESC, id DESC LIMIT ?", (place, since_ms or 0, limit)).fetchall()
+        return [Line(*r) for r in reversed(rows)]

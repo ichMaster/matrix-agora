@@ -33,6 +33,7 @@ from nio import (
     SyncError,
 )
 
+from agents.archive import Archive
 from agents.chronicle import (
     day_memory_request,
     days_due,
@@ -191,6 +192,9 @@ log = logging.getLogger("agent")
 BACKFILL_PAGE = 100  # the homeserver's cap on one /messages page
 BACKFILL_PAGES = 5  # at most this many pages on a start
 VOICES_KEPT = 200  # v5.2: the owner's recent voice event ids an agent remembers, to know a transcript of one
+ARCHIVE_AGORA_LINES = 1500     # v5.8: the archive's first fill — Agora's last lines (the owner, 2026-10-25)
+ARCHIVE_PRIVATE_EVENTS = 5000  # … and the whole private room, bounded
+EMBED_BATCH = 100              # lines embedded per idle tick
 
 
 class Agent:
@@ -345,6 +349,12 @@ class Agent:
         self.private_history: list[tuple[str, str]] = []
         self.last_private_ms: int | None = None
         self._private_pending = self._private_again = False
+        # v5.8 — the archive (`recall`): every line she sees, both rooms and both doors, searchable; filled from the
+        # chats at its first start, embedded by the idle watcher
+        self.archive: Archive | None = None
+        if cfg.can("recall"):
+            self.archive = Archive(self.memory_file.parent / f"{cfg.localpart}.archive.db")
+        self._own_seq = 0
         # v5.3 — its own voice (VOICE_ID: the agent's <NAME>_VOICE_ID unless the panel says otherwise), how often it
         # speaks in it, and the speakers' monthly budget; read only by an agent with `voice`
         self.voice_id, self.voice_reply_p, self.voice_monthly_chars = "", 0.0, 0
@@ -441,6 +451,7 @@ class Agent:
                 self.last_owner = (str(getattr(e, "event_id", "")), e.body)
             self._add_context(speaker, e.body)
             self._remember_text(str(getattr(e, "event_id", "")), e.body)
+            self._archive(str(getattr(e, "event_id", "")), int(e.server_timestamp), "agora", "matrix", speaker, e.body)
             self.timeline = [*self.timeline, (speaker, int(e.server_timestamp), str(getattr(e, "event_id", "")),
                                               self._purr_in_timeline(e.sender, e.body))][-max(self.history_n, 1):]
         return len(texts[-window:])
@@ -512,6 +523,7 @@ class Agent:
                 # the context window sees every room message, own and the other agent's included
                 speaker = self.names.get(event.sender, event.sender)
                 self._add_context(speaker, event.body)
+                self._archive(event_id, now_ms, "agora", "matrix", speaker, event.body)  # v5.8: every room line
                 self._remember_text(event_id, event.body)
                 self.timeline = [*self.timeline, (speaker, now_ms, event_id,
                                                   self._purr_in_timeline(event.sender, event.body))
@@ -627,12 +639,14 @@ class Agent:
         if is_edit(event):
             log.info("ignored: edit (private chat)")
             return
-        self.private_line(event.body, int(getattr(event, "server_timestamp", 0) or self.clock()), "matrix")
+        self.private_line(event.body, int(getattr(event, "server_timestamp", 0) or self.clock()), "matrix",
+                          str(getattr(event, "event_id", "")) or None)
 
-    def private_line(self, body: str, ts_ms: int, channel: str) -> None:
+    def private_line(self, body: str, ts_ms: int, channel: str, key: str | None = None) -> None:
         """v5.7 — the owner's line from either door (`matrix` / `telegram`): one history, one memory, labelled; the
-        answer goes back to this door, and it is remembered as the one he used last."""
+        answer goes back to this door, and it is remembered as the one he used last. v5.8: archived by its `key`."""
         self.private_history = append_history(self.private_history, "Ich", body, max(self.history_n, 1))
+        self._archive(key or f"ich:{channel}:{ts_ms}", ts_ms, "private", channel, "Ich", body)
         self.last_private_ms = ts_ms
         self.last_activity_ms = self.clock()  # a private talk is a conversation too: no summary mid-way
         if self.cfg.can("summary"):
@@ -699,6 +713,8 @@ class Agent:
                 return False
             self.private_history = append_history(self.private_history, self.cfg.name, text, max(self.history_n, 1))
             self.last_private_ms = self.clock()
+            self._own_seq += 1
+            self._archive(f"own:{door}:{self.clock()}:{self._own_seq}", self.clock(), "private", door, self.cfg.name, text)
             if self.cfg.can("summary"):
                 self.session.append((private_label(self.cfg.name), text))
             log.info("private: %s%s", "wrote first" if nudge else "answered", " (telegram)" if door == "telegram" else "")
@@ -742,6 +758,81 @@ class Agent:
             if again:  # the owner wrote while she was writing first: answer him (v5.6 review #1)
                 self._private_pending = True
                 self._spawn(self.private_later(0))
+
+    # --- v5.8: the archive (`recall`) -------------------------------------------------------------------------------
+    def _archive(self, key: str, ts_ms: int, place: str, channel: str, speaker: str, text: str) -> None:
+        """One line into the archive, once by its key; a failure is logged by its type and never blocks a line."""
+        if self.archive is None:
+            return
+        try:
+            self.archive.append(key, ts_ms, place, channel, speaker, text)
+        except Exception as exc:  # noqa: BLE001
+            log.error("archive: a line was not kept (%s)", type(exc).__name__)
+
+    async def embed_tick(self, batch: int = EMBED_BATCH) -> int:
+        """The idle watcher's share: embed up to `batch` lines that have no vector yet; a failure waits for the next
+        tick. The number embedded."""
+        embed = getattr(self.llm, "embed", None)
+        if self.archive is None or embed is None:
+            return 0
+        pending = self.archive.unembedded(batch)
+        if not pending:
+            return 0
+        vectors = await embed([text for _, text in pending])
+        if not vectors:
+            return 0
+        self.archive.set_embeddings(zip([i for i, _ in pending], vectors, strict=True))
+        return len(pending)
+
+    async def archive_backfill(self, from_token: str) -> None:
+        """The archive's first fill (an empty archive at start): Agora's last `ARCHIVE_AGORA_LINES` lines and the whole
+        private room (bounded), read back from the homeserver; Telegram keeps no history to fetch."""
+        n = await self._archive_room(self.cfg.room_id, "agora", from_token, ARCHIVE_AGORA_LINES)
+        log.info("archive: %d Agora lines from the homeserver", n)
+        if self.private_room is not None:
+            n = await self._archive_room(self.private_room, "private", from_token, ARCHIVE_PRIVATE_EVENTS)
+            log.info("archive: %d private lines from the homeserver", n)
+        if self.telegram is not None:
+            log.info("archive: Telegram keeps no history to fetch")
+
+    async def _archive_room(self, room_id: str, place: str, from_token: str, cap: int) -> int:
+        events: list = []
+        token = from_token
+        while len(events) < cap:
+            resp = await self.client.room_messages(room_id, start=token, direction=MessageDirection.back,
+                                                   limit=BACKFILL_PAGE)
+            if isinstance(resp, RoomMessagesError):
+                log.error("archive: the %s history was not readable", place)
+                break
+            events.extend(resp.chunk)
+            end = getattr(resp, "end", None)
+            if not resp.chunk or not isinstance(end, str) or end == token:
+                break
+            token = end
+        oldest_first = list(reversed(events))
+        if place == "agora":
+            lines = [(e, self.names.get(e.sender, e.sender)) for e in self._lines(oldest_first)][-cap:]
+        else:
+            lines = [(e, "Ich" if e.sender == self.cfg.owner else self.cfg.name) for e in oldest_first
+                     if isinstance(e, RoomMessageText) and not is_edit(e) and e.sender in (self.cfg.owner, self.cfg.user_id)]
+        kept = 0
+        for e, speaker in lines:
+            key = str(getattr(e, "event_id", "")) or f"{place}:{getattr(e, 'server_timestamp', 0)}"
+            if self.archive.append(key, int(getattr(e, "server_timestamp", 0) or 0), place, "matrix", speaker, e.body):
+                kept += 1
+        return kept
+
+    def seed_private_from_archive(self) -> None:
+        """At start (v5.7 review #5): the private history from the archive's last private lines, both doors — so a
+        Telegram line survives a restart — and the time of the last one."""
+        if self.archive is None:
+            return
+        lines = self.archive.latest("private", max(self.history_n, 1))
+        if not lines:
+            return
+        self.private_history = [(line.speaker, line.text) for line in lines]
+        self.last_private_ms = max(self.last_private_ms or 0, lines[-1].ts_ms)
+        log.info("private chat: %d lines of history from the archive", len(lines))
 
     # --- v5.7: her Telegram bot, a second door to the private chat --------------------------------------------------
     async def telegram_poll(self) -> None:
@@ -794,13 +885,14 @@ class Agent:
                 if update.kind == "text":
                     self.private_history = append_history(self.private_history, "Ich", update.text,
                                                           max(self.history_n, 1))
+                    self._archive(f"tg:{update.update_id}", update.date_ms, "private", "telegram", "Ich", update.text)
                 backlog += 1
                 continue
             try:  # one bad update never replays the batch: the others would be answered twice (review #4)
                 if update.kind == "voice":
                     await self.telegram_hear(update)
                 else:
-                    self.private_line(update.text, update.date_ms, "telegram")
+                    self.private_line(update.text, update.date_ms, "telegram", f"tg:{update.update_id}")
             except Exception as exc:  # noqa: BLE001
                 log.error("telegram: an update failed (%s) — skipped", type(exc).__name__)
         if backlog:
@@ -829,7 +921,7 @@ class Agent:
             await self.telegram.send_message(self.telegram_owner, PRIVATE_NOT_HEARD)
             return
         log.info("telegram: heard (%s ms)", audio_ms)
-        self.private_line(heard, update.date_ms, "telegram")
+        self.private_line(heard, update.date_ms, "telegram", f"tg:{update.update_id}")
 
     async def _telegram_action(self, action: str) -> None:
         """«recording voice…» / «typing…» kept up while she composes — Telegram shows one for about five seconds."""
@@ -1843,6 +1935,11 @@ class Agent:
                     await self.maybe_news()
                 except Exception:
                     log.exception("news failed (bot keeps running)")
+            if self.archive is not None:  # v5.8: the archive's meaning search, a batch at a time
+                try:
+                    await self.embed_tick()
+                except Exception:
+                    log.exception("archive: embedding failed (bot keeps running)")
             if self.cfg.can("private"):  # v5.6: she writes first in the private chat
                 try:
                     await self.maybe_private_nudge()
@@ -1878,6 +1975,7 @@ class Agent:
         first = await self.client.sync(timeout=10000, full_state=True)
         if isinstance(first, SyncError):
             raise RuntimeError(f"first sync failed: {first.message}")
+        fresh_archive = self.archive is not None and self.archive.counts()[0] == 0  # before the context fills it
         try:
             await self.backfill(first.next_batch)  # the context survives a restart
         except Exception:
@@ -1890,6 +1988,9 @@ class Agent:
                 await self.start_private(first.next_batch)
             except Exception:
                 log.exception("private chat start failed (starting without its history)")
+            self.seed_private_from_archive()  # v5.8: both doors, when the archive holds them
+        if fresh_archive:  # v5.8: the archive's first fill, beside the sync
+            self._spawn(self.archive_backfill(first.next_batch))
         self._spawn(self.world_tick(force=True))  # startup kick: catch up memories and today's plans
         if self.cfg.can("mood"):
             self._spawn(self.ensure_mood(local_now(self.clock(), self.tz)))  # the day's horoscope, early
