@@ -391,3 +391,15 @@ def test_a_fact_deleted_in_the_panel_is_not_recalled_in_her_next_answer(tmp_path
     agent.private_history = [("Ich", "Пам'ятаєш, що я грав у театрі?")]          # the word search would find it
     asyncio.run(agent.private_reply())
     assert "грав у театрі" not in agent.llm.calls[-1][1]
+
+
+def test_a_failed_update_leaves_the_lines_to_the_sessions_end(tmp_path, monkeypatch):
+    """v5.8 review #8: «Update now» advanced its mark before the call, so a failed call lost those lines for facts."""
+    agent = kira(tmp_path, monkeypatch, FactsLLM(extraction="вибач, не JSON"))
+    agent.session = [("Ich (наодинці)", "Я граю на віолончелі")]
+    agent.facts_request.write_text("{}")
+    asyncio.run(agent.maybe_update_facts())
+    assert agent._facts_from == 0 and not agent.facts_request.exists()        # not read: still the session's
+    agent.llm.extraction = json.dumps({"add": [{"text": "Ich грає на віолончелі", "pin": 2}], "replace": []})
+    asyncio.run(agent.summarize())
+    assert [f.text for f in load_facts(agent.facts_dir)] == ["Ich грає на віолончелі"]

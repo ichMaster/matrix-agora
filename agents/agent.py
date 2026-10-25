@@ -970,28 +970,28 @@ class Agent:
             async with self._summary_lock:
                 snapshot = list(self.session)
                 fresh = snapshot[min(self._facts_from, len(snapshot)):]
-                self._facts_from = len(snapshot)
-                if any(who.startswith("Ich") for who, _ in fresh):
-                    await self.extract_facts(fresh)
-                else:
+                if not any(who.startswith("Ich") for who, _ in fresh):
                     log.info("facts: nothing new from Ich to learn")
+                    self._facts_from = len(snapshot)
+                elif await self.extract_facts(fresh):  # v5.8 review #8: read only once the answer was valid — a
+                    self._facts_from = len(snapshot)    # failure leaves the lines to the session's end
         finally:
             self.facts_request.unlink(missing_ok=True)
         return True
 
-    async def extract_facts(self, session: list[tuple[str, str]]) -> None:
+    async def extract_facts(self, session: list[tuple[str, str]]) -> bool:
         """At a session's end: one call (GEMINI_MODEL, kind `facts`) reads the session and what she knows, and
         returns new facts and the replacements of stale ones — validated, or nothing changes. Only a session in which
-        the owner spoke."""
+        the owner spoke. Whether the lines are done with (a valid answer, or nothing to learn)."""
         if not any(who.startswith("Ich") for who, _ in session):
-            return
+            return True  # nothing to learn: done
         held = load_facts(self.facts_dir)
         system, contents = extraction_request(self.cfg.name, session, held, self.fact_max_chars)
         raw = await self.llm.generate(contents, system, max_output_tokens=1024, kind="facts")
         parsed = parse_extraction(raw or "", {f.id for f in held}, self.fact_max_chars)
         if parsed is None:
             log.error("facts: the extraction gave no valid answer — nothing changed")
-            return
+            return False
         adds, replaces = parsed
         adds = [(t, p) for t, p in adds if off_limits(t) is None]  # she believes she is human: no fact about AI, agents,
         replaces = [(i, t) for i, t in replaces if off_limits(t) is None]  # servers or his exact address (the owner)
@@ -1001,6 +1001,7 @@ class Agent:
                     for t, p in adds)
         replaced = sum(replace_fact(self.facts_dir, i, t, today, self.fact_max_chars) for i, t in replaces)
         log.info("facts: %d added, %d replaced", added, replaced)
+        return True
 
     # --- v5.7: her Telegram bot, a second door to the private chat --------------------------------------------------
     async def telegram_poll(self) -> None:
