@@ -1,3 +1,10 @@
+Version 5.8.1 (2026-10-25)
+---------------------------
+- Harden (v5.8 code review #5): Kira's archive keeps its vectors normalised
+  in memory - read from the file once, appended as lines are embedded, read
+  again only when the facts change - so a recall no longer reads every vector
+  from SQLite on each reply
+
 Version 5.8.0 (2026-10-25)
 ---------------------------
 - Phase v5.8 - Kira: Gemini 3.1 Pro, a memory of messages and facts about
