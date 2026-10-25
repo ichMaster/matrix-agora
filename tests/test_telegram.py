@@ -74,6 +74,9 @@ def test_odd_fields_never_break_the_parse():
     (message(sender=STRANGER, chat_type="supergroup", text="hi"), (False, "not-private")),
     ({"update_id": 2, "edited_message": message(text="x")["message"]}, (False, "edit")),
     (message(sticker={"file_id": "S"}), (False, "unsupported")),
+    (message(text="/start"), (False, "command")),                # review #6: a bot's word never reaches her prompt
+    (message(text="  /help me"), (False, "command")),
+    (message(text="а/б тест"), (True, "ok")),
     ({"update_id": 4, "channel_post": {"text": "x"}}, (False, "not-private")),
 ])
 def test_only_the_owners_private_text_or_voice_is_handled(raw, verdict):

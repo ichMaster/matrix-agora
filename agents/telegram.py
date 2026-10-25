@@ -82,7 +82,7 @@ def parse_update(raw: Any) -> Update | None:
 
 def allowed(update: Update, owner_id: int) -> Verdict:
     """Only the owner's private chat: a group or a channel is `not-private`, anyone else a `stranger`; then an edit
-    is `edit` and anything but a text or a voice note `unsupported`."""
+    is `edit`, anything but a text or a voice note `unsupported`, and a bot command (`/start`) `command`."""
     if update.chat_type != "private":
         return Verdict(False, "not-private")
     if update.sender != owner_id:
@@ -91,6 +91,8 @@ def allowed(update: Update, owner_id: int) -> Verdict:
         return Verdict(False, "edit")
     if update.kind not in ("text", "voice"):
         return Verdict(False, "unsupported")
+    if update.kind == "text" and update.text.lstrip().startswith("/"):  # `/start` and the like: a bot's word never
+        return Verdict(False, "command")                                  # reaches a person's prompt (review #6)
     return Verdict(True, "ok")
 
 
