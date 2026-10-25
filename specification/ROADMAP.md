@@ -1,6 +1,6 @@
 # Roadmap — matrix-agora
 
-Nine self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, and her memory of messages and facts) → **v6** Applications (the panel's System and Applications; Telegram as an application) → **v7** Theatre (plays on the Stage, recorded by Hermes) → **v8** Лілі (the Lumi bridge: when named, then under the full rules). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Nine self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, and her voice with emotion) → **v6** Applications (the panel's System and Applications; Telegram as an application) → **v7** Theatre (plays on the Stage, recorded by Hermes) → **v8** Лілі (the Lumi bridge: when named, then under the full rules). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
 **Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v8→8), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
@@ -1275,6 +1275,86 @@ she talks with him alone, and in Agora she never talks about him.
 - the archive and facts for the other agents (each becomes a capability, later);
 - facts from Noos (the owner chose her own chat instead);
 - sharing facts between agents.
+
+### v5.9 — Кіра's voice with emotion: ElevenLabs audio tags
+
+**Status:** ⏳ planned.
+
+**Goal:** Кіра's voice laughs, sighs, wonders and whispers where her line asks for it. She writes one or two audio
+tags from a palette verified on her voice, and her voice performs them. Everyone reads her plain words.
+
+**Owner decisions** (2026-10-25):
+- **Emotion in her voice through ElevenLabs audio tags**, Кіра first; the other voices stay as they are.
+- **The findings are re-measured first, on her real voice, in this repository.** They were measured in the Noos
+  session of 2026-10-21; the re-measurement is in [features/voice-emotion.md](features/voice-emotion.md):
+  - today's `eleven_turbo_v2_5` reads tags aloud;
+  - `eleven_v4_turbo` performs them and takes `language_code: "uk"`;
+  - a laughter ladder adds about 40% of breath and laughter;
+  - the two models cost the same on this account.
+- **The text keeps no mark of the tags**: no emote, no emoji. The text is her words alone.
+- **Her English and Scottish inserts stay as she writes them**; they sound right on v4.
+- **A persistent emotion state is later**: her voice settings stay fixed in this phase.
+
+**How it works:**
+- **One pass.** She writes the tags herself in her reply, with no second model call. The capability `emotion` (a
+  person's only, on in `kira.toml`) gives her prompts, in Agora and in the private chat through both doors, a small
+  block:
+  - **the palette verified on her voice:** `[starts laughing]`, `[laughs]`, `[laughs harder]`, `[wheezing]`,
+    `[chuckles]`, `[surprised]`, `[thoughtful]`, `[hesitant]`, `[whispers]`, `[sighs]`;
+  - **the budget:** one or two tags a reply, most replies none;
+  - **the placement:** a tag before the clause it governs, laughter climbing over short clauses, never spelled out
+    next to a ladder;
+  - **the rule:** nothing in brackets but the palette.
+
+  The palette lives in `agents/canon/kira.voice.md`, named by the TOML key `voice_spec`.
+- **The split** (`agents/emotion.py`, pure): `split_tags(reply)` returns the text, with the tags removed and nothing
+  in their place, and the speech, the reply as written. A bracket that is not a tag (`[1]`, `arr[i]`) stays in both.
+- **Her model and settings, per agent:**
+  - `ELEVENLABS_MODEL` defaults to `eleven_turbo_v2_5`, so the others and Hermes are unchanged; Кіра's `kira.env`
+    sets `eleven_v4_turbo`;
+  - `VOICE_STABILITY` and `VOICE_SPEED` take the recipe the owner picked by ear: 0.3 and 1.0.
+- **The safety rule.** A model not in `TAG_MODELS` never receives a bracket: its speech is the text.
+- **Where each part goes:**
+  - the synthesiser gets the speech, in Agora, the Element private chat and Telegram;
+  - the message and everything kept get the text: her history, the session, the summary, the archive, the facts and
+    the other members' transcripts;
+  - a line that goes out as text only sends the clean text.
+- **Hermes's recording is unchanged.** Her voiced lines arrive as audio with the tags performed, and her text has no
+  tags.
+- **Accounting.** The `tts` usage line counts the characters sent, tags included, and names the model. The
+  `TTS_MODEL` comment about the cost is corrected.
+
+**Tasks:**
+- `agents/emotion.py`: the palette loader, `split_tags`, `TAG_MODELS`.
+- `agents/voice.py`: `ElevenLabsTTS` takes the model and the settings per agent, plus the safety strip.
+- `agents/agent.py`:
+  - the palette block in her prompts;
+  - `send_line` and `send_telegram` split each line;
+  - history, the session, the archive and the facts take the text.
+- `agents/roster.py`: the capability `emotion` and the TOML key `voice_spec`.
+- `agents/settings.py`: `ELEVENLABS_MODEL`, `VOICE_STABILITY`, `VOICE_SPEED`.
+- `kira.toml`, `agents/canon/kira.voice.md`, `server/kira.env.example`.
+- ARCHITECTURE: §Voice, §Contracts (the capability, the TOML key, the settings, the env names).
+
+**DoD:**
+- (Manual, owner) In the private chat and in Telegram, a line of hers that laughs is a voice note in which she
+  laughs, and its text carries no bracket and no mark.
+- (Manual, owner) In Agora her voiced lines carry the same emotion; the other members' voices are unchanged.
+- (Manual, owner) The Tokens view shows her `tts` lines on `eleven_v4_turbo`.
+
+**Tests:** unit, with ElevenLabs mocked:
+- `split_tags` on the edge cases: known, invented and non-tag brackets, a ladder, extra spaces;
+- the synthesiser gets the tags and the message does not, on every path;
+- a tag-less model never receives a bracket;
+- no bracket in the history, the session, the archive or another member's transcript;
+- the palette block only for `emotion`, with no banned word;
+- the per-agent model and settings.
+
+**Not in this phase:**
+- the emotion state (valence, arousal, fatigue, decaying between turns);
+- tags for the other voices (each needs its own calibration);
+- a second «director» pass;
+- marks of emotion in the text (the owner).
 
 ## v6 — Applications: the panel's System and Applications
 
