@@ -6,12 +6,14 @@ simulation = "agora"
 type = "persona"         # v5.5: one of the four newcomers — a person, like Ada and Bruno
 engine = "gemini"
 name_forms = ["кіра", "кіри", "кірі", "кіру", "кірою", "кіро", "kira"]  # what addresses this agent in the room (any case, a whole word)
+voice_spec = "agents/canon/kira.voice.md"  # v5.9: the tags verified on her voice (features/voice-emotion.md)
 
 [capabilities]
 private = true          # v5.6: a private chat with the owner (the owner, 2026-10-20: Кіра first)
 telegram = true         # v5.7: her own Telegram bot — the same private chat, a second door (server/kira.env)
 recall = true           # v5.8: an archive of every line she sees, recalled before each answer (the owner: as Noos)
 facts = true            # v5.8: facts about the owner, in her private prompt only (state/kira.facts/)
+emotion = true          # v5.9: audio tags from her palette, performed by her voice, never shown in the text
 
 [turns]
 mode = "ranked"         # ranked | ambient | mention-only

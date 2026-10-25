@@ -267,13 +267,14 @@ def build_instruction(
     facts: str | None = None,
     agora_now: str | None = None,
     recalled: str | None = None,
+    voice: str | None = None,
 ) -> str:
     """The system instruction, in contract order (ARCHITECTURE §Prompt assembly):
     canon → life so far → place and time → memories → plans → today →
     (v4.2) the mood of the day → (v4.3) a past-life memory → (v4.3) a nudge's material and rule →
     (v5.8) the facts about the owner (private only) → (v5.8) Agora today (private only) → (v5.8) what she recalls →
     last-session memory → (v5.6) the private chat's situation → (v4.6) the persona's move → (v5.3) its own
-    questions of this session → rules (v5.6: with the discretion line in Agora). Empty sections are skipped. Nothing
+    questions of this session → (v5.9) her palette of voice tags → rules (v5.6: with the discretion line in Agora). Empty sections are skipped. Nothing
     here may say a persona is a model or a bot."""
     parts = [canon]
     parts += [s for s in (life, world, memories, plans, today, mood, pastlife, nudge) if s]  # «Настрій дня», …
@@ -286,6 +287,8 @@ def build_instruction(
         parts.append(move)  # the freshest instruction: how to reply this time (v4.6)
     if asked:
         parts.append(asked)  # v5.3: what it already asked in this conversation — never again
+    if voice:
+        parts.append(voice)  # v5.9: her palette of tags for her voice, just before the rules
     rules = (
         f"Ти — {name}. Відповідай лише від себе, коротко, без префікса з іменем. "
         "Якщо тобі нема чого додати — відповідай рівно PASS."

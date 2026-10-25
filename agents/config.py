@@ -42,6 +42,7 @@ class AgentConfig:
     capabilities: frozenset[str] = TYPES["persona"]
     natal: str = ""  # v4.2: the natal text (Lumi's natal.md format) for an agent with the `mood` capability
     theses: tuple = ()  # v4.3: the past-life theses (agents.pastlife.Thesis) for an agent with `pastlife`
+    voice_spec: str = ""  # v5.9: the palette of tags verified on her voice, for an agent with `emotion`
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -103,6 +104,8 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         required.append("natal")
     if member.can("pastlife"):
         required.append("memories")
+    if member.can("emotion"):
+        required.append("voice_spec")
     for key in required:
         if not str(data.get(key, "")).strip():
             raise ConfigError(f"{toml_path}: missing '{key}'")
@@ -143,6 +146,16 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         if not theses:
             raise ConfigError(f"past-life theses are empty: {theses_path}")
 
+    voice_spec = ""
+    if member.can("emotion"):  # v5.9: her palette of audio tags, next to her canon
+        spec_path = Path(str(data["voice_spec"]))
+        try:
+            voice_spec = spec_path.read_text(encoding="utf-8").strip()
+        except FileNotFoundError as exc:
+            raise ConfigError(f"voice spec not found: {spec_path}") from exc
+        if not voice_spec:
+            raise ConfigError(f"voice spec is empty: {spec_path}")
+
     if env is None:
         load_dotenv()
         env = dict(os.environ)
@@ -173,4 +186,5 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         capabilities=member.capabilities,
         natal=natal,
         theses=theses,
+        voice_spec=voice_spec,
     )

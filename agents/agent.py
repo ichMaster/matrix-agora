@@ -1371,6 +1371,7 @@ class Agent:
             facts=facts if private is not None else None,
             agora_now=agora_now if private is not None and can("recall") else None,
             recalled=recalled if can("recall") else None,
+            voice=self.cfg.voice_spec if can("emotion") and self.cfg.voice_spec else None,  # v5.9: both her prompts
         )
 
     def draw_move(self, event_id: str, now) -> str | None:
