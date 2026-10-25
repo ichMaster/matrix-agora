@@ -92,6 +92,12 @@ def test_the_prompt_block_pins_first_within_the_limits():
     ("Просто рядок без нічого.", "Просто рядок без нічого.", []),
     ("**ЗАПАМ'ЯТАЙ:** Ich має кота", "", ["Ich має кота"]),
     ("Я тобі кажу: запам'ятай це місце", "Я тобі кажу: запам'ятай це місце", []),   # words, not the marker line
+    # v5.8 review #2: forms the model may write, none of which may reach the owner
+    ("Добре! ЗАПАМ'ЯТАЙ: Ich любить чай", "Добре!", ["Ich любить чай"]),
+    ("Звісно.\n«ЗАПАМ'ЯТАЙ: Ich має кота»", "Звісно.", ["Ich має кота"]),
+    ("Так.\n(ЗАПАМ'ЯТАЙ: Ich народився в березні)", "Так.", ["Ich народився в березні"]),
+    ("Гаразд.\n1. ЗАПАМ'ЯТАЙ — Ich любить гори", "Гаразд.", ["Ich любить гори"]),
+    ("Зроблю.\nЗапам'ятай - Ich не п'є каву", "Зроблю.", ["Ich не п'є каву"]),
 ])
 def test_split_marker(raw, clean, facts):
     assert split_marker(raw) == (clean, facts)
@@ -211,6 +217,11 @@ def test_the_capability_needs_the_private_chat():
                                  "capabilities": {"private": True, "facts": True}}, "kira.toml").can("facts")
     with pytest.raises(RosterError, match="'facts' needs 'private' on the same member"):
         parse_member("kira", {"name": "Кіра", "user_id": KIRA, "capabilities": {"facts": True}}, "kira.toml")
+
+
+def test_the_skill_shows_the_marker_without_quotes():
+    """v5.8 review #2: the skill itself showed «ЗАПАМ'ЯТАЙ: …» in guillemets, and the model copied them."""
+    assert "«" not in REMEMBER_SKILL and "ЗАПАМ'ЯТАЙ" in REMEMBER_SKILL
 
 
 def test_her_lines_about_facts_never_say_what_she_is():

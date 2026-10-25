@@ -7,7 +7,7 @@ of the owner.
 
 They come three ways:
 - **asked** — when the owner asks her to remember something, her answer ends with a marker line
-  (`ЗАПАМ'ЯТАЙ: …`), stripped before anything is sent (`split_marker`);
+  (`ЗАПАМ'ЯТАЙ: …`, anywhere in a line), stripped before anything is sent (`split_marker`);
 - **extracted** — at a session's end, one call reads the session and the facts she holds and returns new facts and
   the replacements of stale ones as JSON (`parse_extraction`), validated before anything is written;
 - **seeded** — once, from the private chat she already had with him, read back from her archive
@@ -35,12 +35,16 @@ from pathlib import Path
 FACTS_TITLE = "Що ти знаєш про Ich:"
 SOURCES = ("private", "agora", "asked")
 ID_RE = re.compile(r"^[\w-]{1,64}$")
-MARK_RE = re.compile(r"^[ \t>*_-]*ЗАПАМ['’ʼ`]?ЯТАЙ[ \t*_]*:[ \t*_]*(.*?)[ \t*_]*$", re.MULTILINE | re.IGNORECASE)
+# the marker (v5.8 review #2): a line of its own in any case — after a quote, a bullet or a number — or, in capitals,
+# anywhere in a line; a colon or a dash after it. Everything from the marker to the line's end is the fact.
+_MARK = r"ЗАПАМ['’ʼ`]?ЯТАЙ[ \t*_»\"')\]]*[:—–-][ \t*_]*(?P<fact>[^\n]*)"
+MARK_LINE_RE = re.compile(r"^[ \t>*_\-–—•\d.)«\"'(\[]*" + _MARK, re.MULTILINE | re.IGNORECASE)
+MARK_ANY_RE = re.compile(r"[«\"'(\[]*[ \t]*" + _MARK)
 # her private brief's skill (the owner, 2026-10-25): understood from the talk, never a keyword (as Hermes's skills)
 REMEMBER_SKILL = (
     "Коли Ich просить тебе щось запам'ятати про нього чи про вас, відповідай як завжди, а в самому кінці додай окремий "
-    "рядок: «ЗАПАМ'ЯТАЙ: <що саме, одним коротким реченням про Ich>». Цей рядок лишиться тобі на згадку, він його "
-    "не побачить."
+    "останній рядок: слово ЗАПАМ'ЯТАЙ великими літерами, двокрапка і що саме, одним коротким реченням про Ich. Цей "
+    "рядок лишиться тобі на згадку, він його не побачить."
 )
 EXTRACT_SYSTEM = (
     "Ти — {name}. Перед тобою ваша розмова (рядки «наодинці» — ваша з Ich розмова сам на сам) і те, що ти вже знаєш "
@@ -202,11 +206,22 @@ def facts_section(facts: list[Fact], in_prompt: int, max_chars: int) -> str | No
 
 
 def split_marker(text: str) -> tuple[str, list[str]]:
-    """Her line without its `ЗАПАМ'ЯТАЙ: …` lines, and what they asked to remember — the marker is never sent."""
-    facts = [m.group(1).strip(" «»\"'") for m in MARK_RE.finditer(text or "")]
-    clean = MARK_RE.sub("", text or "")
-    clean = re.sub(r"\n{3,}", "\n\n", clean).strip()
-    return clean, [f for f in facts if f]
+    """Her line without its `ЗАПАМ'ЯТАЙ: …` markers, and what they asked to remember — the marker is never sent. A
+    marker takes the rest of its line (v5.8 review #2: mid-line, in quotes or brackets, after a number, with a dash)."""
+    lines, facts = [], []
+    for line in (text or "").split("\n"):
+        m = MARK_LINE_RE.match(line) or MARK_ANY_RE.search(line)
+        if m is None:
+            lines.append(line)
+            continue
+        fact = m.group("fact").strip(" \t«»\"'*_()[]")
+        if fact:
+            facts.append(fact)
+        kept = line[:m.start()].rstrip()
+        if kept:
+            lines.append(kept)
+    clean = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+    return clean, facts
 
 
 def _json(raw: str):
