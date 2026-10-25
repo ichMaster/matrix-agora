@@ -400,3 +400,11 @@ def test_a_line_telegram_refused_is_never_counted_as_said(tmp_path, monkeypatch,
     assert agent.private_history == [("Ich", "Привіт")]
     assert agent.session == [("Ich (наодинці)", "Привіт")]
     assert "private: not delivered (telegram)" in caplog.text
+
+
+def test_a_message_sent_just_after_the_start_is_answered(tmp_path, monkeypatch, ogg):
+    """v5.7 review #3: started at …:00.400, written at …:00.900 — the whole-second date read as before the start."""
+    agent = kira(tmp_path, monkeypatch)
+    agent.started_ms = ms(17) + 400
+    assert len(run_batch(agent, tg(50, "Ти вже тут?", at=ms(17) + 900))) == 1
+    assert texts_sent(agent) == ["Привіт, сонце."]

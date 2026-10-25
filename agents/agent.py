@@ -785,7 +785,8 @@ class Agent:
             if not verdict.handle:
                 log.info("ignored: %s (telegram %s)", verdict.reason, update.kind)
                 continue
-            if self.started_ms is not None and update.date_ms < self.started_ms:
+            # Telegram dates are whole seconds: the start floored too, so a line sent just after it counts (review #3)
+            if self.started_ms is not None and update.date_ms < self.started_ms // 1000 * 1000:
                 if update.kind == "text":
                     self.private_history = append_history(self.private_history, "Ich", update.text,
                                                           max(self.history_n, 1))
