@@ -925,7 +925,11 @@ class Agent:
             return None
         now = local_now(self.clock(), self.tz)
         start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
-        return render_agora_now(self.archive.latest("agora", self.private_agora_n, since_ms=start), self.tz)
+        try:
+            return render_agora_now(self.archive.latest("agora", self.private_agora_n, since_ms=start), self.tz)
+        except Exception as exc:  # noqa: BLE001 — v5.8 review #13: no section, never a lost answer
+            log.error("archive: Agora today was not read (%s) — answering without it", type(exc).__name__)
+            return None
 
     # --- v5.8: facts about the owner (`facts`) -----------------------------------------------------------------------
     def facts_now(self) -> str | None:

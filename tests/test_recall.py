@@ -163,3 +163,16 @@ def test_an_owner_line_in_agora_is_still_kept_in_the_archive(tmp_path, monkeypat
     agent = kira(tmp_path, monkeypatch)
     asyncio.run(agent.on_message(SimpleNamespace(room_id=AGORA), text(OWNER, "Привіт", ms(17), "$o1")))
     assert agent.archive.latest("agora", 5)[0].speaker == "Ich"
+
+
+def test_a_failing_agora_today_never_loses_the_private_answer(tmp_path, monkeypatch, caplog):
+    """v5.8 review #13: an SQLite error in «Що сьогодні говорять в Агорі» propagated and lost her answer."""
+    import sqlite3
+    agent = filled(tmp_path, monkeypatch)
+
+    def broken(*a, **k):
+        raise sqlite3.OperationalError("database is locked")
+    agent.archive.latest = broken
+    agent.private_history = [("Ich", "Як ти?")]
+    assert asyncio.run(agent.private_reply()) is True
+    assert AGORA_NOW_TITLE not in agent.llm.calls[-1][1] and "Agora today was not read" in caplog.text
