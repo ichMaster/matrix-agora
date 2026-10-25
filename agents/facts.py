@@ -32,6 +32,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from agents.emotion import split_tags
+
 FACTS_TITLE = "Що ти знаєш про Ich:"
 SOURCES = ("private", "agora", "asked")
 ID_RE = re.compile(r"^[\w-]{1,64}$")
@@ -222,7 +224,7 @@ def split_marker(text: str) -> tuple[str, list[str]]:
         if m is None:
             lines.append(line)
             continue
-        fact = m.group("fact").strip(" \t«»\"'*_()[]")
+        fact = split_tags(m.group("fact"))[0].strip(" \t«»\"'*_()[]")  # v5.9 review #4: no voice tag in a fact
         if fact:
             facts.append(fact)
         kept = line[:m.start()].rstrip()

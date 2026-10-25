@@ -106,6 +106,9 @@ def test_past_the_limit_a_fact_just_asked_for_still_reaches_the_prompt():
     ("Так.\n(ЗАПАМ'ЯТАЙ: Ich народився в березні)", "Так.", ["Ich народився в березні"]),
     ("Гаразд.\n1. ЗАПАМ'ЯТАЙ — Ich любить гори", "Гаразд.", ["Ich любить гори"]),
     ("Зроблю.\nЗапам'ятай - Ich не п'є каву", "Зроблю.", ["Ich не п'є каву"]),
+    # v5.9 review #4: a voice tag in the marker line was kept with half its bracket («… зиму [sighs»)
+    ("Ох.\nЗАПАМ'ЯТАЙ: Ich не любить зиму [sighs]", "Ох.", ["Ich не любить зиму"]),
+    ("[laughs] Добре! ЗАПАМ'ЯТАЙ: [whispers] Ich боїться павуків", "[laughs] Добре!", ["Ich боїться павуків"]),
 ])
 def test_split_marker(raw, clean, facts):
     assert split_marker(raw) == (clean, facts)
