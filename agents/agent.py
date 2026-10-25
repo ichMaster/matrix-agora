@@ -410,7 +410,11 @@ class Agent:
             if self.voice_off:
                 log.warning("voice off: %s — every line goes out as text", self.voice_off)
             else:
-                self.tts = ElevenLabsTTS(voice_key, self.voice_id)
+                self.tts = ElevenLabsTTS(voice_key, self.voice_id,  # v5.9: the speaker's own model and settings
+                                         model=os.environ.get("ELEVENLABS_MODEL", "eleven_turbo_v2_5").strip()
+                                         or TTS_MODEL,
+                                         stability=float(os.environ.get("VOICE_STABILITY", "0.5")),
+                                         speed=float(os.environ.get("VOICE_SPEED", "1.0")))
         # v5.7 — her own Telegram bot (`telegram`): a second door to the private chat, polled beside the sync; the
         # private chat answers to the door the owner wrote from (`private_channel`)
         self.telegram: TelegramBot | None = None
@@ -1174,7 +1178,8 @@ class Agent:
         return speakers_month_chars(records, local_now(self.clock(), self.tz).strftime("%Y-%m"), self.heralds)
 
     def record_tts(self, characters: int, ok: bool) -> None:
-        self._append_usage(lambda ts: tts_usage_line(ts, self.cfg.localpart, TTS_MODEL, characters, ok))
+        model = getattr(self.tts, "model", None) or TTS_MODEL  # v5.9: the model this voice ran on
+        self._append_usage(lambda ts: tts_usage_line(ts, self.cfg.localpart, model, characters, ok))
 
     async def on_audio(self, room: MatrixRoom, event: RoomMessageAudio) -> None:
         """v5.2 — no agent answers audio: the owner's voice in the room is remembered, so Hermes's transcript of it

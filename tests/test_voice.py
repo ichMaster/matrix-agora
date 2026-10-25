@@ -243,3 +243,40 @@ def test_a_speakers_voice_carries_its_words_as_the_caption_and_reads_back():
     assert voice_caption(SimpleNamespace(source={"content": {"msgtype": "m.audio", "body": "x.ogg",
                                                              "filename": "x.ogg"}})) is None
     assert voice_caption(SimpleNamespace(source={"content": {"msgtype": "m.text", "body": "так"}})) is None
+
+
+# --- v5.9: a speaker's own model and settings -----------------------------------------------------------------------
+def test_every_other_speakers_request_is_as_before(session):
+    asyncio.run(ElevenLabsTTS(KEY, VOICE).synth("Привіт."))
+    assert session.seen["json"] == {"text": "Привіт.", "model_id": "eleven_turbo_v2_5", "language_code": "uk",
+                                    "voice_settings": {"stability": 0.5, "similarity_boost": 0.75, "style": 0.4}}
+
+
+def test_kiras_model_and_stability_reach_the_request(session):
+    asyncio.run(ElevenLabsTTS(KEY, VOICE, model="eleven_v4_turbo", stability=0.3).synth("[laughs] Ха."))
+    body = session.seen["json"]
+    assert body["model_id"] == "eleven_v4_turbo" and body["language_code"] == "uk"
+    assert body["voice_settings"] == {"stability": 0.3, "similarity_boost": 0.75, "style": 0.4}   # speed 1.0: absent
+    asyncio.run(ElevenLabsTTS(KEY, VOICE, speed=1.1).synth("Швидше."))
+    assert session.seen["json"]["voice_settings"]["speed"] == 1.1
+
+
+def test_the_settings_and_the_tts_line_name_the_model(tmp_path, monkeypatch):
+    from agents.agent import Agent
+    from agents.config import AgentConfig
+    from agents.settings import BY_NAME, validate
+    from tests.test_private_runtime import KindLLM
+    assert BY_NAME["ELEVENLABS_MODEL"].default == "eleven_turbo_v2_5" and BY_NAME["ELEVENLABS_MODEL"].scope == "cap:voice"
+    assert validate("ELEVENLABS_MODEL", "eleven_v4_turbo")[1] is None and validate("VOICE_SPEED", "2")[0] is None
+    monkeypatch.setenv("ELEVENLABS_API_KEY", KEY)
+    monkeypatch.setenv("VOICE_ID", VOICE)
+    monkeypatch.setenv("ELEVENLABS_MODEL", "eleven_v4_turbo")
+    monkeypatch.setenv("VOICE_STABILITY", "0.3")
+    cfg = AgentConfig(name="Кіра", user_id="@kira:agora.lan", canon="К.", homeserver="http://hs", room_id="!room",
+                      owner="@ich:agora.lan", password="pw", capabilities=frozenset({"canon", "voice"}))
+    agent = Agent(cfg, llm=KindLLM())
+    assert agent.tts.model == "eleven_v4_turbo" and agent.tts.voice_settings["stability"] == 0.3
+    agent.record_tts(12, True)
+    import json
+    line = json.loads(agent.usage_file.read_text().splitlines()[-1])
+    assert (line["kind"], line["model"], line["characters"]) == ("tts", "eleven_v4_turbo", 12)

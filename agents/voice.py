@@ -21,7 +21,8 @@ from agents.settings import VOICE_ID_RE  # one pattern for the panel and the voi
 log = logging.getLogger("agent.voice")
 
 TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=pcm_24000"
-TTS_MODEL = "eleven_turbo_v2_5"  # the owner's choice: multilingual, fast; 0.5 credit a character
+TTS_MODEL = "eleven_turbo_v2_5"  # the owner's choice: multilingual, fast (v5.9: the default — a speaker may set its own;
+                                 # measured 2026-10-25: the same `character-cost` as eleven_v4_turbo on this account)
 RATE = 24_000                    # pcm_24000: signed 16-bit little-endian, mono
 VOICE_SETTINGS = {"stability": 0.5, "similarity_boost": 0.75, "style": 0.4}  # Lumi's defaults
 TIMEOUT_S = 60
@@ -80,10 +81,13 @@ def deepgram_duration_ms(data) -> int | None:
 
 
 class ElevenLabsTTS:
-    def __init__(self, api_key: str, voice_id: str, model: str = TTS_MODEL) -> None:
+    def __init__(self, api_key: str, voice_id: str, model: str = TTS_MODEL, stability: float = 0.5,
+                 speed: float = 1.0) -> None:
         self._key = api_key
         self.voice_id = voice_id
         self.model = model
+        # v5.9: a speaker's own stability, and its speed only when not the default — every other request unchanged
+        self.voice_settings = {**VOICE_SETTINGS, "stability": stability, **({"speed": speed} if speed != 1.0 else {})}
 
     async def synth(self, text: str) -> bytes | None:
         """The text spoken in Ukrainian as PCM (s16le, 24 kHz, mono); None on any failure."""
@@ -91,7 +95,7 @@ class ElevenLabsTTS:
             log.error("tts: the voice id is malformed")
             return None
         url = TTS_URL.format(voice=urllib.parse.quote(self.voice_id, safe=""))
-        body = {"text": text, "model_id": self.model, "language_code": "uk", "voice_settings": VOICE_SETTINGS}
+        body = {"text": text, "model_id": self.model, "language_code": "uk", "voice_settings": self.voice_settings}
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=TIMEOUT_S)) as session, \
                     session.post(url, json=body, headers={"xi-api-key": self._key, "Accept": "audio/*"}) as resp:

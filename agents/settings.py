@@ -117,6 +117,12 @@ SCHEMA: tuple[Setting, ...] = (
     _s("VOICE_ID", "id", "", "voice", "cap:voice", None, "Голос (ElevenLabs voice id; порожньо — текст)"),
     _s("VOICE_REPLY_P", "float", "1.0", "voice", "cap:voice", None,
        "Частка реплік голосом (на голос Ich — завжди)", "", 0, 1),
+    # v5.9 — a speaker's own ElevenLabs model and voice settings (Кіра: eleven_v4_turbo, 0.3 — the owner's ear)
+    _s("ELEVENLABS_MODEL", "choice", "eleven_turbo_v2_5", "voice", "cap:voice", None, "Модель голосу (ElevenLabs)",
+       choices=("eleven_turbo_v2_5", "eleven_flash_v2_5", "eleven_multilingual_v2", "eleven_v3", "eleven_v4_turbo",
+                "eleven_v4")),
+    _s("VOICE_STABILITY", "float", "0.5", "voice", "cap:voice", None, "Стабільність голосу (менше — живіше)", "", 0, 1),
+    _s("VOICE_SPEED", "float", "1.0", "voice", "cap:voice", None, "Швидкість голосу", "", 0.7, 1.2),
     # v5.6 — the private chat with the owner: writing first after a long silence
     _s("PRIVATE_IDLE_S", "int", "21600", "private", "cap:private", None,
        "Тиша в особистому чаті, після якої пише першою", "s", 1800, 604800),

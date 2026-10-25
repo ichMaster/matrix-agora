@@ -62,7 +62,8 @@ def test_the_service_view_holds_the_rooms_settings_and_the_agents_view_its_own(r
     claude = {r["name"] for r in client.get("/api/agents/claude/settings", headers=AUTH).json()["settings"]}
     assert {"MEMORY_DAYS", "PLAN_MAX_WORDS", "LOCATION", "GEMINI_MODEL"} <= ada and "MAX_BOT_TURNS" not in ada
     assert claude == {"CLAUDE_MODEL", "CLAUDE_TIMEOUT_S", "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
-                      "VOICE_ID", "VOICE_REPLY_P"}  # v5.3: his voice
+                      "VOICE_ID", "VOICE_REPLY_P",  # v5.3: his voice
+                      "ELEVENLABS_MODEL", "VOICE_STABILITY", "VOICE_SPEED"}  # v5.9: its own model and settings
     assert "GEMINI_API_KEY" not in json.dumps(view) and "PANEL_TOKEN" not in json.dumps(view)
 
 
