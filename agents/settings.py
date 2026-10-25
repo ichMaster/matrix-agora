@@ -123,6 +123,11 @@ SCHEMA: tuple[Setting, ...] = (
     _s("PRIVATE_NUDGES_PER_DAY", "int", "2", "private", "cap:private", None,
        "Скільки разів на день може написати першою", "", 0, 10),
     _s("PRIVATE_HOURS", "hours", "10-22", "private", "cap:private", None, "Години, коли може написати першою (HH-HH)"),
+    # v5.8 — the archive (`recall`): how many recalled lines enter a prompt, and Agora's lines of today in the private
+    # chat
+    _s("RECALL_N", "int", "6", "memory", "cap:recall", None, "Скільки рядків пригадує перед відповіддю", "lines", 0, 20),
+    _s("PRIVATE_AGORA_N", "int", "20", "private", "cap:recall", None,
+       "Скільки сьогоднішніх рядків Агори бачить в особистому чаті", "lines", 0, 60),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
        choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),

@@ -21,10 +21,17 @@ from pathlib import Path
 
 import numpy as np
 
+from agents.world import MONTHS_GEN, local_now
+
 PLACES = ("agora", "private", "facts")  # facts (v5.8, `facts`): searchable by a private recall only
 RRF_K = 60       # Noos's reciprocal rank fusion constant
 CANDIDATES = 50  # each ranked list's length before the fusion
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
+LINE_MAX_CHARS = 400  # a recalled line is cut here: the gist, not a long news item in full
+PLACE_LABEL = {"agora": "в Агорі", "private": "наодинці"}
+# the prompt sections (ARCHITECTURE §Prompt assembly) — her memory, never told as what is said now
+RECALL_TITLE = "Тобі згадується з давніших розмов (це пам'ять, а не те, що кажуть зараз):"
+AGORA_NOW_TITLE = "Що сьогодні говорять в Агорі:"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS lines (
@@ -82,6 +89,37 @@ def pick_recall(ranked: list[int], lines: dict[int, Line], exclude: set[tuple[st
         if len(out) >= n:
             break
     return out
+
+
+def _cut(text: str) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= LINE_MAX_CHARS else text[:LINE_MAX_CHARS - 1].rstrip() + "…"
+
+
+def render_recalled(groups: list[list[Line]], tz) -> str | None:
+    """The recall section: each recalled line with its neighbours, a group a paragraph, oldest first, each line
+    with its date and place («12 жовтня, в Агорі — Ада: …»); a fact as what she knows."""
+    out = []
+    for group in groups:
+        rows = []
+        for line in group:
+            if line.place == "facts":
+                rows.append(f"(те, що ти знаєш про Ich) {_cut(line.text)}")
+                continue
+            when = local_now(line.ts_ms, tz)
+            rows.append(f"{when.day} {MONTHS_GEN[when.month - 1]}, {PLACE_LABEL.get(line.place, line.place)} — "
+                        f"{line.speaker}: {_cut(line.text)}")
+        if rows:
+            out.append("\n".join(rows))
+    return RECALL_TITLE + "\n" + "\n\n".join(out) if out else None
+
+
+def render_agora_now(lines: list[Line], tz) -> str | None:
+    """Agora's latest lines of today, for the private chat: «14:05 Ада: …»."""
+    if not lines:
+        return None
+    rows = [f"{local_now(line.ts_ms, tz):%H:%M} {line.speaker}: {_cut(line.text)}" for line in lines]
+    return AGORA_NOW_TITLE + "\n" + "\n".join(rows)
 
 
 class Archive:

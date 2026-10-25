@@ -33,7 +33,15 @@ from nio import (
     SyncError,
 )
 
-from agents.archive import Archive
+from agents.archive import (
+    CANDIDATES,
+    Archive,
+    cosine_top,
+    fuse,
+    pick_recall,
+    render_agora_now,
+    render_recalled,
+)
 from agents.chronicle import (
     day_memory_request,
     days_due,
@@ -352,8 +360,11 @@ class Agent:
         # v5.8 — the archive (`recall`): every line she sees, both rooms and both doors, searchable; filled from the
         # chats at its first start, embedded by the idle watcher
         self.archive: Archive | None = None
+        self.recall_n, self.private_agora_n = 0, 0
         if cfg.can("recall"):
             self.archive = Archive(self.memory_file.parent / f"{cfg.localpart}.archive.db")
+            self.recall_n = int(os.environ.get("RECALL_N", "6"))
+            self.private_agora_n = int(os.environ.get("PRIVATE_AGORA_N", "20"))
         self._own_seq = 0
         # v5.3 — its own voice (VOICE_ID: the agent's <NAME>_VOICE_ID unless the panel says otherwise), how often it
         # speaks in it, and the speakers' monthly budget; read only by an agent with `voice`
@@ -701,7 +712,13 @@ class Agent:
                     await self.ensure_today(local_now(self.clock(), self.tz))
                 except Exception:
                     log.exception("today block refresh failed (the private answer continues)")
-            prompt = self.build_prompt(private=PRIVATE_NUDGE if nudge else PRIVATE_BRIEF)
+            recalled = agora_now = None
+            if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
+                query = next((t for s, t in reversed(self.private_history) if s == "Ich"), "")
+                recalled = await self.recall_section(query, ("agora", "private", "facts"), set(self.private_history))
+                agora_now = self.agora_now_section()
+            prompt = self.build_prompt(private=PRIVATE_NUDGE if nudge else PRIVATE_BRIEF, recalled=recalled,
+                                       agora_now=agora_now)
             text = await self._compose(prompt, lines=self.private_history,
                                        kind="private_nudge" if nudge else "private")
             if text is None:
@@ -731,8 +748,8 @@ class Agent:
         if (not (self.started and self.cfg.can("private") and (self.private_room or self.telegram_open))
                 or self._private_pending):
             return False
-        if not self.private_history:
-            return False
+        if not self.private_history and not (self.archive is not None and self.last_private_ms):
+            return False  # never before they have talked (v5.8: the archive remembers a talk the RAM lost)
         now_ms = self.clock()
         now = local_now(now_ms, self.tz)
         state = load_private_state(self.private_file, now.date().isoformat())
@@ -833,6 +850,43 @@ class Agent:
         self.private_history = [(line.speaker, line.text) for line in lines]
         self.last_private_ms = max(self.last_private_ms or 0, lines[-1].ts_ms)
         log.info("private chat: %d lines of history from the archive", len(lines))
+
+    async def recall_section(self, query: str, places: tuple[str, ...], exclude: set) -> str | None:
+        """What she recalls before an answer: the message she answers is the query — the word search and (when its
+        embedding comes back) the meaning search within `places`, fused; the best `RECALL_N` lines not already in the
+        prompt's window, each with its neighbours. A failure is no section, never a blocked answer."""
+        if self.archive is None or self.recall_n <= 0 or not (query or "").strip():
+            return None
+        try:
+            word_ids = self.archive.search_words(query, places)
+            meaning_ids: list[int] = []
+            embed = getattr(self.llm, "embed", None)
+            vector = await embed([query], task="RETRIEVAL_QUERY") if embed else None
+            if vector:
+                ids, matrix = self.archive.vectors(places)
+                meaning_ids = cosine_top(vector[0], ids, matrix)
+            ranked = fuse(word_ids, meaning_ids)
+            picked = pick_recall(ranked, self.archive.lines(ranked[:2 * CANDIDATES]), exclude, self.recall_n)
+            groups, seen = [], set()
+            for line in sorted(picked, key=lambda x: (x.ts_ms, x.id)):
+                group = [n for n in (self.archive.around(line, 1) if line.place != "facts" else [line])
+                         if n.id not in seen and (n.speaker, n.text) not in exclude]
+                seen.update(n.id for n in group)
+                groups.append(group)
+            if picked:
+                log.info("recall: %d lines (%s)", len(picked), "+".join(places))
+            return render_recalled(groups, self.tz)
+        except Exception as exc:  # noqa: BLE001
+            log.error("recall failed (%s) — answering without it", type(exc).__name__)
+            return None
+
+    def agora_now_section(self) -> str | None:
+        """Agora's latest `PRIVATE_AGORA_N` lines of today (local), for the private chat."""
+        if self.archive is None or self.private_agora_n <= 0:
+            return None
+        now = local_now(self.clock(), self.tz)
+        start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
+        return render_agora_now(self.archive.latest("agora", self.private_agora_n, since_ms=start), self.tz)
 
     # --- v5.7: her Telegram bot, a second door to the private chat --------------------------------------------------
     async def telegram_poll(self) -> None:
@@ -1157,7 +1211,8 @@ class Agent:
         return template.format(members=self.members_phrase)
 
     def build_prompt(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None,
-                     private: str | None = None) -> str:
+                     private: str | None = None, recalled: str | None = None, agora_now: str | None = None,
+                     facts: str | None = None) -> str:
         """The full system instruction for a reply, in contract order; `pastlife` is a chosen thesis, `nudge` a
         nudge's material and rule (v4.3), `move` a persona's move line (v4.6), `private` the private chat's situation
         (v5.6; an Agora reply of a person with `private` closes its rules with the discretion line). An assistant
@@ -1187,6 +1242,10 @@ class Agent:
             asked=asked_section(own_questions(self.session, self.cfg.name)) if self.cfg.type == "persona" else None,
             private=private if can("private") else None,
             discretion=PRIVATE_DISCRETION if can("private") and private is None else None,
+            # v5.8: what she knows of the owner and Agora today reach only her private prompt
+            facts=facts if private is not None else None,
+            agora_now=agora_now if private is not None and can("recall") else None,
+            recalled=recalled if can("recall") else None,
         )
 
     def draw_move(self, event_id: str, now) -> str | None:
@@ -1655,8 +1714,12 @@ class Agent:
             answered = trigger or (self.last_owner[0] if self.last_owner else "")
             answered_id = answered  # v5.3: the message this line answers — a transcript of the owner's voice is voiced
             move = self.draw_move(answered, local_now(self.clock(), self.tz))
+            recalled = None
+            if self.archive is not None:  # v5.8: Agora recalls only Agora — the place is the search's, in code
+                query = self._texts.get(trigger, "") if trigger else (self.last_owner[1] if self.last_owner else "")
+                recalled = await self.recall_section(query, ("agora",), set(self.history))
             prompt = self.build_prompt(pastlife_section(self.cfg.theses[memory]) if memory is not None else None,
-                                       move=move)
+                                       move=move, recalled=recalled)
             lines, effort = None, None
             if self.cfg.type == "assistant":  # v4.5: direct when named, otherwise the philosopher
                 answered = (self._texts.get(trigger, "") if trigger
