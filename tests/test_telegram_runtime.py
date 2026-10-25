@@ -435,3 +435,13 @@ def test_one_failing_update_never_replays_the_batch(tmp_path, monkeypatch, caplo
     assert calls == ["перше", "друге", "третє"]                            # each once, the batch never fetched again
     assert load_telegram_state(agent.telegram_file).offset == 63 and waits == []
     assert "telegram: an update failed (OSError) — skipped" in caplog.text
+
+
+def test_after_a_week_of_silence_the_poller_asks_without_the_offset(tmp_path, monkeypatch):
+    """v5.7 review #7: the stored offset is used while updates are fresh, dropped once they are a week old."""
+    from agents.telegram import TelegramState, save_telegram_state
+    agent = kira(tmp_path, monkeypatch)
+    save_telegram_state(agent.telegram_file, TelegramState(500, ms(18) - 7 * 24 * 3600 * 1000))
+    poll(agent, monkeypatch, Reply(True, [tg(9, "після тижня")]), Reply(True, []), Reply(False, status=401))
+    assert [c.args[0] for c in agent.telegram.get_updates.await_args_list] == [None, 10, 10]
+    assert load_telegram_state(agent.telegram_file) == TelegramState(10, ms(18))

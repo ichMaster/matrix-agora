@@ -33,6 +33,9 @@ CHUNK = 65_536
 VOICE_MAX_BYTES = 20_000_000  # Hermes's cap (and the Bot API's own for a download): a voice note is far smaller
 ACTION_EVERY_S = 4.0  # a chat action shows about five seconds: repeated while she composes
 BACKOFF_FIRST_S, BACKOFF_MAX_S = 5, 300
+# after a week without updates Telegram picks the next `update_id` at random — an older offset would confirm new
+# messages unseen, so an offset this stale is dropped (review #7)
+OFFSET_STALE_MS = 6 * 24 * 3600 * 1000
 
 
 @dataclass(frozen=True)
@@ -117,17 +120,28 @@ def fit_text(text: str, limit: int = TEXT_MAX) -> str:
 
 @dataclass
 class TelegramState:
-    """`state/<name>.telegram.json`: the next update to fetch — never a text, a token or an id."""
+    """`state/<name>.telegram.json`: the next update to fetch and when updates last came — never a text, a token
+    or an id."""
     offset: int | None = None
+    seen_ms: int | None = None  # the last batch that held updates (review #7)
 
 
 def load_telegram_state(path: Path) -> TelegramState:
     """A missing or corrupt file is a fresh state (no offset: the first start)."""
     try:
-        offset = json.loads(path.read_text(encoding="utf-8")).get("offset")
-        return TelegramState(int(offset) if offset is not None else None)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        offset, seen = data.get("offset"), data.get("seen_ms")
+        return TelegramState(int(offset) if offset is not None else None, int(seen) if seen is not None else None)
     except (OSError, ValueError, TypeError, AttributeError):
         return TelegramState()
+
+
+def poll_offset(state: TelegramState, now_ms: int) -> int | None:
+    """The offset to poll from: the stored one while updates came within `OFFSET_STALE_MS`; else none, so only
+    the unconfirmed updates come back — whatever ids Telegram gave them."""
+    if state.offset is None or state.seen_ms is None or now_ms - state.seen_ms > OFFSET_STALE_MS:
+        return None
+    return state.offset
 
 
 def save_telegram_state(path: Path, state: TelegramState) -> None:
@@ -136,7 +150,7 @@ def save_telegram_state(path: Path, state: TelegramState) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        os.write(fd, json.dumps({"offset": state.offset}).encode())
+        os.write(fd, json.dumps({"offset": state.offset, "seen_ms": state.seen_ms}).encode())
     finally:
         os.close(fd)
     os.chmod(tmp, 0o600)

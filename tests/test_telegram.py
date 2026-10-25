@@ -20,6 +20,7 @@ from agents.telegram import (
     load_telegram_state,
     next_offset,
     parse_update,
+    poll_offset,
     save_telegram_state,
 )
 
@@ -95,10 +96,28 @@ def test_the_next_offset_confirms_the_whole_batch():
 def test_the_offset_survives_a_restart_privately(tmp_path):
     path = tmp_path / "kira.telegram.json"
     assert load_telegram_state(path) == TelegramState()  # the first start
-    save_telegram_state(path, TelegramState(42))
-    assert load_telegram_state(path).offset == 42
+    save_telegram_state(path, TelegramState(42, 1_761_400_000_000))
+    assert load_telegram_state(path) == TelegramState(42, 1_761_400_000_000)
     assert os.stat(path).st_mode & 0o777 == 0o600
-    assert json.loads(path.read_text()) == {"offset": 42}  # no text, no token, no id
+    assert json.loads(path.read_text()) == {"offset": 42, "seen_ms": 1_761_400_000_000}  # no text, no token, no id
+    path.write_text('{"offset": 42}')                                   # a v5.7.0 file: no time yet
+    assert load_telegram_state(path) == TelegramState(42, None)
+
+
+DAY = 24 * 3600 * 1000
+
+
+@pytest.mark.parametrize(("state", "now", "offset"), [
+    (TelegramState(None, None), 10 * DAY, None),        # the first start
+    (TelegramState(42, 9 * DAY), 10 * DAY, 42),         # updates came yesterday
+    (TelegramState(42, 3 * DAY), 9 * DAY, 42),          # six days exactly: still kept
+    (TelegramState(42, 2 * DAY), 9 * DAY, None),        # a week of silence: Telegram may restart the ids
+    (TelegramState(42, None), 9 * DAY, None),           # no time known: never trust the offset blind
+])
+def test_a_stale_offset_is_dropped(state, now, offset):
+    """v5.7 review #7: after a week without updates the next `update_id` is random; an older offset would confirm
+    the owner's new messages unseen."""
+    assert poll_offset(state, now) == offset
 
 
 @pytest.mark.parametrize("body", ["{", "[]", '{"offset": "x"}'])

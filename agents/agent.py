@@ -147,6 +147,7 @@ from agents.telegram import (
     load_telegram_state,
     next_offset,
     parse_update,
+    poll_offset,
     save_telegram_state,
 )
 from agents.turns import (
@@ -748,7 +749,7 @@ class Agent:
         failures = 0
         while True:
             try:
-                reply = await self.telegram.get_updates(state.offset)
+                reply = await self.telegram.get_updates(poll_offset(state, self.clock()))
                 if not reply.ok:
                     if reply.status in (401, 404):
                         log.error("telegram off: refused (HTTP %s)", reply.status)
@@ -763,6 +764,7 @@ class Agent:
                 if reply.result:
                     await self.on_telegram(reply.result)
                     state.offset = next_offset(reply.result, state.offset)
+                    state.seen_ms = self.clock()
                     save_telegram_state(self.telegram_file, state)
             except asyncio.CancelledError:
                 raise
