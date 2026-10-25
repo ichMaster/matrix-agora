@@ -293,7 +293,7 @@ def test_kiras_env_file_reaches_her_container_only():
 
 def test_kiras_env_example_holds_the_bot_the_owner_and_her_hearing_only():
     assert env_keys(ROOT / "server" / "kira.env.example") == {"TELEGRAM_BOT_TOKEN", "TELEGRAM_OWNER_ID",
-                                                               "DEEPGRAM_API_KEY"}
+                                                               "DEEPGRAM_API_KEY", "GEMINI_REPLY_MODEL"}  # v5.8
     for example in (".env.example", "server/.env.example"):
         assert not env_keys(ROOT / example) & {"TELEGRAM_BOT_TOKEN", "TELEGRAM_OWNER_ID"}, example
 

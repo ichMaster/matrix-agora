@@ -20,6 +20,8 @@ log = logging.getLogger("agent.llm")
 MODEL = "gemini-2.5-flash"  # the default; `GEMINI_MODEL` overrides it (v4.7: tunable in the panel)
 DIGEST_MODEL = "gemini-3.1-pro-preview"  # v5.1: Hermes's digests and answers — Lumi's verified id, with thinking
 THINK_MAX_TOKENS = 16384  # the cap counts the thinking too: room for it and a ~1,500-character digest
+# v5.8 — models that refuse a zero thinking budget: an answer on one of them goes through the thinking path
+THINKING_MODELS = frozenset({"gemini-3.1-pro-preview"})
 
 UsageSink = Callable[[str, str, Any, bool], None]  # (kind, model, usage_metadata | None, ok)
 
@@ -29,6 +31,10 @@ class GeminiClient:
         self._client = genai.Client()  # reads GEMINI_API_KEY from the environment
         self._sink = sink
         self.model = os.environ.get("GEMINI_MODEL", MODEL).strip() or MODEL
+        # v5.8 — the agent's answers on a model of their own (empty: the same as GEMINI_MODEL), and how hard a
+        # thinking reply model thinks
+        self.reply_model = os.environ.get("GEMINI_REPLY_MODEL", "").strip() or self.model
+        self.thinking_level = os.environ.get("GEMINI_THINKING_LEVEL", "low").strip() or "low"
 
     def _report(self, kind: str, usage: Any, ok: bool, model: str | None = None) -> None:
         if self._sink is None:
@@ -46,11 +52,14 @@ class GeminiClient:
 
     async def complete(
         self, transcript: str, system_instruction: str | None, max_output_tokens: int = 400, kind: str = "reply",
+        model: str | None = None,
     ) -> tuple[str, str] | None:
-        """(text, finish) — finish is "max_tokens" when the cap cut the reply, else "stop"; None on failure."""
+        """(text, finish) — finish is "max_tokens" when the cap cut the reply, else "stop"; None on failure. `model`
+        (v5.8) overrides `GEMINI_MODEL` for this call — a model that runs with thinking off."""
+        model = model or self.model
         try:
             resp = await self._client.aio.models.generate_content(
-                model=self.model,
+                model=model,
                 contents=transcript,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
@@ -62,12 +71,45 @@ class GeminiClient:
             )
         except Exception as exc:  # noqa: BLE001 — any provider failure means silence
             log.error("gemini call failed: %s", type(exc).__name__)
-            self._report(kind, None, False)
+            self._report(kind, None, False, model)
             return None
         text = (resp.text or "").strip() if resp is not None else ""
-        self._report(kind, getattr(resp, "usage_metadata", None), bool(text))
+        self._report(kind, getattr(resp, "usage_metadata", None), bool(text), model)
         if not text:
             log.error("gemini returned an empty reply")
+            return None
+        return text, finish_of(resp)
+
+    async def reply(
+        self, transcript: str, system_instruction: str | None, max_output_tokens: int = 400, kind: str = "reply",
+    ) -> tuple[str, str] | None:
+        """v5.8 — an answer (in the room, in the private chat, a line written first) on `GEMINI_REPLY_MODEL`: a
+        thinking model through the thinking config at `GEMINI_THINKING_LEVEL`, any other through `complete`.
+        (text, finish) either way, so a cut answer is still trimmed to a sentence; None on failure."""
+        if self.reply_model not in THINKING_MODELS:
+            return await self.complete(transcript, system_instruction, max_output_tokens, kind, self.reply_model)
+        model = self.reply_model
+        try:
+            resp = await self._client.aio.models.generate_content(
+                model=model,
+                contents=transcript,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    max_output_tokens=max_output_tokens,
+                    thinking_config=types.ThinkingConfig(
+                        include_thoughts=False,
+                        thinking_level=getattr(types.ThinkingLevel, self.thinking_level.upper(), None)),
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001 — any provider failure means silence
+            log.error("gemini reply failed: %s", type(exc).__name__)
+            self._report(kind, None, False, model)
+            return None
+        text = answer_text(resp)
+        self._report(kind, getattr(resp, "usage_metadata", None), bool(text), model)
+        if not text:
+            log.error("gemini reply was empty (finish %s)", finish_of(resp))
             return None
         return text, finish_of(resp)
 

@@ -126,6 +126,14 @@ SCHEMA: tuple[Setting, ...] = (
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
        choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),
+    # v5.8 — the agent's answers on a model of their own (empty: GEMINI_MODEL); a thinking model (3.1 Pro) answers
+    # through the thinking path at this level, under its own cap (the thinking counts toward it)
+    _s("GEMINI_REPLY_MODEL", "choice", "", "model", "engine:gemini", None, "Модель відповідей (порожньо — та сама)",
+       choices=("", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.1-pro-preview")),
+    _s("GEMINI_THINKING_LEVEL", "choice", "low", "model", "engine:gemini", None, "Як довго думає модель відповідей",
+       choices=("low", "medium", "high")),
+    _s("REPLY_THINK_MAX_TOKENS", "int", "4096", "model", "engine:gemini", None,
+       "Межа токенів відповіді, що думає (з думанням)", "tokens", 1024, 32768),
     _s("CLAUDE_MODEL", "choice", "opus", "model", "engine:claude-sdk", None, "Модель Клода", choices=("opus", "sonnet", "haiku")),
     _s("CLAUDE_TIMEOUT_S", "int", "300", "model", "engine:claude-sdk", None, "Найдовша відповідь Клода", "s", 30, 1800),
     _s("CLAUDE_CODE_MAX_OUTPUT_TOKENS", "int", "0", "model", "engine:claude-sdk", None, "Межа виводу (0 — без межі)",

@@ -37,6 +37,11 @@ class Responder(Protocol):
     async def respond(self, turn: Turn) -> Reply | None: ...
 
 
+# v5.8 — the kinds that are the agent's own answers: they go on its reply model; every other kind (the summary, the
+# memories, the plans, the today block, the mood, the sky, the facts) stays on GEMINI_MODEL
+ANSWER_KINDS = ("reply", "private", "private_nudge")
+
+
 class GeminiResponder:
     """Wraps the Gemini seam; usage accounting stays in its sink, unchanged."""
 
@@ -50,7 +55,9 @@ class GeminiResponder:
             text = await self.llm.generate(transcript, turn.instruction, max_output_tokens=turn.max_tokens,
                                            kind=turn.kind)
             return Reply(text) if text else None
-        out = await complete(transcript, turn.instruction, max_output_tokens=turn.max_tokens, kind=turn.kind)
+        reply = getattr(self.llm, "reply", None) if turn.kind in ANSWER_KINDS else None
+        call = reply or complete  # v5.8: an answer on the reply model
+        out = await call(transcript, turn.instruction, max_output_tokens=turn.max_tokens, kind=turn.kind)
         return Reply(*out) if out else None
 
 

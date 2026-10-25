@@ -57,7 +57,7 @@ from agents.config import AgentConfig, load_config
 from agents.guardian import KEY_VAR as GUARDIAN_KEY_VAR
 from agents.guardian import Guardian
 from agents.life import current_chapter, life_section, next_chapter
-from agents.llm import GeminiClient
+from agents.llm import THINKING_MODELS, GeminiClient
 from agents.logic import (
     CLAUDE_BRIEF_DIRECT,
     CLAUDE_BRIEF_PHILOSOPHER,
@@ -238,6 +238,8 @@ class Agent:
             self.llm = llm or GeminiClient(sink=self.record_usage)
             self.responder = responder_for(cfg.engine, self.llm)  # the reply engine seam (v4.1)
         self.reply_max_tokens = int(os.environ.get("REPLY_MAX_TOKENS", "200"))
+        if getattr(self.llm, "reply_model", None) in THINKING_MODELS:  # v5.8: the thinking counts toward the cap
+            self.reply_max_tokens = int(os.environ.get("REPLY_THINK_MAX_TOKENS", "4096"))
         self.history: list[tuple[str, str]] = []
         self.history_n = int(os.environ.get("HISTORY_N", "40"))
         # v4.5 — Claude the philosopher reads a wider window (RAM only, seeded from the room like the regular one)
