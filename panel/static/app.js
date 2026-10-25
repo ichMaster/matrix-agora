@@ -8,10 +8,11 @@ const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today",
 // review #11: a kind not listed above still shows, after the listed ones — a tab's rows always add up to its total
 function kindsOf(byKind) { return [...KIND_ORDER.filter((k) => byKind[k]), ...Object.keys(byKind).filter((k) => !KIND_ORDER.includes(k)).sort()]; }
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
-              ["today", "Today"], ["mood", "Mood"], ["facts", "Facts"], ["tokens", "Tokens"], ["files", "Files"],
-              ["settings", "Settings"]];
+              ["today", "Today"], ["mood", "Mood"], ["facts", "Facts"], ["voice", "Voice"], ["tokens", "Tokens"],
+              ["files", "Files"], ["settings", "Settings"]];
 // v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
-const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", facts: "facts"};
+const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", facts: "facts",
+                 voice: "voice"};
 const SERIES = ["a", "b", "c", "d", "e"];  // stacked token bars: one tint of the accent per agent (v4.2: N agents)
 const PRONOUN = {she: "She", he: "He", it: "It"};
 function can(a, cap) { return !a.capabilities || a.capabilities.includes(cap); }
@@ -405,6 +406,7 @@ function agentCardHtml(a) {
     ${a.engine === "claude-sdk" ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Subscription</div>${claudeLines(mem)}</div>` : ""}
     ${can(a, "digest") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Digests</div>${digestLine(mem)}</div>` : ""}
     ${a.capabilities && can(a, "recall") ? `<div class="muted" style="font-size:12px">${archiveLine(mem)}</div>` : ""}
+    ${a.engine === "gemini" && mem.models ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Models</div>${modelLines(mem.models)}</div>` : ""}
     <div class="card-foot rule-t"><div class="meta">${tokens == null ? `${icon("database", 13)} Memory unavailable` : `7 days · ${esc(tokens)}`}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${actionButtons({kind: "agent", id: a.name, state: d.health.docker ? c.state : "unknown", big: true})}</div>
       <button class="btn btn-primary" data-act="agent" data-id="${esc(a.name)}">Details${icon("arrow-right", 14)}</button></div>
@@ -579,6 +581,31 @@ function digestLine(mem) {
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${full ? pill("warn", "monthly cap reached") : ""}<span class="muted" style="font-size:12px">${esc(voice)}</span></div>`;
 }
 
+// v5.9 (AGORA-121) — what a Gemini speaker runs on: «answers … · background …» and «voice … · emotion: N tags»
+function modelLines(m) {
+  const answers = m.answers === m.background ? `model ${m.answers}`
+    : `answers ${m.answers}${m.thinking ? ` (thinking ${m.thinking})` : ""} · background ${m.background}`;
+  const v = m.voice;
+  const voice = !v ? "" : `voice ${v.model} · stability ${v.stability}${v.speed !== "1.0" && v.speed !== "1" ? ` · speed ${v.speed}` : ""}`
+    + (m.emotion ? ` · emotion: ${m.emotion.tags.length} tags` : "");
+  return `<div class="today-line mono" style="font-size:12px">${esc(answers)}</div>${voice ? `<div class="muted mono" style="font-size:12px">${esc(voice)}</div>` : ""}`;
+}
+function voiceTabHtml(a, mem) {
+  const m = mem.models;
+  if (!m || !m.voice) return `<p class="muted">${esc(a.display)}'s voice runs on its engine's own settings — see the Settings tab.</p>`;
+  const v = m.voice;
+  const rows = [["Voice model", v.model], ["Stability", v.stability], ["Speed", v.speed],
+                ["Answers", m.answers + (m.thinking ? ` · thinking ${m.thinking}` : "")], ["Background", m.background]];
+  const table = `<dl class="fields">${rows.map(([k, val]) => `<div><dt class="label">${esc(k)}</dt><dd class="mono">${esc(val)}</dd></div>`).join("")}</dl>`;
+  if (!m.emotion) return `${table}<p class="muted" style="margin-top:14px">No emotion palette — the voice reads the words as they are.</p>`;
+  const chips = m.emotion.tags.map((t) => `<code class="chip-code">${esc(t)}</code>`).join(" ");
+  const how = m.emotion.performed ? "performed by her voice · never shown in the text"
+    : "this voice model reads tags aloud — they are kept out of it, and out of the text";
+  return `${table}<div class="label" style="margin-top:16px">Emotion · ${m.emotion.tags.length} tags</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">${chips}</div>
+    <div class="muted" style="font-size:12.5px">${esc(how)}</div>`;
+}
+
 // v5.8 — Кіра's archive: «archive: 1,820 lines · 1,790 embedded»
 function archiveLine(mem) {
   if (!mem.available) return "Memory unavailable";
@@ -660,6 +687,7 @@ function agentTabHtml(a, mem, tab) {
   if (!mem.available) return unavailableBox();
   if (tab === "mood") return moodTabHtml(mem);
   if (tab === "facts") return factsTabHtml(a, mem);
+  if (tab === "voice") return voiceTabHtml(a, mem);
   if (tab === "session") {
     const state = a.container_state?.state;
     const stopped = S.data.health.docker && ["stopped", "missing"].includes(state) && !S.busy[a.container];

@@ -99,3 +99,17 @@ icon (the trash icon is v4.7's).
 
 **Her card (`recall`):** a 12 px muted line under the other fields, «archive: 1,820 lines · 1,790 embedded»
 («Archive unreadable» when it cannot be read).
+
+## Addendum (v5.9): models and the voice with emotion
+
+**A Gemini speaker's card** gains a «Models» field under the others:
+- a mono line: «model gemini-2.5-flash», or, when the answers run on their own model, «answers gemini-3.1-pro-preview
+  (thinking low) · background gemini-2.5-flash»;
+- a muted mono line: «voice eleven_v4_turbo · stability 0.3», plus «· emotion: 10 tags» for a person with `emotion`.
+
+**A Voice tab** on the drawer of an agent with `voice`:
+- the fields: voice model, stability, speed, answers and background;
+- for `emotion`, «Emotion · N tags», the palette as code chips, and a muted line: «performed by her voice · never shown
+  in the text», or, on a model that reads tags aloud, that they are kept out of it.
+
+The palette's own text, like a canon, is not shown, and the voice id never is.

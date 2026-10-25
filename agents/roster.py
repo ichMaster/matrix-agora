@@ -72,6 +72,7 @@ class Member:
     panel: dict = field(default_factory=dict, compare=False, hash=False)  # [panel] — never part of a prompt
     natal: str = ""  # v4.2: the natal file's path (agents with `mood`)
     memories: str = ""  # v4.3: the past-life theses file's path (agents with `pastlife`)
+    voice_spec: str = ""  # v5.9: the palette file's path (agents with `emotion`)
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -136,6 +137,7 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
         panel=dict(panel) if isinstance(panel, dict) else {},
         natal=str(data.get("natal", "")),
         memories=str(data.get("memories", "")),
+        voice_spec=str(data.get("voice_spec", "")),
     )
 
 

@@ -16,6 +16,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from agents.emotion import TAG_MODELS
+from agents.emotion import TAG_RE as VOICE_TAG_RE
 from agents.facts import load_facts
 from agents.usage import Row, aggregate, cost, month_chars, parse_lines, parse_model_prices
 
@@ -187,10 +189,39 @@ def archive_view(state_dir: Path, name: str) -> dict | None:
     return {"lines": int(lines), "embedded": int(embedded)}
 
 
+def models_view(state_dir: Path, name: str, voice_spec: Path | None = None) -> dict | None:
+    """v5.9 (AGORA-121) — what a Gemini speaker runs on, from what it wrote at its start (`<name>.settings.json`):
+    the answers' and the background model, the thinking level, the voice's model and settings, and with a palette
+    (`emotion`) its tags and whether the voice performs them. Never the voice id or the palette's text; unreadable is
+    None, never a 500."""
+    try:
+        data = json.loads((state_dir / f"{name}.settings.json").read_text(encoding="utf-8"))
+        value = {k: str(v.get("value", "")) for k, v in data.items() if isinstance(v, dict)}
+    except (OSError, ValueError, AttributeError):
+        return None
+    background = value.get("GEMINI_MODEL") or "gemini-2.5-flash"
+    answers = value.get("GEMINI_REPLY_MODEL") or background
+    view = {"answers": answers, "background": background,
+            "thinking": value.get("GEMINI_THINKING_LEVEL") if answers != background or answers.startswith("gemini-3")
+            else None,
+            "voice": None, "emotion": None}
+    if "ELEVENLABS_MODEL" in value or "VOICE_STABILITY" in value:
+        model = value.get("ELEVENLABS_MODEL") or "eleven_turbo_v2_5"
+        view["voice"] = {"model": model, "stability": value.get("VOICE_STABILITY") or "0.5",
+                         "speed": value.get("VOICE_SPEED") or "1.0"}
+        if voice_spec is not None:
+            try:
+                tags = list(dict.fromkeys(f"[{t}]" for t in VOICE_TAG_RE.findall(voice_spec.read_text(encoding="utf-8"))))
+            except OSError:
+                tags = []
+            view["emotion"] = {"tags": tags, "performed": model in TAG_MODELS}
+    return view
+
+
 def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = None, with_mood: bool = False,
                 memories: Path | None = None, with_nudge: bool = False, with_ratelimit: bool = False,
                 with_news: bool = False, with_digest: bool = False, with_facts: bool = False,
-                with_archive: bool = False) -> dict:
+                with_archive: bool = False, with_models: bool = False, voice_spec: Path | None = None) -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -236,6 +267,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         # AGORA-116: «Update now» pressed and not yet done by her
         "facts_pending": (state_dir / f"{name}.facts.request").exists() if with_facts else None,
         "archive": archive_view(state_dir, name) if with_archive else None,              # v5.8: her archive
+        "models": models_view(state_dir, name, voice_spec) if with_models else None,     # v5.9: models, voice
     }
 
 

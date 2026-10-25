@@ -73,7 +73,7 @@ def test_the_page_follows_capabilities():
     pronoun; with every capability on (Ada, Bruno) the page is unchanged."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert ('const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", '
-            'facts: "facts"};') in js                                       # v5.8: the Facts tab needs `facts`
+            'facts: "facts",\n                 voice: "voice"};') in js     # v5.8 Facts needs `facts`, v5.9 Voice `voice`
     assert 'PRONOUN = {she: "She", he: "He", it: "It"}' in js
     assert "agentTabs(a)" in js and 'dr.tab = "log"' in js
     assert 'can(a, "today") ?' in js                                   # the card's Today field
@@ -264,3 +264,11 @@ def test_the_update_now_button():
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert 'data-act="facts-update" ${mem.facts_pending ? "disabled" : ""}' in js
     assert 'send("POST", `/api/agents/${encodeURIComponent(agent)}/facts/update`)' in js
+
+
+def test_the_models_lines_and_the_voice_tab():
+    """v5.9 (AGORA-121): a Gemini speaker's card names its models and voice; a Voice tab lists the emotion palette."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert '["voice", "Voice"]' in js and "function voiceTabHtml(a, mem)" in js and "function modelLines(m)" in js
+    assert 'a.engine === "gemini" && mem.models' in js and "emotion: ${m.emotion.tags.length} tags" in js
+    assert "performed by her voice · never shown in the text" in js

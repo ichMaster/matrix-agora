@@ -208,7 +208,10 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
         theses = Path(found.memories) if found.memories and "pastlife" in found.capabilities else None
         return memory_view(state_dir, found.name, local_today(), natal, "mood" in found.capabilities, theses,
                            "nudge" in found.capabilities, found.engine == "claude-sdk", "news" in found.capabilities,
-                           "digest" in found.capabilities, "facts" in found.capabilities, "recall" in found.capabilities)
+                           "digest" in found.capabilities, "facts" in found.capabilities, "recall" in found.capabilities,
+                           found.engine == "gemini" and found.type != "herald",
+                           # v5.9: the palette by the registry's own path, never request data
+                           Path(found.voice_spec) if found.voice_spec and "emotion" in found.capabilities else None)
 
     # ── v5.8: a person's facts about the owner — re-pin or delete one; the id resolves only inside her own folder ──
     def facts_folder(name: str) -> Path:
