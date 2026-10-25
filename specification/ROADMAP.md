@@ -1278,7 +1278,7 @@ she talks with him alone, and in Agora she never talks about him.
 
 ### v5.9 — Кіра's voice with emotion: ElevenLabs audio tags
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.9.0` on 2026-10-25 (her palette of ten tags verified on her voice; Кіра on `eleven_v4_turbo` at stability 0.3; tags to the voice, plain words to every text; the panel's Models field and Voice tab added mid-phase as AGORA-121; six code-review fixes, #7–#9 deferred, #10 the owner's).
 
 **Goal:** Кіра's voice laughs, sighs, wonders and whispers where her line asks for it. She writes one or two audio
 tags from a palette verified on her voice, and her voice performs them. Everyone reads her plain words.

@@ -1,3 +1,30 @@
+Version 5.9.0 (2026-10-25)
+---------------------------
+- Phase v5.9 - Kira's voice with emotion: ElevenLabs audio tags
+  (AGORA-117...121)
+- The palette and the split (AGORA-117): agents/canon/kira.voice.md holds
+  the ten tags verified on her voice ([laughs], [sighs], [whispers] ...),
+  in her prompt just before the rules (the emotion capability, voice_spec);
+  agents/emotion.py splits each reply into her words and the speech
+- Her model and settings (AGORA-118): ELEVENLABS_MODEL, VOICE_STABILITY
+  and VOICE_SPEED per speaker; Kira on eleven_v4_turbo at 0.3; everyone
+  else's request unchanged
+- Tags to the voice, words to the text (AGORA-119): the voice note performs
+  the tags; the message, her history, the session, the archive and the
+  others get her plain words (no emote, no emoji - the owner); a model that
+  reads tags aloud never gets one; the budget counts the speech
+- Docs and live (AGORA-120): deployed; the owner confirmed the laughing
+  voice notes and the clean text («все працює»)
+- The panel (AGORA-121, the owner): the card's Models field (answers,
+  background, thinking, voice) and a Voice tab with her palette as chips;
+  never the voice id or the palette's text
+- Code review fixes: a tag before a name never hides another's line (#1);
+  tags and punctuation alone are silence (#2); every variant of a tag
+  leaves her text - capitals, glued, punctuation, the apostrophe (#3); no
+  tag in a remembered fact (#4); text without tags is never re-spaced
+  (#5); a palette that is not UTF-8 never breaks the panel (#6); #7-#9
+  deferred to the backlog, #10 is the owner's
+
 Version 5.8.2 (2026-10-25)
 ---------------------------
 - Kira writes first every 3 hours, 08:00-01:00, up to 6 a day, and always
