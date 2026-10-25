@@ -130,6 +130,8 @@ services:
         required: false
       - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
         required: false
+      - path: kira.env                           # v5.7: her bot's token, the owner's Telegram id, Deepgram's key
+        required: false                          # — read by no other service
     environment:
       HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
       TZ: ${TIMEZONE:-Europe/Kyiv}

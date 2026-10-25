@@ -22,7 +22,7 @@ log = logging.getLogger("agent.roster")
 
 # the type sets the default capabilities; a later phase adds the bridge
 CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood", "pastlife", "nudge",
-                "news", "digest", "transcribe", "voice", "private")
+                "news", "digest", "transcribe", "voice", "private", "telegram")
 TYPES: dict[str, frozenset[str]] = {
     # a human persona: the full memory stack, no horoscope
     "persona": frozenset({"canon", "life", "summary", "chronicle", "plans", "today", "world", "voice"}),
@@ -40,8 +40,10 @@ TYPES: dict[str, frozenset[str]] = {
 CREATURE_ONLY = frozenset({"pastlife", "nudge"})  # v4.3: no persona remembers a past life or speaks first
 ASSISTANT_ONLY = frozenset({"news"})               # v4.5: only Claude brings news unasked
 HERALD_ONLY = frozenset({"digest", "transcribe"})  # v5.1: only the herald digests; v5.2: and transcribes
-PERSONA_ONLY = frozenset({"private"})             # v5.6: a private chat with the owner is a person's; no type
-                                                  # has it by default — a person's TOML switches it on
+PERSONA_ONLY = frozenset({"private", "telegram"})  # v5.6: a private chat with the owner is a person's; no type
+                                                  # has it by default — a person's TOML switches it on; v5.7: her
+                                                  # own Telegram bot, a second door to that chat
+NEEDS = {"telegram": "private"}                    # v5.7: the bot is a door to the private chat, never without it
 INITIATIVES = ("nudge", "news")                    # who may speak first: one member per initiative
 SINGLES = (*INITIATIVES, "digest", "transcribe")   # one member per simulation with each of these
 ENGINES = ("gemini", "claude-sdk")  # v4.4: Claude through the Agent SDK, on the subscription only
@@ -102,6 +104,9 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
     for cap in sorted(caps & PERSONA_ONLY):
         if kind != "persona":
             raise RosterError(f"{source}: '{cap}' belongs to the persona type only")
+    for cap, needed in NEEDS.items():
+        if cap in caps and needed not in caps:
+            raise RosterError(f"{source}: '{cap}' needs '{needed}' on the same member")
     turns = data.get("turns", {})
     if not isinstance(turns, dict):
         raise RosterError(f"{source}: [turns] must be a table")

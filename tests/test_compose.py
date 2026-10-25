@@ -34,7 +34,9 @@ def test_one_container_per_agent_from_one_image():
         assert svc["environment"]["HOMESERVER"] == "http://homeserver:8008"  # the compose network
         assert svc["volumes"] == ["../state:/app/state"] and svc["user"] == "1000:1000"
         assert svc["stop_grace_period"] == "30s" and svc["restart"] == "unless-stopped"
-        assert svc["env_file"] == [{"path": ".env", "required": False}, {"path": "voice.env", "required": False}]  # v5.3: the voice key
+        kira = [{"path": "kira.env", "required": False}] if name == "kira" else []  # v5.7: her bot
+        assert svc["env_file"] == [{"path": ".env", "required": False}, {"path": "voice.env", "required": False},
+                                   *kira]  # v5.3: the voice key
         assert "ports" not in svc  # agents listen on nothing
 
 
@@ -280,3 +282,27 @@ def test_the_voice_key_reaches_exactly_the_members_who_speak():
     env = SERVICES["claude"]["environment"]
     assert env["CLAUDE_VOICE_ID"] == "${CLAUDE_VOICE_ID:-}" and env["VOICE_REPLY_P"] == "${VOICE_REPLY_P:-1.0}"
     assert env["VOICE_MONTHLY_CHARS"] == "${VOICE_MONTHLY_CHARS:-200000}"  # v5.5: the owner
+
+
+# --- v5.7: Кіра's own env file -----------------------------------------------------------------------------------------
+def test_kiras_env_file_reaches_her_container_only():
+    readers = {n for n, svc in SERVICES.items()
+               if any((e.get("path") if isinstance(e, dict) else e) == "kira.env" for e in svc.get("env_file", []))}
+    assert readers == {"kira"}  # her bot's token and the owner's id reach no other container
+
+
+def test_kiras_env_example_holds_the_bot_the_owner_and_her_hearing_only():
+    assert env_keys(ROOT / "server" / "kira.env.example") == {"TELEGRAM_BOT_TOKEN", "TELEGRAM_OWNER_ID",
+                                                               "DEEPGRAM_API_KEY"}
+    for example in (".env.example", "server/.env.example"):
+        assert not env_keys(ROOT / example) & {"TELEGRAM_BOT_TOKEN", "TELEGRAM_OWNER_ID"}, example
+
+
+def test_deploy_syncs_kiras_env_file_privately_and_it_is_never_committed_or_baked():
+    from fnmatch import fnmatch
+    deploy = (ROOT / "server" / "deploy.sh").read_text()
+    assert 'KIRA_ENV="$REPO_DIR/server/kira.env"' in deploy and "chmod 600 ~/$REMOTE_DIR/kira.env" in deploy
+    for ignore in (".gitignore", ".dockerignore"):
+        lines = (ROOT / ignore).read_text().splitlines()
+        assert any(fnmatch("server/kira.env", p) for p in lines if p and not p.startswith(("#", "!"))), ignore
+        assert not any(fnmatch("server/kira.env", p[1:]) for p in lines if p.startswith("!")), ignore

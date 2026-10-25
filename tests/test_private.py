@@ -44,6 +44,19 @@ def test_only_a_person_may_have_a_private_chat_and_no_type_has_it_by_default():
                              "capabilities": {"private": True}}, "kit.toml")
 
 
+def test_telegram_is_a_persons_second_door_and_never_without_the_private_chat():
+    """v5.7: her own bot is a door to the private chat — a person's only, never on its own."""
+    both = parse_member("kira", {"name": "Кіра", "user_id": KIRA,
+                                 "capabilities": {"private": True, "telegram": True}}, "kira.toml")
+    assert both.can("telegram") and both.can("private")
+    assert not parse_member("ada", {"name": "Ада", "user_id": ADA}, "ada.toml").can("telegram")
+    with pytest.raises(RosterError, match="'telegram' needs 'private' on the same member"):
+        parse_member("kira", {"name": "Кіра", "user_id": KIRA, "capabilities": {"telegram": True}}, "kira.toml")
+    with pytest.raises(RosterError, match="'telegram' belongs to the persona type only"):
+        parse_member("claude", {"name": "Клод", "user_id": "@claude:agora.lan", "type": "assistant",
+                                "engine": "claude-sdk", "capabilities": {"telegram": True}}, "claude.toml")
+
+
 # --- the invite rule -----------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("room,inviter,private,stored,join", [
     (AGORA, OWNER, False, None, True),          # Agora as ever
