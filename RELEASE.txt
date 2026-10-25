@@ -1,3 +1,39 @@
+Version 5.8.0 (2026-10-25)
+---------------------------
+- Phase v5.8 - Kira: Gemini 3.1 Pro, a memory of messages and facts about
+  the owner (AGORA-110...116)
+- Two models (AGORA-110): her answers on gemini-3.1-pro-preview with
+  thinking (GEMINI_REPLY_MODEL, GEMINI_THINKING_LEVEL,
+  REPLY_THINK_MAX_TOKENS); every other call stays on GEMINI_MODEL
+- The archive (AGORA-111): state/<name>.archive.db - every Agora line and
+  both sides of her private chat through both doors, searchable by words
+  (FTS5) and by meaning (gemini-embedding-001, embedded in batches); first
+  filled from the chats; the private history at start comes from it, so
+  Telegram lines survive a restart
+- Recall (AGORA-112): before each answer the closest lines come back,
+  dated and placed; Agora recalls only Agora (in code); alone with him she
+  recalls both places and her facts and sees Agora's lines of today; the
+  discretion line keeps what she knows of him out of Agora
+- Facts about the owner (AGORA-113): long-lived facts in her private
+  prompt only - asked for (a marker line never sent), extracted at a
+  session's end, seeded once from her private chat (the owner chose this
+  over an import from Noos); off_limits drops any fact about AI, agents,
+  bots, models, servers or an exact address
+- The panel (AGORA-114, AGORA-116): a Facts tab (re-pin, delete) and
+  Update now; her card shows the archive's size
+- Live (AGORA-115): deployed, the seed kept 21 facts; the owner's checks
+  confirmed («все гут»)
+- Code review fixes: a line sent while she was down survives the restart
+  (#1); the marker is never sent, whatever its form (#2); asked facts pass
+  off_limits, and the list is wider (#3); a corrupt archive never stops
+  her start (#4); a deleted fact is not recalled (#6); a new pin-1 fact
+  reaches the prompt past the limit (#7); a failed update keeps its lines
+  (#8); mixed vector lengths never disable recall (#10); a malformed
+  extraction never crashes the seed (#11); Agora today is guarded (#13);
+  #5, #9, #12 deferred
+- Planned: ROADMAP v5.9 (Kira's voice with emotion: ElevenLabs audio
+  tags), v6 Applications, v7 Theatre, v8 Lili
+
 Version 5.7.0 (2026-10-25)
 ---------------------------
 - Phase v5.7 - Kira in Telegram (AGORA-106...109)

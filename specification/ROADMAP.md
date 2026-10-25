@@ -1115,7 +1115,7 @@ with Telegram voice notes and then the text, and she hears the owner's voice not
 
 ### v5.8 — Кіра: Gemini 3.1 Pro, a memory of messages and facts about the owner
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.8.0` on 2026-10-25 (her answers on Pro; the archive and recall; facts seeded from her own private chat, not from Noos, and filtered by `off_limits` (the owner); «Update now» added mid-phase as AGORA-116; ten code-review fixes, #5/#9/#12 deferred).
 
 **Goal:** Кіра answers on Gemini 3.1 Pro and remembers like Noos (`~/claude-home`) does. When something comes up, she
 recalls the past messages it touches, from Agora and from her private chat. She keeps short facts about the owner,
