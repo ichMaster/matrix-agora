@@ -373,7 +373,10 @@ class Agent:
         self.archive: Archive | None = None
         self.recall_n, self.private_agora_n = 0, 0
         if cfg.can("recall"):
-            self.archive = Archive(self.memory_file.parent / f"{cfg.localpart}.archive.db")
+            try:  # v5.8 review #4: a bad archive never stops her start — she answers without recall
+                self.archive = Archive(self.memory_file.parent / f"{cfg.localpart}.archive.db")
+            except Exception as exc:  # noqa: BLE001
+                log.error("archive: unreadable (%s) — running without it", type(exc).__name__)
             self.recall_n = int(os.environ.get("RECALL_N", "6"))
             self.private_agora_n = int(os.environ.get("PRIVATE_AGORA_N", "20"))
         self._own_seq = 0
@@ -875,7 +878,11 @@ class Agent:
         Telegram line survives a restart — and the time of the last one."""
         if self.archive is None:
             return
-        lines = self.archive.latest("private", max(self.history_n, 1))
+        try:
+            lines = self.archive.latest("private", max(self.history_n, 1))
+        except Exception as exc:  # noqa: BLE001 — v5.8 review #4: the homeserver's history stays
+            log.error("archive: the private history was not read (%s)", type(exc).__name__)
+            return
         if not lines:
             return
         self.private_history = [(line.speaker, line.text) for line in lines]
@@ -2161,7 +2168,13 @@ class Agent:
         first = await self.client.sync(timeout=10000, full_state=True)
         if isinstance(first, SyncError):
             raise RuntimeError(f"first sync failed: {first.message}")
-        fresh_archive = self.archive is not None and self.archive.counts()[0] == 0  # before the context fills it
+        fresh_archive = False
+        if self.archive is not None:
+            try:
+                fresh_archive = self.archive.counts()[0] == 0  # before the context fills it
+            except Exception as exc:  # noqa: BLE001 — v5.8 review #4
+                log.error("archive: unreadable (%s) — running without it", type(exc).__name__)
+                self.archive = None
         try:
             await self.backfill(first.next_batch)  # the context survives a restart
         except Exception:

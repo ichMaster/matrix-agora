@@ -4,6 +4,7 @@ the agent's appends, embedding ticks, first fill and private seed (nio and Gemin
 import asyncio
 import logging
 import os
+import sqlite3
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -249,3 +250,28 @@ def test_her_element_line_is_archived_under_its_event_id_so_a_re_read_dedupes(tm
         chunk=[text(KIRA, "Привіт, сонце.", ms(18), "$mine")]))
     asyncio.run(agent.start_private("s1"))
     assert agent.archive.db.execute("SELECT COUNT(*) FROM lines WHERE place = 'private'").fetchone()[0] == 1
+
+
+def test_a_corrupt_archive_never_stops_her_start(tmp_path, monkeypatch, caplog):
+    """v5.8 review #4: `file is not a database` in __init__ made the container restart in a loop."""
+    (tmp_path / "kira.archive.db").write_bytes(b"not a database at all, just bytes" * 10)
+    agent = kira(tmp_path, monkeypatch)
+    assert agent.archive is None and "archive: unreadable (DatabaseError)" in caplog.text
+    agent.seed_private_from_archive()                                          # nothing to read: no crash
+    assert asyncio.run(agent.recall_section("будь-що", ("agora",), set())) is None
+
+
+def test_an_archive_that_breaks_after_start_is_dropped_by_the_start_checks(tmp_path, monkeypatch, caplog):
+    agent = kira(tmp_path, monkeypatch)
+
+    class Broken:
+        def counts(self):
+            raise sqlite3.DatabaseError("malformed")
+
+        def latest(self, *a, **k):
+            raise sqlite3.DatabaseError("malformed")
+
+    agent.archive = Broken()
+    agent.private_history = [("Ich", "з Element")]
+    agent.seed_private_from_archive()
+    assert agent.private_history == [("Ich", "з Element")] and "the private history was not read" in caplog.text
