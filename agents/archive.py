@@ -70,6 +70,11 @@ def fuse(*ranked: list[int], k: int = RRF_K) -> list[int]:
     return sorted(score, key=lambda i: -score[i])
 
 
+def _normalised(matrix: np.ndarray) -> np.ndarray:
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    return matrix / np.where(norms == 0, 1.0, norms)
+
+
 def cosine_top(query: list[float] | np.ndarray, ids: list[int], matrix: np.ndarray | None, n: int = CANDIDATES) -> list[int]:
     """The `n` ids whose vectors are closest to the query's by cosine."""
     if matrix is None or not ids:
@@ -132,6 +137,9 @@ class Archive:
         os.chmod(path, 0o600)
         self.db = sqlite3.connect(path)
         self.db.executescript(SCHEMA)
+        # v5.8 review #5: the embedded vectors, read once and kept normalised in memory — (ids, places, matrix) —
+        # appended as lines are embedded; a recall never reads them all from the file again
+        self._cache: tuple[list[int], np.ndarray, np.ndarray] | None = None
 
     def close(self) -> None:
         self.db.close()
@@ -159,9 +167,29 @@ class Archive:
         return self.db.execute("SELECT id, text FROM lines WHERE emb IS NULL ORDER BY id LIMIT ?", (limit,)).fetchall()
 
     def set_embeddings(self, pairs: Iterable[tuple[int, list[float]]]) -> None:
+        pairs = [(i, np.asarray(v, dtype="float32")) for i, v in pairs]
         with self.db:
-            self.db.executemany("UPDATE lines SET emb = ? WHERE id = ?",
-                                [(np.asarray(v, dtype="float32").tobytes(), i) for i, v in pairs])
+            self.db.executemany("UPDATE lines SET emb = ? WHERE id = ?", [(v.tobytes(), i) for i, v in pairs])
+        if self._cache is None or not pairs:
+            return
+        ids, places, matrix = self._cache
+        if any(v.shape[0] != matrix.shape[1] for _, v in pairs) and matrix.shape[0]:
+            self._cache = None  # another length: the next recall reads the file again and keeps the common one
+            return
+        known = {i: n for n, i in enumerate(ids)}
+        new = [(i, v) for i, v in pairs if i not in known]
+        if any(i in known for i, _ in pairs):
+            self._cache = None  # a vector replaced: read again
+            return
+        place_of = dict(self.db.execute(f"SELECT id, place FROM lines WHERE id IN ({','.join('?' * len(new))})",
+                                        [i for i, _ in new]).fetchall()) if new else {}
+        rows = [(i, v) for i, v in new if i in place_of]
+        if not rows:
+            return
+        added = _normalised(np.vstack([v for _, v in rows]))
+        self._cache = (ids + [i for i, _ in rows],
+                       np.concatenate([places, np.array([place_of[i] for i, _ in rows], dtype=object)]),
+                       added if not matrix.shape[0] else np.vstack([matrix, added]))
 
     def search_words(self, query: str, places: Iterable[str], limit: int = CANDIDATES) -> list[int]:
         """BM25 over FTS5 within `places`, the best first; no usable word → nothing."""
@@ -178,20 +206,31 @@ class Archive:
             return []
 
     def vectors(self, places: Iterable[str]) -> tuple[list[int], np.ndarray | None]:
-        """The embedded lines of `places`: their ids and their vectors as one matrix — only the vectors of the most
-        common length, so one of another size never disables the search (v5.8 review #10)."""
+        """The embedded lines of `places`: their ids and their vectors (normalised) as one matrix — only the vectors
+        of the most common length, so one of another size never disables the search (v5.8 review #10). Read from the
+        file once, then kept in memory (v5.8 review #5)."""
         places = tuple(places)
         if not places:
             return [], None
-        rows = self.db.execute(f"SELECT id, emb FROM lines WHERE emb IS NOT NULL AND place IN "
-                               f"({','.join('?' * len(places))})", places).fetchall()
-        if not rows:
+        if self._cache is None:
+            self._cache = self._load_vectors()
+        ids, where, matrix = self._cache
+        if not ids:
             return [], None
-        size = Counter(len(r[1]) for r in rows).most_common(1)[0][0]
-        rows = [r for r in rows if len(r[1]) == size and size % 4 == 0]
-        if not rows:
+        mask = np.isin(where, places)
+        if not mask.any():
             return [], None
-        return [r[0] for r in rows], np.vstack([np.frombuffer(r[1], dtype="float32") for r in rows])
+        return [i for i, keep in zip(ids, mask, strict=True) if keep], matrix[mask]
+
+    def _load_vectors(self) -> tuple[list[int], np.ndarray, np.ndarray]:
+        rows = self.db.execute("SELECT id, place, emb FROM lines WHERE emb IS NOT NULL").fetchall()
+        if rows:
+            size = Counter(len(r[2]) for r in rows).most_common(1)[0][0]
+            rows = [r for r in rows if len(r[2]) == size and size % 4 == 0]
+        if not rows:
+            return [], np.array([], dtype=object), np.zeros((0, 0), dtype="float32")
+        matrix = _normalised(np.vstack([np.frombuffer(r[2], dtype="float32") for r in rows]))
+        return [r[0] for r in rows], np.array([r[1] for r in rows], dtype=object), matrix
 
     def lines(self, ids: Iterable[int]) -> dict[int, Line]:
         ids = list(ids)
@@ -213,6 +252,7 @@ class Archive:
     def sync_facts(self, facts: Iterable[tuple[str, str]], ts_ms: int) -> None:
         """The `facts` place mirrors her facts (id, text): few and edited often, so replaced whole each time they
         change (Noos's reindexing) — their embeddings follow on the next ticks."""
+        self._cache = None  # their rows go: the vectors are read again at the next recall
         with self.db:
             for row_id, text in self.db.execute("SELECT id, text FROM lines WHERE place = 'facts'").fetchall():
                 self.db.execute("INSERT INTO fts(fts, rowid, text) VALUES ('delete', ?, ?)", (row_id, text))

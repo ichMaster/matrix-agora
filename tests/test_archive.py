@@ -287,3 +287,23 @@ def test_an_embedding_of_the_wrong_length_is_refused(monkeypatch):
     monkeypatch.setattr(llm_mod.genai, "Client",
                         lambda: SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(embed_content=embed_content))))
     assert asyncio.run(llm_mod.GeminiClient().embed(["рядок"])) is None
+
+
+def test_the_vectors_are_read_from_the_file_once_and_kept_up_to_date(arc):
+    """v5.8 review #5: every reply read every vector from SQLite — 0.7 s and ~300 MB at 100k lines, growing."""
+    reads = []
+    arc.db.set_trace_callback(lambda sql: reads.append(sql) if "emb FROM lines" in sql else None)
+    for i, t in enumerate(["перше", "друге"]):
+        arc.append(f"${i}", ms(9, i), "agora" if i == 0 else "private", "matrix", "Ада", t)
+    arc.set_embeddings([(1, [3.0, 4.0]), (2, [0.0, 2.0])])
+    ids, matrix = arc.vectors(["agora", "private"])
+    assert ids == [1, 2] and np.allclose(matrix, [[0.6, 0.8], [0.0, 1.0]])   # normalised
+    for _ in range(5):
+        arc.vectors(["agora"])                                                 # a recall per reply
+    assert len(reads) == 1                                                     # read from the file once
+    arc.append("$2", ms(9, 5), "agora", "matrix", "Ада", "третє")
+    arc.set_embeddings([(3, [1.0, 0.0])])                                      # the tick adds one: appended
+    assert arc.vectors(["agora"])[0] == [1, 3] and len(reads) == 1
+    arc.sync_facts([("f1", "Ich любить гори")], ms(10))                         # the facts change: read again
+    arc.vectors(["agora"])
+    assert len(reads) == 2
