@@ -408,3 +408,30 @@ def test_a_message_sent_just_after_the_start_is_answered(tmp_path, monkeypatch, 
     agent.started_ms = ms(17) + 400
     assert len(run_batch(agent, tg(50, "Ти вже тут?", at=ms(17) + 900))) == 1
     assert texts_sent(agent) == ["Привіт, сонце."]
+
+
+def test_one_failing_update_never_replays_the_batch(tmp_path, monkeypatch, caplog, ogg):
+    """v5.7 review #4: an error mid-batch made the poller fetch it again — the earlier lines answered twice."""
+    agent = kira(tmp_path, monkeypatch)
+    calls = []
+    original = agent.private_line
+
+    def flaky(body, ts_ms, channel):
+        calls.append(body)
+        if body == "друге":
+            raise OSError("disk full")
+        original(body, ts_ms, channel)
+
+    agent.private_line = flaky
+    agent._spawn = lambda coro: coro.close()
+    waits = []
+
+    async def sleep(s):
+        waits.append(s)
+    monkeypatch.setattr(agent_mod.asyncio, "sleep", sleep)
+    agent.telegram.get_updates = AsyncMock(side_effect=[Reply(True, [tg(60, "перше"), tg(61, "друге"), tg(62, "третє")]),
+                                                        Reply(False, status=401)])
+    asyncio.run(agent.telegram_poll())
+    assert calls == ["перше", "друге", "третє"]                            # each once, the batch never fetched again
+    assert load_telegram_state(agent.telegram_file).offset == 63 and waits == []
+    assert "telegram: an update failed (OSError) — skipped" in caplog.text

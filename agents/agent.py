@@ -792,10 +792,13 @@ class Agent:
                                                           max(self.history_n, 1))
                 backlog += 1
                 continue
-            if update.kind == "voice":
-                await self.telegram_hear(update)
-            else:
-                self.private_line(update.text, update.date_ms, "telegram")
+            try:  # one bad update never replays the batch: the others would be answered twice (review #4)
+                if update.kind == "voice":
+                    await self.telegram_hear(update)
+                else:
+                    self.private_line(update.text, update.date_ms, "telegram")
+            except Exception as exc:  # noqa: BLE001
+                log.error("telegram: an update failed (%s) — skipped", type(exc).__name__)
         if backlog:
             log.info("telegram: %d messages from before the start read as context", backlog)
 
