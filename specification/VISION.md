@@ -38,7 +38,7 @@ The panel is what this project is really building. Today it manages the first **
 ## Non-goals
 
 - E2EE, voice/video calls, images. **Voice messages arrive with v5** (the owner, 2026-10-13): Hermes's voice digests (v5.1), then the agents hearing (v5.2) and speaking (v5.3).
-- Raw archives of conversations (full message logs), vector DBs and RAG — long-term memory is the layered digests, not search. Hermes (v5.1) reads the room from the homeserver when he digests it or answers a question about its last days, and keeps no copy; the Agora recording (v5.4) is assembled from the room on demand, and nothing is kept but the file he sends.
+- Raw archives of conversations (full message logs), vector DBs and RAG — long-term memory is the layered digests, not search. **Narrowed in v5.8** (the owner, 2026-10-25): a person with `recall` (Кіра) keeps an archive of the lines she took part in and searches it before an answer, as Noos does, and a person with `facts` keeps short facts about the owner that only her private chat sees. Everyone else's long-term memory stays the layered digests. Hermes (v5.1) reads the room from the homeserver when he digests it or answers a question about its last days, and keeps no copy; the Agora recording (v5.4) is assembled from the room on demand, and nothing is kept but the file he sends.
 - Live world data (weather, news, city events, external APIs). World awareness is only place, calendar and clock.
 - Token limits, budgets or billing — accounting only counts and reports. One exception, the owner's (v5.1): a monthly cap on Hermes's voice characters, since the ElevenLabs credits are shared with Lumi; past it his digests go out as text.
 - Public or multi-user access of any kind: no open registration, no internet exposure, no accounts — the panel takes a single owner token.
@@ -48,6 +48,10 @@ The panel is what this project is really building. Today it manages the first **
 - Lili herself. This PoC runs simple stand-in agents; connecting real agents is the follow-up rework, not a phase here.
 
 ## Glossary
+
+- **Archive** (v5.8) — a person's own record of every line she sees, in Agora and in her private chat (`state/<name>.archive.db`); searchable by words and by meaning, never pruned, read by no one else.
+- **Recall** (v5.8) — the lines from her archive that come back to her before an answer: in Agora only Agora's, alone with the owner both places' and her facts.
+- **Fact** (v5.8) — one short sentence about the owner she keeps (`state/<name>.facts/`): asked for, learned in a talk, or brought once from Noos; only her private chat sees it.
 
 - **Owner** — the one human (`OWNER`, `@ich:agora.lan`): the admin of the homeserver and the only person in the room.
 - **Agent** — one of two instances of `agents/agent.py` (`Ada`, `Bruno`), each with its own Matrix account, TOML config and canon. From v3.2 each runs as its own Docker container on the server; `uv run` on the Mac is the dev mode.
