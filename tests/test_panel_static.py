@@ -257,3 +257,10 @@ def test_the_facts_tab_and_the_archive_line():
     assert '{action: "delete", kind: "fact", id, fresh: true}' in js            # a delete is confirmed first
     assert 'send("DELETE", `/api/agents/${encodeURIComponent(agent)}/facts/${encodeURIComponent(id)}`)' in js
     assert "function archiveLine(mem)" in js and 'can(a, "recall")' in js
+
+
+def test_the_update_now_button():
+    """AGORA-116: «Update now» in the Facts tab — disabled while her update is pending."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert 'data-act="facts-update" ${mem.facts_pending ? "disabled" : ""}' in js
+    assert 'send("POST", `/api/agents/${encodeURIComponent(agent)}/facts/update`)' in js

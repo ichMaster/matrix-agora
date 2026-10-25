@@ -297,3 +297,47 @@ def test_an_invalid_seed_answer_skips_its_chunk(tmp_path):
     out = io.StringIO()
     assert asyncio.run(run_seed(chat(10), tmp_path / "f", SeedLLM(["ні"]), "Кіра", TODAY, 100, 240, False, out)) == 0
     assert "lines 1–10: no valid answer — skipped" in out.getvalue()
+
+
+# --- AGORA-116: «Update now» from the panel -------------------------------------------------------------------------
+def test_update_now_reads_the_talk_so_far_once_and_the_summary_skips_it(tmp_path, monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
+    agent = kira(tmp_path, monkeypatch)
+    agent.llm.extraction = json.dumps({"add": [{"text": "Ich любить гори", "pin": 1}], "replace": []})
+    agent.session = [("Ich (наодинці)", "Я обожнюю гори"), ("Кіра (наодинці)", "І я!")]
+    agent.facts_request.write_text('{"requested_ms": 1}')
+    assert asyncio.run(agent.maybe_update_facts()) is True
+    assert [f.text for f in load_facts(agent.facts_dir)] == ["Ich любить гори"] and not agent.facts_request.exists()
+    assert "Я обожнюю гори" in agent.llm.calls[-1][0] and agent._facts_from == 2
+    assert asyncio.run(agent.maybe_update_facts()) is False                    # no request, nothing
+    calls = len(agent.llm.calls)
+    agent.session.append(("Ich (наодинці)", "А ще я граю на гітарі"))
+    agent.llm.extraction = '{"add": [], "replace": []}'
+    asyncio.run(agent.summarize())
+    facts_call = [c for c, k in zip(agent.llm.calls[calls:], agent.llm.kinds[-2:]) if k == "facts"][-1][0]
+    assert "граю на гітарі" in facts_call and "Я обожнюю гори" not in facts_call   # never read twice
+    assert agent._facts_from == 0
+
+
+def test_update_now_with_nothing_new_from_him_makes_no_call(tmp_path, monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
+    agent = kira(tmp_path, monkeypatch)
+    agent.session = [("Ада", "привіт"), ("Кіра", "привіт")]
+    agent.facts_request.write_text("{}")
+    calls = len(agent.llm.calls)
+    assert asyncio.run(agent.maybe_update_facts()) is True
+    assert len(agent.llm.calls) == calls and not agent.facts_request.exists()
+    assert "facts: nothing new from Ich to learn" in caplog.text
+
+
+def test_a_failed_update_still_clears_the_request(tmp_path, monkeypatch):
+    agent = kira(tmp_path, monkeypatch)
+    agent.session = [("Ich (наодинці)", "привіт")]
+    agent.facts_request.write_text("{}")
+
+    async def boom(_):
+        raise RuntimeError("quota")
+    agent.extract_facts = boom
+    with pytest.raises(RuntimeError):
+        asyncio.run(agent.maybe_update_facts())
+    assert not agent.facts_request.exists()                                     # the button is never stuck

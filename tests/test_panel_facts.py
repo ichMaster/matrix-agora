@@ -102,3 +102,22 @@ def test_an_unreadable_store_or_archive_is_null_never_a_500(tmp_path):
         assert facts_view(s, "kira") == []                                    # an unreadable file is skipped
     finally:
         os.chmod(s / "kira.facts" / "x.md", 0o600)
+
+
+# --- AGORA-116: «Update now» -------------------------------------------------------------------------------------------
+def test_update_now_leaves_a_private_request_she_sees(client, state):
+    assert client.get("/api/agents/kira/memory", headers=AUTH).json()["facts_pending"] is False
+    r = client.post("/api/agents/kira/facts/update", headers=SAME)
+    assert r.status_code == 200 and r.json() == {"requested": True}
+    request = state / "kira.facts.request"
+    assert json.loads(request.read_text())["requested_ms"] > 0 and os.stat(request).st_mode & 0o777 == 0o600
+    assert client.get("/api/agents/kira/memory", headers=AUTH).json()["facts_pending"] is True
+    assert client.get("/api/agents/ada/memory", headers=AUTH).json()["facts_pending"] is None
+
+
+def test_update_now_needs_the_capability_the_token_and_the_same_origin(client, state):
+    assert client.post("/api/agents/ada/facts/update", headers=SAME).status_code == 404
+    assert client.post("/api/agents/kira/facts/update").status_code == 401
+    assert client.post("/api/agents/kira/facts/update",
+                       headers={**AUTH, "Origin": "http://evil.example"}).status_code == 403
+    assert not (state / "kira.facts.request").exists()

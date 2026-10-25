@@ -381,8 +381,11 @@ class Agent:
         self.facts_dir: Path | None = None
         self.facts_max, self.facts_in_prompt, self.fact_max_chars = 100, 25, 240
         self._facts_seen: tuple | None = None  # the facts last mirrored into the archive
+        self.facts_request: Path | None = None  # AGORA-116: the panel's «Update now», a file the idle watcher sees
+        self._facts_from = 0                    # the session lines already read for facts
         if cfg.can("facts"):
             self.facts_dir = self.memory_file.parent / f"{cfg.localpart}.facts"
+            self.facts_request = self.memory_file.parent / f"{cfg.localpart}.facts.request"
             self.facts_max = int(os.environ.get("FACTS_MAX", "100"))
             self.facts_in_prompt = int(os.environ.get("FACTS_IN_PROMPT", "25"))
             self.fact_max_chars = int(os.environ.get("FACT_MAX_CHARS", "240"))
@@ -934,6 +937,25 @@ class Agent:
         kept = add_fact(self.facts_dir, text, pin, source, today, self.facts_max, self.fact_max_chars) is not None
         log.info("facts: %s (%s)", "kept one" if kept else "not kept (empty, too long, known or full)", source)
         return kept
+
+    async def maybe_update_facts(self) -> bool:
+        """AGORA-116 — the panel's «Update now» (`state/<name>.facts.request`): under the summary lock, the extraction
+        over the session lines not yet read for facts, then the request is gone. A summary's extraction later skips
+        what this one read. Whether there was a request."""
+        if self.facts_request is None or not self.facts_request.exists():
+            return False
+        try:
+            async with self._summary_lock:
+                snapshot = list(self.session)
+                fresh = snapshot[min(self._facts_from, len(snapshot)):]
+                self._facts_from = len(snapshot)
+                if any(who.startswith("Ich") for who, _ in fresh):
+                    await self.extract_facts(fresh)
+                else:
+                    log.info("facts: nothing new from Ich to learn")
+        finally:
+            self.facts_request.unlink(missing_ok=True)
+        return True
 
     async def extract_facts(self, session: list[tuple[str, str]]) -> None:
         """At a session's end: one call (GEMINI_MODEL, kind `facts`) reads the session and what she knows, and
@@ -2048,9 +2070,11 @@ class Agent:
             self.summary_ms = self.clock()
             self.append_journal(session_part or note)
             self.session = self.session[len(snapshot):]  # keep what arrived meanwhile
-            if self.facts_dir is not None:  # v5.8: what she learned about him, beside the summary
+            if self.facts_dir is not None:  # v5.8: what she learned about him, beside the summary — the lines an
+                fresh = snapshot[min(self._facts_from, len(snapshot)):]  # «Update now» already read are skipped
+                self._facts_from = 0
                 try:
-                    await self.extract_facts(snapshot)
+                    await self.extract_facts(fresh)
                 except Exception as exc:  # noqa: BLE001
                     log.error("facts: the extraction failed (%s)", type(exc).__name__)
             return True
@@ -2080,6 +2104,11 @@ class Agent:
                     await self.maybe_news()
                 except Exception:
                     log.exception("news failed (bot keeps running)")
+            if self.facts_request is not None:  # AGORA-116: the owner pressed «Update now» in the panel
+                try:
+                    await self.maybe_update_facts()
+                except Exception:
+                    log.exception("facts: the update failed (bot keeps running)")
             if self.archive is not None:  # v5.8: the archive's meaning search, a batch at a time
                 try:
                     await self.embed_tick()

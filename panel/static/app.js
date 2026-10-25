@@ -593,13 +593,27 @@ const PIN_LABEL = {1: "always", 2: "if room", 0: "recall only"};
 function factsTabHtml(a, mem) {
   const facts = mem.facts;
   if (!facts) return `<p class="muted">Facts unreadable.</p>`;
-  if (!facts.length) return `<p class="muted">${esc(a.display)} knows no facts about you yet.</p>`;
+  // AGORA-116: «Update now» — her facts from the talk so far, without waiting for the session's end
+  const update = `<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+      <button class="btn btn-primary" data-act="facts-update" ${mem.facts_pending ? "disabled" : ""}>${icon("arrow-clockwise", 14)}Update now</button>
+      <span class="muted" style="font-size:12.5px">${mem.facts_pending ? "Updating — she is reading the talk so far…" : "from what you said since the last update"}</span></div>`;
+  if (!facts.length) return `${update}<p class="muted">${esc(a.display)} knows no facts about you yet.</p>`;
   const rows = facts.map((f) => `<div class="rule-b" style="padding:10px 0;display:flex;gap:12px;align-items:flex-start">
       <div style="flex:1;min-width:0"><div lang="uk">${esc(f.text)}</div>
         <div class="muted mono" style="font-size:11.5px;margin-top:3px">${esc(f.source)} · ${esc(f.added || "—")}</div></div>
       <div style="display:flex;gap:4px;flex-wrap:wrap">${[1, 2, 0].map((p) => `<button class="btn ${p === f.pin ? "btn-primary" : "btn-ghost"}" data-act="fact-pin" data-id="${esc(f.id)}" data-pin="${p}" ${p === f.pin ? "disabled" : ""}>${PIN_LABEL[p]}</button>`).join("")}
         <button class="btn btn-ghost btn-icon" data-act="fact-delete" data-id="${esc(f.id)}" title="Delete" aria-label="Delete this fact">${icon("trash", 14)}</button></div></div>`).join("");
-  return `<div class="muted" style="font-size:12.5px;margin-bottom:12px">${facts.length} facts · only her private chat sees them · a change counts at her next answer</div>${rows}`;
+  return `${update}<div class="muted" style="font-size:12.5px;margin-bottom:12px">${facts.length} facts · only her private chat sees them · a change counts at her next answer</div>${rows}`;
+}
+async function updateFacts(agent) {
+  try {
+    await send("POST", `/api/agents/${encodeURIComponent(agent)}/facts/update`);
+    showToast("ok", "Update asked — new facts in under a minute");
+  } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    showToast("err", `Update failed: ${err.message}`);
+  }
+  await refreshMemory();
 }
 async function changeFact(agent, id, pin) {
   try {
@@ -1025,6 +1039,7 @@ document.addEventListener("click", (e) => {
   else if (act === "file-download") downloadFile(S.drawer.id, id);
   else if (act === "file-delete") { S.dialog = {action: "delete", kind: "file", id, fresh: true}; render(); }
   else if (act === "fact-pin") changeFact(S.drawer.id, id, Number(el.dataset.pin));
+  else if (act === "facts-update") updateFacts(S.drawer.id);
   else if (act === "fact-delete") { S.dialog = {action: "delete", kind: "fact", id, fresh: true}; render(); }
   else if (act === "file-pick") filePicker().click();
   else if (act === "follow") { S.log.follow = !S.log.follow; render(); if (S.log.follow) loadLog(); }

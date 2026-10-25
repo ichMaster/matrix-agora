@@ -233,6 +233,8 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "news": nudge_view(state_dir, name, today, kind="news") if with_news else None,  # v4.5: Claude's news
         "digest": digest_view(state_dir, name, today) if with_digest else None,           # v5.1: Hermes
         "facts": facts_view(state_dir, name) if with_facts else None,                    # v5.8: Кіра's facts
+        # AGORA-116: «Update now» pressed and not yet done by her
+        "facts_pending": (state_dir / f"{name}.facts.request").exists() if with_facts else None,
         "archive": archive_view(state_dir, name) if with_archive else None,              # v5.8: her archive
     }
 

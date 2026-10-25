@@ -10,8 +10,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hmac
+import json
 import logging
 import os
+import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -214,6 +216,21 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
         if found is None or "facts" not in found.capabilities:
             raise HTTPException(404, "not found")
         return state_dir / f"{found.name}.facts"
+
+    @app.post("/api/agents/{name}/facts/update")
+    def facts_update(name: str) -> dict:
+        """AGORA-116 — «Update now»: a request she sees within her idle watcher's tick (≤ 30 s) — her facts from the
+        talk so far, without waiting for the session's end. Written atomically, private (0600)."""
+        folder = facts_folder(name)
+        path = folder.parent / f"{folder.name.removesuffix('.facts')}.facts.request"
+        tmp = path.with_suffix(".tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            os.write(fd, json.dumps({"requested_ms": int(time.time() * 1000)}).encode())
+        finally:
+            os.close(fd)
+        os.replace(tmp, path)
+        return {"requested": True}
 
     @app.put("/api/agents/{name}/facts/{fact_id}")
     async def fact_pin(name: str, fact_id: str, request: Request) -> dict:

@@ -91,6 +91,9 @@ icon (the trash icon is v4.7's).
   chat sees them · a change counts at her next answer». With none: «Кіра knows no facts about you yet.»
 - **Re-pin:** three buttons per row — **always** (pin 1), **if room** (pin 2), **recall only** (pin 0); the current
   one is primary and disabled. A click saves at once and shows «Fact re-pinned».
+- **Update now** (AGORA-116): a primary button above the list, with a muted line «from what you said since the last
+  update»; pressed, it shows «Update asked — new facts in under a minute» and stays disabled with «Updating — she is
+  reading the talk so far…» until she is done.
 - **Delete:** the trash button asks «Delete this fact? She stops knowing it at her next answer — it is not kept
   anywhere else.», then «Fact deleted».
 

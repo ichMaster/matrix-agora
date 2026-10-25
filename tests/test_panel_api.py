@@ -52,7 +52,8 @@ def test_the_only_mutating_routes_are_the_v34_actions_and_the_v47_settings_and_f
                         ("/api/agents/{name}/files/{path:path}", frozenset({"PUT"})),
                         ("/api/agents/{name}/files/{path:path}", frozenset({"DELETE"})),
                         ("/api/agents/{name}/facts/{fact_id}", frozenset({"PUT"})),      # v5.8: re-pin a fact
-                        ("/api/agents/{name}/facts/{fact_id}", frozenset({"DELETE"}))}   # v5.8: delete one
+                        ("/api/agents/{name}/facts/{fact_id}", frozenset({"DELETE"})),   # v5.8: delete one
+                        ("/api/agents/{name}/facts/update", frozenset({"POST"}))}        # AGORA-116: «Update now»
     assert client.put("/api/agents/ada/stop", headers=AUTH).status_code == 405
     assert client.get("/docs").status_code == 404 and client.get("/openapi.json").status_code == 404
 
