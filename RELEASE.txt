@@ -1,3 +1,11 @@
+Version 5.8.2 (2026-10-25)
+---------------------------
+- Kira writes first every 3 hours, 08:00-01:00, up to 6 a day, and always
+  in Telegram (the owner): a new setting PRIVATE_FIRST_DOOR (last | telegram
+  | matrix), a closed door falling back to the other; her values in her
+  kira.env (PRIVATE_IDLE_S=10800, PRIVATE_HOURS=08-01,
+  PRIVATE_NUDGES_PER_DAY=6, PRIVATE_FIRST_DOOR=telegram)
+
 Version 5.8.1 (2026-10-25)
 ---------------------------
 - Harden (v5.8 code review #5): Kira's archive keeps its vectors normalised
