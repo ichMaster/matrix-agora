@@ -77,3 +77,11 @@ def test_a_palette_on_a_model_that_reads_tags_aloud_says_so(state):
 def test_the_registry_carries_the_palette_path():
     assert Registry().agents["kira"].voice_spec == "agents/canon/kira.voice.md"
     assert Registry().agents["ada"].voice_spec == ""
+
+
+def test_a_palette_that_is_not_utf8_shows_no_chips(state, tmp_path):
+    """v5.9 review #6: a UnicodeDecodeError got past `except OSError` and the memory route answered 500."""
+    bad = tmp_path / "bad.voice.md"
+    bad.write_bytes(b"\xff\xfe [laughs] \xc3")
+    m = models_view(state, "kira", bad)
+    assert m["emotion"]["tags"] == [] and m["voice"]["model"] == "eleven_v4_turbo"

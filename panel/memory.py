@@ -212,7 +212,7 @@ def models_view(state_dir: Path, name: str, voice_spec: Path | None = None) -> d
         if voice_spec is not None:
             try:
                 tags = list(dict.fromkeys(f"[{t}]" for t in VOICE_TAG_RE.findall(voice_spec.read_text(encoding="utf-8"))))
-            except OSError:
+            except (OSError, ValueError):  # v5.9 review #6: not UTF-8 is no chips, never a 500
                 tags = []
             view["emotion"] = {"tags": tags, "performed": model in TAG_MODELS}
     return view
