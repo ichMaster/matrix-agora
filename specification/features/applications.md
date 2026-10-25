@@ -285,7 +285,7 @@ its reachability (the health probe) and the last turn's outcome.
 - The agent cards of today, no longer nested under one application.
 - Each card shows its connections as chips with their status dots: `● Agora · room`, `● Agora · private`,
   `● Telegram · private`.
-- The drawer keeps its tabs (Log, Session, Memories, Plans, Today, Mood, Tokens, Files, Settings) and gains
+- The drawer keeps its tabs (Log, Session, Memories, Plans, Today, Mood, Tokens, Files, Settings, and v5.8's Facts) and gains
   **Connections**: every application, its contexts and state, and the on/off switch.
 - An external agent's card shows `external`, its system's reachability and the last turn's outcome. It has no
   memory tabs and no Forget (as the design addendum (v4.2) already says for Лілі).

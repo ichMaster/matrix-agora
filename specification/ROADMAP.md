@@ -1,6 +1,6 @@
 # Roadmap — matrix-agora
 
-Nine self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice) → **v6** Applications (the panel's System and Applications; Telegram as an application) → **v7** Theatre (plays on the Stage, recorded by Hermes) → **v8** Лілі (the Lumi bridge: when named, then under the full rules). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Nine self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, and her memory of messages and facts) → **v6** Applications (the panel's System and Applications; Telegram as an application) → **v7** Theatre (plays on the Stage, recorded by Hermes) → **v8** Лілі (the Lumi bridge: when named, then under the full rules). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
 **Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v8→8), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
@@ -1112,6 +1112,176 @@ with Telegram voice notes and then the text, and she hears the owner's voice not
 - Telegram for the other persons;
 - Agora in Telegram;
 - group chats.
+
+### v5.8 — Кіра: Gemini 3.1 Pro, a memory of messages and facts about the owner
+
+**Status:** ⏳ planned.
+
+**Goal:** Кіра answers on Gemini 3.1 Pro and remembers like Noos (`~/claude-home`) does. When something comes up, she
+recalls the past messages it touches, from Agora and from her private chat. She keeps short facts about the owner,
+and the pinned ones are always in her mind when she talks with him. She knows everything that happens in Agora when
+she talks with him alone, and in Agora she never talks about him.
+
+**Owner decisions** (2026-10-25):
+- **Both models.** Gemini 3.1 Pro for her answers, Gemini 2.5 Flash for her background calls. The other agents stay
+  on their models.
+- **A memory of messages and facts about the owner, as in claude-home.**
+- **She remembers all of Agora in the private chat, and in Agora she says nothing about him.**
+- **The embeddings come from Gemini**, through the client the agents already use: no new dependency.
+- **The archive is filled from the chats** at its first start.
+- **Her first facts come from Noos:** its pinned facts, and the extract of Лілі's memory about the owner that Noos
+  keeps (`~/claude-home/memory/import/lumi/`).
+- **This lifts a non-goal for her.** VISION excludes "raw archives of conversations, vector DBs and RAG". From v5.8
+  a person with the `recall` capability keeps an archive of the lines she took part in and searches it. The layered
+  digests stay the long-term memory of everyone else, and Hermes still keeps no copy.
+
+**How Noos does it** (`~/claude-home/memory/`, read on 2026-10-25):
+- **The archive.** Every transcript is indexed every 15 minutes into `sessions.db`: SQLite with an FTS5 table and,
+  per chunk, an embedding from `paraphrase-multilingual-MiniLM-L12-v2` (fastembed, local ONNX). A chunk is up to
+  1,400 characters with a 200-character overlap.
+- **Search.** A hybrid: BM25 over FTS5 and cosine over the embeddings, 50 candidates each, merged by reciprocal rank
+  fusion (k = 60). The top 8 fragments are returned with their date, role and session. Claude calls it itself when
+  the owner refers to the past.
+- **Facts.** `memory/facts/`, one Markdown file per fact, with a header holding `pin`, `tags` and `added`. Pin 1 is
+  always in the system prompt, pin 2 is used when there is room, pin 0 is for search only. The store holds at most
+  100 facts, the prompt at most 25, at most 240 characters each. The facts are indexed into the archive too.
+- **Who adds a fact.** The session, by its persona's rule: when the owner says "remember", or when a long-lived fact
+  about him surfaces. A stale fact is deleted, not piled up.
+
+**How it works here:**
+- **Two models.**
+  - A new agent setting, `GEMINI_REPLY_MODEL`, is the model of her answers: in Agora, in the private chat, and when
+    she writes first. Empty by default, which means `GEMINI_MODEL`; set to `gemini-3.1-pro-preview` for Кіра alone.
+  - `GEMINI_MODEL` stays the model of everything else: the session summary, the day memory, the digests, the plans,
+    the today block and the facts' extraction. For her that is `gemini-2.5-flash`.
+  - A Pro model refuses a zero thinking budget, so a reply on it goes through the thinking path
+    (`GeminiClient.think`, as Hermes's), with `GEMINI_THINKING_LEVEL` (`low` by default) and a token cap that leaves
+    room for the thinking.
+  - Each usage line names its model, and `PRICE_MODELS` prices the Pro lines (`gemini-3.1-pro-preview=2/12`).
+- **The archive** (the capability `recall`).
+  - `state/<name>.archive.db` is SQLite, 0600. Every line she sees is appended with its time, its place (`agora` or
+    `private`), its channel (`matrix` or `telegram`) and its speaker: the Agora room's lines and both sides of her
+    private chat. It is append-only and never pruned.
+  - An FTS5 index makes a line searchable at once. Embeddings come from Gemini's embedding model
+    (`gemini-embedding-001`, usage kind `embed`), added in batches by the idle watcher.
+  - At the first start the archive is filled from the chats on the homeserver: the whole private room and Agora's
+    last 1,500 lines (the owner, 2026-10-25).
+- **Recall** (Noos's hybrid, without the tool call).
+  - Before each reply, the message she answers is the query: BM25 and cosine, merged by reciprocal rank fusion.
+  - The top `RECALL_N` (6) lines are given, each with its neighbouring lines, leaving out what is already in the
+    prompt's history window.
+  - They enter the prompt as «Тобі згадується: …», each with its date and place («в Агорі, 12 жовтня» or
+    «наодинці, …»).
+  - The fusion and the pick are pure functions over plain data.
+- **Facts about the owner** (the capability `facts`, which needs `private`).
+  - `state/<name>.facts/` holds one file per fact, in Noos's format: `pin`, `added`, `source`, then the text, at most
+    240 characters. The store holds at most 100 facts and the prompt at most 25.
+  - **Extracted.** At the end of a session, beside the summary, one call reads the session's lines and the current
+    facts. It returns new facts and the replacements of stale ones as JSON, validated before anything is written
+    (usage kind `facts`).
+  - **Asked for.** When the owner asks her to remember something, she understands it from the conversation, not
+    from a keyword (as Hermes's skills): her answer ends with a marker line holding the fact. The code validates it,
+    strips it before sending and stores the fact as pin 1.
+  - **In the prompt.** Only her private prompt carries the pinned facts, «Що ти знаєш про нього: …», after the today
+    block. They are also searchable by recall in the private chat.
+  - A stale fact is replaced. "Nothing lived is deleted" covers the memories, digests and plans; a fact is current
+    knowledge, not something lived.
+- **Her first facts, from Noos** (the owner, 2026-10-25). A one-shot import, run by the owner on the host when v5.8
+  is deployed:
+  - Its sources are Noos's `memory/facts/` (21 facts: 7 at pin 1, 14 at pin 2 on 2026-10-25) and
+    the extract in `memory/import/lumi/` (Лілі's memory of the owner, about 20 KB in 12 sections).
+  - Only those two directories are mounted, read-only, into a one-off run of Кіра's image. Noos's
+    `config.local.json` and `.env.*` are never reachable.
+  - One Flash call (usage kind `facts`) condenses them into facts in her format, each at most 240 characters,
+    without duplicates, within the store's limit. Noos's pins are kept; the extract's identity facts go to pin 1 and
+    the rest to pin 2 or 0.
+  - It keeps what is about the owner as a person: his life, family, work, interests, character, values and daily
+    life. It drops what is about servers, tokens, permissions, and agents, bots or simulations by name (Agora, its
+    members, Лілі, Noos), so no fact tells a persona what she is.
+  - `--dry-run` prints what would be kept, for the owner to read first. Each fact is marked `source: noos`, and a
+    second run adds nothing it has already imported.
+  - The facts live only in `state/` on the host: never in the repo, which is public, nor in a log.
+- **Agora in the private chat.**
+  - Her private prompt also carries Agora's latest lines of today (`PRIVATE_AGORA_N`, 20) as «Що зараз в Агорі».
+  - Recall there searches both places.
+- **Not about the owner in Agora.**
+  - An Agora prompt never carries a fact or a private line. Recall there searches only `agora` lines, in code, not
+    by an instruction.
+  - The discretion line widens. In Agora she never tells what she knows about the owner personally, nor what they
+    said alone; she speaks to him as anyone in the room does.
+  - Her memories keep the private lines labelled «наодинці», as in v5.6.
+- **The panel.**
+  - The drawer gains a **Facts** tab: each fact with its pin, source and date. The owner can re-pin a fact or delete
+    it (confirmed).
+  - Her card shows the archive's size: the lines, and how many are embedded.
+
+**Tasks:**
+- `agents/llm.py`:
+  - the reply on `GEMINI_REPLY_MODEL`, through the thinking path when it is a thinking model;
+  - `GEMINI_THINKING_LEVEL`;
+  - the embedding call (usage kind `embed`).
+- `agents/settings.py`:
+  - `GEMINI_REPLY_MODEL` (an agent setting; its choices include `gemini-3.1-pro-preview`);
+  - `GEMINI_THINKING_LEVEL`;
+  - `RECALL_N` and `PRIVATE_AGORA_N`;
+  - the facts' limits.
+- `agents/archive.py`: the SQLite store (append, FTS5, embeddings, the backfill) and the pure fusion and pick.
+- `agents/facts.py`:
+  - the store and its limits;
+  - the prompt block;
+  - the marker line's parsing and stripping;
+  - the extraction call and its validation;
+  - the one-shot import from Noos (`python -m agents.facts import`, with `--dry-run`), and the owner's command for
+    it in the deploy notes.
+- The runtime and the prompt assembly:
+  - the archive written from every line she sees;
+  - recall in both prompts, with the place filter;
+  - the facts and «Що зараз в Агорі» in the private prompt;
+  - the widened discretion line;
+  - the extraction at session end.
+- `kira.toml`: `recall = true` and `facts = true`.
+- The panel:
+  - the Facts tab, with re-pin and delete;
+  - the archive's size on the card.
+- **VISION and ARCHITECTURE:**
+  - the non-goal narrowed for a person with `recall`;
+  - §Memory;
+  - the prompt order;
+  - the state files `<name>.archive.db` and `<name>.facts/`;
+  - the usage kinds `embed` and `facts`;
+  - the settings.
+
+**DoD:**
+- (Manual, owner) The Tokens view shows Кіра's answers on `gemini-3.1-pro-preview`, priced, and her background calls
+  on `gemini-2.5-flash`. The others stay on their models.
+- (Manual, owner) After the import, the Facts tab lists the owner's facts from Noos, and none of them is about
+  servers, agents or bots.
+- (Manual, owner) In the private chat the owner refers to something said a week ago, beyond the history window, and
+  she recalls it.
+- (Manual, owner) «Запам'ятай, що …»: the fact appears in the Facts tab, and she knows it in a later conversation.
+  Deleted in the panel, it is gone from her next answer.
+- (Manual, owner) Alone with the owner, she knows what was just said in Agora.
+- (Manual, owner) In Agora, asked about the owner by another member, she does not tell what she knows of him or what
+  they said alone.
+
+**Tests:** unit, with Gemini mocked and SQLite in memory:
+- the two models: an answer on `GEMINI_REPLY_MODEL` through the thinking path (no zero budget, the level), a
+  background call on `GEMINI_MODEL`, an empty reply model meaning `GEMINI_MODEL`, and each usage line's model and
+  price;
+- the import: Noos's fact files and the extract's sections parsed, the condensed facts validated and deduplicated,
+  the pins, a second run adding nothing, `--dry-run` writing nothing;
+- the archive: append, the full-text search, the embeddings batched, the bounded backfill;
+- the fusion and the pick: the order, the neighbours, the history window left out, and the place filter;
+- the facts: the limits, the pins in the prompt block, the marker line parsed and stripped and never sent, the
+  extraction's validation, a replacement instead of a duplicate;
+- an Agora prompt never carries a fact or a private line, even when the archive matches;
+- the private prompt's order: the facts, «Що зараз в Агорі», recall;
+- the panel API: the Facts tab, re-pin and delete (same-origin, confirmation), and an unreadable store never a 500.
+
+**Not in this phase:**
+- the archive and facts for the other agents (each becomes a capability, later);
+- a live sync with Noos's facts (the import is one-shot);
+- sharing facts between agents.
 
 ## v6 — Applications: the panel's System and Applications
 
