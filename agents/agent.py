@@ -63,6 +63,16 @@ from agents.claude_sdk import (
     write_status,
 )
 from agents.config import AgentConfig, load_config
+from agents.facts import (
+    REMEMBER_SKILL,
+    add_fact,
+    extraction_request,
+    facts_section,
+    load_facts,
+    parse_extraction,
+    replace_fact,
+    split_marker,
+)
 from agents.guardian import KEY_VAR as GUARDIAN_KEY_VAR
 from agents.guardian import Guardian
 from agents.life import current_chapter, life_section, next_chapter
@@ -366,6 +376,15 @@ class Agent:
             self.recall_n = int(os.environ.get("RECALL_N", "6"))
             self.private_agora_n = int(os.environ.get("PRIVATE_AGORA_N", "20"))
         self._own_seq = 0
+        # v5.8 — facts about the owner (`facts`): her private prompt only; kept as files, read at each private prompt
+        self.facts_dir: Path | None = None
+        self.facts_max, self.facts_in_prompt, self.fact_max_chars = 100, 25, 240
+        self._facts_seen: tuple | None = None  # the facts last mirrored into the archive
+        if cfg.can("facts"):
+            self.facts_dir = self.memory_file.parent / f"{cfg.localpart}.facts"
+            self.facts_max = int(os.environ.get("FACTS_MAX", "100"))
+            self.facts_in_prompt = int(os.environ.get("FACTS_IN_PROMPT", "25"))
+            self.fact_max_chars = int(os.environ.get("FACT_MAX_CHARS", "240"))
         # v5.3 — its own voice (VOICE_ID: the agent's <NAME>_VOICE_ID unless the panel says otherwise), how often it
         # speaks in it, and the speakers' monthly budget; read only by an agent with `voice`
         self.voice_id, self.voice_reply_p, self.voice_monthly_chars = "", 0.0, 0
@@ -717,8 +736,10 @@ class Agent:
                 query = next((t for s, t in reversed(self.private_history) if s == "Ich"), "")
                 recalled = await self.recall_section(query, ("agora", "private", "facts"), set(self.private_history))
                 agora_now = self.agora_now_section()
-            prompt = self.build_prompt(private=PRIVATE_NUDGE if nudge else PRIVATE_BRIEF, recalled=recalled,
-                                       agora_now=agora_now)
+            brief = PRIVATE_NUDGE if nudge else PRIVATE_BRIEF
+            if self.facts_dir is not None and not nudge:  # v5.8: «запам'ятай» — a skill, never a keyword
+                brief = f"{brief}\n\n{REMEMBER_SKILL}"
+            prompt = self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=self.facts_now())
             text = await self._compose(prompt, lines=self.private_history,
                                        kind="private_nudge" if nudge else "private")
             if text is None:
@@ -887,6 +908,52 @@ class Agent:
         now = local_now(self.clock(), self.tz)
         start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
         return render_agora_now(self.archive.latest("agora", self.private_agora_n, since_ms=start), self.tz)
+
+    # --- v5.8: facts about the owner (`facts`) -----------------------------------------------------------------------
+    def facts_now(self) -> str | None:
+        """Her facts about the owner, read from disk (a panel edit counts at the next answer), mirrored into the
+        archive when they changed, and rendered for her private prompt."""
+        if self.facts_dir is None:
+            return None
+        facts = load_facts(self.facts_dir)
+        seen = tuple((f.id, f.text) for f in facts)
+        if self.archive is not None and seen != self._facts_seen:
+            try:
+                self.archive.sync_facts(seen, self.clock())
+                self._facts_seen = seen
+            except Exception as exc:  # noqa: BLE001
+                log.error("archive: the facts were not mirrored (%s)", type(exc).__name__)
+        return facts_section(facts, self.facts_in_prompt, self.fact_max_chars)
+
+    def remember(self, text: str, source: str, pin: int = 1) -> bool:
+        """One fact kept — never its words in a log."""
+        if self.facts_dir is None:
+            return False
+        today = local_now(self.clock(), self.tz).date().isoformat()
+        kept = add_fact(self.facts_dir, text, pin, source, today, self.facts_max, self.fact_max_chars) is not None
+        log.info("facts: %s (%s)", "kept one" if kept else "not kept (empty, too long, known or full)", source)
+        return kept
+
+    async def extract_facts(self, session: list[tuple[str, str]]) -> None:
+        """At a session's end: one call (GEMINI_MODEL, kind `facts`) reads the session and what she knows, and
+        returns new facts and the replacements of stale ones — validated, or nothing changes. Only a session in which
+        the owner spoke."""
+        if not any(who.startswith("Ich") for who, _ in session):
+            return
+        held = load_facts(self.facts_dir)
+        system, contents = extraction_request(self.cfg.name, session, held, self.fact_max_chars)
+        raw = await self.llm.generate(contents, system, max_output_tokens=1024, kind="facts")
+        parsed = parse_extraction(raw or "", {f.id for f in held}, self.fact_max_chars)
+        if parsed is None:
+            log.error("facts: the extraction gave no valid answer — nothing changed")
+            return
+        adds, replaces = parsed
+        source = "private" if any("наодинці" in who for who, _ in session) else "agora"
+        today = local_now(self.clock(), self.tz).date().isoformat()
+        added = sum(add_fact(self.facts_dir, t, p, source, today, self.facts_max, self.fact_max_chars) is not None
+                    for t, p in adds)
+        replaced = sum(replace_fact(self.facts_dir, i, t, today, self.fact_max_chars) for i, t in replaces)
+        log.info("facts: %d added, %d replaced", added, replaced)
 
     # --- v5.7: her Telegram bot, a second door to the private chat --------------------------------------------------
     async def telegram_poll(self) -> None:
@@ -1766,6 +1833,13 @@ class Agent:
         if reply is None:
             return None  # already logged
         text = reply.text
+        if self.facts_dir is not None:  # v5.8: the «ЗАПАМ'ЯТАЙ: …» line is kept, never sent — on every path
+            text, asked = split_marker(text)
+            for fact in asked:
+                self.remember(fact, "asked")
+            if not text:
+                log.info("silent: only a line to remember")
+                return None
         if reply.finish == "max_tokens":  # the cap cut it: never send half a sentence
             text = trim_to_sentence(text)
             if text is None:
@@ -1971,6 +2045,11 @@ class Agent:
             self.summary_ms = self.clock()
             self.append_journal(session_part or note)
             self.session = self.session[len(snapshot):]  # keep what arrived meanwhile
+            if self.facts_dir is not None:  # v5.8: what she learned about him, beside the summary
+                try:
+                    await self.extract_facts(snapshot)
+                except Exception as exc:  # noqa: BLE001
+                    log.error("facts: the extraction failed (%s)", type(exc).__name__)
             return True
 
     async def idle_watcher(self) -> None:

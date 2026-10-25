@@ -126,6 +126,11 @@ SCHEMA: tuple[Setting, ...] = (
     # v5.8 — the archive (`recall`): how many recalled lines enter a prompt, and Agora's lines of today in the private
     # chat
     _s("RECALL_N", "int", "6", "memory", "cap:recall", None, "Скільки рядків пригадує перед відповіддю", "lines", 0, 20),
+    # v5.8 — facts about the owner (`facts`): the store's size, how many reach her private prompt, a fact's length
+    _s("FACTS_MAX", "int", "100", "memory", "cap:facts", None, "Скільки фактів про Ich зберігає", "facts", 10, 500),
+    _s("FACTS_IN_PROMPT", "int", "25", "memory", "cap:facts", None, "Скільки фактів бачить в особистому чаті", "facts",
+       0, 100),
+    _s("FACT_MAX_CHARS", "int", "240", "memory", "cap:facts", None, "Найдовший факт", "chars", 80, 600),
     _s("PRIVATE_AGORA_N", "int", "20", "private", "cap:recall", None,
        "Скільки сьогоднішніх рядків Агори бачить в особистому чаті", "lines", 0, 60),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)

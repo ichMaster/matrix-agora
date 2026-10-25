@@ -204,6 +204,19 @@ class Archive:
                                 "ORDER BY ts_ms, id LIMIT ?", (line.place, line.ts_ms, line.id, n)).fetchall()
         return [Line(*r) for r in reversed(before)] + [line] + [Line(*r) for r in after]
 
+    def sync_facts(self, facts: Iterable[tuple[str, str]], ts_ms: int) -> None:
+        """The `facts` place mirrors her facts (id, text): few and edited often, so replaced whole each time they
+        change (Noos's reindexing) — their embeddings follow on the next ticks."""
+        with self.db:
+            for row_id, text in self.db.execute("SELECT id, text FROM lines WHERE place = 'facts'").fetchall():
+                self.db.execute("INSERT INTO fts(fts, rowid, text) VALUES ('delete', ?, ?)", (row_id, text))
+            self.db.execute("DELETE FROM lines WHERE place = 'facts'")
+            for fact_id, text in facts:
+                cur = self.db.execute(
+                    "INSERT INTO lines(key, ts_ms, place, channel, speaker, text) VALUES (?,?,?,?,?,?)",
+                    (f"fact:{fact_id}", int(ts_ms), "facts", "", "факт", text))
+                self.db.execute("INSERT INTO fts(rowid, text) VALUES (?,?)", (cur.lastrowid, text))
+
     def latest(self, place: str, limit: int, since_ms: int | None = None) -> list[Line]:
         """The last `limit` lines of a place (from `since_ms` on), oldest first."""
         rows = self.db.execute(
