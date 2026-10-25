@@ -1925,7 +1925,7 @@ class Agent:
             text = cap_words(text, max_words or self.cat_max_words)
         if self.cfg.can("emotion"):  # v5.9: her words for every text, the tags only for her voice
             words, speech = split_tags(text)
-            if not words:
+            if not re.search(r"\w", words):  # review #2: `[laughs] … [laughs harder] …` leaves «……», not words
                 log.info("silent: only voice tags")
                 return None
             return Spoken(words, speech_for(getattr(self.tts, "model", None) or TTS_MODEL, words, speech))

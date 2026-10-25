@@ -202,8 +202,11 @@ def test_a_tag_never_hides_anothers_line(tmp_path, monkeypatch):
     assert line == "Ну так." and line.speech == "[laughs] Ну так."
 
 
-def test_a_reply_of_tags_only_is_silence(tmp_path, monkeypatch):
-    agent, _ = her(tmp_path, monkeypatch, llm=TaggedLLM("[laughs] [sighs]"))
+@pytest.mark.parametrize("reply", ["[laughs] [sighs]",
+                                   "[starts laughing] … [laughs] … [laughs harder] …",  # review #2: was «………»
+                                   "[laughs]!"])
+def test_a_reply_of_tags_only_is_silence(tmp_path, monkeypatch, reply):
+    agent, _ = her(tmp_path, monkeypatch, llm=TaggedLLM(reply))
     assert asyncio.run(agent._compose(agent.build_prompt())) is None
 
 
