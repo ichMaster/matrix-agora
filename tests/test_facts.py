@@ -403,3 +403,16 @@ def test_a_failed_update_leaves_the_lines_to_the_sessions_end(tmp_path, monkeypa
     agent.llm.extraction = json.dumps({"add": [{"text": "Ich грає на віолончелі", "pin": 2}], "replace": []})
     asyncio.run(agent.summarize())
     assert [f.text for f in load_facts(agent.facts_dir)] == ["Ich грає на віолончелі"]
+
+
+@pytest.mark.parametrize("bad", [['x'], {"a": 1}, 5, None])
+def test_a_malformed_id_never_crashes_the_parse(bad):
+    """v5.8 review #11: an id that was a list or a dict raised TypeError and crashed the seed command."""
+    raw = json.dumps({"add": [{"text": "Ich любить гори", "pin": 1}], "replace": [{"id": bad, "text": "нове"}]})
+    assert parse_extraction(raw, {"known"}, 240) == ([("Ich любить гори", 1)], [])
+
+
+def test_a_malformed_answer_never_stops_the_seed(tmp_path):
+    bad = json.dumps({"add": [{"text": "Ich любить какао", "pin": 2}], "replace": [{"id": ["x"], "text": "y"}]})
+    out = io.StringIO()
+    assert asyncio.run(run_seed(chat(10), tmp_path / "f", SeedLLM([bad]), "Кіра", TODAY, 100, 240, False, out)) == 1

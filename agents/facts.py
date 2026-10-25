@@ -249,13 +249,15 @@ def parse_extraction(raw: str, known: set[str], max_chars: int) -> tuple[list[tu
         return None
     adds = []
     for item in data.get("add", []):
-        if isinstance(item, dict) and isinstance(item.get("text"), str) and item.get("pin", 2) in (1, 2):
+        if (isinstance(item, dict) and isinstance(item.get("text"), str) and not isinstance(item.get("pin", 2), bool)
+                and item.get("pin", 2) in (1, 2)):
             text = _norm(item["text"])
             if text and len(text) <= max_chars:
                 adds.append((text, int(item.get("pin", 2))))
     replaces = []
     for item in data.get("replace", []):
-        if isinstance(item, dict) and item.get("id") in known and isinstance(item.get("text"), str):
+        if (isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"] in known  # review #11: a
+                and isinstance(item.get("text"), str)):                                      # list id never raises
             text = _norm(item["text"])
             if text and len(text) <= max_chars:
                 replaces.append((item["id"], text))
