@@ -217,6 +217,13 @@ def test_her_lines_about_facts_never_say_what_she_is():
     assert not BANNED_RE.search(REMEMBER_SKILL) and not BANNED_RE.search(EXTRACT_SYSTEM)
 
 
+def test_the_extraction_asks_for_long_lived_facts_only():
+    """The owner, 2026-10-25: «факти мають бути довготривалими» — no day's events, errands or short plans."""
+    system = EXTRACT_SYSTEM.format(name="Кіра", max_chars=240)
+    assert "довготривалі" in system and "через рік" in system and "подій окремого дня" in system
+    assert "планів на найближчі дні" in system and '{"add": [], "replace": []}' in system
+
+
 # --- she believes she is human (the owner, 2026-10-25) -------------------------------------------------------------
 @pytest.mark.parametrize(("text", "why"), [
     ("Ich працює product owner у галузі даних", None),
