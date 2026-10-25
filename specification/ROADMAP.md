@@ -1238,7 +1238,9 @@ she talks with him alone, and in Agora she never talks about him.
   - recall in both prompts, with the place filter;
   - the facts and «Що зараз в Агорі» in the private prompt;
   - the widened discretion line;
-  - the extraction at session end.
+  - the extraction at session end;
+  - the private history seeded at start from the archive, both doors, instead of the Element room alone; writing
+    first decided from the time of the last private message, not from an empty history (v5.7 code review #5).
 - `kira.toml`: `recall = true` and `facts = true`.
 - The panel:
   - the Facts tab, with re-pin and delete;
