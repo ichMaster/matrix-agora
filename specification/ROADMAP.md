@@ -1,8 +1,8 @@
 # Roadmap — matrix-agora
 
-Seven self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice) → **v6** Лілі (the Lumi bridge: when named, then under the full rules). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Nine self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice) → **v6** Applications (the panel's System and Applications; Telegram as an application) → **v7** Theatre (plays on the Stage, recorded by Hermes) → **v8** Лілі (the Lumi bridge: when named, then under the full rules). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
-**Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v6→6), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
+**Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v8→8), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
 Many DoD items need the live homeserver, Element or a real Gemini key — those are **Manual (owner)** checks: the owner performs or confirms them, and only then do they count as passed. Everything automated runs with `matrix-nio` and `google-genai` mocked and the clock injected (no network, no paid calls).
 
@@ -39,8 +39,11 @@ are generated. Other further work (the deferred backlog items in the code-review
 | v5.1 | Hermes: voice digests for the owner | ⏳ planned | — |
 | v5.2 | The agents hear voice messages | ⏳ planned | — |
 | v5.3 | The agents answer in voice | ⏳ planned | — |
-| v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
-| v6.2 | Лілі under the full rules | ⏳ planned | — |
+| v6.1 | System and Applications: the panel's new shape | ⏳ planned | — |
+| v6.2 | Telegram as an application: Кіра connected | ⏳ planned | — |
+| v7.x | Theatre: plays on the Stage (phases from features/radio-theatre.md) | ⏳ planned | — |
+| v8.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
+| v8.2 | Лілі under the full rules | ⏳ planned | — |
 
 ## v0 — Platform: homeserver, server deploy, client, accounts, echo bot
 
@@ -404,7 +407,7 @@ Builds on the reviewed v3.3 panel. The docker socket now performs actions, so ev
 
 ## v4 — Ensemble: agent types, N-agent turn-taking, the cat, Claude and the panel's settings
 
-The room grows from two Gemini personas to four agents of three types (from v4.6 the personas grow curious; from v4.7 the agents' settings move into the panel): Ada and Bruno (`persona`), the cat Кіт (`creature`) and Claude (`assistant`); Lumi (`bridge`) joins in v6. The newcomers are openly non-human; Ada and Bruno keep believing they are human. One owner message must stay a few short replies, not two pages. The full design, its decisions and its open questions live in [features/more-agents.md](features/more-agents.md) (draft); each phase lands its ARCHITECTURE and VISION changes and the tests that pin them, per that document's contract list. Depends on: v3 (the images, compose, the panel).
+The room grows from two Gemini personas to four agents of three types (from v4.6 the personas grow curious; from v4.7 the agents' settings move into the panel): Ada and Bruno (`persona`), the cat Кіт (`creature`) and Claude (`assistant`); Lumi (`bridge`) joins in v8. The newcomers are openly non-human; Ada and Bruno keep believing they are human. One owner message must stay a few short replies, not two pages. The full design, its decisions and its open questions live in [features/more-agents.md](features/more-agents.md) (draft); each phase lands its ARCHITECTURE and VISION changes and the tests that pin them, per that document's contract list. Depends on: v3 (the images, compose, the panel).
 
 ### v4.1 — Roster, agent types and N-agent turn-taking
 
@@ -1110,13 +1113,199 @@ with Telegram voice notes and then the text, and she hears the owner's voice not
 - Agora in Telegram;
 - group chats.
 
-## v6 — Лілі: the Lumi bridge
+## v6 — Applications: the panel's System and Applications
+
+The owner, 2026-10-25: the panel stops being "a simulation and its agents". **Simulations become applications**:
+places where agents meet the owner or each other, each reached over one protocol (Agora today, Telegram next, later
+RoboFace). An application shows **who is connected to it and in which context** (`room`, `listens`, `private`).
+**System** holds what is not tied to one application: **Agents**, **Server** and **Tokens**. The model makes room for
+agents reachable in several places (Кіра in the room, in her private chat and in Telegram) and for external agents
+(Лілі in v8, later Noos). The owner's decisions (2026-10-25): the rename goes everywhere; each agent writes the
+status of its connections so the panel can monitor them; the panel switches a declared connection on and off and
+configures it, and the repo declares it; a switched-off connection keeps everything in a buffer and gives the
+backlog one answer; Hermes's contexts are `listens` and `digests`; alerts come later. The design and its decisions
+are in [features/applications.md](features/applications.md) (draft; its open questions closed by the owner on
+2026-10-25); read it before generating the issues. Depends on: v5 (v5.7 for v6.2).
+
+### v6.1 — System and Applications: the panel's new shape
+
+**Status:** ⏳ planned.
+
+**Goal:** the panel is reorganised into **Applications** (Agora) and **System** (Agents, Server, Tokens). Agora's
+page lists every connected agent with its contexts and monitors each connection. No new application; the agents
+talk as before and gain only the status file.
+
+Design: applications.md §The model, §The panel, §Monitoring.
+
+**Tasks:**
+- **The rename** (the owner: everywhere). "Simulation" becomes "application" throughout: `simulations.toml` → `applications.toml` (the same
+  entry shape), `agents/registry.py` and `panel/registry.py`, the agent TOML key `simulation` → `application`
+  (`simulation` still read in v6.1, with a log line naming it), the Dockerfiles' copy, the API
+  (`/api/applications…`; the `/api/simulations…` routes are removed, since the panel is their only client).
+  `state/settings.json` keeps its shape: its keys are the ids, and `agora` does not change.
+- **Contexts.** A pure function over the roster: a member's contexts in the base application (Agora). It returns
+  `room` with its turn mode and weight, `listens` for a herald, `private` for the `private` capability, and
+  `digests` for a herald's one-to-one room (the owner: `private` means only a person's private chat). The agent
+  view carries `connections`: the application, its contexts, the container state and the status.
+- **Monitoring** (the owner, 2026-10-25):
+  - every agent writes `state/<name>.connections.json` with its `agora` entry: its Matrix user id; the state
+    (`ok`, `retrying`, `error`) and the last error's time and kind; the last successful sync as the heartbeat; per
+    context the day's `in`, `out` and `ignored` and the last in and out times;
+  - the heartbeat is written at most once a minute (`STATUS_EVERY_S`) and at once on a change of state; the write is
+    atomic, 0600, with no texts or ids, and a failed write is logged and never blocks the conversation;
+  - the agent reads the file back only at start, to carry on the day's counts; no decision and no other agent reads
+    it;
+  - the panel's pure status function over the switch, the container state, the entry and an injected clock: `off`,
+    `stopped`, `stale` (no heartbeat for 3 min while running), `retrying`, `error`, `ok`;
+  - Agora's health warns when a running member is `stale`, `retrying` or `error`.
+- **The panel UI:**
+  - the rail: Applications (Agora) and System (Agents, Server, Tokens);
+  - the application page: health, services with their actions, a **Connected** table (agent, contexts, status,
+    today's in · out, container state), the application's settings (v4.7, unchanged);
+  - System → Agents: the agent cards no longer nested under an application, each with its connections as chips
+    with their status dots;
+  - the agent drawer gains a **Connections** tab: per context the counts, `ignored`, the last in and out, the last
+    error;
+  - every v3.4/v4.7 action (start/stop/restart, forget, settings, Claude's files) works from its new place.
+- **The design addendum (v6)** in `specification/design/README.md`: the rail, the application page, System →
+  Agents, and the Connections table and tab.
+- **VISION and ARCHITECTURE:**
+  - the direction and the principle "the panel is the centre": applications;
+  - the glossary: application, base application, connection, context, external agent;
+  - the non-goal "a second simulation" is retired (the owner, 2026-10-25);
+  - §The panel: monitoring, and "only what is recorded" names the status file as the one thing an agent writes for
+    the panel;
+  - the contracts: the registry, the TOML key, the API surface, the status file.
+
+**DoD:**
+- (Manual, owner) The panel shows Applications → Agora and System → Agents / Server / Tokens.
+- (Manual, owner) Agora's page lists the nine members with their contexts: Кіра with `room` and `private`, Hermes
+  with `listens` and `digests`, Kit `ambient`, Claude `ranked` 0.4.
+- (Manual, owner) Each running member shows `ok` with a sync seconds old, and today's in · out grow as the room
+  talks; a stopped member shows `stopped`.
+- (Manual, owner) Start, stop, restart, forget, the settings of Agora and of an agent, and Claude's files all work
+  from their new places.
+- An agent TOML with the old `simulation` key still starts.
+
+**Tests:**
+- unit: the registry loads `applications.toml`, an unknown id is an error, and the old TOML key is read;
+- unit: the contexts of every member type: persona, creature, assistant, herald, and a person with `private`;
+- unit: the status writer: the shape, the heartbeat at most once a minute, an immediate write on a change of state,
+  no text or id, a failed write logged; the day's counts carried over a restart and reset on a new day;
+- unit: the panel's status function in every case, with an injected clock; an unreadable status file → unknown,
+  never a 500;
+- the panel API: `/api/applications…`, an unknown application is 404, `/api/simulations…` is gone, the agent view's
+  `connections` with their status;
+- compose and Dockerfile: the image carries `applications.toml`.
+
+**Not in this phase:** a second application; switching or configuring a connection; external agents.
+
+### v6.2 — Telegram as an application: Кіра connected
+
+**Status:** ⏳ planned.
+
+**Goal:** Telegram is the second application. Кіра's bot from v5.7 becomes her **connection** to it: declared in
+the registry, then switched on and off and configured from the panel. It is still the same private conversation as
+in Agora.
+
+Design: applications.md §Rules, §Connection settings, §Applications after v6 → Telegram.
+
+**Tasks:**
+- **The registry.**
+  - `[telegram]`: kind `telegram-bot`, no services;
+  - `[telegram.connections.kira]` with `contexts = ["private"]`;
+  - validation: a `private` context needs the agent's `private` capability, and an unknown agent or context is an
+    error by name.
+- **The migration.** v5.7's `[capabilities] telegram = true` is retired. The roster names it as an error with the
+  fix ("declare the connection in the registry"); `kira.toml` loses the line.
+- **Connection settings.**
+  - The schema `agents/settings.py` gains a **connection** scope: settings of an application kind (`telegram-bot`),
+    each value belonging to one connection.
+  - v6.2 moves into it what v5.7 fixes in code or env for Кіра's Telegram (the owner agreed, 2026-10-25): answering
+    with a voice note and the text, or with the text only; whether she may write first there; whether she shows
+    «typing…» and «recording voice…».
+  - Precedence as in v4.7: code default < env < panel. Secrets are never in the schema.
+- **`state/settings.json` gains `connections`:** per application and agent, `enabled`, `since` (the moment it was
+  last switched on) and the setting overrides. The panel writes it; the agent only reads it.
+- **The agent:**
+  - at start, it reads its connections from the registry and their switch and settings from `state/settings.json`;
+  - **switched off, it keeps everything** (the owner, 2026-10-25). The poller keeps running; it does not answer
+    and does not write first in Telegram. Each update from the owner goes into
+    `state/<name>.telegram.buffer.jsonl` (the text, or the voice note's file id; 0600; never in a log) and is then
+    confirmed to Telegram. A stranger's update is never buffered;
+  - switched back on, she reads what waited, in order, and gives one answer to all of it, as a person answers a
+    backlog, hearing the buffered voice notes then. The messages join the private history, and the buffer is
+    emptied;
+  - while Telegram is off and was the owner's last channel, she writes first in the Element private chat;
+  - it adds its `telegram` entry to the status file: the bot's `@username` from `getMe`; the poll as the heartbeat;
+    `retrying` on a network error; `error` on a refusal (401), with the poller stopped; `off` with the number
+    `buffered`; the day's counts, with a stranger counted as `ignored`.
+- **The panel:**
+  - Applications → Telegram:
+    - health from its connections' statuses: all switched-on ones `ok` → ok; one `stopped`, `stale`, `retrying` or
+      `error` → a warning; all switched off → off;
+  - the Connected table: agent, the bot's `@username`, context «private · the same chat as in Agora», status
+    («polled 12 s ago», or «off · 3 waiting»), today's in · out, last in · out, on since, container state;
+  - each row: **switch off/on** (confirmed) and **configure** (the connection's settings, validated against the
+    scope);
+  - a save writes its part of `state/settings.json` and restarts the agent if it is running, as the v4.7 settings do;
+  - the connection's log: the agent's log filtered to its `telegram:` lines;
+  - no token or owner id anywhere; a connection is never created from the panel.
+- **Tokens by application.** A usage line carries `app` (`agora` | `telegram`; older lines count as `agora`). The
+  Tokens table and chart group by application, then by agent.
+- **ARCHITECTURE:**
+  - §The panel: applications without services, and the connection actions;
+  - §Contracts: the registry's `connections`, the connection scope of the settings schema, `settings.json`'s
+    `connections`, the status file's `telegram` entry, the buffer file, the API routes, the usage line's `app`, the
+    retired capability.
+
+**DoD:**
+- (Manual, owner) The panel shows Applications → Telegram with Кіра connected, in the context `private`: the bot's
+  username, a poll seconds old and today's counts. A message in Telegram moves its last in · out.
+- (Manual, owner) Switched off from the panel, the bot does not answer, and the row shows how many messages wait.
+  Switched back on, she answers what was sent while it was off.
+- (Manual, owner) A connection setting changed in the panel (for example the text only instead of a voice note)
+  holds after her restart.
+- (Manual, owner) Still one conversation: what was said in Telegram she knows in the Element private chat, and back.
+- (Manual, owner) The Tokens view shows Кіра's Telegram traffic under `telegram`.
+
+**Tests:**
+- unit: the registry's connections and their validation, and the retired capability named as an error;
+- unit: the connection scope: validation, bounds, a name from another scope → 422, the precedence;
+- unit: the switch and the settings read from `settings.json`;
+- unit: the buffer: updates kept while off and confirmed to Telegram, a stranger never kept, the backlog answered
+  with one answer, read in order, on the switch-on and then emptied, writing first in Element while Telegram is off;
+  no text in a log;
+- unit: the `telegram` status entry: the account from `getMe`, the heartbeat on a poll, `retrying`, `error` with the
+  poller stopped, `off` with `buffered`, a stranger counted as `ignored`; no token, owner id or text in the file;
+- the panel API: the Telegram view, the switch and the settings (same-origin, confirmation, 409 when busy, 404 for
+  an unknown connection), the restart of the concerned agent only;
+- usage: the `app` field, old lines as `agora`, the grouping.
+
+**Not in this phase:** Telegram for the other persons (each becomes a registry entry, a bot and an env file);
+RoboFace; external agents; creating a connection from the panel; alerts on a failed connection (later: Hermes tells
+the owner).
+
+## v7 — Theatre: plays on the Stage
+
+**Status:** ⏳ planned.
+
+The owner, 2026-10-25: the radio theatre is v7. The members of Agora perform audio plays together in a second room,
+the Stage, and Hermes records each play into one file. The design, its phases and its open questions are in the
+draft [features/radio-theatre.md](features/radio-theatre.md) (Ukrainian copy: `radio-theatre-UA.md`). Its phases
+are written into this file once its open questions are closed. Its first proposed phase, the three new personas,
+shipped as v5.5. Depends on: v5.4 (the Agora recording) and v6 (in the v6 model the Stage is a second room of the
+Agora application).
+
+## v8 — Лілі: the Lumi bridge
 
 Лілі — Lumi's prod brain — joins the room through a bridge that is one of our agents: first when named, then under
-the full turn rules. Moved from v4.8–v4.9 by the owner on 2026-10-13, after the voice of v5. Depends on: Lumi ≥ v2.5
-in prod (v2.6 puts her server on 192.168.1.197), and v4.
+the full turn rules. Moved from v4.8–v4.9 by the owner on 2026-10-13, after the voice of v5, and from v6 to v8 on
+2026-10-25, after v6 Applications and v7 Theatre. In the v6 model she is an **external** agent under System →
+Agents, connected to Agora in the `room` context (applications.md §Лілі). Depends on: Lumi ≥ v2.5 in prod (v2.6 puts
+her server on 192.168.1.197), v4 and v6.
 
-### v6.1 — The Lumi bridge: Лілі when named
+### v8.1 — The Lumi bridge: Лілі when named
 
 **Status:** ⏳ planned.
 
@@ -1128,7 +1317,7 @@ Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails t
 - The `bridge` type; `agents/lumi.toml` (shown as «Лілі»; name forms for both «Лілі» and «Стхіра»; `engine = "lumi-http"`; `[turns] mode = "mention-only"`, weight 1).
 - `LumiBridgeResponder`: when a message names her, `POST /v1/turn` with the room lines since her last turn as `"Name: text"`, `turn_id` = the trigger's `event_id`; only `reply` is posted, never `thinking`; never `/v1/session/new`; `409`/`5xx`/timeout → silence; her reply is never dropped or trimmed after the call (R3 before the call only); the bridge never posts except in reply to a trigger.
 - The `lumi` compose service with its own env file (`LUMI_URL`, `LUMI_TOKEN`) and the route to her server on the same host (`extra_hosts: host-gateway`); usage rows `external` from her `stats`.
-- **Лілі's panel card**: Lumi's reachability (`/v1/health`), the last turn's outcome from `state/lumi.bridge.json`; never her `thinking`, mood or replies; her token rows unpriced; no memory tabs, no Forget.
+- **Лілі's panel card** (under System → Agents, `external`; v6): Lumi's reachability (`/v1/health`), the last turn's outcome from `state/lumi.bridge.json`; never her `thinking`, mood or replies; her token rows unpriced; no memory tabs, no Forget.
 - VISION: the "Lili herself" wording becomes "connected through the bridge".
 - (Owner) The Matrix account, the invite; Lumi's server token and her bind address.
 
@@ -1140,13 +1329,13 @@ Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails t
 
 **Tests:** unit — the bridge against a fake Lumi server (turn payload with the lines since her last turn, `turn_id`, `409`, `5xx`, timeout, `thinking` never posted, no post-call filtering, no post without a trigger), mention detection for both names, the env-file isolation, `external` usage rows.
 
-### v6.2 — Лілі under the full rules
+### v8.2 — Лілі under the full rules
 
 **Status:** ⏳ planned.
 
 **Goal:** Лілі takes part in the room like Ada and Bruno — chosen by the turn-taking, not only when named.
 
-Design: more-agents.md §Lumi (the bridge), §4. Depends on: v6.1, proven in the room.
+Design: more-agents.md §Lumi (the bridge), §4. Depends on: v8.1, proven in the room.
 
 **Tasks:**
 - `agents/lumi.toml`: `[turns] mode = "ranked"`, weight 1 — she joins R1 (`OWNER_REPLIERS`) and R2 (the next speaker).

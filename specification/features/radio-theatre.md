@@ -1,6 +1,6 @@
 # Feature: the radio theatre — plays on the Stage
 
-> **Status: draft, 2026-10-20.** A proposal, not a contract. It designs a new ROADMAP version — proposed **v7 Theatre**, phases v7.1–v7.5 (the numbering is the owner's call, see [Open questions](#open-questions)). CLAUDE.md and ARCHITECTURE.md do not link here yet; the changes in [VISION and contract changes](#vision-and-contract-changes) land with those phases. Ukrainian copy: `radio-theatre-UA.md`.
+> **Status: draft, 2026-10-20.** A proposal, not a contract. It designs ROADMAP version **v7 Theatre**, phases v7.1–v7.5 (numbered by the owner on 2026-10-25; v7.1, the three new personas, shipped as v5.5). CLAUDE.md and ARCHITECTURE.md do not link here yet; the changes in [VISION and contract changes](#vision-and-contract-changes) land with those phases. Ukrainian copy: `radio-theatre-UA.md`.
 >
 > **Changes:** 2026-10-20 — the owner renamed the newcomers to Леон (`leon`) and Мія (`mia`); the first draft called them Орест and Соломія. The same day he took Кіт out of the theatre and asked for a third newcomer instead: Ірма (`irma`), first drafted as Стефа.
 >
@@ -186,7 +186,7 @@ New env names: `STAGE_ROOM_ID` (both shared examples), `LEON_VOICE_ID`, `MIA_VOI
 
 ## Open questions
 
-1. **Numbering:** v7 after Лілі (v6), or before it? v7.1 can ship on its own at any time.
+1. **Numbering:** decided — v7, before Лілі, who moves to v8 (the owner, 2026-10-25). The three new personas of v7.1 shipped as v5.5.
 2. **Do the actors know the sources?** Proposed: no.
 3. **The Agora pause** during a play: proposed yes.
 4. **The owner in a play:** only the audience, or a character too (typed lines in his cloned voice)?
