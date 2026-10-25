@@ -79,9 +79,17 @@ def test_the_prompt_block_pins_first_within_the_limits():
     out = facts_section(facts, 3, 240)
     assert out.startswith(FACTS_TITLE)
     lines = out.split("\n")[1:]
-    assert lines[0].startswith("- " + "я" * 200) and lines[0].endswith("…") and len(lines[0]) == 242
-    assert lines[1:] == ["- перше", "- друге"] and "лише для пошуку" not in out
+    assert lines[0] == "- перше"                                               # pin 1, the newest first
+    assert lines[1].startswith("- " + "я" * 200) and lines[1].endswith("…") and len(lines[1]) == 242
+    assert lines[2] == "- друге" and "лише для пошуку" not in out
     assert facts_section(facts, 0, 240) is None and facts_section([], 25, 240) is None
+
+
+def test_past_the_limit_a_fact_just_asked_for_still_reaches_the_prompt():
+    """v5.8 review #7: oldest first, a 26th pin-1 fact — the one he just asked for — never reached her prompt."""
+    facts = [Fact(f"f{i:02}", 1, f"2026-09-{i + 1:02}", "private", f"факт {i}") for i in range(25)]
+    facts.append(Fact("new", 1, "2026-10-25", "asked", "Ich щойно попросив це запам'ятати"))
+    assert "щойно попросив" in facts_section(facts, 25, 240)
 
 
 # --- the marker --------------------------------------------------------------------------------------------------

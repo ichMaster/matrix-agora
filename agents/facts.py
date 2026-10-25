@@ -203,8 +203,10 @@ def remove_fact(folder: Path, fact_id: str) -> bool:
 
 
 def facts_section(facts: list[Fact], in_prompt: int, max_chars: int) -> str | None:
-    """Her private prompt's block: pin 1 first, then pin 2 while there is room, each oldest first; pin 0 never."""
-    chosen = sorted((f for f in facts if f.pin in (1, 2)), key=lambda f: (f.pin, f.added, f.id))[:max(in_prompt, 0)]
+    """Her private prompt's block: pin 1 first, then pin 2 while there is room, each newest first — past the limit a
+    fact just asked for still gets in (v5.8 review #7); pin 0 never."""
+    pinned = [f for f in facts if f.pin in (1, 2)]
+    chosen = sorted(sorted(pinned, key=lambda f: (f.added, f.id), reverse=True), key=lambda f: f.pin)[:max(in_prompt, 0)]
     if not chosen:
         return None
     lines = [f"- {f.text if len(f.text) <= max_chars else f.text[:max_chars - 1].rstrip() + '…'}" for f in chosen]
