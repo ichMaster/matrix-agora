@@ -61,11 +61,17 @@ EXTRACT_SYSTEM = (
 # the owner, 2026-10-25: «не все потрібно Кірі, вона думає, що вона людина» — a model's own judgement leaks facts
 # about AI, agents and his servers, so a fact that names any of these is dropped in code, whatever the model answered
 OFF_LIMITS = (
-    (re.compile(r"(?<!\w)(?:ші|ai|llm|gpt|gemini|claude|noos|lumi|лілі|агор\w*|tailscale|vpn|docker|hugging ?face|"
-                r"kiln|пічк\w*|промпт\w*|нейромереж\w*|нейронн\w*|human in the loop)(?!\w)", re.IGNORECASE),
+    (re.compile(r"(?<!\w)(?:ші|ai|llm|gpt|chatgpt|openai|anthropic|gemini|claude|copilot|noos|lumi|лілі|агор\w*|"
+                r"tailscale|vpn|docker|hugging ?face|kiln|пічк\w*|промпт\w*|нейромереж\w*|нейронн\w*|нейронк\w*|"
+                r"штучн\w*\s+інтелект\w*|машинн\w*\s+навчан\w*|machine learning|human in the loop)(?!\w)", re.IGNORECASE),
      "AI or tools"),
-    (re.compile(r"(?<!\w)(?:агент|бот|модел|симуляц|сервер|мереж)\w*", re.IGNORECASE), "agents, models or servers"),
-    (re.compile(r"(?<!\w)(?:вул\.|вулиц\w*|просп\w*|провул\w*|буд\.)", re.IGNORECASE), "an address"),
+    (re.compile(r"(?<!\w)(?:агент|бот|модел|симуляц|сервер|мереж)\w*|(?<!\w)(?:bots?|agents?|models?|servers?)(?!\w)",
+                re.IGNORECASE), "agents, models or servers"),
+    # v5.8 review #3: what she is — a fact written by the model may say it outright
+    (re.compile(r"(?<!\w)не\s+людин\w*|(?<!\w)створи\w*\s+тебе|(?<!\w)ти\s+(?:лише\s+|просто\s+)?програм\w*",
+                re.IGNORECASE), "what she is"),
+    (re.compile(r"(?<!\w)(?:вул\.|вулиц\w*|просп\w*|провул\w*|буд\.|будин\w*\s+\d|кв\.|квартир\w*\s+\d)",
+                re.IGNORECASE), "an address"),
 )
 
 

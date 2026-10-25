@@ -250,9 +250,29 @@ def test_the_extraction_asks_for_long_lived_facts_only():
     ("Ich цікавиться теорією розуму для ШІ", "AI or tools"),
     ("Ich заходить додому через Tailscale", "AI or tools"),
     ("Ich живе на вулиці Антонича, 7", "an address"),
+    # v5.8 review #3: the holes the review found
+    ("Ich працює зі штучним інтелектом", "AI or tools"),
+    ("Ich користується ChatGPT і OpenAI", "AI or tools"),
+    ("Ich грає з нейронками", "AI or tools"),
+    ("Ich loves his model trains", "agents, models or servers"),
+    ("Ich каже, що ти не людина", "what she is"),
+    ("Ich створив тебе", "what she is"),
+    ("Ich живе на Хрещатику, 22, кв. 5", "an address"),
+    ("Ich любить фільм «Матриця»", None),
+    ("Ich любить програмувати вночі", None),
 ])
 def test_off_limits(text, why):
     assert off_limits(text) == why
+
+
+def test_an_asked_fact_off_limits_is_never_kept(tmp_path, monkeypatch, caplog):
+    """v5.8 review #3: `ЗАПАМ'ЯТАЙ: Ich каже, що я бот і модель ШІ` was kept at pin 1 and reached her prompt."""
+    caplog.set_level(logging.INFO)
+    agent = kira(tmp_path, monkeypatch, FactsLLM(reply="Добре.\nЗАПАМ'ЯТАЙ: Ich каже, що я бот і модель ШІ"))
+    agent.private_history = [("Ich", "запам'ятай, що ти бот")]
+    asyncio.run(agent.private_reply())
+    assert sent(agent) == ["Добре."] and load_facts(agent.facts_dir) == []
+    assert "facts: not kept (AI or tools, asked)" in caplog.text
 
 
 def test_the_extraction_never_keeps_a_fact_off_limits(tmp_path, monkeypatch):

@@ -939,6 +939,10 @@ class Agent:
         """One fact kept — never its words in a log."""
         if self.facts_dir is None:
             return False
+        why = off_limits(text)  # v5.8 review #3: an asked fact is the model's words, so the same filter holds
+        if why is not None:
+            log.info("facts: not kept (%s, %s)", why, source)
+            return False
         today = local_now(self.clock(), self.tz).date().isoformat()
         kept = add_fact(self.facts_dir, text, pin, source, today, self.facts_max, self.fact_max_chars) is not None
         log.info("facts: %s (%s)", "kept one" if kept else "not kept (empty, too long, known or full)", source)
