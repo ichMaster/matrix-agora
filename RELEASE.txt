@@ -1,3 +1,32 @@
+Version 5.7.0 (2026-10-25)
+---------------------------
+- Phase v5.7 - Kira in Telegram (AGORA-106...109)
+- The Bot API client (AGORA-106): agents/telegram.py - long polling over
+  aiohttp, voice notes and texts, a capped download, the owner-only
+  allowlist, the offset in state/<name>.telegram.json; the token (in every
+  URL) never reaches a log
+- The capability (AGORA-107): "telegram", a person's only, never without
+  "private"; server/kira.env (the bot's token, the owner's Telegram id, her
+  Deepgram key) read by the kira service alone, synced 0600 by deploy.sh
+- One private chat, two doors (AGORA-108): the Element room and her bot
+  share one history and one memory; the answer goes back to the door the
+  owner wrote from - in Telegram a voice note in her own voice, then the
+  text; his voice notes are heard by Deepgram; she writes first through the
+  door he used last (last_channel); what he wrote before a start is context
+- Live (AGORA-109): the bot @ich_kira_bot, deployed; confirmed by the
+  owner's use: a text answered in voice then text, a voice note heard and
+  answered in voice; waived by the owner's release word: one conversation
+  with Element, and no answer to another account (not separately observed)
+- Code review fixes: writing first keeps the door he switched to (#1); a
+  refused token closes the door and an undelivered line is never said (#2);
+  a message just after the start is answered (#3); a failing update never
+  replays its batch (#4); bot commands like /start never reach her prompt
+  (#6); an offset a week stale is dropped (#7); #5 carried into v5.8
+- Kira's canon: a wider vocabulary, her pet words a seasoning, not every
+  sentence
+- Planned: ROADMAP v5.8 (Kira on Gemini 3.1 Pro, a memory of messages and
+  facts about the owner), v6 Applications, v7 Theatre, v8 Lili
+
 Version 5.6.0 (2026-10-21)
 ---------------------------
 - Phase v5.6 - A private chat with a person, Kira first (AGORA-103...105)

@@ -1030,7 +1030,7 @@ chat; group chats beside Agora.
 
 ### v5.7 — Кіра in Telegram
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.7.0` on 2026-10-25 (her bot `@ich_kira_bot`; a text answered in voice then text and a voice note heard, confirmed by the owner's use; one conversation with Element and no answer to another account waived by the release word; six code-review fixes, #5 carried into v5.8).
 
 **Goal:** the owner talks with Кіра from Telegram too. Her private chat gets a second door: her own Telegram bot,
 the same conversation as the Element private chat (one history, one memory). Voice goes both ways: she answers
