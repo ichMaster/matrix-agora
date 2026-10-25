@@ -353,3 +353,25 @@ def test_the_bot_is_the_real_client_in_production(tmp_path, monkeypatch):
     cfg = AgentConfig(name="Кіра", user_id=KIRA, canon="К.", homeserver="http://hs", room_id="!room", owner=OWNER,
                       password="pw", capabilities=caps)
     assert isinstance(Agent(cfg, llm=KindLLM()).telegram, TelegramBot)
+
+
+def test_writing_first_never_undoes_the_door_he_switched_to_meanwhile(tmp_path, monkeypatch, ogg):
+    """v5.7 review #1: the nudge saved its stale state after the line — `last_channel` went back to matrix."""
+    agent = kira(tmp_path, monkeypatch)
+    agent.private_room = DM
+    agent.voice_reply_p = 0.0
+    agent.private_history, agent.last_private_ms = [("Ich", "раніше")], ms(10)
+    agent.private_idle_ms, agent.private_per_day, agent.private_hours = 3_600_000, 2, (10, 22)
+    save_private_state(agent.private_file, PrivateState(room=DM, day="2026-10-20", last_channel="matrix"))
+    original = agent.private_reply
+
+    async def write_while_he_switches(nudge=False, channel=None):
+        sent = await original(nudge, channel)
+        agent.private_line("я тепер у телеграмі", ms(18), "telegram")    # he writes from Telegram meanwhile
+        return sent
+
+    agent.private_reply = write_while_he_switches
+    agent._spawn = lambda coro: coro.close()
+    assert asyncio.run(agent.maybe_private_nudge()) is True
+    state = load_private_state(agent.private_file, "2026-10-20")
+    assert (state.last_channel, state.count, state.sent_ms) == ("telegram", 1, ms(18))

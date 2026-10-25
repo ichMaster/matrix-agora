@@ -724,10 +724,11 @@ class Agent:
             state.last_ms = now_ms  # every attempt spaces the next one; only a sent line counts
             save_private_state(self.private_file, state)
             sent = await self.private_reply(nudge=True, channel=state.last_channel)  # v5.7: his last door
-            if sent:
-                state.count += 1
-                state.sent_ms = now_ms
-                save_private_state(self.private_file, state)
+            if sent:  # read again: the owner may have changed door, or the room moved, while she wrote (review #1)
+                fresh = load_private_state(self.private_file, now.date().isoformat())
+                fresh.count += 1
+                fresh.sent_ms = now_ms
+                save_private_state(self.private_file, fresh)
             return sent
         finally:
             again = self._private_again
