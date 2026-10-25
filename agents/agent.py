@@ -899,11 +899,14 @@ class Agent:
         try:
             word_ids = self.archive.search_words(query, places)
             meaning_ids: list[int] = []
-            embed = getattr(self.llm, "embed", None)
-            vector = await embed([query], task="RETRIEVAL_QUERY") if embed else None
-            if vector:
-                ids, matrix = self.archive.vectors(places)
-                meaning_ids = cosine_top(vector[0], ids, matrix)
+            try:  # v5.8 review #10: the meaning search fails on its own — the words' results stay
+                embed = getattr(self.llm, "embed", None)
+                vector = await embed([query], task="RETRIEVAL_QUERY") if embed else None
+                if vector:
+                    ids, matrix = self.archive.vectors(places)
+                    meaning_ids = cosine_top(vector[0], ids, matrix)
+            except Exception as exc:  # noqa: BLE001
+                log.error("recall: the meaning search failed (%s) — words only", type(exc).__name__)
             ranked = fuse(word_ids, meaning_ids)
             picked = pick_recall(ranked, self.archive.lines(ranked[:2 * CANDIDATES]), exclude, self.recall_n)
             groups, seen = [], set()

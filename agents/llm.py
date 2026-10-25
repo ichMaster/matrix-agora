@@ -130,7 +130,7 @@ class GeminiClient:
             self._report(kind, None, False, EMBED_MODEL)
             return None
         vectors = [list(getattr(e, "values", None) or []) for e in (getattr(resp, "embeddings", None) or [])]
-        ok = len(vectors) == len(texts) and all(vectors)
+        ok = len(vectors) == len(texts) and all(len(v) == EMBED_DIM for v in vectors)  # v5.8 review #10
         self._report(kind, getattr(resp, "metadata", None), ok, EMBED_MODEL)
         if not ok:
             log.error("gemini embed returned %d of %d vectors", len(vectors), len(texts))

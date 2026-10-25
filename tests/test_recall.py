@@ -176,3 +176,23 @@ def test_a_failing_agora_today_never_loses_the_private_answer(tmp_path, monkeypa
     agent.private_history = [("Ich", "Як ти?")]
     assert asyncio.run(agent.private_reply()) is True
     assert AGORA_NOW_TITLE not in agent.llm.calls[-1][1] and "Agora today was not read" in caplog.text
+
+
+def test_a_vector_of_another_length_never_disables_recall(tmp_path, monkeypatch):
+    """v5.8 review #10: np.vstack raised on mixed lengths, and the catch threw the word results away too."""
+    agent = filled(tmp_path, monkeypatch)
+    agent.archive.append("$odd", ms(9, 30), "agora", "matrix", "Ада", "Тустань знову кличе")
+    agent.archive.set_embeddings([(agent.archive.counts()[0], [1.0, 0.0, 0.5])])   # three floats, the rest two
+    ids, matrix = agent.archive.vectors(["agora"])
+    assert matrix.shape[1] == 2 and agent.archive.counts()[0] not in ids
+    assert "Тустань" in asyncio.run(agent.recall_section("Тустань", ("agora",), set()))
+
+
+def test_the_meaning_search_failing_keeps_the_words(tmp_path, monkeypatch, caplog):
+    agent = filled(tmp_path, monkeypatch)
+
+    def broken(places):
+        raise ValueError("bad shapes")
+    agent.archive.vectors = broken
+    assert "Тустань" in asyncio.run(agent.recall_section("Тустань", ("agora",), set()))
+    assert "the meaning search failed (ValueError)" in caplog.text

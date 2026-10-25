@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
+from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -177,12 +178,17 @@ class Archive:
             return []
 
     def vectors(self, places: Iterable[str]) -> tuple[list[int], np.ndarray | None]:
-        """The embedded lines of `places`: their ids and their vectors as one matrix."""
+        """The embedded lines of `places`: their ids and their vectors as one matrix — only the vectors of the most
+        common length, so one of another size never disables the search (v5.8 review #10)."""
         places = tuple(places)
         if not places:
             return [], None
         rows = self.db.execute(f"SELECT id, emb FROM lines WHERE emb IS NOT NULL AND place IN "
                                f"({','.join('?' * len(places))})", places).fetchall()
+        if not rows:
+            return [], None
+        size = Counter(len(r[1]) for r in rows).most_common(1)[0][0]
+        rows = [r for r in rows if len(r[1]) == size and size % 4 == 0]
         if not rows:
             return [], None
         return [r[0] for r in rows], np.vstack([np.frombuffer(r[1], dtype="float32") for r in rows])

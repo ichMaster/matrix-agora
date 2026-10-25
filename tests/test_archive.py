@@ -202,8 +202,8 @@ def test_the_vectors_are_float32(arc):
 
 # --- the embedding call (google-genai mocked) -------------------------------------------------------------------------
 @pytest.mark.parametrize(("embeddings", "fail", "out", "ok"), [
-    ([[0.1, 0.2], [0.3, 0.4]], None, [[0.1, 0.2], [0.3, 0.4]], True),
-    ([[0.1, 0.2]], None, None, False),                       # a short answer is none
+    ([[0.1] * 768, [0.2] * 768], None, [[0.1] * 768, [0.2] * 768], True),
+    ([[0.1] * 768], None, None, False),                      # a short answer is none
     (None, RuntimeError("quota"), None, False),
 ])
 def test_the_embedding_call(monkeypatch, caplog, embeddings, fail, out, ok):
@@ -275,3 +275,15 @@ def test_an_archive_that_breaks_after_start_is_dropped_by_the_start_checks(tmp_p
     agent.private_history = [("Ich", "з Element")]
     agent.seed_private_from_archive()
     assert agent.private_history == [("Ich", "з Element")] and "the private history was not read" in caplog.text
+
+
+def test_an_embedding_of_the_wrong_length_is_refused(monkeypatch):
+    """v5.8 review #10: a vector that is not EMBED_DIM long never reaches the archive."""
+    from agents import llm as llm_mod
+
+    async def embed_content(model, contents, config):
+        return SimpleNamespace(embeddings=[SimpleNamespace(values=[0.1, 0.2])], metadata=None)
+
+    monkeypatch.setattr(llm_mod.genai, "Client",
+                        lambda: SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(embed_content=embed_content))))
+    assert asyncio.run(llm_mod.GeminiClient().embed(["рядок"])) is None
