@@ -375,3 +375,28 @@ def test_writing_first_never_undoes_the_door_he_switched_to_meanwhile(tmp_path, 
     assert asyncio.run(agent.maybe_private_nudge()) is True
     state = load_private_state(agent.private_file, "2026-10-20")
     assert (state.last_channel, state.count, state.sent_ms) == ("telegram", 1, ms(18))
+
+
+def test_a_refused_token_closes_the_door_and_element_takes_the_lines(tmp_path, monkeypatch, ogg):
+    """v5.7 review #2: after a 401 the poller stopped, yet every first line still went to the dead bot."""
+    agent = kira(tmp_path, monkeypatch)
+    agent.private_room = DM
+    agent.voice_reply_p = 0.0
+    poll(agent, monkeypatch, Reply(False, status=401))
+    assert agent.telegram_open is False
+    agent.private_history, agent.last_private_ms = [("Ich", "раніше")], ms(10)
+    agent.private_idle_ms, agent.private_per_day, agent.private_hours = 3_600_000, 2, (10, 22)
+    save_private_state(agent.private_file, PrivateState(room=DM, day="2026-10-20", last_channel="telegram"))
+    assert asyncio.run(agent.maybe_private_nudge()) is True
+    assert agent.client.room_send.await_args.kwargs["room_id"] == DM
+    assert agent.telegram.send_message.await_count == 0
+
+
+def test_a_line_telegram_refused_is_never_counted_as_said(tmp_path, monkeypatch, caplog, ogg):
+    """v5.7 review #2: a 403 (the bot blocked) still put her line in the history and the session."""
+    agent = kira(tmp_path, monkeypatch)
+    agent.telegram.send_message = AsyncMock(return_value=False)
+    run_batch(agent, tg(10, "Привіт"))
+    assert agent.private_history == [("Ich", "Привіт")]
+    assert agent.session == [("Ich (наодинці)", "Привіт")]
+    assert "private: not delivered (telegram)" in caplog.text

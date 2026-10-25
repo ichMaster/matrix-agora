@@ -361,6 +361,7 @@ class Agent:
         # v5.7 — her own Telegram bot (`telegram`): a second door to the private chat, polled beside the sync; the
         # private chat answers to the door the owner wrote from (`private_channel`)
         self.telegram: TelegramBot | None = None
+        self.telegram_open = False  # the door is usable: the bot is set and its token not refused (review #2)
         self.telegram_owner = 0
         self.telegram_file = self.memory_file.parent / f"{cfg.localpart}.telegram.json"
         self.stt: DeepgramSTT | None = None
@@ -372,6 +373,7 @@ class Agent:
                 log.warning("telegram off: %s", off)
             else:
                 self.telegram, self.telegram_owner = TelegramBot(tg_token), int(tg_owner)
+                self.telegram_open = True
                 if stt_key:
                     self.stt = DeepgramSTT(stt_key)
                 else:
@@ -666,7 +668,7 @@ class Agent:
         a line through the door (v5.7: the Element room, voiced under the speakers' rules, or her Telegram bot, a
         voice note and then the text) → typing off in a finally."""
         room = self.private_room
-        door = pick_door(channel or self.private_channel, room is not None, self.telegram is not None)
+        door = pick_door(channel or self.private_channel, room is not None, self.telegram_open)
         if door is None:
             return False
         action = None
@@ -689,8 +691,9 @@ class Agent:
                 return False
             if door == "matrix":
                 await self.send_line(room, text, f"private:{self.clock()}")
-            else:
-                await self.send_telegram(text)
+            elif not await self.send_telegram(text):  # never said: not in the history, not counted (review #2)
+                log.warning("private: not delivered (telegram)")
+                return False
             self.private_history = append_history(self.private_history, self.cfg.name, text, max(self.history_n, 1))
             self.last_private_ms = self.clock()
             if self.cfg.can("summary"):
@@ -706,7 +709,7 @@ class Agent:
     async def maybe_private_nudge(self) -> bool:
         """After a long private silence, in the owner's hours, under the day's cap: one line of her own — never
         while an answer is on its way, never before they have talked there, never at once after a restart."""
-        if (not (self.started and self.cfg.can("private") and (self.private_room or self.telegram))
+        if (not (self.started and self.cfg.can("private") and (self.private_room or self.telegram_open))
                 or self._private_pending):
             return False
         if not self.private_history:
@@ -749,6 +752,7 @@ class Agent:
                 if not reply.ok:
                     if reply.status in (401, 404):
                         log.error("telegram off: refused (HTTP %s)", reply.status)
+                        self.telegram_open = False  # the door closes: Element takes every line (review #2)
                         return
                     failures += 1
                     wait = reply.retry_after if reply.status == 429 and reply.retry_after else backoff_s(failures)
@@ -825,9 +829,10 @@ class Agent:
             await asyncio.sleep(ACTION_EVERY_S)
             await self.telegram.send_chat_action(self.telegram_owner, action)
 
-    async def send_telegram(self, text: str) -> None:
+    async def send_telegram(self, text: str) -> bool:
         """Every answer in Telegram is a voice note in her own voice, then the text (the owner, 2026-10-21) — the
-        speakers' monthly budget and `voiceable` still hold; when the voice cannot be made, the text goes alone."""
+        speakers' monthly budget and `voiceable` still hold; when the voice cannot be made, the text goes alone.
+        True when the text went out."""
         why = self.voice_off
         if self.tts is not None:
             if not voiceable(text):
@@ -846,7 +851,7 @@ class Agent:
                 log.info("voice: sent (%d chars, telegram)", len(text))
             elif why != "not voiceable":
                 log.info("voice: text only (%s, telegram)", why)
-        await self.telegram.send_message(self.telegram_owner, text)
+        return await self.telegram.send_message(self.telegram_owner, text)
 
     async def send_line(self, room_id: str, text: str, event_key: str, answering: str | None = None) -> None:
         """v5.3 — every line the agent says: a voice message under a plain label when it should and can (`voice_due`,
