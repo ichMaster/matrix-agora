@@ -87,7 +87,7 @@ icon (the trash icon is v4.7's).
 
 **A Facts tab on the drawer of a person with `facts` (Кіра).**
 - **The list:** one row per fact, pin 1 first, then pin 2, then pin 0; the text in Ukrainian, then a 11.5 px mono
-  line `source · added` (`asked`, `private`, `agora` or `noos`). Above it a muted line: «n facts · only her private
+  line `source · added` (`asked`, `private` or `agora`). Above it a muted line: «n facts · only her private
   chat sees them · a change counts at her next answer». With none: «Кіра knows no facts about you yet.»
 - **Re-pin:** three buttons per row — **always** (pin 1), **if room** (pin 2), **recall only** (pin 0); the current
   one is primary and disabled. A click saves at once and shows «Fact re-pinned».

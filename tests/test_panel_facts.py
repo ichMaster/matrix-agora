@@ -25,8 +25,8 @@ def state(tmp_path):
     s = tmp_path / "state"
     s.mkdir()
     folder = s / "kira.facts"
-    add_fact(folder, "Ich веган", 2, "noos", "2026-10-22", 100, 240)
-    add_fact(folder, "Ich народився навесні", 1, "noos", "2026-10-25", 100, 240)
+    add_fact(folder, "Ich веган", 2, "private", "2026-10-22", 100, 240)
+    add_fact(folder, "Ich народився навесні", 1, "private", "2026-10-25", 100, 240)
     add_fact(folder, "Ich колись грав у театрі", 0, "asked", "2026-10-24", 100, 240)
     arc = Archive(s / "kira.archive.db")
     arc.append("$1", 1, "agora", "matrix", "Ада", "перше")
@@ -48,7 +48,7 @@ def test_the_memory_view_carries_her_facts_and_the_archives_size(client):
     view = client.get("/api/agents/kira/memory", headers=AUTH).json()
     assert [(f["pin"], f["text"]) for f in view["facts"]] == [(1, "Ich народився навесні"), (2, "Ich веган"),
                                                              (0, "Ich колись грав у театрі")]
-    assert set(view["facts"][0]) == {"id", "pin", "source", "added", "text"} and view["facts"][0]["source"] == "noos"
+    assert set(view["facts"][0]) == {"id", "pin", "source", "added", "text"} and view["facts"][0]["source"] == "private"
     assert view["archive"] == {"lines": 2, "embedded": 1}
     ada = client.get("/api/agents/ada/memory", headers=AUTH).json()
     assert ada["facts"] is None and ada["archive"] is None                    # without the capabilities

@@ -51,7 +51,7 @@ The panel is what this project is really building. Today it manages the first **
 
 - **Archive** (v5.8) — a person's own record of every line she sees, in Agora and in her private chat (`state/<name>.archive.db`); searchable by words and by meaning, never pruned, read by no one else.
 - **Recall** (v5.8) — the lines from her archive that come back to her before an answer: in Agora only Agora's, alone with the owner both places' and her facts.
-- **Fact** (v5.8) — one short sentence about the owner she keeps (`state/<name>.facts/`): asked for, learned in a talk, or brought once from Noos; only her private chat sees it.
+- **Fact** (v5.8) — one short sentence about the owner she keeps (`state/<name>.facts/`): asked for, or learned in their private talks; never about AI, agents, servers or his exact address; only her private chat sees it.
 
 - **Owner** — the one human (`OWNER`, `@ich:agora.lan`): the admin of the homeserver and the only person in the room.
 - **Agent** — one of two instances of `agents/agent.py` (`Ada`, `Bruno`), each with its own Matrix account, TOML config and canon. From v3.2 each runs as its own Docker container on the server; `uv run` on the Mac is the dev mode.

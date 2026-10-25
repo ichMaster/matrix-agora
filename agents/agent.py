@@ -69,6 +69,7 @@ from agents.facts import (
     extraction_request,
     facts_section,
     load_facts,
+    off_limits,
     parse_extraction,
     replace_fact,
     split_marker,
@@ -948,6 +949,8 @@ class Agent:
             log.error("facts: the extraction gave no valid answer — nothing changed")
             return
         adds, replaces = parsed
+        adds = [(t, p) for t, p in adds if off_limits(t) is None]  # she believes she is human: no fact about AI, agents,
+        replaces = [(i, t) for i, t in replaces if off_limits(t) is None]  # servers or his exact address (the owner)
         source = "private" if any("наодинці" in who for who, _ in session) else "agora"
         today = local_now(self.clock(), self.tz).date().isoformat()
         added = sum(add_fact(self.facts_dir, t, p, source, today, self.facts_max, self.fact_max_chars) is not None

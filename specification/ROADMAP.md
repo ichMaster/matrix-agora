@@ -1129,8 +1129,7 @@ she talks with him alone, and in Agora she never talks about him.
 - **She remembers all of Agora in the private chat, and in Agora she says nothing about him.**
 - **The embeddings come from Gemini**, through the client the agents already use: no new dependency.
 - **The archive is filled from the chats** at its first start.
-- **Her first facts come from Noos:** its pinned facts, and the extract of Лілі's memory about the owner that Noos
-  keeps (`~/claude-home/memory/import/lumi/`).
+- **Her first facts come from her own private chat with the owner**, not from Noos (the owner, 2026-10-25, after reading the Noos import's dry run: «не все потрібно Кірі, вона думає, що вона людина … виберемо факти тільки з чату з Кірою»). No fact she keeps names AI, agents, bots, models, servers or his exact address.
 - **This lifts a non-goal for her.** VISION excludes "raw archives of conversations, vector DBs and RAG". From v5.8
   a person with the `recall` capability keeps an archive of the lines she took part in and searches it. The layered
   digests stay the long-term memory of everyone else, and Hermes still keeps no copy.
@@ -1186,20 +1185,10 @@ she talks with him alone, and in Agora she never talks about him.
     block. They are also searchable by recall in the private chat.
   - A stale fact is replaced. "Nothing lived is deleted" covers the memories, digests and plans; a fact is current
     knowledge, not something lived.
-- **Her first facts, from Noos** (the owner, 2026-10-25). A one-shot import, run by the owner on the host when v5.8
-  is deployed:
-  - Its sources are Noos's `memory/facts/` (21 facts: 7 at pin 1, 14 at pin 2 on 2026-10-25) and
-    the extract in `memory/import/lumi/` (Лілі's memory of the owner, about 20 KB in 12 sections).
-  - Only those two directories are mounted, read-only, into a one-off run of Кіра's image. Noos's
-    `config.local.json` and `.env.*` are never reachable.
-  - One Flash call (usage kind `facts`) condenses them into facts in her format, each at most 240 characters,
-    without duplicates, within the store's limit. Noos's pins are kept; the extract's identity facts go to pin 1 and
-    the rest to pin 2 or 0.
-  - It keeps what is about the owner as a person: his life, family, work, interests, character, values and daily
-    life. It drops what is about servers, tokens, permissions, and agents, bots or simulations by name (Agora, its
-    members, Лілі, Noos), so no fact tells a persona what she is.
-  - `--dry-run` prints what would be kept, for the owner to read first. Each fact is marked `source: noos`, and a
-    second run adds nothing it has already imported.
+- **Her first facts, from her private chat** (the owner, 2026-10-25; it replaces the Noos import planned first). A one-shot seed, run by the owner on the host when v5.8 is deployed:
+  - `python -m agents.facts seed [--dry-run]` reads the private chat from her archive (both doors, oldest first) and runs the session-end extraction over it in chunks of 150 lines, each chunk seeing the facts kept so far.
+  - Every fact, here and at every session's end, passes `off_limits`: one that names AI, agents, bots, models, servers, networks or tools, or an exact address, is dropped in code, whatever the model answered.
+  - `--dry-run` prints what would be kept and what was dropped, for the owner to read first; then the same without it. Each fact is marked `source: private`.
   - The facts live only in `state/` on the host: never in the repo, which is public, nor in a log.
 - **Agora in the private chat.**
   - Her private prompt also carries Agora's latest lines of today (`PRIVATE_AGORA_N`, 20) as «Що зараз в Агорі».
@@ -1231,8 +1220,10 @@ she talks with him alone, and in Agora she never talks about him.
   - the prompt block;
   - the marker line's parsing and stripping;
   - the extraction call and its validation;
-  - the one-shot import from Noos (`python -m agents.facts import`, with `--dry-run`), and the owner's command for
-    it in the deploy notes.
+  - the one-shot seed from her private chat (`python -m agents.facts seed`, with `--dry-run`), and the owner's
+    command for it in the deploy notes;
+  - `off_limits`: no fact about AI, agents, bots, models, servers or an exact address, at the seed and at every
+    extraction.
 - The runtime and the prompt assembly:
   - the archive written from every line she sees;
   - recall in both prompts, with the place filter;
@@ -1256,8 +1247,8 @@ she talks with him alone, and in Agora she never talks about him.
 **DoD:**
 - (Manual, owner) The Tokens view shows Кіра's answers on `gemini-3.1-pro-preview`, priced, and her background calls
   on `gemini-2.5-flash`. The others stay on their models.
-- (Manual, owner) After the import, the Facts tab lists the owner's facts from Noos, and none of them is about
-  servers, agents or bots.
+- (Manual, owner) After the seed, the Facts tab lists facts about the owner from their private chat, and none of
+  them is about AI, agents, bots or servers.
 - (Manual, owner) In the private chat the owner refers to something said a week ago, beyond the history window, and
   she recalls it.
 - (Manual, owner) «Запам'ятай, що …»: the fact appears in the Facts tab, and she knows it in a later conversation.
@@ -1270,8 +1261,8 @@ she talks with him alone, and in Agora she never talks about him.
 - the two models: an answer on `GEMINI_REPLY_MODEL` through the thinking path (no zero budget, the level), a
   background call on `GEMINI_MODEL`, an empty reply model meaning `GEMINI_MODEL`, and each usage line's model and
   price;
-- the import: Noos's fact files and the extract's sections parsed, the condensed facts validated and deduplicated,
-  the pins, a second run adding nothing, `--dry-run` writing nothing;
+- the seed: chunks that see the facts kept so far, `off_limits` at the seed and the extraction, `--dry-run` writing
+  nothing, an invalid answer skipping its chunk;
 - the archive: append, the full-text search, the embeddings batched, the bounded backfill;
 - the fusion and the pick: the order, the neighbours, the history window left out, and the place filter;
 - the facts: the limits, the pins in the prompt block, the marker line parsed and stripped and never sent, the
@@ -1282,7 +1273,7 @@ she talks with him alone, and in Agora she never talks about him.
 
 **Not in this phase:**
 - the archive and facts for the other agents (each becomes a capability, later);
-- a live sync with Noos's facts (the import is one-shot);
+- facts from Noos (the owner chose her own chat instead);
 - sharing facts between agents.
 
 ## v6 — Applications: the panel's System and Applications

@@ -10,8 +10,12 @@ They come three ways:
   (`ЗАПАМ'ЯТАЙ: …`), stripped before anything is sent (`split_marker`);
 - **extracted** — at a session's end, one call reads the session and the facts she holds and returns new facts and
   the replacements of stale ones as JSON (`parse_extraction`), validated before anything is written;
-- **imported** — once, from Noos (`python -m agents.facts import <dir> [--dry-run]`), filtered to the owner as a
-  person: nothing about servers, tokens, agents, bots or simulations, so no fact tells a persona what she is.
+- **seeded** — once, from the private chat she already had with him, read back from her archive
+  (`python -m agents.facts seed [--dry-run]`; the owner, 2026-10-25: «факти тільки з чату з Кірою» — no import from
+  Noos).
+
+She believes she is human, so no fact she keeps names AI, agents, bots, models, servers or his exact address
+(`off_limits`), whatever a model answered.
 
 A fact is current knowledge, not something lived: a stale one is replaced, and the owner may delete one in the panel.
 No fact's text ever reaches a log.
@@ -29,7 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 FACTS_TITLE = "Що ти знаєш про Ich:"
-SOURCES = ("private", "agora", "asked", "noos")
+SOURCES = ("private", "agora", "asked")
 ID_RE = re.compile(r"^[\w-]{1,64}$")
 MARK_RE = re.compile(r"^[ \t>*_-]*ЗАПАМ['’ʼ`]?ЯТАЙ[ \t*_]*:[ \t*_]*(.*?)[ \t*_]*$", re.MULTILINE | re.IGNORECASE)
 # her private brief's skill (the owner, 2026-10-25): understood from the talk, never a keyword (as Hermes's skills)
@@ -47,16 +51,21 @@ EXTRACT_SYSTEM = (
     '{{"add": [{{"text": "…", "pin": 1}}], "replace": [{{"id": "…", "text": "…"}}]}}. Якщо нового нема — '
     '{{"add": [], "replace": []}}.'
 )
-IMPORT_SYSTEM = (
-    "Перед тобою записи про одну людину — у розмовах її звуть Ich. Склади з них короткі факти про Ich як про людину: "
-    "його життя, сім'я і близькі, дитинство, робота загальними словами (професія, галузь), інтереси, книжки і кіно, "
-    "духовність, характер, цінності, побут, звички. Не бери нічого про сервери, програми, токени, паролі, дозволи, "
-    "налаштування, а також про агентів, ботів, моделі, симуляції, чати з ними і їхні імена (Агора, Ада, Бруно, Кіра, "
-    "Кіт, Клод, Гермес, Леон, Мія, Ірма, Лілі, Lumi, Noos) — такі записи пропусти повністю. Кожен факт — одне "
-    "речення про Ich, до {max_chars} символів, без повторів. pin 1 — хто він і найголовніше (не більше 20), pin 2 — "
-    "важливе, pin 0 — решта. Щонайбільше {limit} фактів. Відповідай лише JSON: "
-    '{{"facts": [{{"text": "…", "pin": 1}}]}}.'
+# the owner, 2026-10-25: «не все потрібно Кірі, вона думає, що вона людина» — a model's own judgement leaks facts
+# about AI, agents and his servers, so a fact that names any of these is dropped in code, whatever the model answered
+OFF_LIMITS = (
+    (re.compile(r"(?<!\w)(?:ші|ai|llm|gpt|gemini|claude|noos|lumi|лілі|агор\w*|tailscale|vpn|docker|hugging ?face|"
+                r"kiln|пічк\w*|промпт\w*|нейромереж\w*|нейронн\w*|human in the loop)(?!\w)", re.IGNORECASE),
+     "AI or tools"),
+    (re.compile(r"(?<!\w)(?:агент|бот|модел|симуляц|сервер|мереж)\w*", re.IGNORECASE), "agents, models or servers"),
+    (re.compile(r"(?<!\w)(?:вул\.|вулиц\w*|просп\w*|провул\w*|буд\.)", re.IGNORECASE), "an address"),
 )
+
+
+def off_limits(text: str) -> str | None:
+    """Why a fact may not reach a person who believes she is human — AI and tools, agents, models or servers, an
+    exact address — or None when it may."""
+    return next((why for pattern, why in OFF_LIMITS if pattern.search(text or "")), None)
 
 
 @dataclass(frozen=True)
@@ -95,7 +104,7 @@ def parse_fact(name: str, raw: str) -> Fact | None:
     text = _norm(body)
     if not text:
         return None
-    return Fact(name, pin if pin in (0, 1, 2) else 0, head.get("added", ""), head.get("source", "noos"), text)
+    return Fact(name, pin if pin in (0, 1, 2) else 0, head.get("added", ""), head.get("source", "private"), text)
 
 
 def load_facts(folder: Path) -> list[Fact]:
@@ -234,77 +243,59 @@ def extraction_request(name: str, session: list[tuple[str, str]], facts: list[Fa
     return EXTRACT_SYSTEM.format(name=name, max_chars=max_chars), f"Що ти вже знаєш:\n{known}\n\nРозмова:\n{talk}"
 
 
-# --- the one-shot import from Noos -----------------------------------------------------------------------------------
-def read_noos(folder: Path) -> tuple[list[Fact], list[str]]:
-    """Noos's facts (`facts/*.md`) and its imported extracts (`import/*/*.md`, README left out)."""
-    facts = load_facts(folder / "facts")
-    extracts = []
-    for path in sorted((folder / "import").glob("*/*.md")) if (folder / "import").is_dir() else []:
-        if path.name.lower() != "readme.md":
-            extracts.append(path.read_text(encoding="utf-8"))
-    return facts, extracts
+# --- the one-shot seed from her private chat ------------------------------------------------------------------------
+SEED_CHUNK = 150  # private lines per extraction call: each call sees what the earlier ones kept
 
 
-def import_request(facts: list[Fact], extracts: list[str], max_chars: int, limit: int) -> tuple[str, str]:
-    notes = "\n".join(f"[pin {f.pin}] {f.text}" for f in facts)
-    contents = f"Нотатки (з важливістю):\n{notes}\n\n" + "\n\n".join(f"Витяг:\n{e}" for e in extracts)
-    return IMPORT_SYSTEM.format(max_chars=max_chars, limit=limit), contents
-
-
-def parse_import(raw: str, max_chars: int, limit: int) -> list[tuple[str, int]] | None:
-    data = _json(raw)
-    if not isinstance(data, dict) or not isinstance(data.get("facts"), list):
-        return None
-    out, seen = [], set()
-    for item in data["facts"]:
-        if not isinstance(item, dict) or not isinstance(item.get("text"), str) or item.get("pin", 2) not in (0, 1, 2):
+async def run_seed(lines: list[tuple[str, str]], folder: Path, llm, name: str, today: str, max_facts: int,
+                   max_chars: int, dry_run: bool, out=sys.stdout) -> int:
+    """Her first facts, from the private chat she already had with the owner (both sides, oldest first): the
+    session-end extraction over it in chunks, each seeing the facts kept so far; every fact through `off_limits`.
+    `--dry-run` prints what would be kept and what was dropped, and writes nothing. The number kept."""
+    known = load_facts(folder)
+    kept = dropped = 0
+    for start in range(0, len(lines), SEED_CHUNK):
+        chunk = lines[start:start + SEED_CHUNK]
+        system, contents = extraction_request(name, chunk, known, max_chars)
+        raw = await llm.generate(contents, system, max_output_tokens=2048, kind="facts")
+        parsed = parse_extraction(raw or "", set(), max_chars)
+        if parsed is None:
+            print(f"lines {start + 1}–{start + len(chunk)}: no valid answer — skipped", file=out)
             continue
-        text = _norm(item["text"])
-        if text and len(text) <= max_chars and text.casefold() not in seen:
-            seen.add(text.casefold())
-            out.append((text, int(item.get("pin", 2))))
-    return out[:limit]
-
-
-async def run_import(source: Path, folder: Path, llm, today: str, max_facts: int, max_chars: int,
-                     dry_run: bool, out=sys.stdout) -> int:
-    """Noos's facts and extracts → her facts, `source: noos`; once only — a store that holds any is left as it is.
-    `--dry-run` prints what would be kept and writes nothing. The number written (or that would be)."""
-    held = load_facts(folder)
-    if any(f.source == "noos" for f in held):
-        print(f"already imported: {sum(f.source == 'noos' for f in held)} facts from Noos — nothing done", file=out)
-        return 0
-    facts, extracts = read_noos(source)
-    if not facts and not extracts:
-        print("nothing to import", file=out)
-        return 0
-    limit = max(max_facts - len(held), 0)
-    system, contents = import_request(facts, extracts, max_chars, limit)
-    raw = await llm.generate(contents, system, max_output_tokens=8192, kind="facts")
-    kept = parse_import(raw or "", max_chars, limit)
-    if kept is None:
-        print("the import failed: no valid answer", file=out)
-        return 0
-    written = 0
-    for text, pin in kept:
-        if dry_run:
-            print(f"[pin {pin}] {text}", file=out)
-            written += 1
-        elif add_fact(folder, text, pin, "noos", today, max_facts, max_chars):
-            written += 1
-    print(f"{'would keep' if dry_run else 'kept'} {written} facts", file=out)
-    return written
+        for text, pin in parsed[0]:
+            why = off_limits(text)
+            if why is not None:
+                dropped += 1
+                if dry_run:
+                    print(f"[dropped: {why}] {text}", file=out)
+                continue
+            if any(f.text.casefold() == text.casefold() for f in known) or len(known) >= max_facts:
+                continue
+            if dry_run:
+                print(f"[pin {pin}] {text}", file=out)
+                fact_id = f"dry-{len(known)}"
+            else:
+                fact_id = add_fact(folder, text, pin, "private", today, max_facts, max_chars)
+                if fact_id is None:
+                    continue
+            known.append(Fact(fact_id, pin, today, "private", text))
+            kept += 1
+    print(f"{'would keep' if dry_run else 'kept'} {kept} facts, dropped {dropped}", file=out)
+    return kept
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m agents.facts")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    imp = sub.add_parser("import", help="the one-shot import of Noos's facts")
-    imp.add_argument("source", type=Path)
-    imp.add_argument("--agent", default="kira")
-    imp.add_argument("--dry-run", action="store_true")
+    seed = sub.add_parser("seed", help="her first facts, from the private chat in her archive (once)")
+    seed.add_argument("--agent", default="kira")
+    seed.add_argument("--name", default="Кіра")
+    seed.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
+    import time
+
+    from agents.archive import Archive
     from agents.llm import GeminiClient
     from agents.usage import usage_line
     from agents.world import local_now
@@ -313,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
     state = Path("state")
     usage_file = state / f"{args.agent}.usage.jsonl"
 
-    def sink(kind, model, meta, ok):  # the import's call is counted under the agent, like any other
+    def sink(kind, model, meta, ok):  # the seed's calls are counted under the agent, like any other
         line = usage_line(local_now(int(time.time() * 1000), tz).isoformat(timespec="seconds"), args.agent, kind,
                           model, meta, ok)
         fd = os.open(usage_file, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
@@ -322,11 +313,19 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             os.close(fd)
 
-    import time
+    archive = Archive(state / f"{args.agent}.archive.db")
+    try:
+        private = archive.latest("private", 1_000_000)
+    finally:
+        archive.close()
+    lines = [(f"{line.speaker} (наодинці)", line.text) for line in private]
+    if not lines:
+        print("no private chat in the archive yet", file=sys.stdout)
+        return 0
     today = local_now(int(time.time() * 1000), tz).date().isoformat()
-    asyncio.run(run_import(args.source, state / f"{args.agent}.facts", GeminiClient(sink=sink), today,
-                           int(os.environ.get("FACTS_MAX", "100")), int(os.environ.get("FACT_MAX_CHARS", "240")),
-                           args.dry_run))
+    asyncio.run(run_seed(lines, state / f"{args.agent}.facts", GeminiClient(sink=sink), args.name, today,
+                         int(os.environ.get("FACTS_MAX", "100")), int(os.environ.get("FACT_MAX_CHARS", "240")),
+                         args.dry_run))
     return 0
 
 

@@ -22,12 +22,12 @@ from agents.facts import (
     fact_path,
     facts_section,
     load_facts,
+    off_limits,
     parse_extraction,
     parse_fact,
-    read_noos,
     remove_fact,
     replace_fact,
-    run_import,
+    run_seed,
     set_pin,
     split_marker,
 )
@@ -69,13 +69,13 @@ def test_replace_pin_and_remove_stay_inside_the_folder(tmp_path):
 
 def test_noos_files_parse_too():
     raw = "---\npin: 2\ntags: food\nadded: 2026-10-22\n---\nВеган, без алкоголю.\n"
-    assert parse_fact("побут", raw) == Fact("побут", 2, "2026-10-22", "noos", "Веган, без алкоголю.")
+    assert parse_fact("побут", raw) == Fact("побут", 2, "2026-10-22", "private", "Веган, без алкоголю.")
     assert parse_fact("x", "no header") is None and parse_fact("x", "---\npin: 9\n---\n  ") is None
 
 
 def test_the_prompt_block_pins_first_within_the_limits():
-    facts = [Fact("a", 2, "2026-10-01", "noos", "друге"), Fact("b", 1, "2026-10-02", "noos", "перше"),
-             Fact("c", 0, "2026-10-01", "noos", "лише для пошуку"), Fact("d", 1, "2026-10-01", "noos", "я" * 300)]
+    facts = [Fact("a", 2, "2026-10-01", "private", "друге"), Fact("b", 1, "2026-10-02", "private", "перше"),
+             Fact("c", 0, "2026-10-01", "private", "лише для пошуку"), Fact("d", 1, "2026-10-01", "private", "я" * 300)]
     out = facts_section(facts, 3, 240)
     assert out.startswith(FACTS_TITLE)
     lines = out.split("\n")[1:]
@@ -164,8 +164,8 @@ def test_a_marker_in_agora_is_stripped_too(tmp_path, monkeypatch):
 
 def test_facts_reach_only_her_private_prompt_and_only_a_private_recall(tmp_path, monkeypatch):
     agent = kira(tmp_path, monkeypatch)
-    add_fact(agent.facts_dir, f"Ich веган {SECRET}", 1, "noos", TODAY, 100, 240)
-    add_fact(agent.facts_dir, "Ich колись грав у театрі", 0, "noos", TODAY, 100, 240)
+    add_fact(agent.facts_dir, f"Ich веган {SECRET}", 1, "private", TODAY, 100, 240)
+    add_fact(agent.facts_dir, "Ich колись грав у театрі", 0, "private", TODAY, 100, 240)
     private = agent.build_prompt(private="НАОДИНЦІ", facts=agent.facts_now())
     assert FACTS_TITLE in private and SECRET in private and "грав у театрі" not in private  # pin 0: search only
     assert FACTS_TITLE not in agent.build_prompt() and SECRET not in agent.build_prompt()
@@ -217,59 +217,76 @@ def test_her_lines_about_facts_never_say_what_she_is():
     assert not BANNED_RE.search(REMEMBER_SKILL) and not BANNED_RE.search(EXTRACT_SYSTEM)
 
 
-# --- the import from Noos ------------------------------------------------------------------------------------------
-def noos(tmp_path):
-    src = tmp_path / "noos"
-    (src / "facts").mkdir(parents=True)
-    (src / "import" / "lumi").mkdir(parents=True)
-    (src / "facts" / "побут.md").write_text("---\npin: 2\ntags: x\nadded: 2026-10-22\n---\nВеган, без алкоголю.\n")
-    (src / "facts" / "сервер.md").write_text("---\npin: 1\n---\nНа сервері працює стек.\n")
-    (src / "import" / "lumi" / "README.md").write_text("як імпортувати")
-    (src / "import" / "lumi" / "core.md").write_text("# Особа\n- народився навесні")
-    return src
+# --- she believes she is human (the owner, 2026-10-25) -------------------------------------------------------------
+@pytest.mark.parametrize(("text", "why"), [
+    ("Ich працює product owner у галузі даних", None),
+    ("Ich живе у Львові", None),
+    ("Ich пише музику під псевдонімом Lili Jinx", None),
+    ("Ich любить робототехніку: Jetson, ROS", None),
+    ("Ich цінує соцмережі менше, ніж книжки", None),
+    ("Ich створює агентів і системи", "agents, models or servers"),
+    ("Ich будує в Minecraft архітектури для ботів і симуляцій", "agents, models or servers"),
+    ("Ich вважає Его помилкою моделі", "agents, models or servers"),
+    ("Ich використовує Claude як помічника", "AI or tools"),
+    ("Ich поєднує GPU й LLM з піксель-артом", "AI or tools"),
+    ("Ich цікавиться теорією розуму для ШІ", "AI or tools"),
+    ("Ich заходить додому через Tailscale", "AI or tools"),
+    ("Ich живе на вулиці Антонича, 7", "an address"),
+])
+def test_off_limits(text, why):
+    assert off_limits(text) == why
 
 
-class ImportLLM:
-    def __init__(self, answer):
-        self.answer, self.calls = answer, []
+def test_the_extraction_never_keeps_a_fact_off_limits(tmp_path, monkeypatch):
+    agent = kira(tmp_path, monkeypatch)
+    agent.llm.extraction = json.dumps({"add": [{"text": "Ich будує агентів для чату", "pin": 1},
+                                               {"text": "Ich любить какао", "pin": 2}], "replace": []})
+    asyncio.run(agent.extract_facts([("Ich (наодинці)", "я вечорами п'ю какао і будую агентів")]))
+    assert [f.text for f in load_facts(agent.facts_dir)] == ["Ich любить какао"]
+
+
+# --- the one-shot seed from her private chat (the owner, 2026-10-25: «тільки з чату з Кірою») ------------------------
+class SeedLLM:
+    def __init__(self, answers):
+        self.answers, self.calls = list(answers), []
 
     async def generate(self, contents, system, max_output_tokens=400, kind="reply"):
         self.calls.append((contents, system, kind))
-        return self.answer
+        return self.answers.pop(0) if self.answers else '{"add": [], "replace": []}'
 
 
-ANSWER = json.dumps({"facts": [{"text": "Ich веган і не п'є алкоголю", "pin": 2},
-                               {"text": "Ich народився навесні", "pin": 1},
-                               {"text": "Ich веган і не п'є алкоголю", "pin": 2}]})
+def chat(n):
+    return [("Ich (наодинці)" if i % 2 == 0 else "Кіра (наодинці)", f"рядок {i}") for i in range(n)]
 
 
-def test_the_import_reads_noos_files_and_extracts_without_readmes(tmp_path):
-    facts, extracts = read_noos(noos(tmp_path))
-    assert sorted(f.text for f in facts) == ["Веган, без алкоголю.", "На сервері працює стек."]
-    assert extracts == ["# Особа\n- народився навесні"]
+FIRST = json.dumps({"add": [{"text": "Ich любить гори", "pin": 1}, {"text": "Ich будує агентів", "pin": 1},
+                            {"text": "Ich живе на вулиці Антонича, 7", "pin": 1}], "replace": []})
+SECOND = json.dumps({"add": [{"text": "Ich любить гори", "pin": 2}, {"text": "Ich п'є какао", "pin": 2}],
+                     "replace": []})
 
 
-def test_a_dry_run_prints_and_writes_nothing(tmp_path):
-    llm, out = ImportLLM(ANSWER), io.StringIO()
+def test_a_dry_run_seed_prints_kept_and_dropped_and_writes_nothing(tmp_path):
+    llm, out, folder = SeedLLM([FIRST, SECOND]), io.StringIO(), tmp_path / "kira.facts"
+    assert asyncio.run(run_seed(chat(200), folder, llm, "Кіра", TODAY, 100, 240, True, out)) == 2
+    text = out.getvalue()
+    assert "[pin 1] Ich любить гори" in text and "[pin 2] Ich п'є какао" in text
+    assert "[dropped: agents, models or servers] Ich будує агентів" in text and "[dropped: an address]" in text
+    assert "would keep 2 facts, dropped 2" in text and load_facts(folder) == []
+    assert len(llm.calls) == 2 and all(kind == "facts" for _, _, kind in llm.calls)       # 150 lines a call
+    assert "Ich любить гори" in llm.calls[1][0]                                           # the second sees the first's
+
+
+def test_the_seed_writes_private_facts_without_duplicates(tmp_path):
     folder = tmp_path / "kira.facts"
-    assert asyncio.run(run_import(noos(tmp_path), folder, llm, TODAY, 100, 240, True, out)) == 2
-    assert "[pin 1] Ich народився навесні" in out.getvalue() and "would keep 2 facts" in out.getvalue()
-    assert load_facts(folder) == []
-    contents, system, kind = llm.calls[0]
-    assert kind == "facts" and "Веган, без алкоголю." in contents and "народився навесні" in contents
-    assert "Noos" in system and "ботів" in system                             # the filter is asked for
+    assert asyncio.run(run_seed(chat(200), folder, SeedLLM([FIRST, SECOND]), "Кіра", TODAY, 100, 240, False,
+                                io.StringIO())) == 2
+    assert sorted((f.text, f.pin, f.source) for f in load_facts(folder)) == [
+        ("Ich любить гори", 1, "private"), ("Ich п'є какао", 2, "private")]
+    for f in folder.iterdir():
+        assert os.stat(f).st_mode & 0o777 == 0o600
 
 
-def test_the_import_writes_once_as_noos(tmp_path):
-    folder, src = tmp_path / "kira.facts", noos(tmp_path)
-    assert asyncio.run(run_import(src, folder, ImportLLM(ANSWER), TODAY, 100, 240, False, io.StringIO())) == 2
-    assert sorted((f.source, f.pin) for f in load_facts(folder)) == [("noos", 1), ("noos", 2)]
-    llm, out = ImportLLM(ANSWER), io.StringIO()
-    assert asyncio.run(run_import(src, folder, llm, TODAY, 100, 240, False, out)) == 0   # a second run: nothing
-    assert llm.calls == [] and "already imported: 2 facts" in out.getvalue()
-
-
-def test_an_invalid_import_answer_writes_nothing(tmp_path):
-    folder, out = tmp_path / "kira.facts", io.StringIO()
-    assert asyncio.run(run_import(noos(tmp_path), folder, ImportLLM("ні"), TODAY, 100, 240, False, out)) == 0
-    assert load_facts(folder) == [] and "no valid answer" in out.getvalue()
+def test_an_invalid_seed_answer_skips_its_chunk(tmp_path):
+    out = io.StringIO()
+    assert asyncio.run(run_seed(chat(10), tmp_path / "f", SeedLLM(["ні"]), "Кіра", TODAY, 100, 240, False, out)) == 0
+    assert "lines 1–10: no valid answer — skipped" in out.getvalue()
