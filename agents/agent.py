@@ -743,6 +743,7 @@ class Agent:
                 except Exception:
                     log.exception("today block refresh failed (the private answer continues)")
             recalled = agora_now = None
+            facts = self.facts_now()  # v5.8 review #6: mirrored before the recall, so a deleted fact is not recalled
             if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
                 query = next((t for s, t in reversed(self.private_history) if s == "Ich"), "")
                 recalled = await self.recall_section(query, ("agora", "private", "facts"), set(self.private_history))
@@ -750,7 +751,7 @@ class Agent:
             brief = PRIVATE_NUDGE if nudge else PRIVATE_BRIEF
             if self.facts_dir is not None and not nudge:  # v5.8: «запам'ятай» — a skill, never a keyword
                 brief = f"{brief}\n\n{REMEMBER_SKILL}"
-            prompt = self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=self.facts_now())
+            prompt = self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts)
             text = await self._compose(prompt, lines=self.private_history,
                                        kind="private_nudge" if nudge else "private")
             if text is None:

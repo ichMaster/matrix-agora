@@ -372,3 +372,14 @@ def test_a_failed_update_still_clears_the_request(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError):
         asyncio.run(agent.maybe_update_facts())
     assert not agent.facts_request.exists()                                     # the button is never stuck
+
+
+def test_a_fact_deleted_in_the_panel_is_not_recalled_in_her_next_answer(tmp_path, monkeypatch):
+    """v5.8 review #6: the recall ran before the facts were mirrored, so the deleted fact came back once more."""
+    agent = kira(tmp_path, monkeypatch)
+    fid = add_fact(agent.facts_dir, "Ich колись грав у театрі", 0, "private", TODAY, 100, 240)
+    agent.facts_now()                                                          # mirrored into the archive
+    remove_fact(agent.facts_dir, fid)                                          # the panel deletes it
+    agent.private_history = [("Ich", "Пам'ятаєш, що я грав у театрі?")]          # the word search would find it
+    asyncio.run(agent.private_reply())
+    assert "грав у театрі" not in agent.llm.calls[-1][1]
