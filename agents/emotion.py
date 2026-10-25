@@ -21,11 +21,20 @@ TAG_MODELS = frozenset({"eleven_v3", "eleven_v3_conversational", "eleven_v4", "e
 TAG_RE = re.compile(r"\[([^\W\d_][^\[\]\n\d]{1,39})\](?!\()")
 
 
+RUN_RE = re.compile(rf"[ \t]*(?:{TAG_RE.pattern}[ \t]*)+")  # a run of tags with the spaces around it
+
+
+def _gap(m: re.Match) -> str:
+    """What a removed run of tags leaves: one space between words; nothing at a line's edge, after an opening quote
+    or bracket, or before punctuation. Text without tags is never touched (review #5)."""
+    before = m.string[m.start() - 1] if m.start() else "\n"
+    after = m.string[m.end()] if m.end() < len(m.string) else "\n"
+    return "" if before in "\n(«„“" or after in "\n,.!?…:;)»”" else " "
+
+
 def split_tags(reply: str) -> tuple[str, str]:
     """(text, speech): her words with every tag removed and the spaces tidied; the reply as written for the voice."""
-    text = TAG_RE.sub("", reply or "")
-    text = re.sub(r"[ \t]{2,}", " ", text)
-    text = re.sub(r"[ \t]+([,.!?…:;])", r"\1", text)
+    text = RUN_RE.sub(_gap, reply or "")
     text = "\n".join(line.strip() for line in text.split("\n")).strip()
     return text, reply or ""
 

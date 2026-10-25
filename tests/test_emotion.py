@@ -30,6 +30,9 @@ KIRA = "@kira:agora.lan"
     ("[Laughs] Так[laughs] і [LAUGHS] все.", "Так і все."),
     ("[sighs.] Ну, [laughs softly, then sighs] добре.", "Ну, добре."),
     ("Я [зам’ялася] не знаю.", "Я не знаю."),
+    # review #5: the tidy-up is only where a tag was; her own spacing stays
+    ("Ну , добре :) так ?", "Ну , добре :) так ?"),
+    ("Ну , так [laughs] ?  «[sighs] Ой»", "Ну , так?  «Ой»"),
     ("Тихо [whispers] , так?", "Тихо, так?"),                                  # no space before the comma
     ("[sighs]\n[thoughtful] Може, завтра.", "Може, завтра."),
     ("[laughs] [laughs harder]", ""),                                          # tags only: no words at all
