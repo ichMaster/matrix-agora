@@ -80,6 +80,14 @@ def mood_view(state_dir: Path, name: str, today: date, natal: Path | None) -> di
     return {"date": today.isoformat(), "resolution": split_resolution(reading), "reading": reading, "biorhythms": cycles}
 
 
+def weather_view(state_dir: Path, name: str, today: date) -> dict | None:
+    """v5.10 — a person's day of Lviv weather from `<name>.weather.json`: today's line, or None (another day, not
+    fetched yet, unreadable — never a 500)."""
+    from agents.weather import load_weather
+    line = load_weather(state_dir / f"{name}.weather.json", today.isoformat())
+    return {"date": today.isoformat(), "line": line} if line else None
+
+
 def pastlife_view(theses: Path | None) -> dict | None:
     """v4.3 — how many past-life theses the agent holds; None without the file or when it does not parse."""
     from agents.pastlife import ThesesError, parse_theses
@@ -258,6 +266,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "summary": {"text": summary, "written_at": _stamp(summary_path), "words": len(summary.split())} if summary else None,
         "days": days, "digests": digests, "plans": plans, "today": today_view,
         "mood": mood_view(state_dir, name, today, natal) if with_mood else None,
+        "weather": weather_view(state_dir, name, today) if with_mood else None,         # v5.10: Кіра's Lviv
         "pastlife": pastlife_view(memories),
         "nudge": nudge_view(state_dir, name, today) if with_nudge else None,
         "ratelimit": ratelimit_view(state_dir, name) if with_ratelimit else None,

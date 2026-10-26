@@ -401,7 +401,7 @@ function agentCardHtml(a) {
       <div><dt class="label">Uptime</dt><dd>${esc(c.state === "running" ? fmtDur(c.uptime_s) : "—")}</dd></div>
     </dl>
     ${can(a, "today") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Today</div>${today}</div>` : ""}
-    ${!can(a, "today") && can(a, "mood") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Mood of the day</div>${moodLine(mem)}</div>` : ""}
+    ${can(a, "mood") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Mood of the day</div>${moodLine(mem)}${weatherLine(mem)}</div>` : ""}
     ${can(a, "pastlife") || can(a, "nudge") ? `<div class="muted" style="font-size:12px">${pastLifeLine(mem)}</div>` : ""}
     ${a.engine === "claude-sdk" ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Subscription</div>${claudeLines(mem)}</div>` : ""}
     ${can(a, "digest") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Digests</div>${digestLine(mem)}</div>` : ""}
@@ -534,6 +534,11 @@ function logHtml(caption) {
 function unavailableBox() {
   return `<div class="empty-box">${icon("database", 18)}<strong style="font-weight:500;color:var(--color-text)">Memory unavailable</strong>
     <span>state/ cannot be read — memories, plans and tokens appear as soon as it is back.</span></div>`;
+}
+
+// v5.10 — a person's day of Lviv weather, under her mood (the cat has none: no line)
+function weatherLine(mem) {
+  return mem.available && mem.weather ? `<div class="muted" style="font-size:12px" lang="uk">${icon("sun", 13)} ${esc(mem.weather.line)}</div>` : "";
 }
 
 function moodLine(mem) {
@@ -675,7 +680,8 @@ function moodTabHtml(mem) {
   const past = mem.pastlife || mem.nudge ? `<div class="meta-line" style="margin-bottom:10px">${pastLifeLine(mem)}</div>` : "";
   if (!mem.mood) return `${past}<p class="muted">No horoscope yet — it is cast once a day, before the first reply.</p>`;
   const rhythms = mem.mood.biorhythms.map((c) => `<li><span class="mono">${esc(c.name)}</span> ${c.value >= 0 ? "+" : ""}${c.value.toFixed(2)} · ${esc(c.label)}</li>`).join("");
-  return `${past}<div class="meta-line">${icon("clock", 14)}${esc(mem.mood.date)}</div>
+  const weather = mem.weather ? `<div class="meta-line" lang="uk">${icon("sun", 14)}${esc(mem.weather.line)}</div>` : "";
+  return `${past}<div class="meta-line">${icon("clock", 14)}${esc(mem.mood.date)}</div>${weather}
     <p class="read" lang="uk">${esc(mem.mood.resolution)}</p>
     ${rhythms ? `<div class="label" style="margin-top:14px">Biorhythms</div><ul class="plain">${rhythms}</ul>` : ""}
     <details data-keep="mood:${esc(mem.mood.date)}" ${S.openDetails[`mood:${mem.mood.date}`] ? "open" : ""} style="margin-top:14px"><summary class="muted">The full reading</summary><p class="read" lang="uk" style="white-space:pre-wrap">${esc(mem.mood.reading)}</p></details>`;

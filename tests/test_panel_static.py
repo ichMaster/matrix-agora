@@ -93,6 +93,16 @@ def test_the_mood_tab_and_the_n_agent_chart():
     assert ".bars .c" in css and ".legend .e" in css
 
 
+def test_a_person_with_a_mood_shows_it_under_today_with_the_weather():
+    """v5.10: «Mood of the day» shows for every agent with `mood` — Кіра has «Today» too — and the Lviv weather beneath
+    it on the card and in the Mood tab."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert '${can(a, "mood") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Mood of the day</div>${moodLine(mem)}${weatherLine(mem)}</div>` : ""}' in js
+    assert '!can(a, "today") && can(a, "mood")' not in js
+    assert "function weatherLine(mem)" in js and "esc(mem.weather.line)" in js
+    assert 'const weather = mem.weather ?' in js and "${esc(mem.mood.date)}</div>${weather}" in js
+
+
 def test_the_full_reading_stays_open_across_re_renders():
     """Review #10: every poll re-renders the drawer, and the Mood tab's <details> folded shut each time."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")

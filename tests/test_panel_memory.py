@@ -147,6 +147,34 @@ def test_a_torn_mood_log_never_breaks_the_memory_route(state, monkeypatch):
     assert r.status_code == 200 and r.json()["mood"]["resolution"] == "Мрр."
 
 
+# --- v5.10: Кіра's mood of the day and the Lviv weather ---------------------------------------------------------------
+WEATHER = "Львів: дощ, від +3 до +9 °C, опади 4 мм, вітер до 18 км/год, схід 07:31, захід 16:52"
+
+
+def test_the_weather_view_is_todays_line_or_none(state):
+    (state / "kira.weather.json").write_text(json.dumps({"day": "2026-10-04", "weather": WEATHER}), encoding="utf-8")
+    assert memory_view(state, "kira", TODAY, with_mood=True)["weather"] == {"date": "2026-10-04", "line": WEATHER}
+    assert memory_view(state, "kira", date(2026, 10, 5), with_mood=True)["weather"] is None       # another day
+    assert memory_view(state, "kira", TODAY)["weather"] is None                                    # no `mood`
+    assert memory_view(state, "kit", TODAY, with_mood=True)["weather"] is None                     # never fetched
+    (state / "kira.weather.json").write_bytes(b"{\"day\": \"2026-10-04\", \xd0")
+    assert memory_view(state, "kira", TODAY, with_mood=True)["weather"] is None                    # corrupt, no 500
+
+
+def test_the_memory_route_serves_kiras_mood_and_weather_and_the_cat_none(state, monkeypatch):
+    monkeypatch.setattr(app_mod, "local_today", lambda: TODAY)
+    (state / "kira.mood.log").write_text("\n\n===== 2026-10-04 =====\nЧитання.\n\nРЕЗОЛЮЦІЯ: Ти тиха.\n",
+                                         encoding="utf-8")
+    (state / "kira.weather.json").write_text(json.dumps({"day": "2026-10-04", "weather": WEATHER}), encoding="utf-8")
+    reg = Registry()
+    c = TestClient(create_app(token=TOKEN, registry=reg, docker_reader=DockerReader(client_factory=lambda: None),
+                              prober=Prober(reg), state_dir=state, background=False))
+    kira = c.get("/api/agents/kira/memory", headers=AUTH).json()
+    assert kira["mood"]["resolution"] == "Ти тиха." and kira["weather"]["line"] == WEATHER
+    assert c.get("/api/agents/kit/memory", headers=AUTH).json()["weather"] is None
+    assert c.get("/api/agents/ada/memory", headers=AUTH).json()["weather"] is None
+
+
 # --- v4.3: the cat's past life and initiative -----------------------------------------------------------------------
 @pytest.mark.canon
 def test_the_cat_shows_his_theses_his_last_nudge_and_todays_count(state, monkeypatch):
