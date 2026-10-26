@@ -1,3 +1,16 @@
+Version 5.9.1 (2026-10-26)
+---------------------------
+- Plans cover a whole life, not the pastimes alone (the owner): each plan
+  has at least one work item (a day plan: on a working day of the usual
+  week) and one about the person's own people outside the room, and
+  pastimes take at most half; the room's members and the owner are still
+  never planned for
+- The canon is private (the owner): agents/canon/ is gitignored and kept
+  out of the images; server/deploy.sh syncs it to ~/matrix-agora/canon on
+  the host, and compose mounts it read-only into the persons, the cat,
+  Hermes and the panel - never Claude's container; tests that read it are
+  marked `canon` and skipped where it is absent (CI)
+
 Version 5.9.0 (2026-10-25)
 ---------------------------
 - Phase v5.9 - Kira's voice with emotion: ElevenLabs audio tags
