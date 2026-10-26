@@ -1368,7 +1368,8 @@ day, in Agora and alone with the owner.
 - **The mood is the cat's mechanism, for a person**: the horoscope (natal chart and the day's real sky) with the
   biorhythms laid over it.
 - **The real Lviv weather** goes into the reading.
-- **Кіра first**; the other persons once hers is tuned.
+- **Кіра only, for now**: every part of v5.10–v5.14 is switched on for her alone, in her TOML; the other persons get
+  none of it until the owner decides otherwise.
 - The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life. Read it before
   generating the issues.
 
@@ -1508,9 +1509,8 @@ stability and speed, never the model.
 feels closeness, trust, hurt, longing and jealousy toward each person; an unsettled thing stays open until it is
 settled. The state may change what she does, within bounds.
 
-**Owner decisions** (2026-10-26): the state may change her behaviour, not only her tone. Defaults, not contradicted:
-- a separate session-end call (kind `feelings`);
-- Кіра first.
+**Owner decisions** (2026-10-26): the state may change her behaviour, not only her tone; Кіра only, for now. A
+default, not contradicted: a separate session-end call (kind `feelings`).
 
 **Tasks:**
 - **Feelings per person.**
@@ -1578,7 +1578,7 @@ day stays with her for months, not only seven days.
 - recall's ranking with the charge;
 - a past memory never rewritten.
 
-**Not in this phase:** the other persons (after Кіра's is tuned).
+**Not in this phase:** the other persons; v5.10–v5.14 are Кіра's only, for now (the owner, 2026-10-26).
 
 ## v6 — Applications: the panel's System and Applications
 

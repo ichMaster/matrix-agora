@@ -141,7 +141,7 @@ by the owner on 2026-10-26, is [Her emotional life](#her-emotional-life-v510-pro
 > - real events of her life, not only plans and memories.
 >
 > The owner answered the main questions the same day (see [Decided](#decided-the-owner-2026-10-26)); the phases are
-> in the ROADMAP as **v5.10–v5.14**. Scoped to Кіра first; the other persons later, once hers is tuned.
+> in the ROADMAP as **v5.10–v5.14**. For Кіра only, for now (the owner, 2026-10-26).
 
 ### Today, for comparison
 
@@ -343,12 +343,13 @@ sources:
      20 minutes) and shorter. His message is never dropped.
    - **Agora's turn rules stay shared.** The state never changes *whether* she takes a turn, since that is derived
      from shared inputs (the ranking, R1–R4). It changes only how she answers and its length; she may still `PASS`.
+5. **Кіра only, for now.** Every part of v5.10–v5.14 is switched on for her alone, in her TOML. The other persons
+   get none of it until the owner decides otherwise.
 
 **Not answered yet; these defaults hold unless the owner says otherwise:**
 - **Known events:** Claude drafts the dated list in her current chapter, and the owner edits it.
 - **A session's end:** a separate call (kind `feelings`) reads the session for the feelings and threads, kept apart
   from the summary's call so each stays simple.
-- **Scope:** Кіра first, then the other persons once hers is tuned.
 
 ## Costs
 
