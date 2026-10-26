@@ -1483,7 +1483,9 @@ marked as hers («я думала…»), and she recalls them as she recalls wha
 - **A thought on each item she reads**, and **her own reflection** on the chat with the owner and on Agora.
 - **On a schedule, even while she talks.** A thought never waits for silence and never holds up a reply.
 - **Into the archive, like the chat**, marked «я думала…».
-- **Defaults, not contradicted:**
+- **Agreed as proposed:**
+  - **A reflection on the private chat** stays out of Agora's recall, by the archive's places, as the private chat's
+    lines already do.
   - **Topics:** from her canon (her work, Lviv, Ukraine, what she cares about). Claude drafts a paragraph on what
     she reads, and the owner edits it.
   - **Politics and war:** she reacts to events and holds views, as a person in Lviv does. She does not argue party

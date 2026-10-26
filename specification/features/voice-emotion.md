@@ -429,19 +429,24 @@ Other sources checked on the same day:
    - Two sources: a local one with the full text (Zaxid.net) and The Guardian.
    - A thought on each item she reads, and her own reflection on her talks with the owner and in Agora.
    - On a schedule, even while she talks.
-   - Into her archive like the chat, marked «я думала…».
+   - Into her archive like the chat, marked «я думала…», with a time a person would remember («вчора», «цього
+     тижня»), never a date.
+   - Agreed as proposed:
+     - **Lviv's news in v5.11** come from Zaxid.net too, not a grounded search.
+     - **A reflection on the private chat** stays out of Agora's recall, by the archive's places, as the private
+       chat's lines already do.
+     - **What she reads:** her work, Lviv, Ukraine and what she cares about. Claude drafts a paragraph on it in her
+       canon, and the owner edits it.
+     - **Politics and war:** she reacts to events and holds views, as a person in Lviv does. She does not argue
+       party politics unless asked.
+     - **Links:** when she shares an item in the private chat or Telegram, its link goes with it. In Agora she tells
+       it in her own words.
    - See [Reading and thoughts](#reading-and-thoughts-v512-the-owner-2026-10-26).
 
 **Not answered yet; these defaults hold unless the owner says otherwise:**
 - **Known events:** Claude drafts the dated list in her current chapter, and the owner edits it.
 - **A session's end:** a separate call (kind `feelings`) reads the session for the feelings and threads, kept apart
   from the summary's call so each stays simple.
-- **What she reads:** her work, Lviv, Ukraine and what she cares about. Claude drafts a paragraph on it in her
-  canon, and the owner edits it.
-- **Politics and war:** she reacts to events and holds views, as a person in Lviv does. She does not argue party
-  politics unless asked.
-- **Links:** when she shares an item in the private chat or Telegram, its link goes with it. In Agora she tells it
-  in her own words.
 
 ## Costs
 
