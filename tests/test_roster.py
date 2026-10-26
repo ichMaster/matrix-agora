@@ -68,7 +68,10 @@ def test_the_four_newcomers_are_people_like_ada_and_bruno(name, shown, forms):
     assert (m.user_id, m.name, m.type, m.engine, m.mode, m.weight) == (
         f"@{name}:agora.lan", shown, "persona", "gemini", "ranked", 1.0)
     assert m.name_forms == forms and m.can("voice")
-    assert m.capabilities == TYPES["persona"] | ({"private", "telegram", "recall", "facts", "emotion"} if name == "kira" else set())
+    # v5.10: her mood of the day is hers alone, with her natal chart; the others have neither
+    assert m.capabilities == TYPES["persona"] | ({"private", "telegram", "recall", "facts", "emotion", "mood"}
+                                                 if name == "kira" else set())
+    assert m.natal == ("agents/canon/kira.natal.md" if name == "kira" else "")
     assert m.panel["name"] == name.capitalize()
 
 
@@ -306,6 +309,28 @@ def test_a_creature_without_a_natal_chart_refuses_to_start(tmp_path, monkeypatch
                     'canon = "agents/canon/x.md"\n[capabilities]\nlife = false\n')
     with pytest.raises(ConfigError, match="natal"):
         load_config(toml, env={**ENV, "X_PASSWORD": "pw"})
+
+
+def test_a_person_may_have_a_mood_and_then_needs_a_natal_chart(tmp_path, monkeypatch):
+    """v5.10: `mood` is no creature's alone — a person's TOML may switch it on, and then her natal chart is required
+    and read like the cat's (comment lines dropped)."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "agents" / "canon").mkdir(parents=True)
+    (tmp_path / "agents" / "canon" / "common.md").write_text("# Агора\nспільне")
+    (tmp_path / "agents" / "canon" / "x.md").write_text("канон")
+    (tmp_path / "simulations.toml").write_text(REGISTRY.replace('"ada", "bruno", "kit"', '"x"').replace("[sim", "[agora"))
+    toml = tmp_path / "agents" / "x.toml"
+    base = ('name = "X"\nuser_id = "@x:agora.lan"\nsimulation = "agora"\ntype = "persona"\n'
+            'canon = "agents/canon/x.md"\n')
+    toml.write_text(base + "[capabilities]\nlife = false\nmood = true\n")
+    with pytest.raises(ConfigError, match="natal"):
+        load_config(toml, env={**ENV, "X_PASSWORD": "pw"})
+    (tmp_path / "agents" / "canon" / "x.natal.md").write_text("# карта\nНародження: 02.12.2002, 20:40, Донецьк.\n")
+    toml.write_text(base + 'natal = "agents/canon/x.natal.md"\n[capabilities]\nlife = false\nmood = true\n')
+    cfg = load_config(toml, env={**ENV, "X_PASSWORD": "pw"})
+    assert cfg.type == "persona" and cfg.can("mood") and cfg.can("plans")
+    assert cfg.natal == "Народження: 02.12.2002, 20:40, Донецьк."
+    assert "mood" not in TYPES["persona"]                        # the type's default stays without it
 
 
 def test_a_broken_other_member_is_skipped_but_ones_own_still_refuses(tmp_path):

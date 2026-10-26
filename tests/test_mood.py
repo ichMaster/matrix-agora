@@ -12,12 +12,18 @@ import pytest
 from agents.agent import Agent
 from agents.config import AgentConfig
 from agents.mood import (
+    HOROSCOPE_RE,
     MOOD_SYSTEM,
+    NO_SKY_RULE,
+    NO_SKY_SECTION,
+    PERSON_RULE,
+    WEATHER_RULE,
     biorhythms,
     format_biorhythms,
     log_block,
     mood_request,
     parse_birth_date,
+    person_mood,
     reading_from_log,
     split_resolution,
 )
@@ -226,3 +232,131 @@ def test_the_mood_log_is_private_from_birth(tmp_path):
         datetime(2026, 10, 11, 12, tzinfo=ZoneInfo("Europe/Kyiv"))))
     assert stat.S_IMODE(os.stat(agent.mood_file).st_mode) == 0o600
     assert reading_from_log(agent.mood_file.read_text(encoding="utf-8"), "2026-10-11") == READING.strip()
+
+
+# --- v5.10: the mood for a person (Кіра) — the reading stays in the log, she reads only a feeling --------------------
+KIRA_NATAL = "Народження: 02.12.2002, 20:40, Донецьк.\nСонце 10° Стрілець (V) · ASC Лев 15°."
+KIRA_READING = ("Транзит Марса до натального Місяця важкий, біоритми на спаді.\n\n"
+                "РЕЗОЛЮЦІЯ: Ти сьогодні тиха й зібрана, тягне до неба. Марс тисне на Місяць, тож будь обережна. "
+                "Біоритми на спаді. Енергії — 40 відсотків. Ти ж не бот? Хочеться бути наодинці з думками.")
+KIRA_FEELING = "Ти сьогодні тиха й зібрана, тягне до неба. Хочеться бути наодинці з думками."
+WEATHER = "Львів: дощ, від +3 до +9 °C, опади 4 мм, вітер до 18 км/год, схід 07:31, захід 16:52, уночі хмарність 85 %"
+
+
+@pytest.mark.parametrize("sentence", [
+    "Марс тисне на Місяць.", "Венера дарує легкість.", "Сатурн у ретроградному русі.", "Гороскоп каже так.",
+    "Транзити важкі.", "Біоритми на спаді.", "Натальний Місяць у Скорпіоні — ти знаєш.", "Зодіак мовчить.",
+    "Енергії — 40 відсотків.", "Сьогодні 2 грудня.", "Ти ж не бот?", "Наче модель на паузі.", "Резолюція проста.",
+    "Асцендент світиться.",
+])
+def test_a_person_never_reads_the_horoscope_a_number_or_a_banned_word(sentence):
+    assert person_mood(f"Ти сьогодні тиха. {sentence} Тягне до неба.") == "Ти сьогодні тиха. Тягне до неба."
+
+
+def test_her_feeling_keeps_the_sun_and_the_moon_as_everyday_words_and_may_be_nothing():
+    assert person_mood("Сонце в очі, і ти легка. Місяць був довгий.") == "Сонце в очі, і ти легка. Місяць був довгий."
+    assert person_mood(split_resolution(KIRA_READING)) == KIRA_FEELING
+    assert person_mood("Марс тисне. Біоритми низькі.") is None and person_mood("") is None
+
+
+def test_the_person_request_carries_the_weather_and_her_rule_and_the_cats_is_unchanged():
+    contents = mood_request("Кіра", KIRA_NATAL, "2026-10-26", "фізичний +0.50 (rising)", None, WEATHER, True)[1]
+    assert WEATHER_RULE.format(weather=WEATHER) in contents and contents.endswith(PERSON_RULE)
+    assert contents.index("Біоритми") < contents.index("Погода на цю дату") < contents.index("Це людина")
+    no_weather = mood_request("Кіра", KIRA_NATAL, "2026-10-26", None, None, None, True)[1]
+    assert "Погода" not in no_weather and PERSON_RULE in no_weather
+    cat_contents = mood_request("Кіт", NATAL, "2026-10-26", "фізичний +0.50 (rising)")[1]
+    assert cat_contents == ("Натальна карта:\n" + NATAL + "\n\nДата: 2026-10-26.\n\n" + NO_SKY_RULE
+                            + "\n\nБіоритми (ТОЧНО обчислені цикли): фізичний +0.50 (rising)." + cat_contents.split(
+                                "фізичний +0.50 (rising).", 1)[1])
+    assert "Погода" not in cat_contents and "Це людина" not in cat_contents and cat_contents.endswith("РЕЗОЛЮЦІЇ.")
+
+
+class KiraLLM(MoodLLM):
+    def __init__(self, reading=KIRA_READING):
+        super().__init__(reading)
+        self.mood_contents, self.systems = [], []
+
+    async def generate(self, transcript, system_instruction, max_output_tokens=400, kind="reply"):
+        if kind == "mood":
+            self.mood_contents.append(str(transcript))
+        else:
+            self.systems.append((kind, system_instruction))
+        return await super().generate(transcript, system_instruction, max_output_tokens, kind)
+
+
+def kira_mood(tmp_path, monkeypatch, llm, weather=WEATHER):
+    from tests.test_private_runtime import kira
+    agent = kira(tmp_path, monkeypatch, llm=llm)
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "capabilities": agent.cfg.capabilities | {"mood"},
+                               "natal": KIRA_NATAL})
+    fetched = []
+
+    async def fetch(day, tz):
+        fetched.append(day)
+        return weather
+    agent.weather_fetch, agent.fetched = fetch, fetched
+    return agent
+
+
+def mood_block(prompt):
+    return next((p for p in prompt.split("\n\n") if p.startswith("Настрій дня")), None)
+
+
+def test_her_reading_takes_the_weather_and_both_her_prompts_carry_only_the_feeling(tmp_path, monkeypatch):
+    from agents.logic import BANNED_RE
+    from agents.private import PRIVATE_BRIEF
+    llm = KiraLLM()
+    agent = kira_mood(tmp_path, monkeypatch, llm)
+    asyncio.run(agent.reply("!room"))
+    assert llm.calls.count("mood") == 1 and agent.fetched == [date(2026, 10, 20)]
+    assert WEATHER_RULE.format(weather=WEATHER) in llm.mood_contents[0] and PERSON_RULE in llm.mood_contents[0]
+    for prompt in (agent.build_prompt(), agent.build_prompt(private=PRIVATE_BRIEF)):
+        block = mood_block(prompt)
+        assert block == f"Настрій дня: {KIRA_FEELING}"
+        assert not HOROSCOPE_RE.search(block) and not BANNED_RE.search(block) and not any(c.isdigit() for c in block)
+        assert "Небо сьогодні" not in prompt and NO_SKY_SECTION not in prompt and WEATHER not in prompt
+    assert "Транзит Марса" in agent.mood_file.read_text(encoding="utf-8")       # the reading lives in her log only
+
+
+def test_her_first_private_answer_of_the_day_has_its_mood(tmp_path, monkeypatch):
+    from tests.test_private_runtime import DM, OWNER, answer, text
+    llm = KiraLLM()
+    agent = kira_mood(tmp_path, monkeypatch, llm)
+    agent.private_room = DM
+    answer(agent, text(OWNER, "Як ти?"))
+    assert llm.calls[0] == "mood"
+    kind, system = llm.systems[-1]
+    assert kind == "private" and f"Настрій дня: {KIRA_FEELING}" in system
+
+
+def test_without_weather_her_reading_still_runs_and_a_restart_reuses_the_day(tmp_path, monkeypatch):
+    llm = KiraLLM()
+    agent = kira_mood(tmp_path, monkeypatch, llm, weather=None)
+    asyncio.run(agent.reply("!room"))
+    assert "Погода" not in llm.mood_contents[0] and PERSON_RULE in llm.mood_contents[0]
+    assert mood_block(agent.build_prompt()) == f"Настрій дня: {KIRA_FEELING}"
+    again = KiraLLM("НОВЕ\n\nРЕЗОЛЮЦІЯ: Ти інша.")
+    restarted = kira_mood(tmp_path, monkeypatch, again)
+    asyncio.run(restarted.reply("!room"))
+    assert again.calls.count("mood") == 0 and mood_block(restarted.build_prompt()) == f"Настрій дня: {KIRA_FEELING}"
+
+
+def test_a_resolution_with_nothing_a_person_may_read_is_no_block(tmp_path, monkeypatch):
+    agent = kira_mood(tmp_path, monkeypatch, KiraLLM("Читання.\n\nРЕЗОЛЮЦІЯ: Марс тисне. Біоритми низькі."))
+    asyncio.run(agent.reply("!room"))
+    assert agent.mood is not None and mood_block(agent.build_prompt()) is None
+
+
+def test_the_cat_is_unchanged_no_weather_and_his_sky_lines(tmp_path):
+    llm = KiraLLM(READING)
+
+    async def no_fetch(day, tz):
+        raise AssertionError("the cat never fetches the weather")
+    agent = cat(tmp_path, llm)
+    agent.weather_fetch = no_fetch
+    asyncio.run(agent.reply("!room"))
+    assert "Погода" not in llm.mood_contents[0] and "Це людина" not in llm.mood_contents[0]
+    prompt = agent.build_prompt()
+    assert "Настрій дня: Сьогодні колючий і сонний. Уникає людей." in prompt and NO_SKY_SECTION in prompt
+    assert not agent.weather_file.exists()

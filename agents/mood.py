@@ -54,9 +54,9 @@ class MoodState:
 
 
 def mood_request(name: str, natal: str, date_str: str, biorhythms: str | None = None,
-                 sky: str | None = None) -> tuple[str, str]:
+                 sky: str | None = None, weather: str | None = None, person: bool = False) -> tuple[str, str]:
     """(system, contents) for the daily mood call — the natal chart, the date, the day's real sky and the computed
-    biorhythms."""
+    biorhythms; for a person (v5.10) the day's real weather too, and a resolution in a person's words."""
     content = f"Натальна карта:\n{natal}\n\nДата: {date_str}."
     content += f"\n\n{SKY_RULE.format(sky=sky)}" if sky else f"\n\n{NO_SKY_RULE}"
     if biorhythms:
@@ -66,7 +66,39 @@ def mood_request(name: str, natal: str, date_str: str, biorhythms: str | None = 
             "і не списком, а вплетеними в загальну картину дня; де щось суперечить транзитам, примири в "
             "одному настрої. Нехай вони фарбують енергію, чутливість і тон, і нехай це відіб'ється в РЕЗОЛЮЦІЇ."
         )
+    if weather:
+        content += f"\n\n{WEATHER_RULE.format(weather=weather)}"
+    if person:
+        content += f"\n\n{PERSON_RULE}"
     return MOOD_SYSTEM.format(name=name), content
+
+
+# --- v5.10: the mood for a person (Кіра) — the reading stays in the log, she reads only a feeling ------------------
+WEATHER_RULE = ("Погода на цю дату (реальна, з прогнозу): {weather}. Нехай вона теж фарбує день — світло чи сірість, "
+                "холод, дощ, вітер, ясна чи хмарна ніч — вплетена в загальну картину, не окремим блоком.")
+PERSON_RULE = (
+    "Це людина, і РЕЗОЛЮЦІЮ вона прочитає як власне відчуття дня. Пиши РЕЗОЛЮЦІЮ для неї самої, другою особою "
+    "(«ти сьогодні …»), словами людини: настрій, енергія, до чого тягне, чого уникає, який тон. У РЕЗОЛЮЦІЇ — жодної "
+    "астрології: ні планет, ні знаків, ні домів, ні транзитів чи аспектів, ні біоритмів, ні слова «гороскоп»; жодних "
+    "чисел і жодних порад. Погоду — лише як відчуття (сіре небо, мокрі вулиці, ясна ніч)."
+)
+# What never reaches a person's prompt from the reading: the horoscope's own words (the planets but the Sun and the
+# Moon, which are everyday words), and — checked apart — a digit or a word the persons must never be called.
+HOROSCOPE_RE = re.compile(
+    r"\b(гороскоп\w*|астролог\w*|транзит\w*|натальн\w*|біоритм\w*|ретроград\w*|зодіак\w*|ефемерид\w*|тригон\w*"
+    r"|секстил\w*|квадратур\w*|резолюц\w*|меркурі\w*|венер\w*|марс\w*|юпітер\w*|сатурн\w*|уран\w*|нептун\w*"
+    r"|плутон\w*|асцендент\w*|horoscope\w*|astrolog\w*)", re.IGNORECASE)
+_SENTENCES = re.compile(r"(?<=[.!?…])\s+|\n+")
+
+
+def person_mood(resolution: str) -> str | None:
+    """The resolution as a person may read it: every sentence with a horoscope word, a digit or a banned word is
+    dropped; nothing left is None (no «Настрій дня» that day)."""
+    from agents.logic import BANNED_RE  # the human-belief rule's own list
+
+    kept = [s.strip() for s in _SENTENCES.split(resolution or "") if s.strip()]
+    kept = [s for s in kept if not (HOROSCOPE_RE.search(s) or BANNED_RE.search(s) or re.search(r"\d", s))]
+    return " ".join(kept) or None
 
 
 def log_block(day: str, reading: str) -> str:

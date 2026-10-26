@@ -25,7 +25,7 @@ CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "worl
                 "news", "digest", "transcribe", "voice", "private", "telegram", "recall", "facts",
                 "emotion")
 TYPES: dict[str, frozenset[str]] = {
-    # a human persona: the full memory stack, no horoscope
+    # a human persona: the full memory stack, no horoscope — v5.10: a person's TOML may switch `mood` on (Кіра)
     "persona": frozenset({"canon", "life", "summary", "chronicle", "plans", "today", "world", "voice"}),
     # v4.2 — a creature (the cat): canon, a life story and the world, a daily horoscope; no memories, no plans;
     # v4.3 — his fixed past-life theses (`pastlife`) and the only initiative in the room (`nudge`)

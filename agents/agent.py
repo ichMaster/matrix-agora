@@ -111,6 +111,7 @@ from agents.mood import (
     log_block,
     mood_request,
     parse_birth_date,
+    person_mood,
     reading_from_log,
     split_resolution,
 )
@@ -755,6 +756,11 @@ class Agent:
                     await self.ensure_today(local_now(self.clock(), self.tz))
                 except Exception:
                     log.exception("today block refresh failed (the private answer continues)")
+            if self.cfg.can("mood"):  # v5.10: a new day's first private answer has its mood, as in Agora
+                try:
+                    await self.ensure_mood(local_now(self.clock(), self.tz))
+                except Exception:
+                    log.exception("mood of the day failed (the private answer continues)")
             recalled = agora_now = None
             facts = self.facts_now()  # v5.8 review #6: mirrored before the recall, so a deleted fact is not recalled
             if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
@@ -1718,6 +1724,9 @@ class Agent:
         is real; without it, he is told he does not know the positions today."""
         if self.mood is None or self.mood.date != now.date().isoformat():
             return None
+        if self.cfg.type == "persona":  # v5.10: a person reads a feeling — no sky, no horoscope word, no number
+            feeling = person_mood(self.mood.resolution)
+            return f"Настрій дня: {feeling}" if feeling else None
         sky = self.sky_today(now)
         return f"Настрій дня: {self.mood.resolution}" + (
             f"\n\n{SKY_SECTION.format(sky=sky)}" if sky else f"\n\n{NO_SKY_SECTION}")
@@ -1788,6 +1797,8 @@ class Agent:
         retry after 10 minutes — never a blocked reply."""
         day = now.date().isoformat()
         sky = await self.ensure_sky(now)  # the day's sky first: the reading is built on it (the owner, 2026-10-11)
+        person = self.cfg.type == "persona"
+        weather = await self.ensure_weather(now) if person else None  # v5.10: the real Lviv weather around her day
         if self.mood is not None and self.mood.date == day:
             return
         if self._mood_lock.locked() or self.clock() < self._mood_retry_ms:
@@ -1799,7 +1810,7 @@ class Agent:
                 return
             birth = parse_birth_date(self.cfg.natal)
             rhythms = format_biorhythms(biorhythms(birth, now.date())) if birth else None
-            system, contents = mood_request(self.cfg.name, self.cfg.natal, day, rhythms, sky)
+            system, contents = mood_request(self.cfg.name, self.cfg.natal, day, rhythms, sky, weather, person)
             reading = await self._mood_reading(contents, system)
             if not reading:
                 log.error("mood of the day failed — none today until a retry")
