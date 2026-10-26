@@ -4,7 +4,9 @@ today; the rendering, the neighbours, the window left out, the fallback, the pro
 
 import asyncio
 import logging
+from datetime import datetime
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 from agents.archive import AGORA_NOW_TITLE, RECALL_TITLE, Line, render_agora_now, render_recalled
 from agents.logic import BANNED_RE, build_instruction
@@ -104,16 +106,20 @@ def test_the_window_is_left_out_and_neighbours_come_along(tmp_path, monkeypatch)
 
 
 # --- the rendering -----------------------------------------------------------------------------------------------
-def test_the_rendering_has_dates_places_and_cuts_long_lines():
+def test_the_rendering_has_when_and_places_never_a_date_and_cuts_long_lines():
     tz = TZ
     group = [Line(1, "$1", ms(9), "agora", "matrix", "Бруно", "Тустань"),
              Line(2, "$2", ms(10), "private", "telegram", "Ich", "я" * 600),
              Line(3, "f", 0, "facts", "", "факт", "Веган уже чотири роки")]
-    out = render_recalled([group], tz)
+    now = datetime(2026, 10, 28, 14, 0, tzinfo=ZoneInfo(TZ))  # Wednesday of the next week
+    out = render_recalled([group], tz, now)
     assert out.startswith(RECALL_TITLE)
-    assert "20 жовтня, в Агорі — Бруно: Тустань" in out and "20 жовтня, наодинці — Ich: " in out
+    assert "минулого тижня, в Агорі — Бруно: Тустань" in out and "минулого тижня, наодинці — Ich: " in out
+    assert "жовтня" not in out and "09:00" not in out                  # the owner, 2026-10-26: a date gives her away
+    assert render_recalled([group[:1]], tz, datetime(2026, 10, 20, 18, 0, tzinfo=ZoneInfo(TZ))).endswith(
+        "сьогодні вранці, в Агорі — Бруно: Тустань")
     assert "(те, що ти знаєш про Ich) Веган уже чотири роки" in out and "я" * 600 not in out and "…" in out
-    assert render_recalled([], tz) is None and render_agora_now([], tz) is None
+    assert render_recalled([], tz, now) is None and render_agora_now([], tz) is None
     assert render_agora_now([group[0]], tz) == f"{AGORA_NOW_TITLE}\n09:00 Бруно: Тустань"
 
 

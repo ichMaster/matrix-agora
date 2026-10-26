@@ -62,6 +62,30 @@ def relative_when(then: datetime, now: datetime) -> str:
     return f"{then.day} {MONTHS_GEN[then.month - 1]}"
 
 
+def ago(then: datetime, now: datetime) -> str:
+    """When a remembered line was, as a person remembers it — never a date or an hour (the owner, 2026-10-26: «26
+    жовтня» gives her away). The nearest band wins; the week starts on Monday."""
+    d, today = then.date(), now.date()
+    diff = (today - d).days
+    if diff <= 0:
+        return f"сьогодні {PART_ADVERB[part_of_day(then.hour)]}"
+    if diff == 1:
+        return "вчора"
+    if diff == 2:
+        return "позавчора"
+    monday = today - timedelta(days=today.weekday())
+    if d >= monday:
+        return "цього тижня"
+    if d >= monday - timedelta(days=7):
+        return "минулого тижня"
+    months = (today.year - d.year) * 12 + today.month - d.month
+    if months == 0:
+        return "цього місяця"
+    if months == 1:
+        return "минулого місяця"
+    return "якось"
+
+
 def last_talk_line(then: datetime, now: datetime) -> str:
     return f"Востаннє ви говорили {relative_when(then, now)}."
 

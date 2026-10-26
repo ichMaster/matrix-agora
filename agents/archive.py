@@ -18,11 +18,12 @@ import sqlite3
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 
-from agents.world import MONTHS_GEN, local_now
+from agents.world import ago, local_now
 
 PLACES = ("agora", "private", "facts")  # facts (v5.8, `facts`): searchable by a private recall only
 RRF_K = 60       # Noos's reciprocal rank fusion constant
@@ -102,9 +103,10 @@ def _cut(text: str) -> str:
     return text if len(text) <= LINE_MAX_CHARS else text[:LINE_MAX_CHARS - 1].rstrip() + "…"
 
 
-def render_recalled(groups: list[list[Line]], tz) -> str | None:
+def render_recalled(groups: list[list[Line]], tz, now: datetime) -> str | None:
     """The recall section: each recalled line with its neighbours, a group a paragraph, oldest first, each line
-    with its date and place («12 жовтня, в Агорі — Ада: …»); a fact as what she knows."""
+    with when it was, as a person remembers it, and its place («минулого тижня, в Агорі — Ада: …»; never a date —
+    the owner, 2026-10-26); a fact as what she knows."""
     out = []
     for group in groups:
         rows = []
@@ -112,9 +114,8 @@ def render_recalled(groups: list[list[Line]], tz) -> str | None:
             if line.place == "facts":
                 rows.append(f"(те, що ти знаєш про Ich) {_cut(line.text)}")
                 continue
-            when = local_now(line.ts_ms, tz)
-            rows.append(f"{when.day} {MONTHS_GEN[when.month - 1]}, {PLACE_LABEL.get(line.place, line.place)} — "
-                        f"{line.speaker}: {_cut(line.text)}")
+            when = ago(local_now(line.ts_ms, tz), now)
+            rows.append(f"{when}, {PLACE_LABEL.get(line.place, line.place)} — {line.speaker}: {_cut(line.text)}")
         if rows:
             out.append("\n".join(rows))
     return RECALL_TITLE + "\n" + "\n\n".join(out) if out else None

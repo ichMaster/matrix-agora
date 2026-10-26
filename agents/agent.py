@@ -927,7 +927,7 @@ class Agent:
                 groups.append(group)
             if picked:
                 log.info("recall: %d lines (%s)", len(picked), "+".join(places))
-            return render_recalled(groups, self.tz)
+            return render_recalled(groups, self.tz, local_now(self.clock(), self.tz))
         except Exception as exc:  # noqa: BLE001
             log.error("recall failed (%s) — answering without it", type(exc).__name__)
             return None

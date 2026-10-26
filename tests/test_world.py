@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from agents.world import (
+    ago,
     day_label,
     last_talk_line,
     local_now,
@@ -54,6 +55,33 @@ def test_relative_when():
     assert relative_when(k(2026, 9, 28, 13, 0), now) == "5 днів тому"
     assert relative_when(k(2026, 9, 20, 13, 0), now) == "20 вересня"
     assert last_talk_line(k(2026, 10, 2, 21, 0), now) == "Востаннє ви говорили вчора ввечері."
+
+
+@pytest.mark.parametrize("then,words", [
+    ((2026, 10, 28, 4, 30), "сьогодні вночі"),
+    ((2026, 10, 28, 9, 0), "сьогодні вранці"),
+    ((2026, 10, 28, 15, 0), "сьогодні вдень"),       # a later hour today (a skewed clock) is still today
+    ((2026, 10, 27, 23, 59), "вчора"),                # just before midnight
+    ((2026, 10, 26, 0, 1), "позавчора"),              # Monday: the nearest band wins over «цього тижня»
+    ((2026, 10, 25, 12, 0), "минулого тижня"),        # Sunday, three days back: the week turned on Monday
+    ((2026, 10, 19, 0, 0), "минулого тижня"),         # last week's Monday
+    ((2026, 10, 18, 23, 0), "цього місяця"),
+    ((2026, 10, 1, 8, 0), "цього місяця"),
+    ((2026, 9, 30, 8, 0), "минулого місяця"),
+    ((2026, 9, 1, 8, 0), "минулого місяця"),
+    ((2026, 8, 31, 8, 0), "якось"),
+    ((2025, 10, 28, 8, 0), "якось"),                  # the same date a year ago is not «this month»
+])
+def test_ago_is_how_a_person_remembers_never_a_date(then, words):
+    now = k(2026, 10, 28, 14, 0)                      # a Wednesday
+    assert ago(k(*then), now) == words
+
+
+def test_ago_across_the_years_turn_and_a_month_start():
+    assert ago(k(2026, 12, 20, 10, 0), k(2027, 1, 14, 10, 0)) == "минулого місяця"
+    assert ago(k(2026, 12, 31, 10, 0), k(2027, 1, 2, 10, 0)) == "позавчора"
+    assert ago(k(2026, 12, 29, 10, 0), k(2027, 1, 1, 10, 0)) == "цього тижня"   # Tuesday → Friday, one week
+    assert ago(k(2026, 11, 28, 10, 0), k(2027, 1, 1, 10, 0)) == "якось"
 
 
 def test_labels():
