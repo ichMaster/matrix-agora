@@ -1356,6 +1356,230 @@ tags from a palette verified on her voice, and her voice performs them. Everyone
 - a second «director» pass;
 - marks of emotion in the text (the owner).
 
+### v5.10 — Кіра's mood of the day: the horoscope, the biorhythms and the Lviv weather
+
+**Status:** ⏳ planned.
+
+**Goal:** Кіра wakes into a mood of her own each day, as the cat does. It comes from her natal chart under the day's
+real sky, with the biorhythms laid over it and the real Lviv weather around it. The mood colours every answer of the
+day, in Agora and alone with the owner.
+
+**Owner decisions** (2026-10-26):
+- **The mood is the cat's mechanism, for a person**: the horoscope (natal chart and the day's real sky) with the
+  biorhythms laid over it.
+- **The real Lviv weather** goes into the reading.
+- **Кіра first**; the other persons once hers is tuned.
+- The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life. Read it before
+  generating the issues.
+
+**Tasks:**
+- **The capability.** `mood` becomes allowed for a `persona` (today it is the creature's), on in `kira.toml`, with
+  her natal file `agents/canon/kira.natal.md` (private canon, Lumi's format, as `kit.natal.md`).
+- **The day's sky.** `agents/sky.py`'s grounded lookup, kept in her own `state/kira.sky.json`; no state is shared
+  with the cat.
+- **The weather.** A new `agents/weather.py`:
+  - Open-Meteo for Lviv, with no key: temperature, rain, wind, the night's cloud cover, sunrise and sunset;
+  - fetched once a day and kept in `state/kira.weather.json`;
+  - a failure means no weather.
+- **The reading.** For a person the reading call gets the weather too. Its resolution enters her prompts as
+  «Настрій дня» in a person's words: a feeling, never "the horoscope says". The full reading goes to
+  `state/kira.mood.log`, never to her prompt.
+- **The panel.** Her card shows the mood of the day and the weather, read-only.
+- **ARCHITECTURE:** §Prompt assembly (the mood for a person), §Contracts (the capability for a persona, the natal
+  key, the state files).
+
+**DoD:**
+- (Manual, owner) On a new day her `kira.mood.log` holds one reading. Over a few days her tone in the private chat
+  and in Agora follows its resolution.
+- (Manual, owner) The panel shows her mood of the day and the Lviv weather.
+
+**Tests:**
+- the mood block for a person, with no banned word, no number and no word of horoscope in her prompt;
+- the weather parsed from a canned Open-Meteo answer, and a failed fetch;
+- one reading a day, reused after a restart;
+- the cat unchanged.
+
+**Not in this phase:** events; a numeric state; the voice derived from the mood.
+
+### v5.11 — Events of her life: known, generated every hour, and Lviv's news
+
+**Status:** ⏳ planned.
+
+**Goal:** things happen to Кіра that she did not plan: news, setbacks, joys and inspiration. They come from
+three sources:
+- the turning points written into her story;
+- events rolled through the day;
+- Lviv's real news, woven in selectively.
+
+They reach «Сьогодні», her day memory and her next plans, and her open threads move.
+
+**Owner decisions** (2026-10-26):
+- **Events may be heavy, inspiring or joyful.**
+- **They are rolled every hour**, alongside «Сьогодні».
+- **Lviv's news is woven in selectively**, through mutations, never all of it.
+- **The room's members may appear in her plans** (shipped in v5.9.x).
+- **Defaults, not contradicted:** Claude drafts the dated list of known events in her current chapter, and the owner
+  edits it.
+
+**Tasks:**
+- **Known events.**
+  - A dated list in her current chapter (private canon), each event `known` or `surprise`.
+  - A known event feeds her plans ahead of its date.
+  - A surprise reaches her only on its date and is hidden from every prompt before then, like the future chapters.
+- **Generated events** (`agents/events.py`, pure where it decides).
+  - At each local hour change in her waking hours, one roll at `EVENT_P` (default 0.12) with weighted kinds:
+    - everyday;
+    - joyful;
+    - inspiring;
+    - heavy (rare).
+  - A hit means one call writes the event inside the frame. Its inputs: the current chapter, the open threads, today's
+    plan, the mood of the day, the last events, and the next chapter as a silent direction.
+- **Lviv's news.**
+  - Once a day, a grounded search for what happened in Lviv, kept in `state/kira.citynews.json`.
+  - Each item is rolled into her life with a probability, at most two a day.
+  - Each woven item gets one of these kinds: she was there, she heard it from her people, it touched her work, it
+    touched one of her people, it changed her plans.
+  - A real person never becomes one of her people, and a real tragedy never gets a victim from her life.
+- **Storage.** `state/kira.events/YYYY-MM-DD.md`, written as events fall, never rewritten.
+- **Where events go.** «Сьогодні вже…» after an event falls, the day memory (with the details), and the next plans.
+- **The truth rule.** An event involves only her, her people and the city; never Ich's or a member's words or deeds.
+- **Settings** (`EVENT_P`, the kinds' weights, `CITY_NEWS_P`, `CITY_NEWS_MAX`) and the panel's list of her events.
+- **ARCHITECTURE:** §Memory (events between plans and memories), §Contracts.
+
+**DoD:**
+- (Manual, owner) Over a day she meets about two events of different kinds, and at most two news items from Lviv
+  touch her life. They show in her «Сьогодні», in her answers and in the next day's memory.
+- (Manual, owner) A surprise from her story arrives on its date and not before.
+
+**Tests:**
+- the hourly roll with an injected rng and clock;
+- the kinds' weights;
+- a surprise hidden before its date;
+- a news item rolled in or out, and the daily cap;
+- the events in «Сьогодні», the day memory and the plan requests;
+- no event naming Ich or a member's deed;
+- no banned word.
+
+**Not in this phase:** the emotional state; feelings toward people.
+
+### v5.12 — The moment and the day: her state and her voice
+
+**Status:** ⏳ planned.
+
+**Goal:** Кіра carries an emotional state between replies: valence, arousal and fatigue. It decays to the day's
+mood within hours, and a slow background holds how she has been lately. Her voice follows it: code sets its
+stability and speed, never the model.
+
+**Tasks:**
+- **The state** (`agents/feeling.py`, pure).
+  - Valence, arousal and fatigue with a half-life of about 2 hours toward the day's baseline. The baseline comes from
+    v5.10's mood, with numbers answered with the reading.
+  - The background is a slow average of the days, with a half-life of about 10 days.
+  - Signals:
+    - the tags she writes (a pure table);
+    - what was said to her, at the session's end;
+    - the hour and her usual week (fatigue after a night under the dome);
+    - her events (v5.11).
+  - Current state in `state/kira.feeling.json` (atomic); its history in `state/kira.feeling.jsonl` (append-only).
+- **In her prompt: words, never numbers.** A pure table turns the state into a short phrase in a block «Як ти
+  зараз», after «Сьогодні».
+- **In her voice.** Stability 0.2–0.5 and speed 0.9–1.1 from arousal and fatigue, for each synthesis.
+- **The panel.** Her Voice tab shows the state and the background, read-only.
+
+**DoD:**
+- (Manual, owner) After a laughing exchange her next voice notes are livelier, and the next morning she is back to
+  her day's mood.
+- (Manual, owner) The panel shows her state moving through a day.
+
+**Tests:**
+- the decay and the background with an injected clock;
+- the tag signals;
+- the words table, with no number and no banned word;
+- the voice settings within their ranges;
+- the history appended and never rewritten.
+
+**Not in this phase:** feelings toward people; threads; behaviour.
+
+### v5.13 — Feelings, open threads and her behaviour
+
+**Status:** ⏳ planned.
+
+**Goal:** what happens between Кіра and the people she talks to stays with her for weeks, not one summary. She
+feels closeness, trust, hurt, longing and jealousy toward each person; an unsettled thing stays open until it is
+settled. The state may change what she does, within bounds.
+
+**Owner decisions** (2026-10-26): the state may change her behaviour, not only her tone. Defaults, not contradicted:
+- a separate session-end call (kind `feelings`);
+- Кіра first.
+
+**Tasks:**
+- **Feelings per person.**
+  - At a session's end one call reads the session and answers JSON deltas, each with the line that caused it. Code
+    clamps the deltas and applies them.
+  - Each feeling decays at its own pace from her TOML: hurt slowly, a passing joy faster.
+  - Longing grows with the owner's silence (`last_private_ms`, pure) and drops at contact.
+- **Open threads.**
+  - Each holds what happened (from the session or an event, never invented), a feeling, an intensity and a date.
+  - Raising it again reinforces it; the session-end call closes a settled one.
+  - The three strongest reach the prompt; every thread is logged forever.
+- **«Як ти зараз»:**
+  - **in the private chat:** the whole block, including her feelings toward the owner and the threads about him;
+  - **in Agora:** the day, the background and the threads not about him (the discretion rule).
+- **Behaviour**, each effect bounded in code:
+  - **reply cap:** 0.6×–1.2×;
+  - **writing first:** the idle interval shortens with longing and lengthens with hurt, within `PRIVATE_HOURS` and
+    the daily cap;
+  - **after a strong hurt:** a delayed and shorter answer to the owner, at most 20 minutes; his message is never
+    dropped;
+  - **Agora's turn rules stay shared:** the state never decides *whether* she takes a turn.
+- **The panel.** Her feelings as bars and the open threads, read-only.
+- **ARCHITECTURE:** §Memory, §Prompt assembly, §Contracts.
+
+**DoD:**
+- (Manual, owner) A sharp exchange leaves her cooler for days, not one reply, and a warm one is still felt the next
+  day.
+- (Manual, owner) After a long silence she writes first sooner and warmer, and nothing about him reaches Agora.
+
+**Tests:**
+- the deltas parsed and clamped;
+- the decay rates;
+- longing from silence;
+- a thread's life cycle;
+- the private and Agora blocks;
+- the behaviour bounds;
+- the owner's message never dropped;
+- no banned word and no number in a prompt.
+
+**Not in this phase:** anticipation; the weight of memories.
+
+### v5.14 — Anticipation and strong memories
+
+**Status:** ⏳ planned.
+
+**Goal:** what is coming weighs on Кіра more as it nears: a birthday, a deadline, a date, an anniversary. A strong
+day stays with her for months, not only seven days.
+
+**Tasks:**
+- **Anticipation.** A pure curve over the days left to a known event (v5.11), a plan's date or an anniversary from
+  her life story. It peaks on the day and becomes a memory after.
+- **The weight of a day.** The day-memory call also answers the day's charge (0–3). Up to a few strong days of the
+  last months stay in her prompt past the 7-day window, labelled by their date.
+- **Recall** (v5.8) ranks a charged line higher.
+- **The panel.** What she is waiting for, and her strong days.
+
+**DoD:**
+- (Manual, owner) In the days before a known date she brings it up more and with more feeling.
+- (Manual, owner) A vivid day from weeks ago still surfaces in her talk.
+
+**Tests:**
+- the anticipation curve with an injected clock;
+- the charge parsed;
+- the strong days' selection and its cap;
+- recall's ranking with the charge;
+- a past memory never rewritten.
+
+**Not in this phase:** the other persons (after Кіра's is tuned).
+
 ## v6 — Applications: the panel's System and Applications
 
 The owner, 2026-10-25: the panel stops being "a simulation and its agents". **Simulations become applications**:
