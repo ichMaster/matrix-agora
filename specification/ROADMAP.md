@@ -1530,12 +1530,24 @@ marked as hers («я думала…»), and she recalls them as she recalls wha
     - A reflection on the private chat has the place `thought_private`.
   - **Recall:** the private recall searches both places. Agora's recall searches `thought` only, as it already
     searches only `agora`.
-  - **How it reads:** a recalled thought renders as «26 жовтня — я думала: …», never as something said. The recall
-    title names thoughts too.
+  - **How it reads:** a recalled thought renders as «вчора я думала: …», never as something said and never with a
+    date or an hour. A date gives her away: a person does not remember the day of a thought (the owner,
+    2026-10-26).
+    - The pure `ago(ts, now)` (injected clock) picks the words:
+      - «сьогодні вранці / вдень / ввечері / вночі»;
+      - «вчора»;
+      - «позавчора»;
+      - «цього тижня»;
+      - «минулого тижня»;
+      - «цього місяця»;
+      - «минулого місяця»;
+      - «якось».
+    - The week starts on Monday, and the nearest band wins.
+    - The recall title names thoughts too.
 - **Where thoughts go.**
   - **Recall,** as above.
-  - **Her prompts:** a block «Що ти сьогодні думала» with the last `THOUGHTS_IN_PROMPT` (3) of today. A
-    `thought_private` thought appears only in the private prompt.
+  - **Her prompts:** a block «Що ти сьогодні думала» with the last `THOUGHTS_IN_PROMPT` (3) of today. Each has its
+    part of the day, never a clock time. A `thought_private` thought appears only in the private prompt.
   - **Writing first:** an item with her thought and its link, or a reflection she comes back to.
   - **Agora:** a persona move `thought` (`PERSONA_THOUGHT_P`, taken from the plain answer's share). She brings up
     what she read or thought when it fits, and never starts a talk with it.
@@ -1564,7 +1576,9 @@ marked as hers («я думала…»), and she recalls them as she recalls wha
 - the reading's and the reflection's schedule with an injected clock, within the hours and while a session is open;
 - an item never read twice;
 - a thought appended to the day file and to the archive with its place;
-- the recall rendering «я думала», and Agora's recall never returning `thought_private`;
+- `ago` over each band and its edges with an injected clock (midnight, Monday, the 1st of a month, a year's turn);
+- a recalled or today's thought carrying no date and no clock time;
+- the recall rendering «… я думала: …», and Agora's recall never returning `thought_private`;
 - no reply waiting on a thought;
 - the reflection prompt forbidding invented words or deeds;
 - no banned word, and no text or key in a log.

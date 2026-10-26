@@ -294,12 +294,29 @@ Other sources checked on the same day:
 **Where thoughts go:**
 - **The archive.** Each thought is a line of `state/kira.archive.db`, embedded like the rest. A news thought and a
   reflection on Agora get the place `thought`; a reflection on the private chat gets `thought_private`. The private
-  recall searches both. Agora's recall searches `thought` only, as it already searches only `agora` today. A recalled
-  thought reads «26 жовтня — я думала: …», never as something said.
+  recall searches both. Agora's recall searches `thought` only, as it already searches only `agora` today.
+- **When, as a person remembers it.** A recalled thought is never dated. A date such as «26 жовтня» gives her away:
+  a person does not remember the day of a thought (the owner, 2026-10-26). It reads «вчора я думала: …», never as
+  something said. A pure function over the thought's time and an injected clock picks the words:
+
+  | When the thought was | The words |
+  |---|---|
+  | Today | «сьогодні вранці», «сьогодні вдень», «сьогодні ввечері», «сьогодні вночі» |
+  | Yesterday | «вчора» |
+  | Two days ago | «позавчора» |
+  | Earlier this week | «цього тижня» |
+  | Last week | «минулого тижня» |
+  | Earlier this month | «цього місяця» |
+  | Last month | «минулого місяця» |
+  | Older | «якось» |
+
+  - The week starts on Monday.
+  - The nearest band wins: two days ago is «позавчора», even on a Wednesday.
+  - No hour and no date is shown.
 - **A day file.** `state/kira.thoughts/YYYY-MM-DD.md` keeps every thought with its time, its kind (`news` or
   `reflection`) and its place, and for news the source, the title and the link. It is appended, never rewritten.
-- **Her prompts.** A block «Що ти сьогодні думала» holds the last three thoughts of today. A reflection on the
-  private chat appears only in her private prompt.
+- **Her prompts.** A block «Що ти сьогодні думала» holds the last three thoughts of today, each with its part of the
+  day, never a clock time. A reflection on the private chat appears only in her private prompt.
 - **Writing first.** In the private chat and Telegram she may share an item with her thought and its link, or come
   back to a reflection.
 - **Agora.** A persona move `thought` lets her bring up something she read or thought when it fits. She never
