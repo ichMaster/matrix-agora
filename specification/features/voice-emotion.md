@@ -141,7 +141,8 @@ by the owner on 2026-10-26, is [Her emotional life](#her-emotional-life-v510-pro
 > - real events of her life, not only plans and memories.
 >
 > The owner answered the main questions the same day (see [Decided](#decided-the-owner-2026-10-26)); the phases are
-> in the ROADMAP as **v5.10–v5.14**. For Кіра only, for now (the owner, 2026-10-26).
+> in the ROADMAP as **v5.10–v5.15**. For Кіра only, for now (the owner, 2026-10-26). The same day the owner added
+> her reading of the news and her own thoughts, as v5.12.
 
 ### Today, for comparison
 
@@ -255,6 +256,62 @@ sources:
   delivers it.
 - An event, once fallen, is never rewritten.
 
+### Reading and thoughts (v5.12; the owner, 2026-10-26)
+
+**What the owner asked:** Кіра reads the news and has thoughts of her own: a thought on each item she reads, and
+her own reflection on her talks, with the owner and in Agora. The thoughts come on a schedule, even while she is
+talking, and go into a memory she can recall as she recalls the chat, marked as her own: «я думала…».
+
+**Two sources:**
+- **Zaxid.net**, Lviv's outlet, for the local news with the full text. Its RSS (`zaxid.net/rss/all.xml`) lists
+  about 50 newest items with a title and a short description. The article page carries the full text in its JSON-LD
+  `articleBody`, so no HTML is scraped. Checked on 2026-10-26: the feed answers, and a sample page held 2,661
+  characters of body text.
+- **The Guardian**, so she may pick what Claude did not. `agents/guardian.py` already builds the search and read
+  URLs and parses the answers. Here code calls it directly over the sections of her interests, with no SDK and no
+  tools. She reads it in English and thinks in Ukrainian. She keeps no shared state with Claude and never reads his,
+  so the two pick independently, and the same article picked by both is fine.
+
+Other sources checked on the same day:
+- **Українська правда:** its RSS carries the full text, but it is national, not local.
+- **Суспільне, Укрінформ, Твоє місто, 1256, Портал:** their feeds carry only a description. The Портал's article
+  pages answer 403.
+
+**A reading**, every `READING_EVERY_S` (3 hours) within her waking hours:
+1. One call gets the fresh titles from both sources, with her canon, the mood of the day and her recent thoughts. It
+   picks at most `READING_PICKS` (2) items that would touch her, or none.
+2. Code fetches the full text of each pick.
+3. One call per pick writes her thought: first person, 1–3 sentences, built only on the article's facts. Recall
+   brings her earlier thoughts on the topic, so she stays herself.
+4. She may change her mind. That is a new thought, and the old one stays.
+
+**A reflection**, every `REFLECT_EVERY_S` (1 hour), for each place with new lines since her last reflection there
+(the private chat in Element and Telegram, and Agora):
+- One call reads those lines and writes one or two thoughts of hers: what stayed with her, what she thinks of what
+  was said, what she would say next time.
+- It runs mid-conversation too, on the lines so far. It sends nothing and never holds up a reply.
+
+**Where thoughts go:**
+- **The archive.** Each thought is a line of `state/kira.archive.db`, embedded like the rest. A news thought and a
+  reflection on Agora get the place `thought`; a reflection on the private chat gets `thought_private`. The private
+  recall searches both. Agora's recall searches `thought` only, as it already searches only `agora` today. A recalled
+  thought reads «26 жовтня — я думала: …», never as something said.
+- **A day file.** `state/kira.thoughts/YYYY-MM-DD.md` keeps every thought with its time, its kind (`news` or
+  `reflection`) and its place, and for news the source, the title and the link. It is appended, never rewritten.
+- **Her prompts.** A block «Що ти сьогодні думала» holds the last three thoughts of today. A reflection on the
+  private chat appears only in her private prompt.
+- **Writing first.** In the private chat and Telegram she may share an item with her thought and its link, or come
+  back to a reflection.
+- **Agora.** A persona move `thought` lets her bring up something she read or thought when it fits. She never
+  starts a talk with it: Agora's news initiative stays Claude's.
+- **The day memory:** what she read and what she thought.
+
+**The rules hold:**
+- She reads her phone like anyone and never «searched».
+- The facts come only from the article: no invented number, quote or name. The opinion is hers.
+- A reflection never invents Ich's or a member's words or deeds.
+- People in the news stay public figures she does not know.
+
 ### How it reaches her
 
 - **In words, never numbers.** Code maps the state to short phrases through a pure table, for example «ти сьогодні
@@ -288,6 +345,10 @@ sources:
   - one grounded search and one call a day for the mood, as the cat;
   - one call a day for a generated event;
   - one call at a session's end (or none, merged into the summary call);
+  - reading and thoughts (v5.12) on `GEMINI_MODEL`, never Pro:
+    - up to about 18 calls a day for the readings (a pick and up to two thoughts, six times);
+    - one call an hour for each place she talked in;
+    - the thoughts' embeddings;
   - no call per reply.
 
 ### Phases (proposed: v5.10+)
@@ -296,9 +357,10 @@ sources:
 |---|---|
 | **v5.10** — Кіра's mood of the day | The cat's horoscope and biorhythms, for a person: her natal file in the private canon, her own day's sky, the reading log, «Настрій дня» in both prompts, the panel shows it; the real Lviv weather in the reading (decided). |
 | **v5.11** — Events of her life | Known events, dated in the current chapter (written with the owner); generated events rolled every hour (everyday, joyful, inspiring, heavy); Lviv's news woven in selectively. They reach «Сьогодні», the day memory and the next plans; `state/kira.events/`; the panel lists them. |
-| **v5.12** — The moment and the day | Valence, arousal and fatigue decaying to the day's baseline, and the background; signals from her tags, the hour and her week; her voice's stability and speed derived from them. |
-| **v5.13** — Feelings, open threads and behaviour | The session-end call (deltas with their cause), decay by temperament, longing from silence, the threads' life cycle, «Як ти зараз» in her prompts; the bounded effects on her reply length, writing first and a silence after a quarrel (decided); the panel. |
-| **v5.14** — Anticipation and strong memories | The curve to known dates and anniversaries; the day memory's charge; strong days kept past the window; recall ranks charged lines higher. |
+| **v5.12** — Reading and thoughts | Zaxid.net (the full text) and The Guardian, read every 3 hours; a thought on each item she picks; a reflection every hour on her talks, with the owner and in Agora, even mid-talk; thoughts in her archive, recalled as «я думала…»; the move `thought`; the panel's Thoughts tab. |
+| **v5.13** — The moment and the day | Valence, arousal and fatigue decaying to the day's baseline, and the background; signals from her tags, the hour and her week; her voice's stability and speed derived from them. |
+| **v5.14** — Feelings, open threads and behaviour | The session-end call (deltas with their cause), decay by temperament, longing from silence, the threads' life cycle, «Як ти зараз» in her prompts; the bounded effects on her reply length, writing first and a silence after a quarrel (decided); the panel. |
+| **v5.15** — Anticipation and strong memories | The curve to known dates and anniversaries; the day memory's charge; strong days kept past the window; recall ranks charged lines higher. |
 
 ### Decided (the owner, 2026-10-26)
 
@@ -308,8 +370,9 @@ sources:
    - It is kept once a day in `state/kira.weather.json`.
    - A failed fetch means no weather, never a blocked mood.
 2. **Lviv's news, woven into her life selectively.**
-   - Once a day, a grounded search (as `agents/sky.py` does) asks what happened in Lviv today. The answer is a short
-     list kept in `state/kira.citynews.json`.
+   - Once a day, the day's items from Zaxid.net's feed are kept in `state/kira.citynews.json`. It is the same local
+     source as her reading (v5.12), with real items and real links. It replaces the grounded search first proposed
+     here (2026-10-26).
    - Each item is rolled like a plan's mutation. With a probability, at most two a day, it becomes part of her life
      in one of these ways:
      - she was there;
@@ -343,13 +406,25 @@ sources:
      20 minutes) and shorter. His message is never dropped.
    - **Agora's turn rules stay shared.** The state never changes *whether* she takes a turn, since that is derived
      from shared inputs (the ranking, R1–R4). It changes only how she answers and its length; she may still `PASS`.
-5. **Кіра only, for now.** Every part of v5.10–v5.14 is switched on for her alone, in her TOML. The other persons
+5. **Кіра only, for now.** Every part of v5.10–v5.15 is switched on for her alone, in her TOML. The other persons
    get none of it until the owner decides otherwise.
+6. **She reads the news and thinks (v5.12).**
+   - Two sources: a local one with the full text (Zaxid.net) and The Guardian.
+   - A thought on each item she reads, and her own reflection on her talks with the owner and in Agora.
+   - On a schedule, even while she talks.
+   - Into her archive like the chat, marked «я думала…».
+   - See [Reading and thoughts](#reading-and-thoughts-v512-the-owner-2026-10-26).
 
 **Not answered yet; these defaults hold unless the owner says otherwise:**
 - **Known events:** Claude drafts the dated list in her current chapter, and the owner edits it.
 - **A session's end:** a separate call (kind `feelings`) reads the session for the feelings and threads, kept apart
   from the summary's call so each stays simple.
+- **What she reads:** her work, Lviv, Ukraine and what she cares about. Claude drafts a paragraph on it in her
+  canon, and the owner edits it.
+- **Politics and war:** she reacts to events and holds views, as a person in Lviv does. She does not argue party
+  politics unless asked.
+- **Links:** when she shares an item in the private chat or Telegram, its link goes with it. In Agora she tells it
+  in her own words.
 
 ## Costs
 
