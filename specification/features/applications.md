@@ -2,8 +2,8 @@
 
 > **Status: draft, 2026-10-25; its open questions are closed.** A proposal, not a contract. It designs ROADMAP
 > **v7 Applications**, phases v7.1–v7.2. v5.7 (Кіра in Telegram) is built first, as planned, with no panel change; v7 then brings it into this
-> model. v8 is the Theatre ([radio-theatre.md](radio-theatre.md)), and Лілі (the Lumi bridge) is
-> **v9** (the owner numbered them v6, v7 and v8 on 2026-10-25; renumbered on 2026-10-26, when Кіра's inner life became v6). ARCHITECTURE.md does not link here yet; the changes in [What changes where](#what-changes-where) land with
+> model. Лілі (the Lumi bridge) is **v6**, built before it, and the Theatre ([radio-theatre.md](radio-theatre.md))
+> is **v9** (the owner's order of 2026-10-26: Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9; on 2026-10-25 the Theatre was v7 and Лілі v8). ARCHITECTURE.md does not link here yet; the changes in [What changes where](#what-changes-where) land with
 > the v7 phases.
 >
 > Sources: the owner's messages of 2026-10-25 (the decisions below are the owner's unless marked *proposed*), the
@@ -20,7 +20,7 @@
   what context.
 - A whole new version, v7, for this change of the panel's concept. v5.7 stays as designed: Кіра's Telegram bot,
   no panel change.
-- The radio theatre is v8, so Лілі moves to v9.
+- The radio theatre comes after Applications, and Лілі after the Theatre (2026-10-25). On 2026-10-26 the owner moved Лілі to v6, before Applications, and the Theatre to v9.
 
 The owner's answers to the first open questions (2026-10-25):
 
@@ -126,7 +126,7 @@ Agora.
 - **Internal.** Our code runs in our container: the engines `gemini` and `claude-sdk`. These are all the members
   today.
 - **External.** The agent runs in another system, and our container is a bridge that applies our rules and forwards
-  the traffic. Examples: Лілі (`lumi-http`, v9) and later Noos. System → Agents marks them `external`. Their card
+  the traffic. Examples: Лілі (`lumi-http`, v6) and later Noos. System → Agents marks them `external`. Their card
   shows reachability and the last turn's outcome (from the bridge's status file, [Monitoring](#monitoring)), never
   their memory or their texts: their memory belongs to their own system and its own panel.
 
@@ -277,7 +277,7 @@ clock:
 The table row shows the account, the status, today's in · out and the last in · out. The drawer's Connections tab
 adds each context's counts, `ignored` and the last error.
 
-An external agent's bridge (v9) writes the same file: its Agora entry, and an `external` entry for the other system:
+From v7.1 an external agent's bridge (Лілі's, built in v6) writes the same file: its Agora entry, and an `external` entry for the other system:
 its reachability (the health probe) and the last turn's outcome.
 
 ### System → Agents
@@ -365,13 +365,13 @@ Deferred by the owner, 2026-10-25. The notes below stay for when it comes back.
 - **B.** Our agent speaks the device's WS protocol itself. That means porting the streaming, the emotion frames and
   the budgets into matrix-agora: the larger change of the two.
 
-### Лілі (Lumi) — v9
+### Лілі (Lumi) — v6
 
 She is designed already: [more-agents.md §Lumi (the bridge)](more-agents.md#lumi-the-bridge). In this model:
 - she is an **external** agent under System → Agents;
-- she is connected to Agora with `room`: `mention-only` in v9.1, `ranked` in v9.2.
+- she is connected to Agora with `room`: `mention-only` in v6.1, `ranked` in v6.2.
 
-Facts to check before v9.1:
+Facts to check before v6.1:
 - the Lumi repo is at v2.7.0, past the v2.5 and v2.6 prerequisites;
 - on the server the running containers are `lumi-dev-server` and `lumi-dev-telegram-*`, with no `lumi-prod`
   container, so where her prod instance runs now is still to verify.
@@ -414,9 +414,9 @@ Deferred by the owner, 2026-10-25. The notes below stay for when it comes back.
 **Overlap with Noos's own panel:** ours manages only Noos's connection to our applications. Its prompt, facts,
 scenarios and tasks stay in its own panel.
 
-### The Stage (v8 Theatre)
+### The Stage (v9 Theatre)
 
-The radio theatre is v8 (the owner, 2026-10-25): [radio-theatre.md](radio-theatre.md). Its Stage is a second room,
+The radio theatre is v9 (the owner, 2026-10-25 and 2026-10-26): [radio-theatre.md](radio-theatre.md). Its Stage is a second room,
 and in this model that makes it a second room of the Agora application (a `stage` context), not an application of
 its own.
 
@@ -450,10 +450,10 @@ its own.
 | Phase | What | Notes |
 |---|---|---|
 | v5.7 | Кіра in Telegram | unchanged: the runtime, no panel change |
+| v6.1–v6.2 | Лілі, before this version | an agent of the type `bridge`; v7.1 makes her an external agent connected to Agora |
 | **v7.1** | System and Applications: the panel's new shape | the rename, the contexts, the Agents page, the status file and Agora's monitoring; no new application |
 | **v7.2** | Telegram as an application: Кіра connected | the registry connection, on/off with the buffer, its settings, its monitoring, tokens by application |
-| v8 | Theatre | [radio-theatre.md](radio-theatre.md); the Stage as a second room of Agora |
-| v9.1–v9.2 | Лілі (renumbered from v6.1–v6.2, then v8.1–v8.2) | an external agent connected to Agora |
+| v9 | Theatre | [radio-theatre.md](radio-theatre.md); the Stage as a second room of Agora |
 | later | Telegram for more persons; alerts through Hermes; RoboFace and Noos (deferred) | not in the ROADMAP yet |
 
 ## Decided (the owner, 2026-10-25)
@@ -474,7 +474,7 @@ its own.
   means only a person's private chat.
 - **Alerts come later, not in v7:** Hermes tells the owner in his one-to-one room when a connection stays `stale` or
   `error` for 10 minutes.
-- **The radio theatre is v8**, so Лілі is v9.
+- **The order** (the owner, 2026-10-26): Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9. On 2026-10-25 the Theatre was v7 and Лілі v8.
 - **RoboFace and Noos are deferred.**
 
 ## Open questions

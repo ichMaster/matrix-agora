@@ -1,6 +1,6 @@
 # Roadmap — matrix-agora
 
-Ten self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, and her reading and thoughts) → **v6** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation) → **v7** Applications (the panel's System and Applications; Telegram as an application) → **v8** Theatre (plays on the Stage, recorded by Hermes) → **v9** Лілі (the Lumi bridge: when named, then under the full rules). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Ten self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, and her reading and thoughts) → **v6** Лілі (the Lumi bridge: when named, then under the full rules) → **v7** Applications (the panel's System and Applications; Telegram as an application) → **v8** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation) → **v9** Theatre (plays on the Stage, recorded by Hermes). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
 **Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v9→9), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
@@ -39,14 +39,14 @@ are generated. Other further work (the deferred backlog items in the code-review
 | v5.1 | Hermes: voice digests for the owner | ⏳ planned | — |
 | v5.2 | The agents hear voice messages | ⏳ planned | — |
 | v5.3 | The agents answer in voice | ⏳ planned | — |
-| v6.1 | The moment and the day: her state and her voice | ⏳ planned | — |
-| v6.2 | Feelings, open threads and her behaviour | ⏳ planned | — |
-| v6.3 | Anticipation and strong memories | ⏳ planned | — |
+| v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
+| v6.2 | Лілі under the full rules | ⏳ planned | — |
 | v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
 | v7.2 | Telegram as an application: Кіра connected | ⏳ planned | — |
-| v8.x | Theatre: plays on the Stage (phases from features/radio-theatre.md) | ⏳ planned | — |
-| v9.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
-| v9.2 | Лілі under the full rules | ⏳ planned | — |
+| v8.1 | The moment and the day: her state and her voice | ⏳ planned | — |
+| v8.2 | Feelings, open threads and her behaviour | ⏳ planned | — |
+| v8.3 | Anticipation and strong memories | ⏳ planned | — |
+| v9.x | Theatre: plays on the Stage (phases from features/radio-theatre.md) | ⏳ planned | — |
 
 ## v0 — Platform: homeserver, server deploy, client, accounts, echo bot
 
@@ -410,7 +410,7 @@ Builds on the reviewed v3.3 panel. The docker socket now performs actions, so ev
 
 ## v4 — Ensemble: agent types, N-agent turn-taking, the cat, Claude and the panel's settings
 
-The room grows from two Gemini personas to four agents of three types (from v4.6 the personas grow curious; from v4.7 the agents' settings move into the panel): Ada and Bruno (`persona`), the cat Кіт (`creature`) and Claude (`assistant`); Lumi (`bridge`) joins in v9. The newcomers are openly non-human; Ada and Bruno keep believing they are human. One owner message must stay a few short replies, not two pages. The full design, its decisions and its open questions live in [features/more-agents.md](features/more-agents.md) (draft); each phase lands its ARCHITECTURE and VISION changes and the tests that pin them, per that document's contract list. Depends on: v3 (the images, compose, the panel).
+The room grows from two Gemini personas to four agents of three types (from v4.6 the personas grow curious; from v4.7 the agents' settings move into the panel): Ada and Bruno (`persona`), the cat Кіт (`creature`) and Claude (`assistant`); Lumi (`bridge`) joins in v6. The newcomers are openly non-human; Ada and Bruno keep believing they are human. One owner message must stay a few short replies, not two pages. The full design, its decisions and its open questions live in [features/more-agents.md](features/more-agents.md) (draft); each phase lands its ARCHITECTURE and VISION changes and the tests that pin them, per that document's contract list. Depends on: v3 (the images, compose, the panel).
 
 ### v4.1 — Roster, agent types and N-agent turn-taking
 
@@ -1371,7 +1371,7 @@ day, in Agora and alone with the owner.
 - **The mood is the cat's mechanism, for a person**: the horoscope (natal chart and the day's real sky) with the
   biorhythms laid over it.
 - **The real Lviv weather** goes into the reading.
-- **Кіра only, for now**: every part of v5.10–v5.12 and v6 is switched on for her alone, in her TOML; the other persons get
+- **Кіра only, for now**: every part of v5.10–v5.12 and v8 is switched on for her alone, in her TOML; the other persons get
   none of it until the owner decides otherwise.
 - The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life. Read it before
   generating the issues.
@@ -1592,136 +1592,56 @@ marked as hers («я думала…»), and she recalls them as she recalls wha
 - the other persons;
 - thoughts without a source (her life's events are v5.11's).
 
-## v6 — Кіра's inner life: her state, her feelings and what she waits for
+## v6 — Лілі: the Lumi bridge
+
+Лілі — Lumi's prod brain — joins the room through a bridge that is one of our agents: first when named, then under
+the full turn rules. Moved from v4.8–v4.9 by the owner on 2026-10-13, after the voice of v5; to v8 on 2026-10-25, after
+Applications and the Theatre; and back to v6 on 2026-10-26, before them (the owner's order: Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9).
+She is built in today's panel as an agent of the type `bridge`; v7 then places her in its model as an
+**external** agent under System → Agents, connected to Agora in the `room` context (applications.md §Лілі).
+Depends on: Lumi ≥ v2.5 in prod (v2.6 puts her server on 192.168.1.197) and v4.
+
+### v6.1 — The Lumi bridge: Лілі when named
 
 **Status:** ⏳ planned.
 
-The owner, 2026-10-26: the last three phases of her emotional life become a version of their own.
-- v5.10–v5.12 give her a mood of the day, the events of her life, and her reading and thoughts.
-- v6 gives her:
-  - a state that lasts between replies and moves her voice (v6.1);
-  - feelings toward each person, open threads, and bounded effects on what she does (v6.2);
-  - anticipation and strong memories (v6.3).
+**Goal:** Лілі — Lumi's prod brain — answers in the room when someone names her, through a bridge that is one of our agents.
 
-For Кіра only, for now. The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life;
-read it before generating the issues. Depends on: v5.10–v5.12.
-
-### v6.1 — The moment and the day: her state and her voice
-
-**Status:** ⏳ planned.
-
-**Goal:** Кіра carries an emotional state between replies: valence, arousal and fatigue. It decays to the day's
-mood within hours, and a slow background holds how she has been lately. Her voice follows it: code sets its
-stability and speed, never the model.
+Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails the room and forwards the changes to Лілі's server; she answers, deciding herself whom and what. It behaves like our agents, with all the room's rules. Лілі is reactive: she only answers and never starts a conversation. **Depends on Lumi ≥ v2.5** (prod runs her server with Telegram, thoughts and the scheduler inside it); from Lumi v2.6 her server runs on 192.168.1.197 itself. Depends on: v4.1 (v4.2 for the scoped human-belief rule), v4.6 review #4 (the `ask` addressee filter: a mention-only bridge is not asked by the personas).
 
 **Tasks:**
-- **The state** (`agents/feeling.py`, pure).
-  - Valence, arousal and fatigue with a half-life of about 2 hours toward the day's baseline. The baseline comes from
-    v5.10's mood, with numbers answered with the reading.
-  - The background is a slow average of the days, with a half-life of about 10 days.
-  - Signals:
-    - the tags she writes (a pure table);
-    - what was said to her, at the session's end;
-    - the hour and her usual week (fatigue after a night under the dome);
-    - her events (v5.11).
-  - Current state in `state/kira.feeling.json` (atomic); its history in `state/kira.feeling.jsonl` (append-only).
-- **In her prompt: words, never numbers.** A pure table turns the state into a short phrase in a block «Як ти
-  зараз», after «Сьогодні».
-- **In her voice.** Stability 0.2–0.5 and speed 0.9–1.1 from arousal and fatigue, for each synthesis.
-- **The panel.** Her Voice tab shows the state and the background, read-only.
+- The `bridge` type; `agents/lumi.toml` (shown as «Лілі»; name forms for both «Лілі» and «Стхіра»; `engine = "lumi-http"`; `[turns] mode = "mention-only"`, weight 1).
+- `LumiBridgeResponder`: when a message names her, `POST /v1/turn` with the room lines since her last turn as `"Name: text"`, `turn_id` = the trigger's `event_id`; only `reply` is posted, never `thinking`; never `/v1/session/new`; `409`/`5xx`/timeout → silence; her reply is never dropped or trimmed after the call (R3 before the call only); the bridge never posts except in reply to a trigger.
+- The `lumi` compose service with its own env file (`LUMI_URL`, `LUMI_TOKEN`) and the route to her server on the same host (`extra_hosts: host-gateway`); usage rows `external` from her `stats`.
+- **Лілі's panel card** (an agent card in today's panel, type `bridge`; v7 moves it under System → Agents as `external`): Lumi's reachability (`/v1/health`), the last turn's outcome from `state/lumi.bridge.json`; never her `thinking`, mood or replies; her token rows unpriced; no memory tabs, no Forget.
+- VISION: the "Lili herself" wording becomes "connected through the bridge".
+- (Owner) The Matrix account, the invite; Lumi's server token and her bind address.
 
 **DoD:**
-- (Manual, owner) After a laughing exchange her next voice notes are livelier, and the next morning she is back to
-  her day's mood.
-- (Manual, owner) The panel shows her state moving through a day.
+- (Manual, owner) Лілі's card appears in the panel, and start/stop/restart of the bridge work from it.
+- (Manual, owner) Named («Лілі», «Стхіро»…), she answers in the room; unnamed, she stays silent; her `thinking` never appears in the room, the logs or the panel.
+- (Manual, owner) While the owner talks to her privately, the room gets silence (`409`), never an error.
+- She never posts on her own.
 
-**Tests:**
-- the decay and the background with an injected clock;
-- the tag signals;
-- the words table, with no number and no banned word;
-- the voice settings within their ranges;
-- the history appended and never rewritten.
+**Tests:** unit — the bridge against a fake Lumi server (turn payload with the lines since her last turn, `turn_id`, `409`, `5xx`, timeout, `thinking` never posted, no post-call filtering, no post without a trigger), mention detection for both names, the env-file isolation, `external` usage rows.
 
-**Not in this phase:** feelings toward people; threads; behaviour.
-
-### v6.2 — Feelings, open threads and her behaviour
+### v6.2 — Лілі under the full rules
 
 **Status:** ⏳ planned.
 
-**Goal:** what happens between Кіра and the people she talks to stays with her for weeks, not one summary. She
-feels closeness, trust, hurt, longing and jealousy toward each person; an unsettled thing stays open until it is
-settled. The state may change what she does, within bounds.
+**Goal:** Лілі takes part in the room like Ada and Bruno — chosen by the turn-taking, not only when named.
 
-**Owner decisions** (2026-10-26): the state may change her behaviour, not only her tone; Кіра only, for now. A
-default, not contradicted: a separate session-end call (kind `feelings`).
+Design: more-agents.md §Lumi (the bridge), §4. Depends on: v6.1, proven in the room.
 
 **Tasks:**
-- **Feelings per person.**
-  - At a session's end one call reads the session and answers JSON deltas, each with the line that caused it. Code
-    clamps the deltas and applies them.
-  - Each feeling decays at its own pace from her TOML: hurt slowly, a passing joy faster.
-  - Longing grows with the owner's silence (`last_private_ms`, pure) and drops at contact.
-- **Open threads.**
-  - Each holds what happened (from the session or an event, never invented), a feeling, an intensity and a date.
-  - Raising it again reinforces it; the session-end call closes a settled one.
-  - The three strongest reach the prompt; every thread is logged forever.
-- **«Як ти зараз»:**
-  - **in the private chat:** the whole block, including her feelings toward the owner and the threads about him;
-  - **in Agora:** the day, the background and the threads not about him (the discretion rule).
-- **Behaviour**, each effect bounded in code:
-  - **reply cap:** 0.6×–1.2×;
-  - **writing first:** the idle interval shortens with longing and lengthens with hurt, within `PRIVATE_HOURS` and
-    the daily cap;
-  - **after a strong hurt:** a delayed and shorter answer to the owner, at most 20 minutes; his message is never
-    dropped;
-  - **Agora's turn rules stay shared:** the state never decides *whether* she takes a turn.
-- **The panel.** Her feelings as bars and the open threads, read-only.
-- **ARCHITECTURE:** §Memory, §Prompt assembly, §Contracts.
+- `agents/lumi.toml`: `[turns] mode = "ranked"`, weight 1 — she joins R1 (`OWNER_REPLIERS`) and R2 (the next speaker).
+- Each time she is chosen, the bridge forwards the chat updates since her last turn; the slow-engine rules apply (R3 only before the call, the fallback after `FALLBACK_S` when she is away or busy).
 
 **DoD:**
-- (Manual, owner) A sharp exchange leaves her cooler for days, not one reply, and a warm one is still felt the next
-  day.
-- (Manual, owner) After a long silence she writes first sooner and warmer, and nothing about him reaches Agora.
+- (Manual, owner) On unnamed messages Лілі answers about as often as the others; when she is away or busy, the fallback answers instead and the room never stalls.
+- A simulated wave with Лілі ranked never exceeds `MAX_BOT_TURNS` beyond the answers to the owner.
 
-**Tests:**
-- the deltas parsed and clamped;
-- the decay rates;
-- longing from silence;
-- a thread's life cycle;
-- the private and Agora blocks;
-- the behaviour bounds;
-- the owner's message never dropped;
-- no banned word and no number in a prompt.
-
-**Not in this phase:** anticipation; the weight of memories.
-
-### v6.3 — Anticipation and strong memories
-
-**Status:** ⏳ planned.
-
-**Goal:** what is coming weighs on Кіра more as it nears: a birthday, a deadline, a date, an anniversary. A strong
-day stays with her for months, not only seven days.
-
-**Tasks:**
-- **Anticipation.** A pure curve over the days left to a known event (v5.11), a plan's date or an anniversary from
-  her life story. It peaks on the day and becomes a memory after.
-- **The weight of a day.** The day-memory call also answers the day's charge (0–3). Up to a few strong days of the
-  last months stay in her prompt past the 7-day window, labelled by their date.
-- **Recall** (v5.8) ranks a charged line higher.
-- **The panel.** What she is waiting for, and her strong days.
-
-**DoD:**
-- (Manual, owner) In the days before a known date she brings it up more and with more feeling.
-- (Manual, owner) A vivid day from weeks ago still surfaces in her talk.
-
-**Tests:**
-- the anticipation curve with an injected clock;
-- the charge parsed;
-- the strong days' selection and its cap;
-- recall's ranking with the charge;
-- a past memory never rewritten.
-
-**Not in this phase:** the other persons; v5.10–v5.12 and v6 are Кіра's only, for now (the owner, 2026-10-26).
+**Tests:** unit — ranking with her in it, R3 and the fallback for a slow or unreachable bridge, the multi-agent simulation with her ranked.
 
 ## v7 — Applications: the panel's System and Applications
 
@@ -1730,7 +1650,7 @@ places where agents meet the owner or each other, each reached over one protocol
 RoboFace). An application shows **who is connected to it and in which context** (`room`, `listens`, `private`).
 **System** holds what is not tied to one application: **Agents**, **Server** and **Tokens**. The model makes room for
 agents reachable in several places (Кіра in the room, in her private chat and in Telegram) and for external agents
-(Лілі in v9, later Noos). The owner's decisions (2026-10-25): the rename goes everywhere; each agent writes the
+(Лілі in v6, later Noos). The owner's decisions (2026-10-25): the rename goes everywhere; each agent writes the
 status of its connections so the panel can monitor them; the panel switches a declared connection on and off and
 configures it, and the repo declares it; a switched-off connection keeps everything in a buffer and gives the
 backlog one answer; Hermes's contexts are `listens` and `digests`; alerts come later. The design and its decisions
@@ -1896,63 +1816,144 @@ Design: applications.md §Rules, §Connection settings, §Applications after v7 
 RoboFace; external agents; creating a connection from the panel; alerts on a failed connection (later: Hermes tells
 the owner).
 
-## v8 — Theatre: plays on the Stage
+## v8 — Кіра's inner life: her state, her feelings and what she waits for
 
 **Status:** ⏳ planned.
 
-The owner, 2026-10-25: the radio theatre is v7 (v8 since 2026-10-26, when Кіра's inner life became v6). The members of Agora perform audio plays together in a second room,
+The owner, 2026-10-26: the last three phases of her emotional life become a version of their own, v8 (Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9).
+- v5.10–v5.12 give her a mood of the day, the events of her life, and her reading and thoughts.
+- v8 gives her:
+  - a state that lasts between replies and moves her voice (v8.1);
+  - feelings toward each person, open threads, and bounded effects on what she does (v8.2);
+  - anticipation and strong memories (v8.3).
+
+For Кіра only, for now. The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life;
+read it before generating the issues. Depends on: v5.10–v5.12.
+
+### v8.1 — The moment and the day: her state and her voice
+
+**Status:** ⏳ planned.
+
+**Goal:** Кіра carries an emotional state between replies: valence, arousal and fatigue. It decays to the day's
+mood within hours, and a slow background holds how she has been lately. Her voice follows it: code sets its
+stability and speed, never the model.
+
+**Tasks:**
+- **The state** (`agents/feeling.py`, pure).
+  - Valence, arousal and fatigue with a half-life of about 2 hours toward the day's baseline. The baseline comes from
+    v5.10's mood, with numbers answered with the reading.
+  - The background is a slow average of the days, with a half-life of about 10 days.
+  - Signals:
+    - the tags she writes (a pure table);
+    - what was said to her, at the session's end;
+    - the hour and her usual week (fatigue after a night under the dome);
+    - her events (v5.11).
+  - Current state in `state/kira.feeling.json` (atomic); its history in `state/kira.feeling.jsonl` (append-only).
+- **In her prompt: words, never numbers.** A pure table turns the state into a short phrase in a block «Як ти
+  зараз», after «Сьогодні».
+- **In her voice.** Stability 0.2–0.5 and speed 0.9–1.1 from arousal and fatigue, for each synthesis.
+- **The panel.** Her Voice tab shows the state and the background, read-only.
+
+**DoD:**
+- (Manual, owner) After a laughing exchange her next voice notes are livelier, and the next morning she is back to
+  her day's mood.
+- (Manual, owner) The panel shows her state moving through a day.
+
+**Tests:**
+- the decay and the background with an injected clock;
+- the tag signals;
+- the words table, with no number and no banned word;
+- the voice settings within their ranges;
+- the history appended and never rewritten.
+
+**Not in this phase:** feelings toward people; threads; behaviour.
+
+### v8.2 — Feelings, open threads and her behaviour
+
+**Status:** ⏳ planned.
+
+**Goal:** what happens between Кіра and the people she talks to stays with her for weeks, not one summary. She
+feels closeness, trust, hurt, longing and jealousy toward each person; an unsettled thing stays open until it is
+settled. The state may change what she does, within bounds.
+
+**Owner decisions** (2026-10-26): the state may change her behaviour, not only her tone; Кіра only, for now. A
+default, not contradicted: a separate session-end call (kind `feelings`).
+
+**Tasks:**
+- **Feelings per person.**
+  - At a session's end one call reads the session and answers JSON deltas, each with the line that caused it. Code
+    clamps the deltas and applies them.
+  - Each feeling decays at its own pace from her TOML: hurt slowly, a passing joy faster.
+  - Longing grows with the owner's silence (`last_private_ms`, pure) and drops at contact.
+- **Open threads.**
+  - Each holds what happened (from the session or an event, never invented), a feeling, an intensity and a date.
+  - Raising it again reinforces it; the session-end call closes a settled one.
+  - The three strongest reach the prompt; every thread is logged forever.
+- **«Як ти зараз»:**
+  - **in the private chat:** the whole block, including her feelings toward the owner and the threads about him;
+  - **in Agora:** the day, the background and the threads not about him (the discretion rule).
+- **Behaviour**, each effect bounded in code:
+  - **reply cap:** 0.6×–1.2×;
+  - **writing first:** the idle interval shortens with longing and lengthens with hurt, within `PRIVATE_HOURS` and
+    the daily cap;
+  - **after a strong hurt:** a delayed and shorter answer to the owner, at most 20 minutes; his message is never
+    dropped;
+  - **Agora's turn rules stay shared:** the state never decides *whether* she takes a turn.
+- **The panel.** Her feelings as bars and the open threads, read-only.
+- **ARCHITECTURE:** §Memory, §Prompt assembly, §Contracts.
+
+**DoD:**
+- (Manual, owner) A sharp exchange leaves her cooler for days, not one reply, and a warm one is still felt the next
+  day.
+- (Manual, owner) After a long silence she writes first sooner and warmer, and nothing about him reaches Agora.
+
+**Tests:**
+- the deltas parsed and clamped;
+- the decay rates;
+- longing from silence;
+- a thread's life cycle;
+- the private and Agora blocks;
+- the behaviour bounds;
+- the owner's message never dropped;
+- no banned word and no number in a prompt.
+
+**Not in this phase:** anticipation; the weight of memories.
+
+### v8.3 — Anticipation and strong memories
+
+**Status:** ⏳ planned.
+
+**Goal:** what is coming weighs on Кіра more as it nears: a birthday, a deadline, a date, an anniversary. A strong
+day stays with her for months, not only seven days.
+
+**Tasks:**
+- **Anticipation.** A pure curve over the days left to a known event (v5.11), a plan's date or an anniversary from
+  her life story. It peaks on the day and becomes a memory after.
+- **The weight of a day.** The day-memory call also answers the day's charge (0–3). Up to a few strong days of the
+  last months stay in her prompt past the 7-day window, labelled by their date.
+- **Recall** (v5.8) ranks a charged line higher.
+- **The panel.** What she is waiting for, and her strong days.
+
+**DoD:**
+- (Manual, owner) In the days before a known date she brings it up more and with more feeling.
+- (Manual, owner) A vivid day from weeks ago still surfaces in her talk.
+
+**Tests:**
+- the anticipation curve with an injected clock;
+- the charge parsed;
+- the strong days' selection and its cap;
+- recall's ranking with the charge;
+- a past memory never rewritten.
+
+**Not in this phase:** the other persons; v5.10–v5.12 and v8 are Кіра's only, for now (the owner, 2026-10-26).
+
+## v9 — Theatre: plays on the Stage
+
+**Status:** ⏳ planned.
+
+The owner, 2026-10-25: the radio theatre is v7 (v9 since 2026-10-26: Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9). The members of Agora perform audio plays together in a second room,
 the Stage, and Hermes records each play into one file. The design, its phases and its open questions are in the
 draft [features/radio-theatre.md](features/radio-theatre.md) (Ukrainian copy: `radio-theatre-UA.md`). Its phases
 are written into this file once its open questions are closed. Its first proposed phase, the three new personas,
 shipped as v5.5. Depends on: v5.4 (the Agora recording) and v7 (in the v7 model the Stage is a second room of the
 Agora application).
-
-## v9 — Лілі: the Lumi bridge
-
-Лілі — Lumi's prod brain — joins the room through a bridge that is one of our agents: first when named, then under
-the full turn rules. Moved from v4.8–v4.9 by the owner on 2026-10-13, after the voice of v5, from v6 to v8 on
-2026-10-25, after Applications and the Theatre, and to v9 on 2026-10-26, when Кіра's inner life became v6. In the v7 model she is an **external** agent under System →
-Agents, connected to Agora in the `room` context (applications.md §Лілі). Depends on: Lumi ≥ v2.5 in prod (v2.6 puts
-her server on 192.168.1.197), v4 and v7.
-
-### v9.1 — The Lumi bridge: Лілі when named
-
-**Status:** ⏳ planned.
-
-**Goal:** Лілі — Lumi's prod brain — answers in the room when someone names her, through a bridge that is one of our agents.
-
-Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails the room and forwards the changes to Лілі's server; she answers, deciding herself whom and what. It behaves like our agents, with all the room's rules. Лілі is reactive: she only answers and never starts a conversation. **Depends on Lumi ≥ v2.5** (prod runs her server with Telegram, thoughts and the scheduler inside it); from Lumi v2.6 her server runs on 192.168.1.197 itself. Depends on: v4.1 (v4.2 for the scoped human-belief rule), v4.6 review #4 (the `ask` addressee filter: a mention-only bridge is not asked by the personas).
-
-**Tasks:**
-- The `bridge` type; `agents/lumi.toml` (shown as «Лілі»; name forms for both «Лілі» and «Стхіра»; `engine = "lumi-http"`; `[turns] mode = "mention-only"`, weight 1).
-- `LumiBridgeResponder`: when a message names her, `POST /v1/turn` with the room lines since her last turn as `"Name: text"`, `turn_id` = the trigger's `event_id`; only `reply` is posted, never `thinking`; never `/v1/session/new`; `409`/`5xx`/timeout → silence; her reply is never dropped or trimmed after the call (R3 before the call only); the bridge never posts except in reply to a trigger.
-- The `lumi` compose service with its own env file (`LUMI_URL`, `LUMI_TOKEN`) and the route to her server on the same host (`extra_hosts: host-gateway`); usage rows `external` from her `stats`.
-- **Лілі's panel card** (under System → Agents, `external`; v7): Lumi's reachability (`/v1/health`), the last turn's outcome from `state/lumi.bridge.json`; never her `thinking`, mood or replies; her token rows unpriced; no memory tabs, no Forget.
-- VISION: the "Lili herself" wording becomes "connected through the bridge".
-- (Owner) The Matrix account, the invite; Lumi's server token and her bind address.
-
-**DoD:**
-- (Manual, owner) Лілі's card appears in the panel, and start/stop/restart of the bridge work from it.
-- (Manual, owner) Named («Лілі», «Стхіро»…), she answers in the room; unnamed, she stays silent; her `thinking` never appears in the room, the logs or the panel.
-- (Manual, owner) While the owner talks to her privately, the room gets silence (`409`), never an error.
-- She never posts on her own.
-
-**Tests:** unit — the bridge against a fake Lumi server (turn payload with the lines since her last turn, `turn_id`, `409`, `5xx`, timeout, `thinking` never posted, no post-call filtering, no post without a trigger), mention detection for both names, the env-file isolation, `external` usage rows.
-
-### v9.2 — Лілі under the full rules
-
-**Status:** ⏳ planned.
-
-**Goal:** Лілі takes part in the room like Ada and Bruno — chosen by the turn-taking, not only when named.
-
-Design: more-agents.md §Lumi (the bridge), §4. Depends on: v9.1, proven in the room.
-
-**Tasks:**
-- `agents/lumi.toml`: `[turns] mode = "ranked"`, weight 1 — she joins R1 (`OWNER_REPLIERS`) and R2 (the next speaker).
-- Each time she is chosen, the bridge forwards the chat updates since her last turn; the slow-engine rules apply (R3 only before the call, the fallback after `FALLBACK_S` when she is away or busy).
-
-**DoD:**
-- (Manual, owner) On unnamed messages Лілі answers about as often as the others; when she is away or busy, the fallback answers instead and the room never stalls.
-- A simulated wave with Лілі ranked never exceeds `MAX_BOT_TURNS` beyond the answers to the owner.
-
-**Tests:** unit — ranking with her in it, R3 and the fallback for a slow or unreachable bridge, the multi-agent simulation with her ranked.

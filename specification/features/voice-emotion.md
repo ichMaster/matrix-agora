@@ -141,7 +141,7 @@ by the owner on 2026-10-26, is [Her emotional life](#her-emotional-life-v510-pro
 > - real events of her life, not only plans and memories.
 >
 > The owner answered the main questions the same day (see [Decided](#decided-the-owner-2026-10-26)); the phases are
-> in the ROADMAP as **v5.10–v5.12** and version **v6** (v6.1–v6.3; its own version since 2026-10-26). For Кіра only, for now (the owner, 2026-10-26). The same day the owner added
+> in the ROADMAP as **v5.10–v5.12** and version **v8** (v8.1–v8.3; its own version since 2026-10-26). For Кіра only, for now (the owner, 2026-10-26). The same day the owner added
 > her reading of the news and her own thoughts, as v5.12.
 
 ### Today, for comparison
@@ -368,16 +368,16 @@ Other sources checked on the same day:
     - the thoughts' embeddings;
   - no call per reply.
 
-### Phases (proposed: v5.10–v5.12 and v6)
+### Phases (proposed: v5.10–v5.12 and v8)
 
 | Phase | What it delivers |
 |---|---|
 | **v5.10** — Кіра's mood of the day | The cat's horoscope and biorhythms, for a person: her natal file in the private canon, her own day's sky, the reading log, «Настрій дня» in both prompts, the panel shows it; the real Lviv weather in the reading (decided). |
 | **v5.11** — Events of her life | Known events, dated in the current chapter (written with the owner); generated events rolled every hour (everyday, joyful, inspiring, heavy); Lviv's news woven in selectively. They reach «Сьогодні», the day memory and the next plans; `state/kira.events/`; the panel lists them. |
 | **v5.12** — Reading and thoughts | Zaxid.net (the full text) and The Guardian, read every 3 hours; a thought on each item she picks; a reflection every hour on her talks, with the owner and in Agora, even mid-talk; thoughts in her archive, recalled as «я думала…»; the move `thought`; the panel's Thoughts tab. |
-| **v6.1** — The moment and the day | Valence, arousal and fatigue decaying to the day's baseline, and the background; signals from her tags, the hour and her week; her voice's stability and speed derived from them. |
-| **v6.2** — Feelings, open threads and behaviour | The session-end call (deltas with their cause), decay by temperament, longing from silence, the threads' life cycle, «Як ти зараз» in her prompts; the bounded effects on her reply length, writing first and a silence after a quarrel (decided); the panel. |
-| **v6.3** — Anticipation and strong memories | The curve to known dates and anniversaries; the day memory's charge; strong days kept past the window; recall ranks charged lines higher. |
+| **v8.1** — The moment and the day | Valence, arousal and fatigue decaying to the day's baseline, and the background; signals from her tags, the hour and her week; her voice's stability and speed derived from them. |
+| **v8.2** — Feelings, open threads and behaviour | The session-end call (deltas with their cause), decay by temperament, longing from silence, the threads' life cycle, «Як ти зараз» in her prompts; the bounded effects on her reply length, writing first and a silence after a quarrel (decided); the panel. |
+| **v8.3** — Anticipation and strong memories | The curve to known dates and anniversaries; the day memory's charge; strong days kept past the window; recall ranks charged lines higher. |
 
 ### Decided (the owner, 2026-10-26)
 
@@ -423,7 +423,7 @@ Other sources checked on the same day:
      20 minutes) and shorter. His message is never dropped.
    - **Agora's turn rules stay shared.** The state never changes *whether* she takes a turn, since that is derived
      from shared inputs (the ranking, R1–R4). It changes only how she answers and its length; she may still `PASS`.
-5. **Кіра only, for now.** Every part of v5.10–v5.12 and v6 is switched on for her alone, in her TOML. The other persons
+5. **Кіра only, for now.** Every part of v5.10–v5.12 and v8 is switched on for her alone, in her TOML. The other persons
    get none of it until the owner decides otherwise.
 6. **She reads the news and thinks (v5.12).**
    - Two sources: a local one with the full text (Zaxid.net) and The Guardian.
