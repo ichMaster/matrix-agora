@@ -86,14 +86,15 @@ def render_plan(items: list[str], mutations: list[str | None], max_words: int) -
 
 def areas(horizon: str, others: list[str]) -> str:
     """The plan covers a whole life, not the pastimes alone (the owner, 2026-10-26: Кіра planned hobbies, never her
-    work or her people): at least one work item and one about her own people, pastimes at most half. Her people are
-    those of her life outside the room; the room's members and Ich are never planned for."""
+    work or her people): at least one work item and one about her own people, pastimes at most half. The room's
+    members may be in it as her own intentions toward them, never committing them (the owner, 2026-10-26: «навіть
+    так ліпше»); Ich is never planned for."""
     workday = " (якщо цей день за твоїм звичним тижнем робочий)" if horizon == "day" else ""
-    room = f"Ich і людей з Агори ({', '.join(others)})" if others else "Ich і людей з Агори"
+    room = f"Люди з Агори ({', '.join(others)}) теж" if others else "Люди з Агори теж"
     return (f"План — про все твоє життя, не лише про дозвілля: щонайменше один пункт про роботу{workday}, щонайменше "
             "один — про твоїх близьких чи особисте життя (рідні, друзі, колеги, стосунки), а захоплення — не більше "
-            f"половини пунктів. Близькі тут — люди з твого життя поза Агорою; {room} у плани не вписуй і нічого за "
-            "них не обіцяй.")
+            f"половини пунктів. {room} можуть бути в планах — як твої наміри щодо них, але нічого не обіцяй за них. "
+            "Ich у плани не вписуй.")
 
 
 def plan_request(

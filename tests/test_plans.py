@@ -138,12 +138,14 @@ def test_telegraphed_failure_is_removed_from_plan_items():
 
 def test_a_plan_covers_work_and_her_people_not_only_pastimes():
     """The owner, 2026-10-26: Кіра planned hobbies, never her work or her people — «лише тебе і міста» read as no
-    people at all. Now: a work item, an item about her own people outside the room, pastimes at most half."""
+    people at all. Now: a work item, an item about her people, pastimes at most half; the room's members may be in it
+    as her intentions (the owner: «навіть так ліпше»), never committed; Ich never."""
     _, week = plan_request("week", "Кіра", "К.", "тиждень", "Розділ.", None, [], None, None, [None] * 6, 120,
                            ["Ада", "Бруно", "Кіт"])
     assert "щонайменше один пункт про роботу," in week and "про твоїх близьких" in week
     assert "не більше половини" in week and "лише тебе і міста" not in week
-    assert "Ich і людей з Агори (Ада, Бруно, Кіт) у плани не вписуй" in week  # the room is still never planned for
+    assert "Люди з Агори (Ада, Бруно, Кіт) теж можуть бути в планах" in week and "нічого не обіцяй за них" in week
+    assert "Ich у плани не вписуй" in week                                      # the owner is never planned for
     _, day = plan_request("day", "Кіра", "К.", "неділя", "Розділ.", None, [], None, None, [None] * 5, 120)
     assert "про роботу (якщо цей день за твоїм звичним тижнем робочий)" in day  # her Sunday is the rocks
     assert not BANNED.search(week + day)
@@ -154,7 +156,7 @@ def test_ensure_plans_names_the_room_but_never_herself_or_the_herald(tmp_path):
     agent = make(tmp_path, llm)
     asyncio.run(agent.ensure_plans(date(2026, 10, 3)))
     asked = llm.calls[0][0]
-    room = asked.split("Ich і людей з Агори (", 1)[1].split(")", 1)[0].split(", ")
+    room = asked.split("Люди з Агори (", 1)[1].split(")", 1)[0].split(", ")
     assert "Бруно" in room and "Ада" not in room and "Гермес" not in room
 
 
