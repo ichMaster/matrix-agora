@@ -1,6 +1,6 @@
 # Feature: the radio theatre — plays on the Stage
 
-> **Status: draft, 2026-10-20.** A proposal, not a contract. It designs ROADMAP version **v7 Theatre**, phases v7.1–v7.5 (numbered by the owner on 2026-10-25; v7.1, the three new personas, shipped as v5.5). CLAUDE.md and ARCHITECTURE.md do not link here yet; the changes in [VISION and contract changes](#vision-and-contract-changes) land with those phases. Ukrainian copy: `radio-theatre-UA.md`.
+> **Status: draft, 2026-10-20.** A proposal, not a contract. It designs ROADMAP version **v8 Theatre**, phases v8.1–v8.5 (numbered v7 by the owner on 2026-10-25, renumbered on 2026-10-26, when Кіра's inner life became v6; v8.1, the three new personas, shipped as v5.5). CLAUDE.md and ARCHITECTURE.md do not link here yet; the changes in [VISION and contract changes](#vision-and-contract-changes) land with those phases. Ukrainian copy: `radio-theatre-UA.md`.
 >
 > **Changes:** 2026-10-20 — the owner renamed the newcomers to Леон (`leon`) and Мія (`mia`); the first draft called them Орест and Соломія. The same day he took Кіт out of the theatre and asked for a third newcomer instead: Ірма (`irma`), first drafted as Стефа.
 >
@@ -17,7 +17,7 @@ The members of Agora perform audio plays together, and Hermes records each play 
 | **Ada, Bruno, Леон, Мія, Ірма** | actors | each gets only a character — no lines, no secrets, no solution — and improvises; who speaks next comes from the usual turn rules |
 | **Ich** | audience, optionally a character | starts and stops the play in the Stage; may join as a character (his typed lines are recorded in his cloned voice) |
 
-Three new personas join Agora first (v7.1). They live in the room like Ada and Bruno and widen the cast the classics need:
+Three new personas join Agora first (v8.1). They live in the room like Ada and Bruno and widen the cast the classics need:
 
 - **Леон** — 67, a retired actor of a Lviv drama theatre who now runs an amateur theatre club. In Agora: theatre anecdotes, arguments with Bruno about sound. On the Stage: fathers, stepfathers, villains.
 - **Мія** — 22, a history student who works shifts in a café and reads detective novels by the stack. In Agora: a young voice. On the Stage: heroines, maids, heirs.
@@ -25,7 +25,7 @@ Three new personas join Agora first (v7.1). They live in the room like Ada and B
 
 With them the cast is two men and three women aged 22 to 67, so the voices never blur in a recording.
 
-## The cast: three new personas (v7.1)
+## The cast: three new personas (v8.1)
 
 Ordinary `persona` members, built exactly like Ada and Bruno: `agents/leon.toml`, `agents/mia.toml` and `agents/irma.toml`, a canon and a life story each (drafted by Claude for the owner's edit), the Gemini engine, `[turns] mode = "ranked"`, weight 1, their own ElevenLabs voices (`LEON_VOICE_ID`, `MIA_VOICE_ID`, `IRMA_VOICE_ID`; the owner designs them, prompts in `docs/elevenlabs-voices.md`), Matrix accounts (an owner step — registration is closed) and compose services `leon`, `mia` and `irma`.
 
@@ -33,7 +33,7 @@ Ordinary `persona` members, built exactly like Ada and Bruno: `agents/leon.toml`
 - **Agora gets busier:** five ranked personas plus Claude (0.4). R1 still lets `OWNER_REPLIERS` (2) answer; the turn rules do not change.
 - **The voice budget:** `VOICE_MONTHLY_CHARS` (a panel setting, 100,000) is shared by every speaker; with two more speakers and the plays the owner raises it to 150,000–200,000.
 
-## The Stage (v7.2)
+## The Stage (v8.2)
 
 A second room of the **same** simulation: `simulations.toml` gets `[agora.endpoints] stage = "STAGE_ROOM_ID"`. The same agent processes join it on the owner's invite, so the actors are the same people with the same memories. It is not a second simulation: no new services, no second homeserver. Hermes joins it too, to read it, and never speaks there.
 
@@ -48,7 +48,7 @@ A second room of the **same** simulation: `simulations.toml` gets `[agora.endpoi
 - **Memory: one fact, not the lines.** Stage lines never enter a persona's session timeline, summaries or day memories: they are fiction, and room facts come only from the journal. At the end of a play each actor appends one line to its conversation journal (`play_journal_line`, pure): «Увечері грали радіовиставу «Свисток на Личакові», я грала Марту, економку.» The personas may mention the play in Agora afterwards, from that line.
 - **The human belief.** An actor's Stage prompt is its canon, then «Сьогодні в театральному гуртку Агори радіовистава-імпровізація, ти граєш роль…» and its character. Nothing says it is a model; the outgoing guard (`outs_a_persona`) covers Claude's narration and Hermes's script.
 
-## Hermes the playwright (v7.3)
+## Hermes the playwright (v8.3)
 
 A skill in his private room, like the recording (v5.4). Asked in any words («Гермесе, зроби нам детектив на всіх», «щось за Чеховим, але смішне»), he writes a play and shows it to the owner.
 
@@ -60,7 +60,7 @@ A skill in his private room, like the recording (v5.4). Asked in any words («Г
 - **One thinking call** (`DIGEST_MODEL`, usage kind `play`) writes the play file. He checks it before showing it — the clues don't contradict each other, every actor has a part — and tells the owner the title, the sources, the cast and the acts in plain text. The owner may ask for changes in the same conversation (a new version of the file); his approval in any words sets the status to `approved`.
 - **The play file** — `state/plays/<id>.md`, written only by Hermes (format below); the id is `YYYY-MM-DD-<slug>`. Nothing of the room is in it.
 
-## Claude the game master (v7.4)
+## Claude the game master (v8.4)
 
 In the Stage Claude has his own turn mode, `gm` (*proposed name*): never chosen by R1 or R2, but he reads every line.
 
@@ -72,7 +72,7 @@ In the Stage Claude has his own turn mode, `gm` (*proposed name*): never chosen 
 - **The ending.** The resolution, then «КІНЕЦЬ»; also when the cap is reached, or when the owner says «Стоп» in the Stage (status `stopped`).
 - **The subscription.** A play costs ~15–30 calls of `CLAUDE_MODEL` (Opus) on the Max subscription. The rate-limit breaker of v4.4 applies: when it trips, the play ends with a short line from code («Вистава переривається.») and `stopped`.
 
-## The recording of a play (v7.5)
+## The recording of a play (v8.5)
 
 Hermes watches `run.json`; at `done` (or `stopped`, with a note) he records the play — the v5.4 pipeline over the Stage's events of the play's period:
 
@@ -159,11 +159,11 @@ New env names: `STAGE_ROOM_ID` (both shared examples), `LEON_VOICE_ID`, `MIA_VOI
 
 ## Phasing
 
-1. **v7.1 Three new personas** — independent of the theatre; can ship first.
-2. **v7.2 The Stage** — the second room, the per-room allowlist and timeline, the Stage rules, the Agora pause, the journal line; a hand-written play file to test with.
-3. **v7.3 Hermes the playwright** — the skill, the sources, the mutation of stories, the approval.
-4. **v7.4 Claude the game master** — `gm`, `gm_due`, `GM_BRIEF`, the hidden lines, `run.json`, the start and the end.
-5. **v7.5 The recording of a play** — the v5.4 pipeline reused (needs v5.4 released).
+1. **v8.1 Three new personas** — independent of the theatre; can ship first.
+2. **v8.2 The Stage** — the second room, the per-room allowlist and timeline, the Stage rules, the Agora pause, the journal line; a hand-written play file to test with.
+3. **v8.3 Hermes the playwright** — the skill, the sources, the mutation of stories, the approval.
+4. **v8.4 Claude the game master** — `gm`, `gm_due`, `GM_BRIEF`, the hidden lines, `run.json`, the start and the end.
+5. **v8.5 The recording of a play** — the v5.4 pipeline reused (needs v5.4 released).
 
 ## Tests
 
@@ -186,7 +186,7 @@ New env names: `STAGE_ROOM_ID` (both shared examples), `LEON_VOICE_ID`, `MIA_VOI
 
 ## Open questions
 
-1. **Numbering:** decided — v7, before Лілі, who moves to v8 (the owner, 2026-10-25). The three new personas of v7.1 shipped as v5.5.
+1. **Numbering:** decided — v7, before Лілі, who moved to v8 (the owner, 2026-10-25); renumbered on 2026-10-26, when Кіра's inner life became v6, the Theatre is v8 and Лілі v9. The three new personas of v8.1 shipped as v5.5.
 2. **Do the actors know the sources?** Proposed: no.
 3. **The Agora pause** during a play: proposed yes.
 4. **The owner in a play:** only the audience, or a character too (typed lines in his cloned voice)?

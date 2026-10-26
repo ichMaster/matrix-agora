@@ -1,10 +1,10 @@
-# Feature: applications and connections — the panel's v6 concept
+# Feature: applications and connections — the panel's v7 concept
 
 > **Status: draft, 2026-10-25; its open questions are closed.** A proposal, not a contract. It designs ROADMAP
-> **v6 Applications**, phases v6.1–v6.2. v5.7 (Кіра in Telegram) is built first, as planned, with no panel change; v6 then brings it into this
-> model. v7 is the Theatre ([radio-theatre.md](radio-theatre.md)), and Лілі (the Lumi bridge) moves from v6 to
-> **v8**. ARCHITECTURE.md does not link here yet; the changes in [What changes where](#what-changes-where) land with
-> the v6 phases.
+> **v7 Applications**, phases v7.1–v7.2. v5.7 (Кіра in Telegram) is built first, as planned, with no panel change; v7 then brings it into this
+> model. v8 is the Theatre ([radio-theatre.md](radio-theatre.md)), and Лілі (the Lumi bridge) is
+> **v9** (the owner numbered them v6, v7 and v8 on 2026-10-25; renumbered on 2026-10-26, when Кіра's inner life became v6). ARCHITECTURE.md does not link here yet; the changes in [What changes where](#what-changes-where) land with
+> the v7 phases.
 >
 > Sources: the owner's messages of 2026-10-25 (the decisions below are the owner's unless marked *proposed*), the
 > matrix-agora code at v5.6.0, the RoboFace repo (`~/development/roboface`, v2.6.2), the Lumi repo
@@ -18,9 +18,9 @@
 - **"Simulations" become "Applications".**
 - **System** holds **Agents**, **Server** and **Tokens**. An **application** shows who is connected to it and with
   what context.
-- A whole new version, v6, for this change of the panel's concept. v5.7 stays as designed: Кіра's Telegram bot,
+- A whole new version, v7, for this change of the panel's concept. v5.7 stays as designed: Кіра's Telegram bot,
   no panel change.
-- The radio theatre is v7, so Лілі moves to v8.
+- The radio theatre is v8, so Лілі moves to v9.
 
 The owner's answers to the first open questions (2026-10-25):
 
@@ -43,7 +43,7 @@ agent belongs to exactly one simulation, and the left rail nests the agents unde
 an agent that is reachable in more than one place: from v5.6 Кіра talks in the Agora room and in a private chat,
 and from v5.7 the same private chat is also reachable from Telegram.
 
-v6 replaces it with three nouns:
+v7 replaces it with three nouns:
 
 - **Agent**: who. The agent's identity, canon, memory, voice and engine. Agents are listed under **System →
   Agents**, independent of where they are connected.
@@ -57,7 +57,7 @@ The panel's rail becomes:
 ```
 APPLICATIONS
   ▣ Agora        ●
-  ▣ Telegram     ●      (v6.2)
+  ▣ Telegram     ●      (v7.2)
 SYSTEM
   ◉ Agents
   ▤ Server
@@ -118,7 +118,7 @@ What the panel will show on Agora's page, from today's TOMLs:
 | Claude | `room` · ranked, weight 0.4 |
 | Hermes | `listens` · `digests` |
 
-After v6.2 Telegram's page shows one connection: Kira · `private`, the same conversation as her private chat in
+After v7.2 Telegram's page shows one connection: Kira · `private`, the same conversation as her private chat in
 Agora.
 
 ### Internal and external agents
@@ -126,7 +126,7 @@ Agora.
 - **Internal.** Our code runs in our container: the engines `gemini` and `claude-sdk`. These are all the members
   today.
 - **External.** The agent runs in another system, and our container is a bridge that applies our rules and forwards
-  the traffic. Examples: Лілі (`lumi-http`, v8) and later Noos. System → Agents marks them `external`. Their card
+  the traffic. Examples: Лілі (`lumi-http`, v9) and later Noos. System → Agents marks them `external`. Their card
   shows reachability and the last turn's outcome (from the bridge's status file, [Monitoring](#monitoring)), never
   their memory or their texts: their memory belongs to their own system and its own panel.
 
@@ -277,7 +277,7 @@ clock:
 The table row shows the account, the status, today's in · out and the last in · out. The drawer's Connections tab
 adds each context's counts, `ignored` and the last error.
 
-An external agent's bridge (v8) writes the same file: its Agora entry, and an `external` entry for the other system:
+An external agent's bridge (v9) writes the same file: its Agora entry, and an `external` entry for the other system:
 its reachability (the health probe) and the last turn's outcome.
 
 ### System → Agents
@@ -313,7 +313,7 @@ The configuration the owner asked for is built on the v4.7 settings, which put e
                                          "settings": {"TG_REPLY": "voice+text"}}}}}
   ```
 
-- **The first Telegram settings** (v6.2; the owner agreed, 2026-10-25) are what v5.7 fixes in code or env for Кіра's
+- **The first Telegram settings** (v7.2; the owner agreed, 2026-10-25) are what v5.7 fixes in code or env for Кіра's
   bot. The final names come with the v5.7 code:
   - how she answers: a voice note and then the text, or the text only;
   - whether she may write first in Telegram (the `last_channel` rule);
@@ -324,16 +324,16 @@ The configuration the owner asked for is built on the v4.7 settings, which put e
 ### System → Server, Tokens
 
 - **Server**: unchanged.
-- **Tokens**: the same 7-day table. From v6.2 each usage line carries `app` (lines written before then count as
+- **Tokens**: the same 7-day table. From v7.2 each usage line carries `app` (lines written before then count as
   `agora`; the owner agreed, 2026-10-25), so the table and the chart group by application, then by agent. Telegram costs nothing in itself; Кіра's
   Telegram answers, her voice and her `stt` lines are counted under `telegram`.
 
-## Applications after v6
+## Applications after v7
 
-### Telegram (v6.2)
+### Telegram (v7.2)
 
 v5.7 builds the runtime: the Bot API client, the private path generalised to two channels, `last_channel`, and the
-secrets in `kira.env`. v6.2 changes how Telegram is declared and managed, not how it talks:
+secrets in `kira.env`. v7.2 changes how Telegram is declared and managed, not how it talks:
 
 - The registry gets `[telegram]` (kind `telegram-bot`, no services) and the connection
   `[telegram.connections.kira]` with `contexts = ["private"]`.
@@ -342,10 +342,10 @@ secrets in `kira.env`. v6.2 changes how Telegram is declared and managed, not ho
 - The agent reads the switch and the settings from `state/settings.json`. Its poller runs while the connection is
   off too, and keeps what comes in for later (rule 4). It writes its `telegram` entry in the status file.
 - The panel switches the connection, configures it, and shows its log lines.
-- Telegram for the other persons is not in v6. It becomes one registry entry, one bot and one env file each,
+- Telegram for the other persons is not in v7. It becomes one registry entry, one bot and one env file each,
   without code.
 
-### RoboFace (deferred; not in v6)
+### RoboFace (deferred; not in v7)
 
 Deferred by the owner, 2026-10-25. The notes below stay for when it comes back.
 
@@ -365,13 +365,13 @@ Deferred by the owner, 2026-10-25. The notes below stay for when it comes back.
 - **B.** Our agent speaks the device's WS protocol itself. That means porting the streaming, the emotion frames and
   the budgets into matrix-agora: the larger change of the two.
 
-### Лілі (Lumi) — v8
+### Лілі (Lumi) — v9
 
 She is designed already: [more-agents.md §Lumi (the bridge)](more-agents.md#lumi-the-bridge). In this model:
 - she is an **external** agent under System → Agents;
-- she is connected to Agora with `room`: `mention-only` in v8.1, `ranked` in v8.2.
+- she is connected to Agora with `room`: `mention-only` in v9.1, `ranked` in v9.2.
 
-Facts to check before v8.1:
+Facts to check before v9.1:
 - the Lumi repo is at v2.7.0, past the v2.5 and v2.6 prerequisites;
 - on the server the running containers are `lumi-dev-server` and `lumi-dev-telegram-*`, with no `lumi-prod`
   container, so where her prod instance runs now is still to verify.
@@ -380,7 +380,7 @@ Lumi's core keeps memory per `user_id` (canon and shared experience are common; 
 separate user for the room would keep the room's lines out of the owner's relationship memory: the "pollution"
 problem of more-agents.md. Her HTTP API v1 serves one session, so that would need a change on Lumi's side.
 
-### Noos (deferred; not in v6)
+### Noos (deferred; not in v7)
 
 Deferred by the owner, 2026-10-25. The notes below stay for when it comes back.
 
@@ -414,9 +414,9 @@ Deferred by the owner, 2026-10-25. The notes below stay for when it comes back.
 **Overlap with Noos's own panel:** ours manages only Noos's connection to our applications. Its prompt, facts,
 scenarios and tasks stay in its own panel.
 
-### The Stage (v7 Theatre)
+### The Stage (v8 Theatre)
 
-The radio theatre is v7 (the owner, 2026-10-25): [radio-theatre.md](radio-theatre.md). Its Stage is a second room,
+The radio theatre is v8 (the owner, 2026-10-25): [radio-theatre.md](radio-theatre.md). Its Stage is a second room,
 and in this model that makes it a second room of the Agora application (a `stage` context), not an application of
 its own.
 
@@ -431,16 +431,16 @@ its own.
     file as the one thing an agent writes for the panel;
   - §Contracts:
     - the registry `applications.toml` (the entry shape plus `connections`);
-    - the agent TOML key `application` (`simulation` still read in v6.1);
+    - the agent TOML key `application` (`simulation` still read in v7.1);
     - the API `/api/applications…`, and the connection routes (switch, settings, log);
     - the settings schema's connection scope;
     - `state/settings.json` gains `connections` (`enabled`, `since`, `settings`);
-    - the status file `state/<name>.connections.json` (v6.1 with `agora`, v6.2 with `telegram`);
-    - the buffer `state/<name>.telegram.buffer.jsonl` (v6.2);
+    - the status file `state/<name>.connections.json` (v7.1 with `agora`, v7.2 with `telegram`);
+    - the buffer `state/<name>.telegram.buffer.jsonl` (v7.2);
     - the usage line's `app`;
     - v5.7's `telegram` capability retired;
   - §Repository layout and the Dockerfiles: the renamed registry file.
-- **design/README.md:** an addendum (v6) for the rail, the application page, System → Agents, and the Connections
+- **design/README.md:** an addendum (v7) for the rail, the application page, System → Agents, and the Connections
   table and tab.
 - **Tests that pin it:** `tests/test_registry.py`, `tests/test_roster.py`, `tests/test_panel_api.py`,
   `tests/test_panel_memory.py`, `tests/test_compose.py` and `tests/test_usage*.py`.
@@ -450,15 +450,15 @@ its own.
 | Phase | What | Notes |
 |---|---|---|
 | v5.7 | Кіра in Telegram | unchanged: the runtime, no panel change |
-| **v6.1** | System and Applications: the panel's new shape | the rename, the contexts, the Agents page, the status file and Agora's monitoring; no new application |
-| **v6.2** | Telegram as an application: Кіра connected | the registry connection, on/off with the buffer, its settings, its monitoring, tokens by application |
-| v7 | Theatre | [radio-theatre.md](radio-theatre.md); the Stage as a second room of Agora |
-| v8.1–v8.2 | Лілі (renumbered from v6.1–v6.2) | an external agent connected to Agora |
+| **v7.1** | System and Applications: the panel's new shape | the rename, the contexts, the Agents page, the status file and Agora's monitoring; no new application |
+| **v7.2** | Telegram as an application: Кіра connected | the registry connection, on/off with the buffer, its settings, its monitoring, tokens by application |
+| v8 | Theatre | [radio-theatre.md](radio-theatre.md); the Stage as a second room of Agora |
+| v9.1–v9.2 | Лілі (renumbered from v6.1–v6.2, then v8.1–v8.2) | an external agent connected to Agora |
 | later | Telegram for more persons; alerts through Hermes; RoboFace and Noos (deferred) | not in the ROADMAP yet |
 
 ## Decided (the owner, 2026-10-25)
 
-- **The rename goes everywhere** in v6.1: the registry file, the TOML key (`simulation` still read in v6.1), the
+- **The rename goes everywhere** in v7.1: the registry file, the TOML key (`simulation` still read in v7.1), the
   Python classes, the API routes, the UI and the docs. The `state/settings.json` keys keep their shape, since the ids
   (`agora`) do not change.
 - **Monitoring.** Each agent writes the status of its connections for the panel to read (rule 6,
@@ -469,12 +469,12 @@ its own.
   everything that waited, as a person answers a backlog.
 - **The first Telegram connection settings:** the answer form (voice and text, or text only), writing first there,
   and the typing indicators.
-- **Tokens by application:** the usage line's `app`, in v6.2.
+- **Tokens by application:** the usage line's `app`, in v7.2.
 - **Hermes's contexts are `listens` and `digests`.** His one-to-one room has a context of its own, so `private`
   means only a person's private chat.
-- **Alerts come later, not in v6:** Hermes tells the owner in his one-to-one room when a connection stays `stale` or
+- **Alerts come later, not in v7:** Hermes tells the owner in his one-to-one room when a connection stays `stale` or
   `error` for 10 minutes.
-- **The radio theatre is v7**, so Лілі is v8.
+- **The radio theatre is v8**, so Лілі is v9.
 - **RoboFace and Noos are deferred.**
 
 ## Open questions

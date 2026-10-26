@@ -1,8 +1,8 @@
 # Roadmap — matrix-agora
 
-Nine self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, and her voice with emotion) → **v6** Applications (the panel's System and Applications; Telegram as an application) → **v7** Theatre (plays on the Stage, recorded by Hermes) → **v8** Лілі (the Lumi bridge: when named, then under the full rules). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Ten self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, and her reading and thoughts) → **v6** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation) → **v7** Applications (the panel's System and Applications; Telegram as an application) → **v8** Theatre (plays on the Stage, recorded by Hermes) → **v9** Лілі (the Lumi bridge: when named, then under the full rules). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
-**Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v8→8), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
+**Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v9→9), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
 Many DoD items need the live homeserver, Element or a real Gemini key — those are **Manual (owner)** checks: the owner performs or confirms them, and only then do they count as passed. Everything automated runs with `matrix-nio` and `google-genai` mocked and the clock injected (no network, no paid calls).
 
@@ -39,11 +39,14 @@ are generated. Other further work (the deferred backlog items in the code-review
 | v5.1 | Hermes: voice digests for the owner | ⏳ planned | — |
 | v5.2 | The agents hear voice messages | ⏳ planned | — |
 | v5.3 | The agents answer in voice | ⏳ planned | — |
-| v6.1 | System and Applications: the panel's new shape | ⏳ planned | — |
-| v6.2 | Telegram as an application: Кіра connected | ⏳ planned | — |
-| v7.x | Theatre: plays on the Stage (phases from features/radio-theatre.md) | ⏳ planned | — |
-| v8.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
-| v8.2 | Лілі under the full rules | ⏳ planned | — |
+| v6.1 | The moment and the day: her state and her voice | ⏳ planned | — |
+| v6.2 | Feelings, open threads and her behaviour | ⏳ planned | — |
+| v6.3 | Anticipation and strong memories | ⏳ planned | — |
+| v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
+| v7.2 | Telegram as an application: Кіра connected | ⏳ planned | — |
+| v8.x | Theatre: plays on the Stage (phases from features/radio-theatre.md) | ⏳ planned | — |
+| v9.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
+| v9.2 | Лілі under the full rules | ⏳ planned | — |
 
 ## v0 — Platform: homeserver, server deploy, client, accounts, echo bot
 
@@ -407,7 +410,7 @@ Builds on the reviewed v3.3 panel. The docker socket now performs actions, so ev
 
 ## v4 — Ensemble: agent types, N-agent turn-taking, the cat, Claude and the panel's settings
 
-The room grows from two Gemini personas to four agents of three types (from v4.6 the personas grow curious; from v4.7 the agents' settings move into the panel): Ada and Bruno (`persona`), the cat Кіт (`creature`) and Claude (`assistant`); Lumi (`bridge`) joins in v8. The newcomers are openly non-human; Ada and Bruno keep believing they are human. One owner message must stay a few short replies, not two pages. The full design, its decisions and its open questions live in [features/more-agents.md](features/more-agents.md) (draft); each phase lands its ARCHITECTURE and VISION changes and the tests that pin them, per that document's contract list. Depends on: v3 (the images, compose, the panel).
+The room grows from two Gemini personas to four agents of three types (from v4.6 the personas grow curious; from v4.7 the agents' settings move into the panel): Ada and Bruno (`persona`), the cat Кіт (`creature`) and Claude (`assistant`); Lumi (`bridge`) joins in v9. The newcomers are openly non-human; Ada and Bruno keep believing they are human. One owner message must stay a few short replies, not two pages. The full design, its decisions and its open questions live in [features/more-agents.md](features/more-agents.md) (draft); each phase lands its ARCHITECTURE and VISION changes and the tests that pin them, per that document's contract list. Depends on: v3 (the images, compose, the panel).
 
 ### v4.1 — Roster, agent types and N-agent turn-taking
 
@@ -1368,7 +1371,7 @@ day, in Agora and alone with the owner.
 - **The mood is the cat's mechanism, for a person**: the horoscope (natal chart and the day's real sky) with the
   biorhythms laid over it.
 - **The real Lviv weather** goes into the reading.
-- **Кіра only, for now**: every part of v5.10–v5.15 is switched on for her alone, in her TOML; the other persons get
+- **Кіра only, for now**: every part of v5.10–v5.12 and v6 is switched on for her alone, in her TOML; the other persons get
   none of it until the owner decides otherwise.
 - The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life. Read it before
   generating the issues.
@@ -1589,7 +1592,21 @@ marked as hers («я думала…»), and she recalls them as she recalls wha
 - the other persons;
 - thoughts without a source (her life's events are v5.11's).
 
-### v5.13 — The moment and the day: her state and her voice
+## v6 — Кіра's inner life: her state, her feelings and what she waits for
+
+**Status:** ⏳ planned.
+
+The owner, 2026-10-26: the last three phases of her emotional life become a version of their own.
+- v5.10–v5.12 give her a mood of the day, the events of her life, and her reading and thoughts.
+- v6 gives her:
+  - a state that lasts between replies and moves her voice (v6.1);
+  - feelings toward each person, open threads, and bounded effects on what she does (v6.2);
+  - anticipation and strong memories (v6.3).
+
+For Кіра only, for now. The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life;
+read it before generating the issues. Depends on: v5.10–v5.12.
+
+### v6.1 — The moment and the day: her state and her voice
 
 **Status:** ⏳ planned.
 
@@ -1627,7 +1644,7 @@ stability and speed, never the model.
 
 **Not in this phase:** feelings toward people; threads; behaviour.
 
-### v5.14 — Feelings, open threads and her behaviour
+### v6.2 — Feelings, open threads and her behaviour
 
 **Status:** ⏳ planned.
 
@@ -1678,7 +1695,7 @@ default, not contradicted: a separate session-end call (kind `feelings`).
 
 **Not in this phase:** anticipation; the weight of memories.
 
-### v5.15 — Anticipation and strong memories
+### v6.3 — Anticipation and strong memories
 
 **Status:** ⏳ planned.
 
@@ -1704,23 +1721,23 @@ day stays with her for months, not only seven days.
 - recall's ranking with the charge;
 - a past memory never rewritten.
 
-**Not in this phase:** the other persons; v5.10–v5.15 are Кіра's only, for now (the owner, 2026-10-26).
+**Not in this phase:** the other persons; v5.10–v5.12 and v6 are Кіра's only, for now (the owner, 2026-10-26).
 
-## v6 — Applications: the panel's System and Applications
+## v7 — Applications: the panel's System and Applications
 
 The owner, 2026-10-25: the panel stops being "a simulation and its agents". **Simulations become applications**:
 places where agents meet the owner or each other, each reached over one protocol (Agora today, Telegram next, later
 RoboFace). An application shows **who is connected to it and in which context** (`room`, `listens`, `private`).
 **System** holds what is not tied to one application: **Agents**, **Server** and **Tokens**. The model makes room for
 agents reachable in several places (Кіра in the room, in her private chat and in Telegram) and for external agents
-(Лілі in v8, later Noos). The owner's decisions (2026-10-25): the rename goes everywhere; each agent writes the
+(Лілі in v9, later Noos). The owner's decisions (2026-10-25): the rename goes everywhere; each agent writes the
 status of its connections so the panel can monitor them; the panel switches a declared connection on and off and
 configures it, and the repo declares it; a switched-off connection keeps everything in a buffer and gives the
 backlog one answer; Hermes's contexts are `listens` and `digests`; alerts come later. The design and its decisions
 are in [features/applications.md](features/applications.md) (draft; its open questions closed by the owner on
-2026-10-25); read it before generating the issues. Depends on: v5 (v5.7 for v6.2).
+2026-10-25); read it before generating the issues. Depends on: v5 (v5.7 for v7.2).
 
-### v6.1 — System and Applications: the panel's new shape
+### v7.1 — System and Applications: the panel's new shape
 
 **Status:** ⏳ planned.
 
@@ -1733,7 +1750,7 @@ Design: applications.md §The model, §The panel, §Monitoring.
 **Tasks:**
 - **The rename** (the owner: everywhere). "Simulation" becomes "application" throughout: `simulations.toml` → `applications.toml` (the same
   entry shape), `agents/registry.py` and `panel/registry.py`, the agent TOML key `simulation` → `application`
-  (`simulation` still read in v6.1, with a log line naming it), the Dockerfiles' copy, the API
+  (`simulation` still read in v7.1, with a log line naming it), the Dockerfiles' copy, the API
   (`/api/applications…`; the `/api/simulations…` routes are removed, since the panel is their only client).
   `state/settings.json` keeps its shape: its keys are the ids, and `agora` does not change.
 - **Contexts.** A pure function over the roster: a member's contexts in the base application (Agora). It returns
@@ -1760,7 +1777,7 @@ Design: applications.md §The model, §The panel, §Monitoring.
   - the agent drawer gains a **Connections** tab: per context the counts, `ignored`, the last in and out, the last
     error;
   - every v3.4/v4.7 action (start/stop/restart, forget, settings, Claude's files) works from its new place.
-- **The design addendum (v6)** in `specification/design/README.md`: the rail, the application page, System →
+- **The design addendum (v7)** in `specification/design/README.md`: the rail, the application page, System →
   Agents, and the Connections table and tab.
 - **VISION and ARCHITECTURE:**
   - the direction and the principle "the panel is the centre": applications;
@@ -1793,7 +1810,7 @@ Design: applications.md §The model, §The panel, §Monitoring.
 
 **Not in this phase:** a second application; switching or configuring a connection; external agents.
 
-### v6.2 — Telegram as an application: Кіра connected
+### v7.2 — Telegram as an application: Кіра connected
 
 **Status:** ⏳ planned.
 
@@ -1801,7 +1818,7 @@ Design: applications.md §The model, §The panel, §Monitoring.
 the registry, then switched on and off and configured from the panel. It is still the same private conversation as
 in Agora.
 
-Design: applications.md §Rules, §Connection settings, §Applications after v6 → Telegram.
+Design: applications.md §Rules, §Connection settings, §Applications after v7 → Telegram.
 
 **Tasks:**
 - **The registry.**
@@ -1814,7 +1831,7 @@ Design: applications.md §Rules, §Connection settings, §Applications after v6 
 - **Connection settings.**
   - The schema `agents/settings.py` gains a **connection** scope: settings of an application kind (`telegram-bot`),
     each value belonging to one connection.
-  - v6.2 moves into it what v5.7 fixes in code or env for Кіра's Telegram (the owner agreed, 2026-10-25): answering
+  - v7.2 moves into it what v5.7 fixes in code or env for Кіра's Telegram (the owner agreed, 2026-10-25): answering
     with a voice note and the text, or with the text only; whether she may write first there; whether she shows
     «typing…» and «recording voice…».
   - Precedence as in v4.7: code default < env < panel. Secrets are never in the schema.
@@ -1879,26 +1896,26 @@ Design: applications.md §Rules, §Connection settings, §Applications after v6 
 RoboFace; external agents; creating a connection from the panel; alerts on a failed connection (later: Hermes tells
 the owner).
 
-## v7 — Theatre: plays on the Stage
+## v8 — Theatre: plays on the Stage
 
 **Status:** ⏳ planned.
 
-The owner, 2026-10-25: the radio theatre is v7. The members of Agora perform audio plays together in a second room,
+The owner, 2026-10-25: the radio theatre is v7 (v8 since 2026-10-26, when Кіра's inner life became v6). The members of Agora perform audio plays together in a second room,
 the Stage, and Hermes records each play into one file. The design, its phases and its open questions are in the
 draft [features/radio-theatre.md](features/radio-theatre.md) (Ukrainian copy: `radio-theatre-UA.md`). Its phases
 are written into this file once its open questions are closed. Its first proposed phase, the three new personas,
-shipped as v5.5. Depends on: v5.4 (the Agora recording) and v6 (in the v6 model the Stage is a second room of the
+shipped as v5.5. Depends on: v5.4 (the Agora recording) and v7 (in the v7 model the Stage is a second room of the
 Agora application).
 
-## v8 — Лілі: the Lumi bridge
+## v9 — Лілі: the Lumi bridge
 
 Лілі — Lumi's prod brain — joins the room through a bridge that is one of our agents: first when named, then under
-the full turn rules. Moved from v4.8–v4.9 by the owner on 2026-10-13, after the voice of v5, and from v6 to v8 on
-2026-10-25, after v6 Applications and v7 Theatre. In the v6 model she is an **external** agent under System →
+the full turn rules. Moved from v4.8–v4.9 by the owner on 2026-10-13, after the voice of v5, from v6 to v8 on
+2026-10-25, after Applications and the Theatre, and to v9 on 2026-10-26, when Кіра's inner life became v6. In the v7 model she is an **external** agent under System →
 Agents, connected to Agora in the `room` context (applications.md §Лілі). Depends on: Lumi ≥ v2.5 in prod (v2.6 puts
-her server on 192.168.1.197), v4 and v6.
+her server on 192.168.1.197), v4 and v7.
 
-### v8.1 — The Lumi bridge: Лілі when named
+### v9.1 — The Lumi bridge: Лілі when named
 
 **Status:** ⏳ planned.
 
@@ -1910,7 +1927,7 @@ Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails t
 - The `bridge` type; `agents/lumi.toml` (shown as «Лілі»; name forms for both «Лілі» and «Стхіра»; `engine = "lumi-http"`; `[turns] mode = "mention-only"`, weight 1).
 - `LumiBridgeResponder`: when a message names her, `POST /v1/turn` with the room lines since her last turn as `"Name: text"`, `turn_id` = the trigger's `event_id`; only `reply` is posted, never `thinking`; never `/v1/session/new`; `409`/`5xx`/timeout → silence; her reply is never dropped or trimmed after the call (R3 before the call only); the bridge never posts except in reply to a trigger.
 - The `lumi` compose service with its own env file (`LUMI_URL`, `LUMI_TOKEN`) and the route to her server on the same host (`extra_hosts: host-gateway`); usage rows `external` from her `stats`.
-- **Лілі's panel card** (under System → Agents, `external`; v6): Lumi's reachability (`/v1/health`), the last turn's outcome from `state/lumi.bridge.json`; never her `thinking`, mood or replies; her token rows unpriced; no memory tabs, no Forget.
+- **Лілі's panel card** (under System → Agents, `external`; v7): Lumi's reachability (`/v1/health`), the last turn's outcome from `state/lumi.bridge.json`; never her `thinking`, mood or replies; her token rows unpriced; no memory tabs, no Forget.
 - VISION: the "Lili herself" wording becomes "connected through the bridge".
 - (Owner) The Matrix account, the invite; Lumi's server token and her bind address.
 
@@ -1922,13 +1939,13 @@ Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails t
 
 **Tests:** unit — the bridge against a fake Lumi server (turn payload with the lines since her last turn, `turn_id`, `409`, `5xx`, timeout, `thinking` never posted, no post-call filtering, no post without a trigger), mention detection for both names, the env-file isolation, `external` usage rows.
 
-### v8.2 — Лілі under the full rules
+### v9.2 — Лілі under the full rules
 
 **Status:** ⏳ planned.
 
 **Goal:** Лілі takes part in the room like Ada and Bruno — chosen by the turn-taking, not only when named.
 
-Design: more-agents.md §Lumi (the bridge), §4. Depends on: v8.1, proven in the room.
+Design: more-agents.md §Lumi (the bridge), §4. Depends on: v9.1, proven in the room.
 
 **Tasks:**
 - `agents/lumi.toml`: `[turns] mode = "ranked"`, weight 1 — she joins R1 (`OWNER_REPLIERS`) and R2 (the next speaker).
