@@ -84,6 +84,18 @@ def render_plan(items: list[str], mutations: list[str | None], max_words: int) -
     return "\n".join(lines)
 
 
+def areas(horizon: str, others: list[str]) -> str:
+    """The plan covers a whole life, not the pastimes alone (the owner, 2026-10-26: Кіра planned hobbies, never her
+    work or her people): at least one work item and one about her own people, pastimes at most half. Her people are
+    those of her life outside the room; the room's members and Ich are never planned for."""
+    workday = " (якщо цей день за твоїм звичним тижнем робочий)" if horizon == "day" else ""
+    room = f"Ich і людей з Агори ({', '.join(others)})" if others else "Ich і людей з Агори"
+    return (f"План — про все твоє життя, не лише про дозвілля: щонайменше один пункт про роботу{workday}, щонайменше "
+            "один — про твоїх близьких чи особисте життя (рідні, друзі, колеги, стосунки), а захоплення — не більше "
+            f"половини пунктів. Близькі тут — люди з твого життя поза Агорою; {room} у плани не вписуй і нічого за "
+            "них не обіцяй.")
+
+
 def plan_request(
     horizon: str,
     name: str,
@@ -96,9 +108,11 @@ def plan_request(
     recent_memory: str | None,
     mutations: list[str | None],
     max_words: int,
+    others: list[str] | None = None,
 ) -> tuple[str, str]:
     """(system_instruction, contents) for one plan. The next chapter is a
-    silent direction; the mutated items are bent but read as sincere intents."""
+    silent direction; the mutated items are bent but read as sincere intents.
+    `others` names the room's members, never planned for."""
     n_items, phrase = HORIZONS[horizon]
     parts = [f"Твоє життя зараз:\n{chapter_body}"]
     if next_opening:
@@ -116,7 +130,7 @@ def plan_request(
     task = (
         f"Склади свій план {phrase} ({period_label}): рівно {n_items} пунктів, кожен з нового рядка, "
         f"що починається з «- », від першої особи, коротко, як щирі наміри, разом не більше {max_words} "
-        "слів. Плани стосуються лише тебе і міста — нічого не обіцяй за інших людей з Агори."
+        "слів. " + areas(horizon, others or [])
     )
     if bent:
         task += " Відхилення від твого звичного життя: " + "; ".join(bent) + \

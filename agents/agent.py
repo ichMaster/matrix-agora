@@ -1459,6 +1459,7 @@ class Agent:
                     cur.body if cur else "", nxt.opening if nxt else None,
                     coarser, strip_tags(prev) if prev else None, yesterday,
                     mutations, self.plan_max_words,
+                    [m.name for m in self.roster.values() if m.user_id != self.cfg.user_id and m.type != "herald"],
                 )
                 text = await self.llm.generate(contents, system, max_output_tokens=self.plan_max_words * 3,
                                                kind="plan")
