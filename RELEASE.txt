@@ -1,3 +1,17 @@
+Version 5.9.3 (2026-10-26)
+---------------------------
+- Kira recalls a line from her archive with when it was, as a person
+  remembers it («сьогодні вранці», «вчора», «минулого тижня», «якось») -
+  never a date or an hour, which gave her away (the owner; agents/world.py
+  ago)
+- Docs: v5.12, Kira reads the news (Zaxid.net with the full text, The
+  Guardian) and thinks: a thought on each item she picks and an hourly
+  reflection on her talks with the owner and in Agora, even mid-talk, kept
+  in her archive as «я думала…»; v5.10-v5.12 and v8 are hers only
+- Docs: the owner's version order - v6 Lili (the Lumi bridge), v7
+  Applications, v8 Kira's inner life (her state, feelings, anticipation),
+  v9 Theatre
+
 Version 5.9.2 (2026-10-26)
 ---------------------------
 - A plan may name the room's members and the owner, as the person's own
