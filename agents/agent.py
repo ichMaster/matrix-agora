@@ -197,6 +197,7 @@ from agents.voice import (
     encode_opus,
     voice_caption,
 )
+from agents.weather import fetch_weather, load_weather, save_weather
 from agents.world import (
     MONTHS_NOM,
     day_label,
@@ -364,6 +365,10 @@ class Agent:
         self._sky_retry_ms = 0
         self._mood_lock = asyncio.Lock()
         self._mood_retry_ms = 0
+        self._weather: tuple[str, str] | None = None  # v5.10: (day, line) — the day's Lviv weather, for a person's mood
+        self._weather_lock = asyncio.Lock()
+        self._weather_retry_ms = 0
+        self.weather_fetch = fetch_weather  # the seam: tests pass a canned answer, never the network
         self.told: set[int] = set()  # v4.3: the theses retold this run — RAM only, like the context window
         # v5.6 — the private chat with the owner (a person with `private`): its room, its own history (never
         # Agora's), and the pending answer; the room is kept in state/<name>.private.json
@@ -1746,6 +1751,36 @@ class Agent:
             self._sky = (day, line)
             save_sky(self.sky_file, day, line)
             log.info("sky looked up")
+            return line
+
+    # --- v5.10: the day's Lviv weather (a person's mood) ---------------------------------------------------------
+    @property
+    def weather_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.weather.json"
+
+    def weather_today(self, now) -> str | None:
+        day = now.date().isoformat()
+        return self._weather[1] if self._weather is not None and self._weather[0] == day else None
+
+    async def ensure_weather(self, now) -> str | None:
+        """Once per local day: the day's file, else one Open-Meteo request; a failure means no weather and a retry
+        after 10 minutes — never a blocked mood or reply. Not a model call: no usage line."""
+        day = now.date().isoformat()
+        if (line := self.weather_today(now)) is not None:
+            return line
+        if self._weather_lock.locked() or self.clock() < self._weather_retry_ms:
+            return None
+        async with self._weather_lock:
+            if (line := load_weather(self.weather_file, day)) is not None:
+                self._weather = (day, line)
+                return line
+            line = await self.weather_fetch(now.date(), self.tz)
+            if line is None:
+                self._weather_retry_ms = self.clock() + 600_000
+                return None
+            self._weather = (day, line)
+            save_weather(self.weather_file, day, line)
+            log.info("weather fetched")
             return line
 
     async def ensure_mood(self, now) -> None:
