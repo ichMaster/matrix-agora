@@ -1,3 +1,17 @@
+Version 5.9.2 (2026-10-26)
+---------------------------
+- A plan may name the room's members and the owner, as the person's own
+  intentions toward them, never committing them (the owner); what they did
+  still comes only from the journal
+- Kira's discretion line in Agora is wider: her feelings for the owner,
+  their relationship, her plans about him and their talks alone stay
+  between them - a rule for her own judgement, not a filter in code (the
+  owner)
+- Docs: ROADMAP v5.10-v5.14, Kira's emotional life (a mood of the day with
+  the Lviv weather, events of her life with Lviv's news, a lasting state,
+  feelings and behaviour, anticipation), designed in
+  features/voice-emotion.md
+
 Version 5.9.1 (2026-10-26)
 ---------------------------
 - Plans cover a whole life, not the pastimes alone (the owner): each plan
