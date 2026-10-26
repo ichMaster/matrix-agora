@@ -10,6 +10,8 @@ server/*.env*
 server_con.yaml
 state/
 reports/
+# the private canon (v5.9.1): mounted from the host at run time, never baked into a public image
+agents/canon/
 # not needed in the image
 .git/
 .github/

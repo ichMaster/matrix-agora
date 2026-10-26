@@ -41,6 +41,7 @@ def client(state):
                                  prober=Prober(reg), state_dir=state, background=False))
 
 
+@pytest.mark.canon
 def test_kiras_card_shows_her_models_her_voice_and_her_palette(client):
     m = client.get("/api/agents/kira/memory", headers=AUTH).json()["models"]
     assert (m["answers"], m["background"], m["thinking"]) == ("gemini-3.1-pro-preview", "gemini-2.5-flash", "low")
@@ -67,6 +68,7 @@ def test_an_unreadable_settings_file_is_null(state):
     assert models_view(state, "nobody") is None
 
 
+@pytest.mark.canon
 def test_a_palette_on_a_model_that_reads_tags_aloud_says_so(state):
     (state / "kira.settings.json").write_text(settings(GEMINI_MODEL="gemini-2.5-flash",
                                                        ELEVENLABS_MODEL="eleven_turbo_v2_5"))

@@ -35,6 +35,7 @@ services:
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
     volumes:
       - ../state:/app/state
+      - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
     stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
 
   bruno:
@@ -55,6 +56,7 @@ services:
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
     volumes:
       - ../state:/app/state
+      - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
     stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
 
 
@@ -76,6 +78,7 @@ services:
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
     volumes:
       - ../state:/app/state
+      - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
     stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
 
   mia:
@@ -96,6 +99,7 @@ services:
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
     volumes:
       - ../state:/app/state
+      - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
     stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
 
   irma:
@@ -116,6 +120,7 @@ services:
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
     volumes:
       - ../state:/app/state
+      - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
     stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
 
   kira:
@@ -138,6 +143,7 @@ services:
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
     volumes:
       - ../state:/app/state
+      - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
     stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
 
   kit:
@@ -158,6 +164,7 @@ services:
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
     volumes:
       - ../state:/app/state
+      - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
     stop_grace_period: 30s                       # a creature writes no summary; the grace period stays
 
   claude:
@@ -231,6 +238,7 @@ services:
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
     volumes:
       - ../state:/app/state
+      - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
     stop_grace_period: 30s
 
   usage-report:
@@ -271,6 +279,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ../state:/app/state                      # v3.4: read-write for "forget" (state/<name>.memory.md only)
+      - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon (Кіра's palette for the Voice tab)
       - ../claude-workspace:/claude-workspace    # v4.7: Claude's folder — list, read, download, upload, delete
       - /etc/os-release:/host/os-release:ro
       # the stack at its HOST path: compose resolves ../state etc. on this side, the daemon mounts them on the host

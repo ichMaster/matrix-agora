@@ -110,6 +110,7 @@ def test_the_routes_validate_names_and_clamp_days(state, monkeypatch):
 
 
 # --- v4.2: the cat's mood of the day -------------------------------------------------------------------------------
+@pytest.mark.canon
 def test_the_mood_view_reads_todays_horoscope_and_the_biorhythms(state):
     from pathlib import Path
     log = "\n\n===== 2026-10-03 =====\nвчора\n\n===== 2026-10-04 =====\nТранзити.\n\nРЕЗОЛЮЦІЯ: Колючий і сонний.\n"
@@ -147,6 +148,7 @@ def test_a_torn_mood_log_never_breaks_the_memory_route(state, monkeypatch):
 
 
 # --- v4.3: the cat's past life and initiative -----------------------------------------------------------------------
+@pytest.mark.canon
 def test_the_cat_shows_his_theses_his_last_nudge_and_todays_count(state, monkeypatch):
     monkeypatch.setattr(app_mod, "local_today", lambda: TODAY)
     monkeypatch.setenv("TIMEZONE", "Europe/Kyiv")

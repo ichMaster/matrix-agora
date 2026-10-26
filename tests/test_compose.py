@@ -32,7 +32,7 @@ def test_one_container_per_agent_from_one_image():
         svc = SERVICES[name]
         assert svc["image"] == IMAGE and svc["command"] == [f"agents/{name}.toml"]
         assert svc["environment"]["HOMESERVER"] == "http://homeserver:8008"  # the compose network
-        assert svc["volumes"] == ["../state:/app/state"] and svc["user"] == "1000:1000"
+        assert svc["volumes"] == ["../state:/app/state", CANON_MOUNT] and svc["user"] == "1000:1000"
         assert svc["stop_grace_period"] == "30s" and svc["restart"] == "unless-stopped"
         kira = [{"path": "kira.env", "required": False}] if name == "kira" else []  # v5.7: her bot
         assert svc["env_file"] == [{"path": ".env", "required": False}, {"path": "voice.env", "required": False},
@@ -52,6 +52,21 @@ def test_server_env_example_carries_every_agent_variable():
     server_keys = env_keys(ROOT / "server" / ".env.example")
     assert agent_keys <= server_keys
     assert server_keys - agent_keys == {"REGISTRATION_TOKEN", "AGENT_IMAGE_TAG", "PANEL_TOKEN", "PANEL_IMAGE_TAG", "DOCKER_GID", "PANEL_BIND", "STACK_DIR"}
+
+
+CANON_MOUNT = "../canon:/app/agents/canon:ro"  # v5.9.1: the private canon, from the host, read-only
+
+
+def test_the_private_canon_is_mounted_never_committed_never_baked():
+    """The owner, 2026-10-26: agents/canon/ is private — gitignored, kept out of the public images, synced by
+    deploy.sh to ~/matrix-agora/canon and mounted read-only where it is read; never into Claude's container."""
+    assert "agents/canon/" in (ROOT / ".gitignore").read_text().splitlines()
+    assert "agents/canon/" in (ROOT / ".dockerignore").read_text().splitlines()
+    mounted = sorted(n for n, s in SERVICES.items() if CANON_MOUNT in s.get("volumes", []))
+    assert mounted == sorted(["ada", "bruno", "leon", "mia", "irma", "kira", "kit", "hermes", "panel"])
+    deploy = (ROOT / "server" / "deploy.sh").read_text()
+    assert '"$CANON_DIR/" "$TARGET:matrix-agora/canon/"' in deploy and "--delete" not in deploy
+    assert "chmod 700 ~/matrix-agora/canon && chmod 600 ~/matrix-agora/canon/*" in deploy
 
 
 def test_deploy_pulls_before_up_and_prepares_the_mounts():
@@ -78,6 +93,7 @@ def test_the_panel_gets_only_its_own_settings_and_the_stack_at_its_host_path():
     assert svc["user"] == "1000:1000" and svc["group_add"] == ["${DOCKER_GID:-999}"]
     assert svc["volumes"] == ["/var/run/docker.sock:/var/run/docker.sock",
                               "../state:/app/state",                       # v3.4: forget writes here
+                              CANON_MOUNT,                                 # v5.9.1: Кіра's palette
                               "../claude-workspace:/claude-workspace",     # v4.7: Claude's files
                               "/etc/os-release:/host/os-release:ro",
                               f"{stack}:{stack}:ro"]                       # same path inside: compose resolves host paths
@@ -212,7 +228,7 @@ def test_hermes_runs_the_shared_image_with_the_shared_file_and_his_own():
     assert svc["env_file"] == [{"path": ".env", "required": False}, {"path": "hermes.env", "required": False},
                                {"path": "voice.env", "required": False}]
     assert svc["environment"]["HOMESERVER"] == "http://homeserver:8008" and svc["user"] == "1000:1000"
-    assert svc["volumes"] == ["../state:/app/state"] and "ports" not in svc and svc["stop_grace_period"] == "30s"
+    assert svc["volumes"] == ["../state:/app/state", CANON_MOUNT] and "ports" not in svc and svc["stop_grace_period"] == "30s"
     others = [n for n, s in SERVICES.items() if n != "hermes"
               and any((e.get("path") if isinstance(e, dict) else e) == "hermes.env" for e in s.get("env_file", []))]
     assert others == []                                             # his key reaches no other container

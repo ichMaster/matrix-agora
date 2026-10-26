@@ -63,6 +63,7 @@ def test_emotion_is_a_persons_and_needs_a_voice():
                              "capabilities": {"emotion": True}}, "kit.toml")
 
 
+@pytest.mark.canon
 def test_kiras_palette_is_loaded_and_says_nothing_of_what_she_is(monkeypatch):
     for var in ("OWNER", "KIRA_PASSWORD", "ROOM_ID", "HOMESERVER"):
         monkeypatch.setenv(var, "x")
@@ -72,6 +73,7 @@ def test_kiras_palette_is_loaded_and_says_nothing_of_what_she_is(monkeypatch):
     assert not BANNED_RE.search(cfg.voice_spec)
 
 
+@pytest.mark.canon
 def test_a_missing_voice_spec_is_named(tmp_path):
     toml = tmp_path / "kira.toml"
     src = (ROOT / "agents" / "kira.toml").read_text(encoding="utf-8")

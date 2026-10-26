@@ -11,6 +11,7 @@ ENV = {
 }
 
 
+@pytest.mark.canon
 @pytest.mark.parametrize("toml,localpart,password", [
     ("agents/ada.toml", "ada", "pw-ada"),
     ("agents/bruno.toml", "bruno", "pw-bruno"),
@@ -27,6 +28,7 @@ def test_loads_both_agents(toml, localpart, password):
     assert cfg.state_file.name == f"{localpart}.json"  # the real path is state/<name>.json (isolated here)
 
 
+@pytest.mark.canon
 def test_missing_env_var_is_a_clear_error():
     env = {k: v for k, v in ENV.items() if k != "ADA_PASSWORD"}
     with pytest.raises(ConfigError, match="ADA_PASSWORD"):
@@ -57,6 +59,7 @@ def test_missing_or_empty_canon_refuses_to_start(tmp_path):
         load_canon(common, empty)
 
 
+@pytest.mark.canon
 def test_real_state_paths_are_under_state(monkeypatch):
     # bypass the isolation fixture: the contract paths themselves
     from pathlib import Path

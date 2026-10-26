@@ -18,7 +18,27 @@ from agents.config import AgentConfig
 from agents.life import parse_life
 from tests.test_first_sync import FakeLLM
 
-LIFE = parse_life(open("agents/canon/ada.life.md", encoding="utf-8").read())  # noqa: SIM115
+# a public life story: the real ones are private (agents/canon/, gitignored since v5.9.1), and these tests need only
+# a frame — chapters around 2026 with a body long enough to be copied
+LIFE = parse_life("""# Життя Ади
+
+Народження: 1994-03-14 08:00, Львів
+Смерть: 2081-11-30
+
+## 1994–2019 · Дитинство і навчання
+
+Ада росла на Левандівці, вчилася на філолога і щоліта їздила до бабусі в Карпати.
+
+## 2020–2027 · Редакція і есеї
+
+Ада працює редакторкою в невеликому видавництві на Підвальній, щоранку п'є каву біля Арсеналу, по вівторках
+ходить у басейн, по четвергах веде гурток читання для підлітків у бібліотеці, а вечорами пише есеї про місто, які
+поки що нікому не показує. Восени вона перекладає популярну книжку про космос і сперечається про кожен термін.
+
+## 2028–2081 · Книжка
+
+Есеї виходять книжкою, і Ада вперше читає їх уголос у повній залі.
+""")
 CFG = AgentConfig(name="Ада", user_id="@ada:agora.lan", canon="Канон.", homeserver="http://hs",
                   room_id="!room", owner="@ich:agora.lan", password="pw", life=LIFE)
 KYIV = ZoneInfo("Europe/Kyiv")

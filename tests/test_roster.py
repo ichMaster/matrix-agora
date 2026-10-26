@@ -72,6 +72,7 @@ def test_the_four_newcomers_are_people_like_ada_and_bruno(name, shown, forms):
     assert m.panel["name"] == name.capitalize()
 
 
+@pytest.mark.canon
 @pytest.mark.parametrize("name", ["ada", "bruno", "leon", "mia", "irma", "kira"])
 def test_a_persons_canon_and_life_never_hold_a_banned_word(name):
     """The persons believe they are human: neither their canon nor their life story says a model or a bot (v5.5:
@@ -165,6 +166,7 @@ def test_config_requires_canon_and_life_only_when_the_type_has_them(tmp_path, mo
         load_config(toml, env={**ENV, "X_PASSWORD": "pw"})
 
 
+@pytest.mark.canon
 def test_the_real_tomls_load_as_personas():
     cfg = load_config("agents/ada.toml", env=ENV)
     assert cfg.type == "persona" and cfg.engine == "gemini" and cfg.capabilities == TYPES["persona"]
@@ -264,6 +266,7 @@ def test_the_cat_is_an_ambient_creature_with_a_horoscope_and_no_memories():
     assert kit.panel["name"] == "Kit" and kit.panel["pronoun"] == "he"
 
 
+@pytest.mark.canon
 def test_the_cats_config_loads_his_canon_life_and_natal_text():
     cfg = load_config("agents/kit.toml", env={**ENV, "KIT_PASSWORD": "pw"})
     assert cfg.type == "creature" and cfg.can("mood") and not cfg.can("summary")
@@ -272,6 +275,7 @@ def test_the_cats_config_loads_his_canon_life_and_natal_text():
     assert 60 <= len(cfg.theses) <= 100 and cfg.can("pastlife")          # v4.3: the past-life theses
 
 
+@pytest.mark.canon
 def test_a_creature_needs_a_readable_theses_file(tmp_path):
     """v4.3 contract: `memories` is required with `pastlife`; missing, empty or malformed refuses to start."""
     from pathlib import Path
@@ -388,6 +392,7 @@ def test_a_simulation_has_at_most_one_herald(tmp_path):
         load_roster("sim", reg, agents)
 
 
+@pytest.mark.canon
 def test_a_heralds_config_loads_his_own_canon_without_the_common_one(tmp_path):
     from pathlib import Path
     reg = tmp_path / "simulations.toml"  # the registry lists him from AGORA-084, with his compose service
@@ -399,6 +404,7 @@ def test_a_heralds_config_loads_his_own_canon_without_the_common_one(tmp_path):
     assert cfg.type == "herald" and cfg.can("digest") and cfg.life is None
 
 
+@pytest.mark.canon
 def test_hermes_canon_never_calls_a_persona_a_model_or_a_bot():
     """He is openly not human, but nothing he is given may tie a persona to a banned word (the outgoing guard's
     rule, v4.2): his canon passes the same check every digest will."""
@@ -434,6 +440,7 @@ def test_transcribe_belongs_to_the_herald_and_one_member(tmp_path):
         load_roster("sim", reg, agents)
 
 
+@pytest.mark.canon
 def test_the_shared_canon_and_hermes_name_the_newcomers():
     """v5.5: the people already in the room know the four — the shared canon names them with their ties, Hermes's
     canon names every member, and Ada's and Bruno's canons hold a line for each."""

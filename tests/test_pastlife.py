@@ -26,6 +26,7 @@ THESES = (
 
 
 # --- the file -------------------------------------------------------------------------------------------------------
+@pytest.mark.canon
 def test_the_real_file_holds_60_to_100_theses_with_tags():
     theses = parse_theses(REAL.read_text(encoding="utf-8"))
     assert 60 <= len(theses) <= 100  # ROADMAP §v4.3; the owner edits the file (review #11)
@@ -41,6 +42,7 @@ def test_headings_and_prose_are_ignored_and_a_broken_thesis_is_named():
             parse_theses(bad)
 
 
+@pytest.mark.canon
 def test_no_thesis_names_ich_ada_or_bruno_or_says_what_it_must_not():
     """The phase DoD: the past is his alone — no room member, no hidden end, no word that outs anyone."""
     roster = load_roster("agora")
@@ -154,6 +156,7 @@ COMMON = ("багато", "цікаво", "цікава", "почати", "по�
           "groups", "circle", "afraid", "typing", "shopping", "topic", "upset")
 
 
+@pytest.mark.canon
 @pytest.mark.parametrize("said", COMMON)
 def test_everyday_words_trigger_no_tag_of_the_real_file(said):
     """v4.3 review #3: tags match at a word start, and no tag starts an everyday word."""

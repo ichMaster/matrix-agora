@@ -85,6 +85,7 @@ def test_a_personas_prompt_carries_the_move_for_the_answered_event_and_the_other
         assert Agent.draw_move(stub, eid, None) is None
 
 
+@pytest.mark.canon
 @pytest.mark.parametrize("name,other,lens", [("ada", "Бруно", "зсередини"), ("bruno", "Ади", "назовні")])
 def test_the_canon_gives_each_persona_curiosity_and_the_opposite_view(name, other, lens):
     """AGORA-071 (the owner, 2026-10-11): what each asks whom, and opposite views — the same situation, two sides."""

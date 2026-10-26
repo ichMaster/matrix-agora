@@ -93,6 +93,7 @@ def _registry_tomls() -> dict[str, dict]:
     return {n: tomllib.loads(Path(f"agents/{n}.toml").read_text(encoding="utf-8")) for n in names}
 
 
+@pytest.mark.canon
 def test_no_persona_prompt_or_canon_calls_the_agent_a_model_or_bot():
     """The human-belief rule (VISION §Principles, scoped to personas in v4.2): every persona's prompt, canon and
     life story, and the shared common.md, are clean."""

@@ -5,6 +5,8 @@ import pytest
 
 from agents.life import LifeError, current_chapter, life_section, next_chapter, parse_life
 
+if not Path("agents/canon/ada.life.md").is_file():  # the real stories are private (v5.9.1): the Mac only
+    pytest.skip("agents/canon/ is private (gitignored)", allow_module_level=True)
 ADA = parse_life(Path("agents/canon/ada.life.md").read_text(encoding="utf-8"))
 BRUNO = parse_life(Path("agents/canon/bruno.life.md").read_text(encoding="utf-8"))
 TODAY = date(2026, 10, 3)

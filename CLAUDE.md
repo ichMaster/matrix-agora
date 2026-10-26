@@ -75,6 +75,7 @@ The full mechanisms live in ARCHITECTURE.md; these are the invariants most often
 - **The persona agents believe they are human** (from v4.2 scoped to `persona` agents). No code path or prompt — reply rules, summary prompts, memory prompts — may say a persona is a model or a bot, and a non-persona agent's reply that would call one so is dropped (`outs_a_persona`).
 - **Nothing lived is deleted, and nothing past is rewritten**: day memories, digests (week/month/year) and plans stay forever, and room facts in memories, plans and the today block come only from the conversation journal.
 - **Keep decisions pure**: the filter, mentions, the ranking and `wave_count`, who-replies, prompt assembly, session-end, day and plan-period selection, the hourly today-refresh decision and usage aggregation are functions over plain data with an injected clock.
+- **The canon is private** (from v5.9.1): `agents/canon/` is gitignored and never baked into an image — it lives on the Mac, `server/deploy.sh` syncs it to the host and compose mounts it read-only. Never commit it, `git add -f` it, or quote it in issues, commits or PR bodies; a test that reads it is marked `canon`.
 - **Secrets stay out**: never print `.env`, `server/.env`, `server_con.yaml` or anything under `state/`; no tokens, passwords, keys or message/summary/memory texts in logs, argv, commits or issue comments. To check a value is set, test it without echoing it (`grep -q '^GEMINI_API_KEY=.' .env`).
 
 ## Contracts

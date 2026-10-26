@@ -116,6 +116,7 @@ def test_the_defaults_are_chat_sized(monkeypatch):
     assert agent.reply_max_tokens == 200 and agent.history_n == 40
 
 
+@pytest.mark.canon
 def test_the_common_canon_asks_for_one_to_three_sentences():
     from pathlib import Path
     assert "Пиши 1–3 речення" in Path("agents/canon/common.md").read_text(encoding="utf-8")

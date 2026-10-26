@@ -44,12 +44,14 @@ def test_a_malformed_registry_is_refused(broken, needle):
         parse_registry(broken)
 
 
+@pytest.mark.canon
 @pytest.mark.parametrize("toml", ["agents/ada.toml", "agents/bruno.toml", "agents/kit.toml"])
 def test_agents_resolve_their_connection_through_the_registry(toml):
     cfg = load_config(toml, env=ENV)
     assert (cfg.simulation, cfg.homeserver, cfg.room_id) == ("agora", "http://hs:8008", "!room")
 
 
+@pytest.mark.canon
 def test_an_unknown_simulation_or_a_stranger_agent_refuses_to_start(tmp_path):
     toml = tmp_path / "ada.toml"
     base = Path("agents/ada.toml").read_text(encoding="utf-8")
