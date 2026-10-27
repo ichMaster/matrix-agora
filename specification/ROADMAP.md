@@ -1361,7 +1361,7 @@ tags from a palette verified on her voice, and her voice performs them. Everyone
 
 ### v5.10 — Кіра's mood of the day: the horoscope, the biorhythms and the Lviv weather
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.10.0` on 2026-10-27 (her natal chart in the private canon; the real Lviv weather from Open-Meteo in her reading; «Настрій дня» in both her prompts as a feeling, guarded by `person_mood`; the panel's card and Mood tab show the weather; the panel check confirmed by the owner, the tone over a few days waived by the release word).
 
 **Goal:** Кіра wakes into a mood of her own each day, as the cat does. It comes from her natal chart under the day's
 real sky, with the biorhythms laid over it and the real Lviv weather around it. The mood colours every answer of the

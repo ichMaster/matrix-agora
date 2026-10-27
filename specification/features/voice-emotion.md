@@ -372,7 +372,7 @@ Other sources checked on the same day:
 
 | Phase | What it delivers |
 |---|---|
-| **v5.10** — Кіра's mood of the day | The cat's horoscope and biorhythms, for a person: her natal file in the private canon, her own day's sky, the reading log, «Настрій дня» in both prompts, the panel shows it; the real Lviv weather in the reading (decided). |
+| **v5.10** — Кіра's mood of the day ✅ delivered (`v5.10.0`, 2026-10-27) | The cat's horoscope and biorhythms, for a person: her natal file in the private canon, her own day's sky, the reading log, «Настрій дня» in both prompts, the panel shows it; the real Lviv weather in the reading (decided). |
 | **v5.11** — Events of her life | Known events, dated in the current chapter (written with the owner); generated events rolled every hour (everyday, joyful, inspiring, heavy); Lviv's news woven in selectively. They reach «Сьогодні», the day memory and the next plans; `state/kira.events/`; the panel lists them. |
 | **v5.12** — Reading and thoughts | Zaxid.net (the full text) and The Guardian, read every 3 hours; a thought on each item she picks; a reflection every hour on her talks, with the owner and in Agora, even mid-talk; thoughts in her archive, recalled as «я думала…»; the move `thought`; the panel's Thoughts tab. |
 | **v8.1** — The moment and the day | Valence, arousal and fatigue decaying to the day's baseline, and the background; signals from her tags, the hour and her week; her voice's stability and speed derived from them. |
