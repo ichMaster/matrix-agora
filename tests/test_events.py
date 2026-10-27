@@ -152,11 +152,16 @@ class EventLLM:
         return self.texts.pop(0) if len(self.texts) > 1 else self.texts[0]
 
 
+async def no_news():
+    return []
+
+
 def person(tmp_path, llm, when, rolls=(0.0, 0.0), caps=frozenset({"events"}), monkeypatch=None):
     cfg = AgentConfig(**{**CFG.__dict__, "name": "Кіра", "user_id": "@kira:agora.lan",
                          "capabilities": TYPES["persona"] | caps, "life": parse_life(STORY)})
     agent = Agent(cfg, llm=llm)
     agent.memory_file = tmp_path / "kira.memory.md"
+    agent.citynews_fetch = no_news
     seq = iter(rolls)
     agent.rng = lambda: next(seq, 0.99)
     agent.clock = lambda: int(at(when).timestamp() * 1000)

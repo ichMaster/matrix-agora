@@ -148,6 +148,10 @@ SCHEMA: tuple[Setting, ...] = (
     _s("EVENT_WEIGHTS", "weights", "everyday:6,joyful:2,inspiring:2,heavy:1", "life", "cap:events", None,
        "Ваги подій (everyday, joyful, inspiring, heavy)"),
     _s("EVENT_HOURS", "hours", "08-23", "life", "cap:events", None, "Години, коли з нею стаються події (HH-HH)"),
+    _s("CITY_NEWS_P", "float", "0.01", "life", "cap:events", None,
+       "Ймовірність, що новина Львова торкнеться її життя (про Львів — уп'ятеро)", "", 0, 1),
+    _s("CITY_NEWS_MAX", "int", "2", "life", "cap:events", None, "Скільки новин на день може торкнутися її життя",
+       "", 0, 5),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
        choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),

@@ -54,6 +54,13 @@ from agents.chronicle import (
     weeks_due,
     years_due,
 )
+from agents.citynews import (
+    REFRESH_MS as CITYNEWS_REFRESH_MS,
+)
+from agents.citynews import RETRY_MS as CITYNEWS_RETRY_MS
+from agents.citynews import day_items, fetch_citynews, news_ask, pick_way, roll_news
+from agents.citynews import load as load_citynews
+from agents.citynews import save as save_citynews
 from agents.claude_sdk import (
     AuthRefused,
     ClaudeSdkResponder,
@@ -76,6 +83,7 @@ from agents.events import (  # v5.11: events of her life
     events_for_prompt,
     forbidden_re,
     hour_due,
+    news_marker,
     parse_day,
     parse_weights,
     roll_event,
@@ -322,8 +330,15 @@ class Agent:
                 self.event_weights = parse_weights(os.environ.get("EVENT_WEIGHTS", "everyday:6,joyful:2,inspiring:2,heavy:1"))
             except ValueError:
                 log.warning("EVENT_WEIGHTS is not kind:weight,… — using its default")
+        # Lviv's news woven in: each of the day's items rolled once at CITY_NEWS_P, at most CITY_NEWS_MAX a day
+        self.city_news_p, self.city_news_max = 0.0, 0
+        if cfg.can("events"):
+            self.city_news_p = float(os.environ.get("CITY_NEWS_P", "0.01"))
+            self.city_news_max = int(os.environ.get("CITY_NEWS_MAX", "2"))
         self._events_lock = asyncio.Lock()
         self._events_retry_ms = 0
+        self.citynews_fetch = fetch_citynews  # the seam: tests pass a canned feed, never the network
+        self._citynews_retry_ms = 0
         # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.
         # Only a person with `private` reads them (a typo never takes the others down).
         self.private_idle_ms, self.private_per_day, self.private_hours = 0, 0, (0, 0)
@@ -1930,21 +1945,65 @@ class Agent:
             return
         kind = roll_event(self.rng, self.event_p, self.event_weights)
         self._append_events(day, rolled_marker(now.hour))
-        if kind is None:
+        if kind is not None:
+            text = await self._write_event(kind, now)
+            if text is None:
+                log.info("events: no %s event this hour", kind)
+            else:
+                self._append_events(day, block(Event(f"{now:%H:%M}", kind, "rolled", text)))
+                log.info("events: %s event fell at %s", kind, f"{now:%H:%M}")
+        await self._weave_news(now, today)
+
+    @property
+    def citynews_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.citynews.json"
+
+    async def ensure_citynews(self, now) -> list:
+        """The day's Lviv items: the kept ones, refreshed from the feed at most every three hours and merged by link;
+        a failed fetch keeps what the day has and is tried again in an hour."""
+        day = now.date()
+        kept_day, fetched_ms, kept = load_citynews(self.citynews_file)
+        items = day_items(kept, day, self.tz) if kept_day == day.isoformat() else []
+        fresh = kept_day == day.isoformat() and self.clock() - fetched_ms < CITYNEWS_REFRESH_MS
+        if fresh or self.clock() < self._citynews_retry_ms:
+            return items
+        try:
+            fetched = await self.citynews_fetch()
+        except Exception as exc:  # noqa: BLE001 — no news is never a blocked event roll
+            log.warning("citynews: fetch failed (%s) — trying again in an hour", type(exc).__name__)
+            self._citynews_retry_ms = self.clock() + CITYNEWS_RETRY_MS
+            return items
+        items = day_items([*items, *fetched], day, self.tz)
+        save_citynews(self.citynews_file, day.isoformat(), self.clock(), items)
+        log.info("citynews: %d items today", len(items))
+        return items
+
+    async def _weave_news(self, now, today) -> None:
+        """This hour's roll of the day's news: each new item once; a hit touches her life in one of five ways."""
+        woven = sum(1 for e in today.events if e.source == "news")
+        if woven >= self.city_news_max or self.city_news_p <= 0:
             return
-        text = await self._write_event(kind, now)
+        items = await self.ensure_citynews(now)
+        rolled, hit = roll_news(items, today.news, woven, self.city_news_p, self.city_news_max, now, self.rng)
+        day = now.date()
+        if rolled:
+            self._append_events(day, "".join(news_marker(link) for link in rolled))
+        if hit is None:
+            return
+        way = pick_way(self.rng)
+        text = await self._write_event(way, now, news=news_ask(hit, way))
         if text is None:
-            log.info("events: no %s event this hour", kind)
+            log.info("events: no news event this hour")
             return
-        self._append_events(day, block(Event(f"{now:%H:%M}", kind, "rolled", text)))
-        log.info("events: %s event fell at %s", kind, f"{now:%H:%M}")
+        self._append_events(day, block(Event(f"{now:%H:%M}", way, "news", text, hit.link)))
+        log.info("events: a news item touched her life (%s) at %s", way, f"{now:%H:%M}")
 
     def _event_forbidden(self):
         """Ich and every other member's name forms — an event never names them."""
         return forbidden_re([f for m in self.roster.values() if m.user_id != self.cfg.user_id
                              for f in (m.name, *m.name_forms)])
 
-    async def _write_event(self, kind: str, now) -> str | None:
+    async def _write_event(self, kind: str, now, news: str | None = None) -> str | None:
         """One call writes the event inside her life's frame; one regeneration when it names Ich or a member or
         holds a banned word, then none."""
         day = now.date()
@@ -1956,7 +2015,7 @@ class Agent:
         recent = events_for_prompt([*self.day_events(day - timedelta(days=1)), *self.day_events(day)]) or None
         system, contents = event_request(self.cfg.name, self.cfg.canon, kind, now, cur.body if cur else "",
                                          nxt.opening if nxt else None, strip_tags(plan) if plan else None, mood,
-                                         recent)
+                                         recent, news)
         forbidden = self._event_forbidden()
         for _attempt in range(2):
             text = await self.llm.generate(contents, system, max_output_tokens=EVENT_MAX_WORDS * 4, kind="event")

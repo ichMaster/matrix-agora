@@ -31,3 +31,25 @@ def _isolated_state(tmp_path, monkeypatch):
                         property(lambda self: tmp_path / f"{self.localpart}.memory.md"))
     monkeypatch.setattr(config.AgentConfig, "state_file",
                         property(lambda self: tmp_path / f"{self.localpart}.json"))
+
+
+@pytest.fixture(autouse=True)
+def _no_network_fetchers(monkeypatch):
+    """v5.11 (and v5.10 review #5): an agent built in a test never reaches Open-Meteo or Zaxid.net through its
+    default fetchers. A test that forgets to pass a canned one fails here, even where the agent swallows the error."""
+    from agents import agent
+
+    reached = []
+
+    async def weather(*_a, **_k):
+        reached.append("weather")
+        raise RuntimeError("a test reached the network: pass agent.weather_fetch")
+
+    async def citynews(*_a, **_k):
+        reached.append("citynews")
+        raise RuntimeError("a test reached the network: pass agent.citynews_fetch")
+
+    monkeypatch.setattr(agent, "fetch_weather", weather)
+    monkeypatch.setattr(agent, "fetch_citynews", citynews)
+    yield
+    assert not reached, f"a test reached the network through the default fetcher: {', '.join(reached)}"

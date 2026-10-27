@@ -158,8 +158,9 @@ EVENT_RULES = (
 
 
 def event_request(name: str, canon: str, kind: str, now: datetime, chapter_body: str, next_opening: str | None,
-                  plan: str | None, mood: str | None, recent: str | None) -> tuple[str, str]:
-    """(system, contents) for one event of `kind`, inside her life's frame; the next chapter is a silent direction."""
+                  plan: str | None, mood: str | None, recent: str | None, news: str | None = None) -> tuple[str, str]:
+    """(system, contents) for one event of `kind`, inside her life's frame; the next chapter is a silent direction.
+    `news` (v5.11, `agents.citynews.news_ask`) asks for a woven news item in place of a kind."""
     parts = [f"Твоє життя зараз:\n{chapter_body}"]
     if next_opening:
         parts.append("Куди тебе поволі тягне життя (не називай цього і не пиши як про факт — нехай лише тихо "
@@ -170,10 +171,11 @@ def event_request(name: str, canon: str, kind: str, now: datetime, chapter_body:
         parts.append(f"Настрій дня: {mood}")
     if recent:
         parts.append(f"Що з тобою сталося останнім часом:\n{recent}")
+    lead = (f"{news} Розкажи, як саме ця новина увійшла у твій день," if news  # v5.11: Lviv's news, woven in
+            else f"Щойно з тобою трапилося те, чого ти не планував(-ла): {KIND_ASK[kind]}. Розкажи про це")
     parts.append(
-        f"Зараз {now:%H:%M}. Щойно з тобою трапилося те, чого ти не планував(-ла): {KIND_ASK[kind]}. Розкажи про це "
-        f"одним-двома реченнями від першої особи, у минулому часі, не більше {EVENT_MAX_WORDS} слів — що саме "
-        "сталося, з ким і де. Нехай воно рухає одну з ниточок твого життя на крок і не повторює того, що вже "
-        f"сталося. {EVENT_RULES}"
+        f"Зараз {now:%H:%M}. {lead} одним-двома реченнями від першої особи, у минулому часі, не більше "
+        f"{EVENT_MAX_WORDS} слів — що саме сталося, з ким і де. Нехай воно рухає одну з ниточок твого життя на крок "
+        f"і не повторює того, що вже сталося. {EVENT_RULES}"
     )
     return f"{canon}\n\nТи — {name}.", "\n\n".join(parts)
