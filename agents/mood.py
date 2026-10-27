@@ -84,10 +84,17 @@ PERSON_RULE = (
 )
 # What never reaches a person's prompt from the reading: the horoscope's own words (the planets but the Sun and the
 # Moon, which are everyday words), and — checked apart — a digit or a word the persons must never be called.
+# Review #2: the signs as a horoscope uses them («у Скорпіоні», «Стрілець»), aspects, degrees and the houses too;
+# Uranus never «уранці» or «уранішній», the morning's own words.
 HOROSCOPE_RE = re.compile(
     r"\b(гороскоп\w*|астролог\w*|транзит\w*|натальн\w*|біоритм\w*|ретроград\w*|зодіак\w*|ефемерид\w*|тригон\w*"
-    r"|секстил\w*|квадратур\w*|резолюц\w*|меркурі\w*|венер\w*|марс\w*|юпітер\w*|сатурн\w*|уран\w*|нептун\w*"
-    r"|плутон\w*|асцендент\w*|horoscope\w*|astrolog\w*)", re.IGNORECASE)
+    r"|секстил\w*|квадратур\w*|резолюц\w*|меркурі\w*|венер\w*|марс\w*|юпітер\w*|сатурн\w*|уран(?!ц|ішн)\w*"
+    r"|нептун\w*|плутон\w*|асцендент\w*|десцендент\w*|аспект\w*|кон['’ʼ]?юнкц\w*|опозиці\w*|градус\w*|планет\w*"
+    r"|стрілец\w*|стрільц\w*|скорпіон\w*|козер[іо][гз]\w*|водолі\w*"
+    r"|[ув]\s+(?:овні|тельці|близнюках|раку|раці|леві|діві|терезах|рибах)\b"
+    r"|(?:перш|друг|трет|четверт|п['’ʼ]?ят|шост|сьом|восьм|дев['’ʼ]?ят|десят|одинадцят|дванадцят)\w*\s+"
+    r"(?:дім|дом[іуа]|будин(?:ок|ку|ка))\b"
+    r"|horoscope\w*|astrolog\w*)", re.IGNORECASE)
 _SENTENCES = re.compile(r"(?<=[.!?…])\s+|\n+")
 
 
