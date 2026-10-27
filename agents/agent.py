@@ -64,6 +64,23 @@ from agents.claude_sdk import (
 )
 from agents.config import AgentConfig, load_config
 from agents.emotion import Spoken, speech_for, split_tags, spoken
+from agents.events import (
+    DEFAULT_WEIGHTS as EVENT_DEFAULT_WEIGHTS,
+)
+from agents.events import (  # v5.11: events of her life
+    EVENT_MAX_WORDS,
+    Event,
+    block,
+    event_ok,
+    event_request,
+    events_for_prompt,
+    forbidden_re,
+    hour_due,
+    parse_day,
+    parse_weights,
+    roll_event,
+    rolled_marker,
+)
 from agents.facts import (
     REMEMBER_SKILL,
     add_fact,
@@ -77,7 +94,7 @@ from agents.facts import (
 )
 from agents.guardian import KEY_VAR as GUARDIAN_KEY_VAR
 from agents.guardian import Guardian
-from agents.life import current_chapter, life_section, next_chapter
+from agents.life import current_chapter, events_due, life_section, next_chapter
 from agents.llm import THINKING_MODELS, GeminiClient
 from agents.logic import (
     CLAUDE_BRIEF_DIRECT,
@@ -122,6 +139,7 @@ from agents.nudge import (
     NUDGE_RULE,
     TELEGRAM_MATERIAL,
     TELEGRAM_MAX_WORDS,
+    in_hours,
     load_nudge_state,
     nudge_due,
     nudge_kind,
@@ -294,6 +312,18 @@ class Agent:
             if self.nudge_idle_ms < self.bot_window_ms:  # the silence must empty the wave window
                 log.warning("CAT_NUDGE_IDLE_S below BOT_WINDOW_S — using %d s", self.bot_window_ms // 1000)
                 self.nudge_idle_ms = self.bot_window_ms
+        # v5.11 — events of her life: an hourly roll at EVENT_P in her waking hours, a kind by its weight. Only a person
+        # with `events` reads them (a typo never takes the others down)
+        self.event_p, self.event_weights, self.event_hours = 0.0, parse_weights(EVENT_DEFAULT_WEIGHTS), (0, 0)
+        if cfg.can("events"):
+            self.event_p = float(os.environ.get("EVENT_P", "0.12"))
+            self.event_hours = parse_hours(os.environ.get("EVENT_HOURS", "08-23"))
+            try:
+                self.event_weights = parse_weights(os.environ.get("EVENT_WEIGHTS", "everyday:6,joyful:2,inspiring:2,heavy:1"))
+            except ValueError:
+                log.warning("EVENT_WEIGHTS is not kind:weight,… — using its default")
+        self._events_lock = asyncio.Lock()
+        self._events_retry_ms = 0
         # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.
         # Only a person with `private` reads them (a typo never takes the others down).
         self.private_idle_ms, self.private_per_day, self.private_hours = 0, 0, (0, 0)
@@ -1851,6 +1881,95 @@ class Agent:
             return None
         return text
 
+    # --- v5.11: events of her life ------------------------------------------------------------------------------
+    def events_file(self, day) -> Path:
+        return self._dir("events") / f"{day.isoformat()}.md"
+
+    def day_events(self, day) -> list[Event]:
+        """The events that fell on `day`, oldest first (none without `events`)."""
+        if not self.cfg.can("events"):
+            return []
+        return list(parse_day(self._read_raw(self.events_file(day))).events)
+
+    def _append_events(self, day, text: str) -> None:
+        """Appended, never rewritten; private from birth, like the mood log."""
+        path = self.events_file(day)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        try:
+            if stat.S_IMODE(os.fstat(fd).st_mode) != 0o600:
+                os.fchmod(fd, 0o600)
+            os.write(fd, text.encode("utf-8"))
+        finally:
+            os.close(fd)
+
+    async def ensure_events(self, now) -> None:
+        """In her waking hours: her story's events due today, entered once each, then one roll for this hour —
+        marked rolled before the call, so a restart never rolls it twice and a missed hour is never caught up. A
+        failure backs off for 10 minutes; it never blocks the watcher."""
+        if not self.cfg.can("events") or self._events_lock.locked() or self.clock() < self._events_retry_ms:
+            return
+        if not in_hours(now.hour, self.event_hours):
+            return
+        async with self._events_lock:
+            try:
+                await self._events_tick(now)
+            except Exception:
+                self._events_retry_ms = self.clock() + 600_000
+                raise
+
+    async def _events_tick(self, now) -> None:
+        day = now.date()
+        today = parse_day(self._read_raw(self.events_file(day)))
+        life = self.cfg.life
+        for due in events_due(life, day) if life else []:
+            if not any(e.source == due.kind and e.text == due.text for e in today.events):
+                self._append_events(day, block(Event(f"{now:%H:%M}", "story", due.kind, due.text)))
+                log.info("events: %s event of the story fell at %s", due.kind, f"{now:%H:%M}")
+        if not hour_due(now, True, today.rolled):
+            return
+        kind = roll_event(self.rng, self.event_p, self.event_weights)
+        self._append_events(day, rolled_marker(now.hour))
+        if kind is None:
+            return
+        text = await self._write_event(kind, now)
+        if text is None:
+            log.info("events: no %s event this hour", kind)
+            return
+        self._append_events(day, block(Event(f"{now:%H:%M}", kind, "rolled", text)))
+        log.info("events: %s event fell at %s", kind, f"{now:%H:%M}")
+
+    def _event_forbidden(self):
+        """Ich and every other member's name forms — an event never names them."""
+        return forbidden_re([f for m in self.roster.values() if m.user_id != self.cfg.user_id
+                             for f in (m.name, *m.name_forms)])
+
+    async def _write_event(self, kind: str, now) -> str | None:
+        """One call writes the event inside her life's frame; one regeneration when it names Ich or a member or
+        holds a banned word, then none."""
+        day = now.date()
+        life = self.cfg.life
+        cur = current_chapter(life, day) if life else None
+        nxt = next_chapter(life, day) if life else None
+        plan = self._read(self.plan_paths(day)["day"])
+        mood = person_mood(self.mood.resolution) if self.mood is not None and self.mood.date == day.isoformat() else None
+        recent = events_for_prompt([*self.day_events(day - timedelta(days=1)), *self.day_events(day)]) or None
+        system, contents = event_request(self.cfg.name, self.cfg.canon, kind, now, cur.body if cur else "",
+                                         nxt.opening if nxt else None, strip_tags(plan) if plan else None, mood,
+                                         recent)
+        forbidden = self._event_forbidden()
+        for _attempt in range(2):
+            text = await self.llm.generate(contents, system, max_output_tokens=EVENT_MAX_WORDS * 4, kind="event")
+            if text is None:
+                log.error("events: the %s event failed", kind)
+                return None
+            text = cap_words(" ".join(text.split()), EVENT_MAX_WORDS)
+            if event_ok(text, forbidden):
+                return text
+            log.info("events: a %s event named someone from the room or a banned word — %s", kind,
+                     "regenerating" if _attempt == 0 else "dropped")
+        return None
+
     def _read_raw(self, path: Path) -> str | None:
         """A torn append (disk full, SIGKILL) may leave bad bytes in the log; the day's block is still found."""
         try:
@@ -2195,6 +2314,11 @@ class Agent:
                     await self.ensure_mood(local_now(self.clock(), self.tz))
                 except Exception:
                     log.exception("mood of the day failed (bot keeps running)")
+            if self.cfg.can("events"):  # v5.11: things happen to her, whether or not anyone talks to her
+                try:
+                    await self.ensure_events(local_now(self.clock(), self.tz))
+                except Exception:
+                    log.exception("events failed (bot keeps running)")
             if self.cfg.can("nudge"):  # v4.3: the cat speaks first
                 try:
                     await self.maybe_nudge()

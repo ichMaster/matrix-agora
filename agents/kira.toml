@@ -16,6 +16,7 @@ recall = true           # v5.8: an archive of every line she sees, recalled befo
 facts = true            # v5.8: facts about the owner, in her private prompt only (state/kira.facts/)
 emotion = true          # v5.9: audio tags from her palette, performed by her voice, never shown in the text
 mood = true             # v5.10: her mood of the day — her chart under the day's sky, the biorhythms, the Lviv weather
+events = true           # v5.11: events of her life — her story's dated ones, an hourly roll, Lviv's news
 
 [turns]
 mode = "ranked"         # ranked | ambient | mention-only

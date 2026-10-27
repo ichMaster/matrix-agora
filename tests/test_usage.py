@@ -39,7 +39,8 @@ def test_kind_list_is_the_contract():
     assert KINDS == ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
                      "digest_voice", "ask", "tts", "stt",  # v5.1–v5.2: Hermes
                      "private", "private_nudge",           # v5.6: a person's private chat
-                     "embed", "facts")                     # v5.8: the archive's embeddings, the facts
+                     "embed", "facts",                     # v5.8: the archive's embeddings, the facts
+                     "event")                              # v5.11: an event of her life
 
 
 # --- the seam reports every call ---

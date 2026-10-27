@@ -42,7 +42,8 @@ CHAT = "matrix-chat"  # the simulation kind of Agora (simulations.toml)
 @dataclass(frozen=True)
 class Setting:
     name: str
-    kind: str                  # int | float | hours | choice | text | id (v5.1: letters and digits, empty = none)
+    kind: str                  # int | float | hours | choice | text | id (v5.1: letters and digits, empty = none) |
+                               # weights (v5.11: the events' `kind:weight,…`)
     default: str               # the code default, as the environment would hold it
     group: str                 # a group within its scope (see GROUPS)
     scope: str                 # the members it concerns: shared | type:<t> | cap:<c> | engine:<e>
@@ -142,6 +143,11 @@ SCHEMA: tuple[Setting, ...] = (
     _s("FACT_MAX_CHARS", "int", "240", "memory", "cap:facts", None, "Найдовший факт", "chars", 80, 600),
     _s("PRIVATE_AGORA_N", "int", "20", "private", "cap:recall", None,
        "Скільки сьогоднішніх рядків Агори бачить в особистому чаті", "lines", 0, 60),
+    # v5.11 — events of her life (`events`): the hourly roll, the kinds' weights, her waking hours
+    _s("EVENT_P", "float", "0.12", "life", "cap:events", None, "Ймовірність події щогодини", "", 0, 1),
+    _s("EVENT_WEIGHTS", "weights", "everyday:6,joyful:2,inspiring:2,heavy:1", "life", "cap:events", None,
+       "Ваги подій (everyday, joyful, inspiring, heavy)"),
+    _s("EVENT_HOURS", "hours", "08-23", "life", "cap:events", None, "Години, коли з нею стаються події (HH-HH)"),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
        choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),
@@ -189,6 +195,12 @@ def validate(name: str, raw: object) -> tuple[str | None, str | None]:
         except ValueError:
             return None, "not HH-HH with two different hours"
         return (text, None) if HOURS_RE.match(text) else (None, "not HH-HH")
+    if setting.kind == "weights":  # v5.11: the agents' own parser, as for the hours
+        from agents.events import format_weights, parse_weights
+        try:
+            return format_weights(parse_weights(text)), None
+        except ValueError:
+            return None, "not kind:weight of everyday, joyful, inspiring, heavy"
     if setting.kind == "choice":
         return (text, None) if text in setting.choices else (None, "not one of " + ", ".join(setting.choices))
     if setting.kind == "id":  # v5.1: an ElevenLabs voice id — letters and digits; empty means none
