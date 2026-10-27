@@ -110,10 +110,14 @@ def plan_request(
     mutations: list[str | None],
     max_words: int,
     others: list[str] | None = None,
+    events: str | None = None,
+    ahead: str | None = None,
 ) -> tuple[str, str]:
     """(system_instruction, contents) for one plan. The next chapter is a
     silent direction; the mutated items are bent but read as sincere intents.
-    `others` names the room's members, never planned for."""
+    `others` names the room's members, never planned for. v5.11: `events` —
+    what happened to her lately (a setback may call for a plan); `ahead` — the
+    known events of her story she expects, never a surprise."""
     n_items, phrase = HORIZONS[horizon]
     parts = [f"Твоє життя зараз:\n{chapter_body}"]
     if next_opening:
@@ -127,6 +131,10 @@ def plan_request(
         parts.append(f"Твій попередній план (незроблене можна перенести):\n{previous_plan}")
     if recent_memory:
         parts.append(f"Що було нещодавно:\n{recent_memory}")
+    if events:
+        parts.append(f"Що з тобою нещодавно сталося (на це можна відповісти планами):\n{events}")
+    if ahead:
+        parts.append(f"Що на тебе чекає (ти про це знаєш наперед):\n{ahead}")
     bent = [f"пункт №{i + 1} — {MUTATION_KINDS[k]}" for i, k in enumerate(mutations) if k]
     task = (
         f"Склади свій план {phrase} ({period_label}): рівно {n_items} пунктів, кожен з нового рядка, "

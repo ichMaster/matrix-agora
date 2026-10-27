@@ -32,6 +32,7 @@ KIND_ASK = {
     "heavy": "важка подія — хвороба, втрата, справжня невдача чи погана новина; без мелодрами, як буває в житті",
 }
 EVENT_MAX_WORDS = 60
+EVENTS_IN_PROMPT = 12  # the most a plan's request carries of the last days' events
 
 _BLOCK_RE = re.compile(r"^## (\d{2}:\d{2}) · (\w+) · (\w+)\s*$", re.MULTILINE)
 _ROLLED_RE = re.compile(r"<!-- rolled (\d{2}) -->")

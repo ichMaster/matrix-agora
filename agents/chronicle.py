@@ -132,12 +132,15 @@ RULES = (
 
 def day_memory_request(name: str, canon: str, day: date, chapter_body: str,
                        previous: list[tuple[str, str]], journal: str | None, plan: str | None,
-                       today_block: str | None, max_words: int) -> tuple[str, str]:
+                       today_block: str | None, max_words: int, events: str | None = None) -> tuple[str, str]:
+    """`events` (v5.11): what happened to her that day — told in the memory with its details."""
     parts = [f"Твоє життя зараз:\n{chapter_body}"]
     if previous:
         parts.append("Твої спогади попередніх днів:\n" + "\n".join(f"{lb}: {tx}" for lb, tx in previous))
     if plan:
         parts.append(f"Твій план на той день:\n{visible_deviations(plan)}")
+    if events:
+        parts.append(f"Що з тобою того дня сталося (це справді було):\n{events}")
     if today_block:
         parts.append(f"Як минав той день (твої нотатки протягом дня):\n{today_block}")
     parts.append(f"Журнал розмов в Агорі за той день:\n{journal}" if journal
@@ -148,6 +151,7 @@ def day_memory_request(name: str, canon: str, day: date, chapter_body: str,
         f"не починаючи з дати і не називаючи той день «сьогодні». {RULES} Пункти плану з "
         "позначкою [відхилення], найімовірніше, не здійснились — якщо природно, розкажи, що завадило "
         "(«хотілося…, але…»). Не повторюй заняття попередніх днів без потреби. Лише сам спогад, без вступу."
+        + (" Розкажи і про те, що з тобою сталося того дня, з подробицями — і про важке теж." if events else "")
     )
     return f"{canon}\n\nТи — {name}.", "\n\n".join(parts)
 
@@ -167,10 +171,14 @@ def digest_request(kind: str, name: str, canon: str, label: str, sources: list[t
 
 
 def today_request(name: str, canon: str, now: datetime, chapter_body: str, plan: str | None,
-                  journal: str | None, previous: str | None, max_words: int) -> tuple[str, str]:
+                  journal: str | None, previous: str | None, max_words: int,
+                  events: str | None = None) -> tuple[str, str]:
+    """`events` (v5.11): what has happened to her today so far — it goes into «Сьогодні вже…»."""
     parts = [f"Твоє життя зараз:\n{chapter_body}"]
     if plan:
         parts.append(f"Твій план на сьогодні:\n{visible_deviations(plan)}")
+    if events:
+        parts.append(f"Що з тобою сьогодні сталося (це справді було):\n{events}")
     if journal:
         parts.append(f"Розмови в Агорі сьогодні:\n{journal}")
     if previous:
@@ -178,7 +186,8 @@ def today_request(name: str, canon: str, now: datetime, chapter_body: str, plan:
     parts.append(
         f"Зараз {now:%H:%M} ({part_of_day(now.hour)}). Напиши дві короткі частини, разом не більше "
         f"{max_words} слів:\nСьогодні вже: <що вже було сьогодні — так, як воно справді йде у твоєму "
-        "житті; пункти з позначкою [відхилення] не позначай зробленими>\nЩе сьогодні: <що ще попереду "
-        f"за планом>\n{RULES}"
+        "житті; пункти з позначкою [відхилення] не позначай зробленими"
+        + ("; те, що з тобою сьогодні сталося, тут обов'язково є" if events else "")
+        + f">\nЩе сьогодні: <що ще попереду за планом>\n{RULES}"
     )
     return f"{canon}\n\nТи — {name}.", "\n\n".join(parts)

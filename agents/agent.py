@@ -47,6 +47,7 @@ from agents.chronicle import (
     days_due,
     digest_request,
     layer_label,
+    month_end,
     months_due,
     select_layers,
     shares_span,
@@ -76,6 +77,7 @@ from agents.events import (
 )
 from agents.events import (  # v5.11: events of her life
     EVENT_MAX_WORDS,
+    EVENTS_IN_PROMPT,
     Event,
     block,
     event_ok,
@@ -102,7 +104,7 @@ from agents.facts import (
 )
 from agents.guardian import KEY_VAR as GUARDIAN_KEY_VAR
 from agents.guardian import Guardian
-from agents.life import current_chapter, events_due, life_section, next_chapter
+from agents.life import current_chapter, events_due, known_ahead, life_section, next_chapter
 from agents.llm import THINKING_MODELS, GeminiClient
 from agents.logic import (
     CLAUDE_BRIEF_DIRECT,
@@ -1510,12 +1512,17 @@ class Agent:
                 mutations = roll_mutations(n_items, self.plan_mutation_rate, self.rng)
                 prev = self._read(self._previous_plan_path(horizon, today))
                 yesterday = self._read(self._dir("days") / f"{(today - timedelta(days=1)).isoformat()}.md")
+                # v5.11: what happened to her lately and the known events ahead in the plan's reach
+                since = today - timedelta(days=1 if horizon == "day" else 7)
+                until = {"day": today + timedelta(days=7), "week": today + timedelta(days=7),
+                         "month": month_end(today.year, today.month), "year": date(today.year, 12, 31)}[horizon]
                 system, contents = plan_request(
                     horizon, self.cfg.name, self.cfg.canon, labels[horizon],
                     cur.body if cur else "", nxt.opening if nxt else None,
                     coarser, strip_tags(prev) if prev else None, yesterday,
                     mutations, self.plan_max_words,
                     [m.name for m in self.roster.values() if m.user_id != self.cfg.user_id and m.type != "herald"],
+                    self.events_between(since, today, today), self.events_ahead(today, until),
                 )
                 text = await self.llm.generate(contents, system, max_output_tokens=self.plan_max_words * 3,
                                                kind="plan")
@@ -1639,6 +1646,7 @@ class Agent:
             self.cfg.name, self.cfg.canon, d, chapter, previous,
             self._read(self._dir("days") / f"{d.isoformat()}.talk.md"),
             self._read(self.plan_paths(d)["day"]), block_text, self.max_words["day"],
+            events_for_prompt(self.day_events(d)) or None,
         )
         text = None
         for _attempt in range(2):  # one regeneration when it copies the story
@@ -1733,7 +1741,8 @@ class Agent:
     async def ensure_today(self, now) -> None:
         """The today block: regenerated when the hour changes; reset at midnight."""
         path = self.today_file
-        tag = f"<!-- {now.date().isoformat()}T{now.hour:02d} -->"
+        events = self.day_events(now.date())  # v5.11: a new event refreshes the block within the hour
+        tag = f"<!-- {now.date().isoformat()}T{now.hour:02d}{f' e{len(events)}' if events else ''} -->"
         current = self._read(path)
         if current and current.startswith(tag):
             return
@@ -1744,7 +1753,7 @@ class Agent:
             self.cfg.name, self.cfg.canon, now, self._chapter_body(now.date()),
             self._read(self.plan_paths(now.date())["day"]),
             self._read(self._dir("days") / f"{now.date().isoformat()}.talk.md"),
-            previous, self.max_words["today"],
+            previous, self.max_words["today"], events_for_prompt(events) or None,
         )
         text = await self.llm.generate(contents, system, max_output_tokens=self.max_words["today"] * 3,
                                        kind="today")
@@ -1905,6 +1914,34 @@ class Agent:
         if not self.cfg.can("events"):
             return []
         return list(parse_day(self._read_raw(self.events_file(day))).events)
+
+    def events_between(self, first, last, today) -> str | None:
+        """v5.11: the events from `first` to `last`, by day, as a prompt sees them — the last EVENTS_IN_PROMPT."""
+        if not self.cfg.can("events"):
+            return None
+        days = []
+        d = first
+        while d <= last:
+            evs = self.day_events(d)
+            if evs:
+                days.append((d, evs))
+            d += timedelta(days=1)
+        kept, n = [], 0
+        for d, evs in reversed(days):
+            evs = evs[-(EVENTS_IN_PROMPT - n):]
+            n += len(evs)
+            label = "сьогодні" if d == today else day_label(d, today)
+            kept.append(f"{label}:\n{events_for_prompt(evs)}")
+            if n >= EVENTS_IN_PROMPT:
+                break
+        return "\n\n".join(reversed(kept)) or None
+
+    def events_ahead(self, today, until) -> str | None:
+        """v5.11: the known events of her story after today up to `until` — never a surprise."""
+        life = self.cfg.life
+        if not self.cfg.can("events") or life is None:
+            return None
+        return "\n".join(f"- {day_label(e.date, today)}: {e.text}" for e in known_ahead(life, today, until)) or None
 
     def _append_events(self, day, text: str) -> None:
         """Appended, never rewritten; private from birth, like the mood log."""
