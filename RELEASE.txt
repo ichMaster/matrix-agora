@@ -1,3 +1,28 @@
+Version 5.10.0 (2026-10-27)
+---------------------------
+- Phase v5.10 - Kira's mood of the day: the cat's horoscope and biorhythms,
+  for a person. Her natal chart lives in the private canon; each day she
+  gets a reading under the day's real sky, with her biorhythms and the real
+  Lviv weather (AGORA-122..125)
+- The Lviv weather: agents/weather.py, Open-Meteo with no key, once a local
+  day, kept in state/<name>.weather.json; a failed fetch means no weather,
+  never a blocked mood (AGORA-122)
+- Only the resolution, asked as a person's feeling in the second person,
+  reaches both her prompts as «Настрій дня»; person_mood drops every
+  sentence with a horoscope word, a digit or a banned word, and the full
+  reading stays in state/kira.mood.log (AGORA-123)
+- The panel: her card and Mood tab show the mood of the day and the Lviv
+  weather (AGORA-124)
+- Code review: the day's sky and weather are looked up inside the mood's
+  lock, so a call during them never casts the day without them, and once
+  her mood exists she looks up neither (#1, #3); the guard also catches the
+  signs, aspects, degrees and houses, and spares «уранці» (#2)
+- Owner checks: the panel confirmed; her tone over a few days waived by the
+  release word
+- Ops, beside the phase: the speakers' voice budget VOICE_MONTHLY_CHARS
+  raised from 200,000 to 600,000 in server/.env (every voice had gone
+  text-only on 2026-10-26)
+
 Version 5.9.3 (2026-10-26)
 ---------------------------
 - Kira recalls a line from her archive with when it was, as a person
