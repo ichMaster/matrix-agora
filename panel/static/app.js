@@ -8,11 +8,11 @@ const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today",
 // review #11: a kind not listed above still shows, after the listed ones — a tab's rows always add up to its total
 function kindsOf(byKind) { return [...KIND_ORDER.filter((k) => byKind[k]), ...Object.keys(byKind).filter((k) => !KIND_ORDER.includes(k)).sort()]; }
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
-              ["today", "Today"], ["mood", "Mood"], ["facts", "Facts"], ["voice", "Voice"], ["tokens", "Tokens"],
+              ["today", "Today"], ["mood", "Mood"], ["events", "Events"], ["facts", "Facts"], ["voice", "Voice"], ["tokens", "Tokens"],
               ["files", "Files"], ["settings", "Settings"]];
 // v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
 const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", facts: "facts",
-                 voice: "voice"};
+                 voice: "voice", events: "events"};
 const SERIES = ["a", "b", "c", "d", "e"];  // stacked token bars: one tint of the accent per agent (v4.2: N agents)
 const PRONOUN = {she: "She", he: "He", it: "It"};
 function can(a, cap) { return !a.capabilities || a.capabilities.includes(cap); }
@@ -687,11 +687,29 @@ function moodTabHtml(mem) {
     <details data-keep="mood:${esc(mem.mood.date)}" ${S.openDetails[`mood:${mem.mood.date}`] ? "open" : ""} style="margin-top:14px"><summary class="muted">The full reading</summary><p class="read" lang="uk" style="white-space:pre-wrap">${esc(mem.mood.reading)}</p></details>`;
 }
 
+// v5.11 — what happened to her: by day, newest first; the kind as a label, her story's and the news marked by source
+const EVENT_LABEL = {everyday: "everyday", joyful: "joyful", inspiring: "inspiring", heavy: "heavy", story: "story"};
+function eventsTabHtml(a, mem) {
+  const days = mem.events;
+  if (!days) return `<p class="muted">Events unreadable.</p>`;
+  if (!days.length) return `<p class="muted">Nothing has happened to ${esc(a.display)} this week yet — events fall in her waking hours.</p>`;
+  return days.map((d) => `<div class="section-label" style="margin:14px 0 6px">${esc(longDay(d.date))}</div>` + d.events.map((e) => {
+    const label = e.source === "news" ? `news · ${e.kind}` : e.source === "rolled" ? EVENT_LABEL[e.kind] || e.kind : `${e.source}`;
+    const link = e.link && /^https:\/\//.test(e.link)
+      ? ` <a href="${esc(e.link)}" target="_blank" rel="noopener noreferrer" class="muted" style="font-size:12px">source</a>` : "";
+    return `<div class="rule-b" style="padding:8px 0;display:flex;gap:12px;align-items:flex-start">
+      <span class="mono muted" style="font-size:12px;min-width:42px">${esc(e.time)}</span>
+      <span class="kind-tag" style="white-space:nowrap">${esc(label)}</span>
+      <div style="flex:1;min-width:0" lang="uk">${esc(e.text)}${link}</div></div>`;
+  }).join("")).join("");
+}
+
 function agentTabHtml(a, mem, tab) {
   if (tab === "files") return filesTabHtml(a);
   if (tab === "settings") return `<div class="muted" style="font-size:12.5px;margin-bottom:12px">${esc(a.display)}'s own settings, whatever the service · a save restarts ${esc(a.display)}</div>${settingsHtml()}`;
   if (!mem.available) return unavailableBox();
   if (tab === "mood") return moodTabHtml(mem);
+  if (tab === "events") return eventsTabHtml(a, mem);
   if (tab === "facts") return factsTabHtml(a, mem);
   if (tab === "voice") return voiceTabHtml(a, mem);
   if (tab === "session") {

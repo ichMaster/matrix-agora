@@ -88,6 +88,25 @@ def weather_view(state_dir: Path, name: str, today: date) -> dict | None:
     return {"date": today.isoformat(), "line": line} if line else None
 
 
+def events_view(state_dir: Path, name: str, today: date, days: int = 7) -> list[dict] | None:
+    """v5.11 — her events of the last `days` days from `<name>.events/`, newest day first, each event's time, kind,
+    source, text and (for news) link; an empty day is left out. None when the folder is unreadable — never a 500."""
+    from agents.events import parse_day
+    folder = state_dir / f"{name}.events"
+    if not folder.exists():
+        return []
+    if not folder.is_dir():
+        return None
+    out = []
+    for back in range(days):
+        day = today - timedelta(days=back)
+        events = parse_day(_read(folder / f"{day.isoformat()}.md")).events
+        if events:
+            out.append({"date": day.isoformat(), "events": [
+                {"time": e.time, "kind": e.kind, "source": e.source, "text": e.text, "link": e.link} for e in events]})
+    return out
+
+
 def pastlife_view(theses: Path | None) -> dict | None:
     """v4.3 — how many past-life theses the agent holds; None without the file or when it does not parse."""
     from agents.pastlife import ThesesError, parse_theses
@@ -229,7 +248,8 @@ def models_view(state_dir: Path, name: str, voice_spec: Path | None = None) -> d
 def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = None, with_mood: bool = False,
                 memories: Path | None = None, with_nudge: bool = False, with_ratelimit: bool = False,
                 with_news: bool = False, with_digest: bool = False, with_facts: bool = False,
-                with_archive: bool = False, with_models: bool = False, voice_spec: Path | None = None) -> dict:
+                with_archive: bool = False, with_models: bool = False, voice_spec: Path | None = None,
+                with_events: bool = False) -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -277,6 +297,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "facts_pending": (state_dir / f"{name}.facts.request").exists() if with_facts else None,
         "archive": archive_view(state_dir, name) if with_archive else None,              # v5.8: her archive
         "models": models_view(state_dir, name, voice_spec) if with_models else None,     # v5.9: models, voice
+        "events": events_view(state_dir, name, today) if with_events else None,          # v5.11: her events
     }
 
 

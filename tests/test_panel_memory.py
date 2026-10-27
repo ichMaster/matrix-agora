@@ -175,6 +175,43 @@ def test_the_memory_route_serves_kiras_mood_and_weather_and_the_cat_none(state, 
     assert c.get("/api/agents/ada/memory", headers=AUTH).json()["weather"] is None
 
 
+# --- v5.11: her events, by day ---------------------------------------------------------------------------------------
+EVENTS_TODAY = ("<!-- rolled 09 -->\n\n## 09:00 · story · surprise\nПодзвонила подруга.\n"
+                "<!-- news-rolled https://zaxid.net/a -->\n\n## 14:00 · heard · news\n<!-- link: https://zaxid.net/a -->\n"
+                "Почула про трамвай.\n")
+
+
+def test_the_events_view_by_day_newest_first(state):
+    folder = state / "kira.events"
+    folder.mkdir()
+    (folder / "2026-10-04.md").write_text(EVENTS_TODAY, encoding="utf-8")
+    (folder / "2026-10-02.md").write_text("\n## 18:00 · heavy · rolled\nМені відмовили.\n", encoding="utf-8")
+    (folder / "2026-10-03.md").write_text("<!-- rolled 10 -->\n", encoding="utf-8")            # a day of misses
+    (folder / "2026-09-20.md").write_text("\n## 10:00 · joyful · rolled\nДавно.\n", encoding="utf-8")  # past 7 days
+    view = memory_view(state, "kira", TODAY, with_events=True)["events"]
+    assert [d["date"] for d in view] == ["2026-10-04", "2026-10-02"]
+    assert view[0]["events"] == [
+        {"time": "09:00", "kind": "story", "source": "surprise", "text": "Подзвонила подруга.", "link": None},
+        {"time": "14:00", "kind": "heard", "source": "news", "text": "Почула про трамвай.", "link": "https://zaxid.net/a"}]
+    assert memory_view(state, "kira", TODAY)["events"] is None                         # no `events`
+    assert memory_view(state, "ada", TODAY, with_events=True)["events"] == []          # none yet
+    (folder / "2026-10-04.md").write_bytes(b"\n## 09:00 \xd0\xff broken")
+    assert [d["date"] for d in memory_view(state, "kira", TODAY, with_events=True)["events"]] == ["2026-10-02"]
+
+
+def test_the_memory_route_serves_her_events_and_only_hers(state, monkeypatch):
+    monkeypatch.setattr(app_mod, "local_today", lambda: TODAY)
+    (state / "kira.events").mkdir()
+    (state / "kira.events" / "2026-10-04.md").write_text(EVENTS_TODAY, encoding="utf-8")
+    reg = Registry()
+    c = TestClient(create_app(token=TOKEN, registry=reg, docker_reader=DockerReader(client_factory=lambda: None),
+                              prober=Prober(reg), state_dir=state, background=False))
+    kira = c.get("/api/agents/kira/memory", headers=AUTH).json()
+    assert kira["events"][0]["events"][1]["link"] == "https://zaxid.net/a"
+    assert c.get("/api/agents/ada/memory", headers=AUTH).json()["events"] is None
+    assert c.get("/api/agents/kira/memory").status_code == 401
+
+
 # --- v4.3: the cat's past life and initiative -----------------------------------------------------------------------
 @pytest.mark.canon
 def test_the_cat_shows_his_theses_his_last_nudge_and_todays_count(state, monkeypatch):
