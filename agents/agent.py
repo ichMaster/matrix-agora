@@ -1794,12 +1794,14 @@ class Agent:
 
     async def ensure_mood(self, now) -> None:
         """Once per local day: reuse the day's logged reading, else one model call; a failure means no mood and a
-        retry after 10 minutes — never a blocked reply."""
+        retry after 10 minutes — never a blocked reply. The lookups run inside the mood's lock, so a call during them
+        never casts the day without its sky and weather (review #1); a person's prompt reads only the feeling, so once
+        her mood exists she looks up nothing (review #3)."""
         day = now.date().isoformat()
-        sky = await self.ensure_sky(now)  # the day's sky first: the reading is built on it (the owner, 2026-10-11)
         person = self.cfg.type == "persona"
-        weather = await self.ensure_weather(now) if person else None  # v5.10: the real Lviv weather around her day
         if self.mood is not None and self.mood.date == day:
+            if not person:
+                await self.ensure_sky(now)  # the cat's prompt carries the day's sky beside his mood
             return
         if self._mood_lock.locked() or self.clock() < self._mood_retry_ms:
             return
@@ -1807,7 +1809,11 @@ class Agent:
             logged = reading_from_log(self._read_raw(self.mood_file) or "", day)
             if logged:
                 self.mood = MoodState(day, split_resolution(logged), logged)
+                if not person:
+                    await self.ensure_sky(now)
                 return
+            sky = await self.ensure_sky(now)  # the day's sky first: the reading is built on it (the owner, 2026-10-11)
+            weather = await self.ensure_weather(now) if person else None  # v5.10: the real Lviv weather around her day
             birth = parse_birth_date(self.cfg.natal)
             rhythms = format_biorhythms(biorhythms(birth, now.date())) if birth else None
             system, contents = mood_request(self.cfg.name, self.cfg.natal, day, rhythms, sky, weather, person)

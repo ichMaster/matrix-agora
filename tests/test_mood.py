@@ -17,6 +17,7 @@ from agents.mood import (
     NO_SKY_RULE,
     NO_SKY_SECTION,
     PERSON_RULE,
+    SKY_RULE,
     WEATHER_RULE,
     biorhythms,
     format_biorhythms,
@@ -346,6 +347,53 @@ def test_a_resolution_with_nothing_a_person_may_read_is_no_block(tmp_path, monke
     agent = kira_mood(tmp_path, monkeypatch, KiraLLM("Читання.\n\nРЕЗОЛЮЦІЯ: Марс тисне. Біоритми низькі."))
     asyncio.run(agent.reply("!room"))
     assert agent.mood is not None and mood_block(agent.build_prompt()) is None
+
+
+KIRA_SKY = "Положення: Сонце — Скорпіон 4°; Місяць — Козеріг 12°. Аспекти: Сонце тригон Місяць."
+
+
+class SlowSkyLLM(KiraLLM):
+    """The sky lookup holds until the test lets it go — the window in which another call came (review #1)."""
+
+    def __init__(self, sky=KIRA_SKY):
+        super().__init__()
+        self.sky, self.searches, self.release = sky, 0, asyncio.Event()
+
+    async def search(self, question, max_output_tokens=800, kind="sky"):
+        self.searches += 1
+        await self.release.wait()
+        return self.sky
+
+
+def test_a_call_during_the_sky_lookup_never_casts_the_day_without_it(tmp_path, monkeypatch):
+    llm = SlowSkyLLM()
+    agent = kira_mood(tmp_path, monkeypatch, llm)
+    now = datetime.fromtimestamp(agent.clock() / 1000, ZoneInfo("Europe/Kyiv"))
+
+    async def run():
+        first = asyncio.create_task(agent.ensure_mood(now))     # the watcher: inside the sky lookup
+        await asyncio.sleep(0)
+        await agent.ensure_mood(now)                              # a reply meanwhile: casts nothing
+        assert llm.calls.count("mood") == 0 and agent.mood is None
+        llm.release.set()
+        await first
+    asyncio.run(run())
+    assert llm.calls.count("mood") == 1 and llm.searches == 1 and agent.fetched == [now.date()]
+    assert SKY_RULE.format(sky=KIRA_SKY) in llm.mood_contents[0] and WEATHER_RULE.format(weather=WEATHER) in \
+        llm.mood_contents[0]
+
+
+def test_once_her_mood_exists_a_failed_sky_or_weather_is_never_retried(tmp_path, monkeypatch):
+    llm = SlowSkyLLM(sky="не знайшов")
+    llm.release.set()
+    agent = kira_mood(tmp_path, monkeypatch, llm, weather=None)
+    asyncio.run(agent.reply("!room"))
+    assert llm.calls.count("mood") == 1 and llm.searches == 1 and len(agent.fetched) == 1
+    start = agent.clock()
+    agent.clock = lambda: start + 3_600_000                       # an hour on: both retry gates long open
+    asyncio.run(agent.reply("!room"))
+    assert llm.searches == 1 and len(agent.fetched) == 1          # her prompt reads only the feeling
+    assert mood_block(agent.build_prompt()) == f"Настрій дня: {KIRA_FEELING}"
 
 
 def test_the_cat_is_unchanged_no_weather_and_his_sky_lines(tmp_path):
