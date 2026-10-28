@@ -1468,12 +1468,12 @@ They reach «Сьогодні», her day memory and her next plans, and her open
 
 **Not in this phase:** the emotional state; feelings toward people.
 
-### v5.12 — Кіра's private chat past a Gemini block: Hermes 3 405B on OpenRouter
+### v5.12 — Кіра's private chat past a Gemini block: Hermes 4 405B on OpenRouter
 
 **Status:** ⏳ planned.
 
 **Goal:** when Gemini's safety filter blocks an answer in Кіра's private chat with the owner (Element and Telegram),
-she still answers: the same prompt goes to Nous Research's Hermes 3 405B on OpenRouter. After a block the chat runs
+she still answers: the same prompt goes to Nous Research's Hermes 4 405B on OpenRouter. After a block the chat runs
 in a careful mode for a while, so the same subject is not sent to Gemini again and again. The owner sees and pins the
 mode with commands in Telegram.
 
@@ -1482,7 +1482,9 @@ mode with commands in Telegram.
   and `private_nudge`), in Element and in Telegram. Agora, the background calls (events, «Сьогодні», the day memory,
   plans, the mood, the session summary, v5.13's thoughts) and every other agent stay as they are: a block there is
   logged, and the agent stays silent.
-- **The model:** `nousresearch/hermes-3-llama-3.1-405b` on OpenRouter.
+- **The model:** `nousresearch/hermes-4-405b` on OpenRouter. Hermes 3 405B, the first choice, broke down in the
+  owner's test in OpenRouter's chat at its default settings: after one Ukrainian sentence it wrote fragments of code
+  and of other scripts, then one symbol over and over.
 - **Three modes:** normal, careful and Hermes-only, switched by blocks (below).
 - **In the careful mode Hermes answers first and marks the talk:** a mark says whether the latest lines hold content a
   filter would block. Only a clean mark lets the prompt reach Gemini, and Gemini's answer then goes to the chat.
@@ -1495,7 +1497,9 @@ mode with commands in Telegram.
   - a day cap of 10 blocks;
   - the block's category in the log;
   - her own Gemini key;
-  - the language and persona checks on Hermes's answers.
+  - the language and persona checks on Hermes's answers;
+  - a check for garbage: other scripts and runs of one symbol;
+  - temperature 0.7 and top_p 0.9, with the model's reasoning off.
 
 **Why** (checked 2026-10-28):
 - **A block is invisible today.** `finish_of` knows only `MAX_TOKENS`, so a block logs as an empty reply and she is
@@ -1506,8 +1510,9 @@ mode with commands in Telegram.
 - **The modes keep such a run away from Gemini**, and her own key keeps it off the key every other agent shares.
 
 **The model** (OpenRouter, checked 2026-10-28):
-- $1 / $1 per million tokens, a 131,072-token context, at most 16,384 tokens out;
-- text only, served by one provider (DeepInfra);
+- Hermes 4 405B is built on Llama 3.1 405B, with a hybrid reasoning mode that this phase keeps off;
+- $1 / $3 per million tokens, a 131,072-token context, at most 117,964 tokens out;
+- text only, served by one provider (Nebius, the Netherlands, fp8);
 - text only is enough: a voice message reaches the prompt already as Deepgram's text.
 
 **Naming:** the model is unrelated to the member Hermes (v5.1). Code, logs and settings call it the fallback and name
@@ -1542,6 +1547,8 @@ the model by its id; only the Telegram command says `/hermes`.
     - the system instruction as the `system` message and the transcript as the `user` message;
     - the same `max_tokens`;
     - `provider: {"data_collection": "deny"}`;
+    - `temperature: 0.7` and `top_p: 0.9` (the provider has no `min_p`);
+    - the reasoning off, so the mark is the answer's first line;
     - `stream: true`.
   - A 60 s timeout. Any failure, an empty answer, or no provider left by the data policy → None: silence, logged.
   - The answer's `usage` (prompt and completion tokens) becomes a usage line with the model's id.
@@ -1568,6 +1575,8 @@ the model by its id; only the Telegram command says `/hermes`.
   tags, the Telegram word cap and the «запам'ятай» marker. The answer is dropped when:
   - it has ы, э, ъ or ё;
   - Latin letters outnumber Cyrillic ones;
+  - it has a letter of another script (Han, Arabic, Hangul and the like) or one symbol repeated more than 10 times in
+    a row;
   - she calls herself a model, an AI or a bot.
 
   A dropped answer means silence, logged.
@@ -1586,7 +1595,7 @@ the model by its id; only the Telegram command says `/hermes`.
 - **Settings** (her TOML, `kira.env` and the panel):
   - `FALLBACK_MODEL` (empty: off; `kira.env` sets the id);
   - `FALLBACK_CAREFUL_S` (1800), `FALLBACK_BLOCKS` (3), `FALLBACK_ONLY_S` (1800), `FALLBACK_DAY_MAX` (10);
-  - the price in `PRICE_MODELS`: `nousresearch/hermes-3-llama-3.1-405b=1/1`.
+  - the price in `PRICE_MODELS`: `nousresearch/hermes-4-405b=1/3`.
 - **Secrets** go in `kira.env`, which no other service reads; `kira.env.example` names them:
   - `OPENROUTER_API_KEY`;
   - her own `GEMINI_API_KEY`, from a separate Google Cloud project. Compose reads `kira.env` after `.env`, so it
@@ -1602,8 +1611,9 @@ the model by its id; only the Telegram command says `/hermes`.
 
 **Owner steps:**
 - an OpenRouter account with credits;
-- its training toggle off (Settings → Privacy). This also checks that DeepInfra passes the data policy: if Hermes then
+- its training toggle off (Settings → Privacy). This also checks that Nebius passes the data policy: if Hermes then
   finds no provider, the owner decides;
+- a test of Hermes 4 in OpenRouter's chat at temperature 0.7: her Ukrainian, her character and the mark;
 - an OpenRouter API key, optionally with a credit limit, in `server/kira.env`;
 - a Google Cloud project of her own, and its Gemini key in `server/kira.env`.
 
@@ -1619,8 +1629,8 @@ the model by its id; only the Telegram command says `/hermes`.
 **Tests:**
 - `blocked_reason` over each prompt and answer reason, and over the non-blocks (`MAX_TOKENS`, `RECITATION`, an error,
   an empty answer);
-- the OpenRouter request body (the messages, `max_tokens`, `data_collection`, the model), a canned streamed answer, a
-  timeout and an error, with no network;
+- the OpenRouter request body (the messages, `max_tokens`, `data_collection`, the sampling, the reasoning off, the
+  model), a canned streamed answer, a timeout and an error, with no network;
 - `parse_mark`: `так`, `ні`, missing, malformed, and the line cut;
 - the route's modes and transitions with an injected clock:
   - the first block;
@@ -1632,7 +1642,7 @@ the model by its id; only the Telegram command says `/hermes`.
   - a restart reading the state;
 - the careful answer: a clean mark → Gemini's answer; a clean mark and a Gemini block → Hermes's; an unsafe mark →
   Gemini never called;
-- the Hermes checks: Russian letters, a Latin majority, a self-named model;
+- the Hermes checks: Russian letters, a Latin majority, another script, a run of one symbol, a self-named model;
 - the commands from the owner and from another id: kept out of the history, the archive and the prompts, and not
   resetting the writing-first timer;
 - Agora, the background kinds and the other agents unchanged;
