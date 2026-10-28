@@ -152,6 +152,17 @@ SCHEMA: tuple[Setting, ...] = (
        "Ймовірність, що новина Львова торкнеться її життя (про Львів — уп'ятеро)", "", 0, 1),
     _s("CITY_NEWS_MAX", "int", "2", "life", "cap:events", None, "Скільки новин на день може торкнутися її життя",
        "", 0, 5),
+    # v5.12 — she reads the news and thinks (`thoughts`): the reading's period, hours, picks and the Guardian's sections;
+    # the reflection's period; how many of today's thoughts her prompts carry
+    _s("READING_EVERY_S", "int", "10800", "life", "cap:thoughts", None, "Як часто читає новини", "s", 1800, 86400),
+    _s("READING_HOURS", "hours", "08-01", "life", "cap:thoughts", None, "Години, коли читає новини (HH-HH)"),
+    _s("READING_PICKS", "int", "2", "life", "cap:thoughts", None, "Скільки новин найбільше прочитає за раз", "", 0, 5),
+    _s("READING_SECTIONS", "text", "science,world,environment,technology,culture", "life", "cap:thoughts", None,
+       "Розділи The Guardian, які гортає (через кому)"),
+    _s("REFLECT_EVERY_S", "int", "3600", "life", "cap:thoughts", None, "Як часто думає про свої розмови", "s", 600,
+       86400),
+    _s("THOUGHTS_IN_PROMPT", "int", "3", "life", "cap:thoughts", None, "Скільки сьогоднішніх думок бачить у розмові",
+       "", 0, 10),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
        choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),

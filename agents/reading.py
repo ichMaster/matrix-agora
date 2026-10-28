@@ -201,3 +201,102 @@ def save_state(path: Path, state: ReadingState, now_ms: int) -> None:
         os.replace(tmp, path)
     except OSError as exc:
         log.error("reading: the state was not saved (%s)", type(exc).__name__)
+
+
+# --- the reading and the reflection: the schedule and the three requests (pure) -------------------------------
+SHOWN_PER_SOURCE = 20       # the freshest a reading shows of each source: a screen of titles, not the whole day
+REFLECT_LINES = 40          # the most a reflection reads of a place's new lines
+PICK_MAX_TOKENS = 20
+THOUGHT_MAX_TOKENS = 220
+REFLECTION_MAX_TOKENS = 320
+SOURCE_LABEL = {"zaxid": "ZAXID.NET", "guardian": "The Guardian"}
+_PICKS_RE = re.compile(r"^[\d\s,;.]+$")
+
+
+def reading_due(now_ms: int, last_ms: int, every_ms: int, in_window: bool) -> bool:
+    """A reading in her reading hours, once a period."""
+    return in_window and now_ms - last_ms >= every_ms
+
+
+def reflect_due(now_ms: int, last_ms: int, every_ms: int) -> bool:
+    return now_ms - last_ms >= every_ms
+
+
+def shown(zaxid: list[Item], guardian: list[Item]) -> list[Item]:
+    """What a reading shows: the freshest of each source, Lviv's first."""
+    return [*zaxid[-SHOWN_PER_SOURCE:], *guardian[:SHOWN_PER_SOURCE]]
+
+
+def _context(canon: str, mood: str | None, recent: list[str]) -> list[str]:
+    parts = [canon]
+    if mood:
+        parts.append(f"Настрій дня: {mood}")
+    if recent:
+        parts.append("Що ти останнім часом думала:\n" + "\n".join(f"- {t}" for t in recent))
+    return parts
+
+
+def pick_request(name: str, canon: str, reading: str, mood: str | None, recent: list[str], items: list[Item],
+                 cap: int) -> tuple[str, str]:
+    """The pick: the fresh titles and descriptions, numbered — which of them she would open, at most `cap`."""
+    system = "\n\n".join([*_context(canon, mood, recent), f"Що ти читаєш і як:\n{reading}", (
+        f"Ти — {name}. Зараз ти гортаєш новини в телефоні. Нижче — свіжі заголовки, кожен з номером. Вибери "
+        f"щонайбільше {cap} з тих, які ти справді відкрила б і прочитала, — те, що тебе зачепить. Якщо нічого не "
+        "зачіпає, відповідай 0. Відповідай лише номерами через кому, без жодних слів.")])
+    rows = []
+    for i, it in enumerate(items, 1):
+        about = f" — {it.summary}" if it.summary else ""
+        rows.append(f"{i}. [{SOURCE_LABEL.get(it.source, it.source)}] {it.title}{about}")
+    return system, "\n".join(rows)
+
+
+def parse_picks(text: str | None, n: int, cap: int) -> list[int]:
+    """The picked items' indexes (0-based), in order, each once, at most `cap`; `0`, garbage or words → none."""
+    text = (text or "").strip()
+    if not text or not _PICKS_RE.match(text):
+        return []
+    out: list[int] = []
+    for raw in re.findall(r"\d+", text):
+        k = int(raw)
+        if 1 <= k <= n and k - 1 not in out:
+            out.append(k - 1)
+    return out[:max(0, cap)]
+
+
+def thought_request(name: str, canon: str, mood: str | None, recalled: str | None, item: Item,
+                    body: str) -> tuple[str, str]:
+    """A thought on an item she read: first person, 1–3 sentences, only the article's facts, her own view."""
+    parts = _context(canon, mood, [])
+    if recalled:
+        parts.append(recalled)
+    parts.append(
+        f"Ти — {name}. Ти щойно прочитала в телефоні статтю ({SOURCE_LABEL.get(item.source, item.source)}). "
+        "Напиши, що ти про неї думаєш, — для себе, від першої особи, одне-три речення, українською. Спирайся лише "
+        "на факти зі статті: не вигадуй чисел, цитат чи імен, яких у ній немає. Погляд і почуття — твої. Люди з "
+        "новин тобі незнайомі. Ти це прочитала, а не шукала. Якщо колись ти думала про це інакше, можеш передумати "
+        "— скажи як є. Не вигадуй, що хтось із твоїх знайомих чи з Агори щось сказав або зробив. Без лапок і без "
+        "заголовка.")
+    return "\n\n".join(parts), f"Заголовок: {item.title}\n\n{body}"
+
+
+def reflection_request(name: str, canon: str, mood: str | None, recent: list[str], place: str,
+                       lines: list[tuple[str, str]]) -> tuple[str, str]:
+    """A reflection on a talk: one or two thoughts of hers, never anyone's invented words or deeds."""
+    where = "з Ich наодинці, в окремій розмові" if place == "private" else "в Агорі"
+    system = "\n\n".join([*_context(canon, mood, recent), (
+        f"Ти — {name}. Нижче — останні рядки твоєї розмови {where}. Подумай про неї сама з собою: що тобі "
+        "запам'яталося, що ти думаєш про сказане, що сказала б наступного разу. Напиши одну або дві думки від "
+        "першої особи, кожну з нового рядка, одне-два речення кожна, українською. Нічого не вигадуй: ні слів, ні "
+        "вчинків Ich чи інших — лише те, що є в рядках; твої почуття й думки — твої. Це не повідомлення, його "
+        "ніхто не побачить.")])
+    return system, "\n".join(f"{who}: {text}" for who, text in lines)
+
+
+def split_reflection(text: str | None) -> list[str]:
+    """At most two thoughts, a line each (a list's marks dropped)."""
+    out = []
+    for raw in (text or "").splitlines():
+        t = " ".join(re.sub(r"^\s*(?:[-–—•*]|\d+[.)])\s*", "", raw).split())
+        if t:
+            out.append(t)
+    return out[:2]

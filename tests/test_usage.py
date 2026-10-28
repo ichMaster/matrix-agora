@@ -40,7 +40,8 @@ def test_kind_list_is_the_contract():
                      "digest_voice", "ask", "tts", "stt",  # v5.1–v5.2: Hermes
                      "private", "private_nudge",           # v5.6: a person's private chat
                      "embed", "facts",                     # v5.8: the archive's embeddings, the facts
-                     "event")                              # v5.11: an event of her life
+                     "event",                              # v5.11: an event of her life
+                     "reading", "thought", "reflection")   # v5.12: her reading and thoughts
 
 
 # --- the seam reports every call ---

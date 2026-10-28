@@ -17,7 +17,8 @@ KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
          "private", "private_nudge",    # v5.6: a person's private chat — an answer, a line written first
          "embed",                       # v5.8: the archive's embeddings (`recall`)
          "facts",                       # v5.8: the facts' extraction and the Noos import (`facts`)
-         "event")                       # v5.11: an event of her life, written by one call (`events`)
+         "event",                       # v5.11: an event of her life, written by one call (`events`)
+         "reading", "thought", "reflection")  # v5.12: her pick, a thought on what she read, a reflection (`thoughts`)
 # v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan; v5.1 also the ElevenLabs
 # plan's credits), `external` (Lumi's own)
 BILLING = ("api", "subscription", "external")

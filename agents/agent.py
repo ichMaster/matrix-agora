@@ -108,6 +108,7 @@ from agents.guardian import Guardian
 from agents.life import current_chapter, events_due, known_ahead, life_section, next_chapter
 from agents.llm import THINKING_MODELS, GeminiClient
 from agents.logic import (
+    BANNED_RE,
     CLAUDE_BRIEF_DIRECT,
     CLAUDE_BRIEF_PHILOSOPHER,
     CLAUDE_NEWS_BRIEF,
@@ -181,6 +182,27 @@ from agents.private import (
     rediscover,
     save_private_state,
 )
+from agents.reading import (
+    PICK_MAX_TOKENS,
+    REFLECT_LINES,
+    REFLECTION_MAX_TOKENS,
+    THOUGHT_MAX_TOKENS,
+    ReadingState,
+    Sources,
+    fresh,
+    from_citynews,
+    parse_picks,
+    parse_sections,
+    pick_request,
+    reading_due,
+    reflect_due,
+    reflection_request,
+    shown,
+    split_reflection,
+    thought_request,
+)
+from agents.reading import load_state as load_reading
+from agents.reading import save_state as save_reading
 from agents.responder import Turn, responder_for, trim_to_sentence
 from agents.roster import Member, load_roster, speakers
 from agents.runtime import acquire_lock, lock_holder, setup_logging
@@ -244,6 +266,7 @@ from agents.world import (
 )
 
 log = logging.getLogger("agent")
+RECENT_THOUGHTS = 5  # v5.12: her last thoughts a reading or a reflection sees
 BACKFILL_PAGE = 100  # the homeserver's cap on one /messages page
 BACKFILL_PAGES = 5  # at most this many pages on a start
 VOICES_KEPT = 200  # v5.2: the owner's recent voice event ids an agent remembers, to know a transcript of one
@@ -349,6 +372,22 @@ class Agent:
         self._events_retry_ms = 0
         self.citynews_fetch = fetch_citynews  # the seam: tests pass a canned feed, never the network
         self._citynews_retry_ms = 0
+        # v5.12 — she reads and thinks: a reading every READING_EVERY_S in READING_HOURS (at most READING_PICKS items),
+        # a reflection every REFLECT_EVERY_S on each place with new lines. Only a person with `thoughts` reads them
+        self.reading_every_ms, self.reflect_every_ms, self.reading_hours = 0, 0, (0, 0)
+        self.reading_picks, self.reading_sections, self.thoughts_in_prompt = 0, [], 0
+        if cfg.can("thoughts"):
+            self.reading_every_ms = int(float(os.environ.get("READING_EVERY_S", "10800")) * 1000)
+            self.reading_hours = parse_hours(os.environ.get("READING_HOURS", "08-01"))
+            self.reading_picks = int(os.environ.get("READING_PICKS", "2"))
+            sections = os.environ.get("READING_SECTIONS", "science,world,environment,technology,culture")
+            self.reading_sections = parse_sections(sections)
+            self.reflect_every_ms = int(float(os.environ.get("REFLECT_EVERY_S", "3600")) * 1000)
+            self.thoughts_in_prompt = int(os.environ.get("THOUGHTS_IN_PROMPT", "3"))
+        # her own key (server/kira.env), never Claude's state; the seam: tests pass canned fetches
+        self.reading_sources = Sources(os.environ.get("GUARDIAN_API_KEY", "") if cfg.can("thoughts") else "")
+        self._reading_lock, self._reflect_lock = asyncio.Lock(), asyncio.Lock()
+        self._reading_retry_ms = self._reflect_retry_ms = self._reflect_ms = 0
         # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.
         # Only a person with `private` reads them (a typo never takes the others down).
         self.private_idle_ms, self.private_per_day, self.private_hours = 0, 0, (0, 0)
@@ -1990,6 +2029,133 @@ class Agent:
         self._archive(thought_key(day.isoformat(), thought, n), int(now.timestamp() * 1000), thought.place, "thought",
                       self.cfg.name, thought.text)
 
+    @property
+    def reading_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.reading.json"
+
+    def _reading_state(self, change) -> ReadingState:
+        """Load, change, save — with no await between, so the reading and the reflection never undo each other."""
+        state = load_reading(self.reading_file)
+        change(state)
+        save_reading(self.reading_file, state, self.clock())
+        return state
+
+    def _mood_today(self, day) -> str | None:
+        return person_mood(self.mood.resolution) if self.mood is not None and self.mood.date == day.isoformat() else None
+
+    def _recent_thoughts(self, day) -> list[str]:
+        """Her last thoughts of yesterday and today, for her reading and reflection — never a private one in vain:
+        these calls are hers alone and send nothing."""
+        return [t.text for t in [*self.day_thoughts(day - timedelta(days=1)), *self.day_thoughts(day)]][-RECENT_THOUGHTS:]
+
+    def reading_is_due(self, now) -> bool:
+        if not self.cfg.can("thoughts") or self._reading_lock.locked() or self.clock() < self._reading_retry_ms:
+            return False
+        return reading_due(self.clock(), load_reading(self.reading_file).last_reading_ms, self.reading_every_ms,
+                           in_hours(now.hour, self.reading_hours))
+
+    def reflection_is_due(self) -> bool:
+        if not self.cfg.can("thoughts") or self.archive is None or self._reflect_lock.locked():
+            return False
+        return self.clock() >= self._reflect_retry_ms and reflect_due(self.clock(), self._reflect_ms,
+                                                                      self.reflect_every_ms)
+
+    async def ensure_reading(self, now) -> None:
+        """v5.12: a reading — her time is saved before the calls, so a restart never reads twice; a failure backs off
+        for 10 minutes. Spawned by the idle watcher: no answer waits for it."""
+        if not self.reading_is_due(now):
+            return
+        async with self._reading_lock:
+            try:
+                await self._reading_tick(now)
+            except Exception:
+                self._reading_retry_ms = self.clock() + 600_000
+                log.exception("reading failed (bot keeps running)")
+
+    async def _reading_tick(self, now) -> None:
+        start = self.clock()
+        self._reading_state(lambda s: setattr(s, "last_reading_ms", start))
+        day = now.date()
+        zaxid = from_citynews(await self.ensure_citynews(now))
+        guardian = await self.reading_sources.guardian(self.reading_sections, day)
+        seen = load_reading(self.reading_file).seen
+        items = shown(fresh(zaxid, seen), fresh(guardian, seen))
+        if not items:
+            log.info("reading: nothing new")
+            return
+        self._reading_state(lambda s: s.seen.update({it.id: start for it in items}))  # shown once, never again
+        mood, recent = self._mood_today(day), self._recent_thoughts(day)
+        system, contents = pick_request(self.cfg.name, self.cfg.canon, self.cfg.reading, mood, recent, items,
+                                        self.reading_picks)
+        raw = await self.llm.generate(contents, system, max_output_tokens=PICK_MAX_TOKENS, kind="reading")
+        picks = parse_picks(raw, len(items), self.reading_picks)
+        log.info("reading: %d items shown, %d picked", len(items), len(picks))
+        for i in picks:
+            item = items[i]
+            body = await self.reading_sources.full_text(item)
+            if not body:
+                log.info("reading: a %s pick had no text — skipped", item.source)
+                continue
+            recalled = await self.recall_section(item.title, THOUGHT_PLACES, set())  # what she thought before
+            system, contents = thought_request(self.cfg.name, self.cfg.canon, mood, recalled, item, body)
+            for text in await self._think(contents, system, THOUGHT_MAX_TOKENS, "thought"):
+                at = local_now(self.clock(), self.tz)
+                self.keep_thought(at, Thought(f"{at:%H:%M}", "news", "thought", item.source, text, item.title,
+                                              item.link))
+                log.info("reading: a thought on a %s item", item.source)
+
+    async def ensure_reflection(self, now) -> None:
+        """v5.12: a reflection on each place with new lines — mid-talk too, sending nothing. Spawned by the idle
+        watcher: no answer waits for it; a failure backs off for 10 minutes."""
+        if not self.reflection_is_due():
+            return
+        async with self._reflect_lock:
+            self._reflect_ms = self.clock()
+            try:
+                await self._reflect_tick(now)
+            except Exception:
+                self._reflect_retry_ms = self.clock() + 600_000
+                log.exception("reflection failed (bot keeps running)")
+
+    async def _reflect_tick(self, now) -> None:
+        day = now.date()
+        for place in ("private", "agora"):
+            mark = load_reading(self.reading_file).reflected.get(place)
+            if mark is None:  # her first reflection there starts from now — never on the whole past
+                start = self.clock()
+                self._reading_state(lambda s, p=place, m=start: s.reflected.__setitem__(p, m))
+                continue
+            lines = self.archive.latest(place, REFLECT_LINES, since_ms=mark + 1)
+            if not any(line.speaker != self.cfg.name for line in lines):
+                continue
+            system, contents = reflection_request(self.cfg.name, self.cfg.canon, self._mood_today(day),
+                                                  self._recent_thoughts(day), place,
+                                                  [(line.speaker, line.text) for line in lines])
+            texts = await self._think(contents, system, REFLECTION_MAX_TOKENS, "reflection", reflection=True)
+            last = lines[-1].ts_ms
+            self._reading_state(lambda s, p=place, m=last: s.reflected.__setitem__(p, m))
+            at = local_now(self.clock(), self.tz)
+            for text in texts:
+                self.keep_thought(at, Thought(f"{at:%H:%M}", "reflection",
+                                              "thought_private" if place == "private" else "thought", place, text))
+            log.info("reflection: %d thoughts on %s", len(texts), place)
+
+    async def _think(self, contents: str, system: str, max_tokens: int, kind: str,
+                     reflection: bool = False) -> list[str]:
+        """One call for her thoughts; one regeneration when a thought holds a banned word, then none — logged by
+        kind, never by text."""
+        for attempt in range(2):
+            raw = await self.llm.generate(contents, system, max_output_tokens=max_tokens, kind=kind)
+            if raw is None:
+                log.error("thoughts: the %s call failed", kind)
+                return []
+            texts = split_reflection(raw) if reflection else [" ".join(raw.split())]
+            if texts and all(t and not BANNED_RE.search(t) for t in texts):
+                return texts
+            log.info("thoughts: a %s held a banned word or nothing — %s", kind,
+                     "regenerating" if attempt == 0 else "dropped")
+        return []
+
     def _append_events(self, day, text: str) -> None:
         """Appended, never rewritten; private from birth, like the mood log."""
         path = self.events_file(day)
@@ -2465,6 +2631,12 @@ class Agent:
                     await self.ensure_events(local_now(self.clock(), self.tz))
                 except Exception:
                     log.exception("events failed (bot keeps running)")
+            if self.cfg.can("thoughts"):  # v5.12: she reads and thinks off the reply path — never awaited by an answer
+                now_local = local_now(self.clock(), self.tz)
+                if self.reading_is_due(now_local):
+                    self._spawn(self.ensure_reading(now_local))
+                if self.reflection_is_due():
+                    self._spawn(self.ensure_reflection(now_local))
             if self.cfg.can("nudge"):  # v4.3: the cat speaks first
                 try:
                     await self.maybe_nudge()

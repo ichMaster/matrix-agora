@@ -197,3 +197,62 @@ def test_a_missing_or_corrupt_state_is_a_fresh_start(tmp_path, raw):
     path.write_text(raw)
     assert load_state(path) == ReadingState()
 
+
+
+# --- the schedule and the requests (AGORA-134) -------------------------------------------------------------------
+from agents.logic import BANNED_RE
+from agents.reading import (
+    SHOWN_PER_SOURCE,
+    parse_picks,
+    pick_request,
+    reading_due,
+    reflect_due,
+    reflection_request,
+    shown,
+    split_reflection,
+    thought_request,
+)
+
+
+@pytest.mark.parametrize("text, picks", [
+    ("2, 1", [1, 0]), ("3", [2]), ("0", []), ("", []), (None, []), ("1, 1, 2", [0, 1]),
+    ("1, 2, 3", [0, 1]),                     # the cap
+    ("7, 2", [1]),                           # out of range
+    ("Мені цікаве друге", []),               # words: garbage, no pick
+    ("2.", [1]), ("1; 3", [0, 2]),
+])
+def test_parse_picks(text, picks):
+    assert parse_picks(text, 4, 2) == picks
+
+
+def test_the_schedule():
+    assert reading_due(10_000, 0, 10_000, True) and not reading_due(9_999, 0, 10_000, True)
+    assert not reading_due(10_000, 0, 10_000, False)            # outside her reading hours
+    assert reflect_due(3_600_000, 0, 3_600_000) and not reflect_due(3_599_999, 0, 3_600_000)
+
+
+def test_a_reading_shows_the_freshest_of_each_source_lviv_first():
+    z = [Item("zaxid", f"z{i}", f"Z{i}", "", "https://zaxid.net/x", "") for i in range(30)]
+    g = [Item("guardian", f"g{i}", f"G{i}", "", "https://www.theguardian.com/x", "") for i in range(30)]
+    out = shown(z, g)
+    assert len(out) == 2 * SHOWN_PER_SOURCE and out[0].id == "z10" and out[SHOWN_PER_SOURCE].id == "g0"
+
+
+def test_the_requests_say_who_she_is_and_never_what_she_is_not():
+    item = Item("guardian", "x/y", "Water on a moon", "A find", "https://www.theguardian.com/x", "")
+    sysp, contents = pick_request("Кіра", "КАНОН", "ЧИТАЄ", "Легкий день.", ["Стара думка."], [item], 2)
+    assert "КАНОН" in sysp and "ЧИТАЄ" in sysp and "Настрій дня: Легкий день." in sysp and "Стара думка." in sysp
+    assert contents == "1. [The Guardian] Water on a moon — A find"
+    syst, body = thought_request("Кіра", "КАНОН", None, "ЗГАДКА", item, "BODY")
+    assert "ЗГАДКА" in syst and "лише на факти зі статті" in syst and "не шукала" in syst
+    assert body == "Заголовок: Water on a moon\n\nBODY"
+    sysr, lines = reflection_request("Кіра", "КАНОН", None, [], "agora", [("Ада", "Привіт"), ("Кіра", "Хай")])
+    assert "в Агорі" in sysr and "ні слів, ні вчинків Ich чи інших" in sysr and lines == "Ада: Привіт\nКіра: Хай"
+    assert "наодинці" in reflection_request("Кіра", "К", None, [], "private", [])[0]
+    for s in (sysp, syst, sysr):
+        assert not BANNED_RE.search(s)
+
+
+def test_a_reflection_is_at_most_two_thoughts_a_line_each():
+    assert split_reflection("- Перша думка.\n\n2) Друга.\nТретя.") == ["Перша думка.", "Друга."]
+    assert split_reflection("") == [] and split_reflection(None) == []
