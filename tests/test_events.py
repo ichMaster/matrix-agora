@@ -280,3 +280,26 @@ def test_a_story_event_with_odd_spacing_enters_once(tmp_path):
         tick(agent, f"2026-10-29 {when}")
     events = agent.day_events(at("2026-10-29 09:00").date())
     assert [e.text for e in events] == ["Подзвонила стара подруга з Единбурга."]
+
+
+def test_a_timed_story_event_falls_from_its_time(tmp_path, caplog):
+    """Review #4: an evening event of her story fell at the first waking tick and was told as done in the morning;
+    with a time it falls at the first tick from then, told at that time, and a time past her hours is warned about."""
+    life = parse_life(STORY.replace("- 2026-11-03 · known", "- 2026-11-03 19:00 · known")
+                      .replace("- 2027-02-14 · known", "- 2027-02-14 23:30 · known"))
+    llm = EventLLM()
+    agent = person(tmp_path, llm, "2026-11-03 08:00", rolls=(0.99,) * 10)
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "life": life})
+    for when in ("08:00", "12:00", "18:59"):
+        tick(agent, f"2026-11-03 {when}")
+    assert agent.day_events(at("2026-11-03 08:00").date()) == []
+    tick(agent, "2026-11-03 19:00")
+    tick(agent, "2026-11-03 20:00")
+    events = agent.day_events(at("2026-11-03 08:00").date())
+    assert [(e.time, e.kind, e.source) for e in events] == [("19:00", "story", "known")]
+    assert agent.events_ahead(at("2026-11-03 08:00").date(), at("2026-11-10 08:00").date()) == (
+        "- сьогодні, о 19:00: Дедлайн статті про змінні зорі.")
+    cfg = AgentConfig(**{**CFG.__dict__, "name": "Кіра", "user_id": "@kira:agora.lan",
+                         "capabilities": TYPES["persona"] | {"events"}, "life": life})
+    Agent(cfg, llm=llm)
+    assert "2027-02-14 at 23:30 is outside EVENT_HOURS" in caplog.text

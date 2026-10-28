@@ -332,6 +332,9 @@ class Agent:
                 self.event_weights = parse_weights(os.environ.get("EVENT_WEIGHTS", "everyday:6,joyful:2,inspiring:2,heavy:1"))
             except ValueError:
                 log.warning("EVENT_WEIGHTS is not kind:weight,… — using its default")
+            for e in (e for c in cfg.life.chapters for e in c.events) if cfg.life else ():
+                if e.time and not in_hours(int(e.time[:2]), self.event_hours):  # review #4: it would never fall
+                    log.warning("events: the story's event of %s at %s is outside EVENT_HOURS", e.date, e.time)
         # Lviv's news woven in: each of the day's items rolled once at CITY_NEWS_P, at most CITY_NEWS_MAX a day
         self.city_news_p, self.city_news_max = 0.0, 0
         if cfg.can("events"):
@@ -1941,7 +1944,8 @@ class Agent:
         life = self.cfg.life
         if not self.cfg.can("events") or life is None:
             return None
-        return "\n".join(f"- {'сьогодні' if e.date == today else day_label(e.date, today)}: {e.text}"
+        return "\n".join(f"- {'сьогодні' if e.date == today else day_label(e.date, today)}"
+                         f"{f', о {e.time}' if e.time else ''}: {e.text}"
                          for e in known_ahead(life, today, until)) or None
 
     def _append_events(self, day, text: str) -> None:
@@ -1976,9 +1980,12 @@ class Agent:
         today = parse_day(self._read_raw(self.events_file(day)))
         life = self.cfg.life
         for due in events_due(life, day) if life else []:
+            if due.time is not None and f"{now:%H:%M}" < due.time:
+                continue  # review #4: a timed event falls from its time, never told as done in the morning
             if not any(e.source == due.kind and e.text == due.text for e in today.events):
-                self._append_events(day, block(Event(f"{now:%H:%M}", "story", due.kind, due.text)))
-                log.info("events: %s event of the story fell at %s", due.kind, f"{now:%H:%M}")
+                at = due.time or f"{now:%H:%M}"
+                self._append_events(day, block(Event(at, "story", due.kind, due.text)))
+                log.info("events: %s event of the story fell at %s", due.kind, at)
         if not hour_due(now, True, today.rolled):
             return
         kind = roll_event(self.rng, self.event_p, self.event_weights)

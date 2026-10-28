@@ -107,3 +107,14 @@ def test_her_real_story_parses_with_its_list():
     assert cur.events, "her current chapter carries the dated list"
     assert {e.kind for e in cur.events} == {"known", "surprise"}
     assert all(e.text not in life_section(s, TODAY) for e in cur.events)
+
+
+def test_an_event_may_carry_its_time():
+    """Review #4: `- YYYY-MM-DD HH:MM · kind · text` — the time kept, the line without one unchanged."""
+    s = story(STORY.replace("- 2027-02-14 · known", "- 2027-02-14 19:30 · known"))
+    by_date = {e.date: e for e in current_chapter(s, TODAY).events}
+    assert by_date[date(2027, 2, 14)].time == "19:30" and by_date[date(2026, 11, 3)].time is None
+    assert by_date[date(2027, 2, 14)].text == "Прем'єра нової програми під куполом."
+    for bad in ("24:00", "19:60"):
+        with pytest.raises(LifeError):
+            story(STORY.replace("- 2027-02-14 · known", f"- 2027-02-14 {bad} · known"))

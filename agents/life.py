@@ -6,7 +6,7 @@ future chapter and never the death date. Only the planner reads the next
 chapter, as silent direction.
 
 v5.11: a chapter may carry a dated list of events (`### Події`, one
-`- YYYY-MM-DD · known|surprise · text` a line). The list is cut out of the
+`- YYYY-MM-DD[ HH:MM] · known|surprise · text` a line). The list is cut out of the
 chapter's body, so no prompt that shows the chapter shows it; only the code
 that delivers an event on its date, and the plans' known events ahead, read it.
 """
@@ -24,7 +24,8 @@ CHAPTER_RE = re.compile(r"^## (\d{4})–(\d{4}) · (.+?)\s*$", re.MULTILINE)
 # v5.11: the chapter's dated events — the subsection runs to the next heading or the chapter's end
 EVENTS_HEAD_RE = re.compile(r"^### Події\s*$", re.MULTILINE)
 NEXT_HEAD_RE = re.compile(r"^#{2,3} ", re.MULTILINE)
-EVENT_LINE_RE = re.compile(r"^-\s*(\d{4}-\d{2}-\d{2})\s*·\s*(\w+)\s*·\s*(\S.*?)\s*$")
+# an optional local time (review #4): the event falls at the first tick from then, else at her day's first
+EVENT_LINE_RE = re.compile(r"^-\s*(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}):(\d{2}))?\s*·\s*(\w+)\s*·\s*(\S.*?)\s*$")
 EVENT_KINDS = ("known", "surprise")
 
 
@@ -39,6 +40,7 @@ class LifeEvent:
     date: date
     kind: str
     text: str
+    time: str | None = None  # HH:MM, local; None: at her day's first tick
 
 
 @dataclass(frozen=True)
@@ -102,9 +104,12 @@ def _split_events(chunk: str, start: int, end: int) -> tuple[str, tuple[LifeEven
             continue
         m = EVENT_LINE_RE.match(line.strip())
         if not m:
-            raise LifeError(f"chapter {start}–{end}: an event line is not '- YYYY-MM-DD · known|surprise · text'")
-        if m[2] not in EVENT_KINDS:
-            raise LifeError(f"chapter {start}–{end}: unknown event kind {m[2]!r} (known | surprise)")
+            raise LifeError(f"chapter {start}–{end}: an event line is not "
+                            "'- YYYY-MM-DD[ HH:MM] · known|surprise · text'")
+        if m[4] not in EVENT_KINDS:
+            raise LifeError(f"chapter {start}–{end}: unknown event kind {m[4]!r} (known | surprise)")
+        if m[2] is not None and not (int(m[2]) < 24 and int(m[3]) < 60):
+            raise LifeError(f"chapter {start}–{end}: bad event time {m[2]}:{m[3]}")
         try:
             day = date.fromisoformat(m[1])
         except ValueError:
@@ -112,7 +117,7 @@ def _split_events(chunk: str, start: int, end: int) -> tuple[str, tuple[LifeEven
         if not start <= day.year <= end:
             raise LifeError(f"chapter {start}–{end}: the event of {m[1]} is outside the chapter's years")
         # one line of single spaces, as the day file keeps it — else it never matches there (review #2)
-        events.append(LifeEvent(day, m[2], " ".join(m[3].split())))
+        events.append(LifeEvent(day, m[4], " ".join(m[5].split()), f"{m[2]}:{m[3]}" if m[2] else None))
     body = (chunk[:head.start()].rstrip() + "\n\n" + chunk[stop:].lstrip()).strip()
     return body, tuple(sorted(events, key=lambda e: e.date))
 
