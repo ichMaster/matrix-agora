@@ -77,6 +77,8 @@ SCHEMA: tuple[Setting, ...] = (
     _s("PERSONA_DISAGREE_P", "float", "0.15", "moves", "type:persona", CHAT, "Хід «заперечити»", "", 0, 1),
     _s("PERSONA_PLAN_P", "float", "0.1", "moves", "type:persona", CHAT, "Хід «згадати план»", "", 0, 1),
     _s("PERSONA_STORY_P", "float", "0.1", "moves", "type:persona", CHAT, "Хід «історія з життя»", "", 0, 1),
+    _s("PERSONA_THOUGHT_P", "float", "0.1", "moves", "cap:thoughts", None, "Хід «згадати прочитане чи подумане»", "",
+       0, 1),  # v5.12: hers only — a person without `thoughts` falls back to a plain answer
     # the cat in the room
     _s("CAT_MAX_WORDS", "int", "12", "cat", "type:creature", CHAT, "Межа слів репліки Кота", "words", 3, 60),
     _s("CAT_MEMORY_P", "float", "0.25", "cat", "cap:pastlife", CHAT, "Як часто Кіт згадує минуле життя", "", 0, 1),

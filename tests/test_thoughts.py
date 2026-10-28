@@ -186,3 +186,119 @@ def test_without_thoughts_the_recall_places_are_unchanged(tmp_path, monkeypatch)
     agent = kira_agent(tmp_path, monkeypatch)
     assert agent.private_places == ("agora", "private", "facts") and agent.agora_places == ("agora",)
     assert agent.day_thoughts(at(2026, 10, 20).date()) == []
+
+
+# --- where thoughts go (AGORA-135) -------------------------------------------------------------------------------
+from agents.chronicle import day_memory_request
+from agents.logic import build_instruction
+from agents.private import PRIVATE_NUDGE, PRIVATE_NUDGE_THOUGHTS
+from agents.thoughts import THOUGHTS_TITLE, thoughts_section
+
+EVENING = Thought("19:30", "news", "thought", "guardian", "Вода на супутнику Сатурна!", "Water on a moon",
+                  "https://www.theguardian.com/x")
+
+
+def test_the_block_shows_parts_of_the_day_and_alone_with_him_the_links_and_the_private_ones():
+    agora = thoughts_section([NEWS, AGORA, PRIVATE, EVENING], private=False, n=3)
+    assert agora == (f"{THOUGHTS_TITLE}\n"
+                     "- вранці, прочитавши «У Львові покажуть новий телескоп»: Прочитала про новий телескоп — аж мурашки.\n"
+                     "- вдень: Ада знову сперечалася про слово, а я мовчала.\n"
+                     "- ввечері, прочитавши «Water on a moon»: Вода на супутнику Сатурна!")
+    assert "https://" not in agora and "чекала більшого" not in agora
+    alone = thoughts_section([NEWS, AGORA, PRIVATE, EVENING], private=True, n=4)
+    assert "(посилання: https://zaxid.net/n1)" in alone and "- ввечері: Він сьогодні був тихий." in alone
+    for leak in ("09:15", "14:05", "21:40", "19:30"):
+        assert leak not in alone
+    assert thoughts_section([], private=True, n=3) is None
+    assert thoughts_section([PRIVATE], private=False, n=3) is None
+    assert thoughts_section([NEWS], private=True, n=0) is None
+
+
+def test_the_block_sits_after_the_mood_and_before_a_past_life_memory():
+    out = build_instruction("Кіра", "КАНОН", today="СЬОГОДНІ", mood="НАСТРІЙ", thoughts="ДУМКИ", pastlife="МИНУЛЕ",
+                            facts="ФАКТИ")
+    order = [out.index(x) for x in ("КАНОН", "СЬОГОДНІ", "НАСТРІЙ", "ДУМКИ", "МИНУЛЕ", "ФАКТИ", "Ти — Кіра")]
+    assert order == sorted(order)
+    assert build_instruction("Ада", "КАНОН", thoughts=None) == build_instruction("Ада", "КАНОН")
+
+
+def test_the_day_memory_knows_what_she_read_and_thought():
+    _, contents = day_memory_request("Кіра", "К", at(2026, 10, 20).date(), "Розділ", [], None, None, None, 120,
+                                     thoughts="- вранці: Думка.")
+    assert "Що ти того дня прочитала і подумала (твої думки):\n- вранці: Думка." in contents
+    assert "Можеш згадати і те, що ти того дня прочитала й подумала." in contents
+    _, plain = day_memory_request("Кіра", "К", at(2026, 10, 20).date(), "Розділ", [], None, None, None, 120)
+    assert "прочитала" not in plain
+
+
+def test_her_prompts_carry_todays_thoughts_in_their_place(tmp_path, monkeypatch):
+    from tests.test_thoughts_flow import ThinkLLM, thinker
+    agent, clock = thinker(tmp_path, monkeypatch, ThinkLLM())
+    now = local(agent)
+    for t in (NEWS, AGORA, PRIVATE):
+        agent.keep_thought(now, t)
+    agora = agent.build_prompt()
+    alone = agent.build_prompt(private="НАОДИНЦІ")
+    assert THOUGHTS_TITLE in agora and "Ада знову сперечалася" in agora
+    assert "чекала більшого" not in agora and "https://" not in agora
+    assert "чекала більшого" in alone and "(посилання: https://zaxid.net/n1)" in alone
+    clock[0] += 24 * 3600 * 1000                                     # a new day: yesterday's are not «today»
+    assert THOUGHTS_TITLE not in agent.build_prompt()
+
+
+def test_a_member_without_thoughts_never_gets_the_block_or_the_move(tmp_path, monkeypatch):
+    agent = kira_agent(tmp_path, monkeypatch)                         # private and recall, no thoughts
+    assert THOUGHTS_TITLE not in agent.build_prompt() and THOUGHTS_TITLE not in agent.build_prompt(private="Х")
+    assert agent.day_thoughts(local(agent).date()) == []
+
+
+def test_the_move_is_drawn_only_with_todays_thoughts_she_may_tell_in_agora(tmp_path, monkeypatch):
+    from agents import moves
+    from tests.test_thoughts_flow import ThinkLLM, thinker
+    agent, _ = thinker(tmp_path, monkeypatch, ThinkLLM())
+    seen = []
+    real = moves.persona_move
+    monkeypatch.setattr("agents.agent.persona_move",
+                        lambda *a, **k: seen.append(k["has_thoughts"]) or real(*a, **k))
+    agent.draw_move("$e1", local(agent))
+    agent.keep_thought(local(agent), PRIVATE)                         # a private one is not for Agora
+    agent.draw_move("$e2", local(agent))
+    agent.keep_thought(local(agent), AGORA)
+    agent.draw_move("$e3", local(agent))
+    assert seen == [False, False, True]
+
+
+def test_writing_first_may_share_what_she_read_only_with_thoughts(tmp_path, monkeypatch):
+    from tests.test_thoughts_flow import ThinkLLM, thinker
+    llm = ThinkLLM()
+    agent, _ = thinker(tmp_path, monkeypatch, llm)
+    agent.private_history = [("Ich", "Привіт")]
+    asyncio.run(agent.private_reply(nudge=True))
+    system = next(s for k, s, _ in llm.calls if k == "private_nudge")
+    assert f"{PRIVATE_NUDGE} {PRIVATE_NUDGE_THOUGHTS}" in system
+    plain_llm = ThinkLLM()
+    plain = kira_agent(tmp_path / "plain", monkeypatch, llm=plain_llm)
+    plain.private_history = [("Ich", "Привіт")]
+    asyncio.run(plain.private_reply(nudge=True))
+    plain_system = next(s for k, s, _ in plain_llm.calls if k == "private_nudge")
+    assert PRIVATE_NUDGE in plain_system and PRIVATE_NUDGE_THOUGHTS not in plain_system
+
+
+def test_the_day_memory_request_gets_her_thoughts_but_never_a_private_one(tmp_path, monkeypatch):
+    from tests.test_thoughts_flow import ThinkLLM, thinker
+    llm = ThinkLLM({"day_memory": ["Спогад про день."]})
+    agent, clock = thinker(tmp_path, monkeypatch, llm)
+    day = local(agent).date()
+    for t in (NEWS, AGORA, PRIVATE):
+        agent.keep_thought(local(agent), t)
+    clock[0] += 24 * 3600 * 1000
+    asyncio.run(agent.ensure_day_memory(day))
+    contents = next(c for k, _, c in llm.calls if k == "day_memory")
+    assert "прочитавши «У Львові покажуть новий телескоп»: Прочитала про новий телескоп" in contents
+    assert "Ада знову сперечалася" in contents
+    assert "чекала більшого" not in contents and "https://" not in contents
+
+
+def local(agent):
+    from agents.world import local_now
+    return local_now(agent.clock(), agent.tz)

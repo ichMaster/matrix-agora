@@ -174,6 +174,7 @@ from agents.private import (
     PRIVATE_DISCRETION,
     PRIVATE_NOT_HEARD,
     PRIVATE_NUDGE,
+    PRIVATE_NUDGE_THOUGHTS,
     live_room,
     load_private_state,
     pick_door,
@@ -223,7 +224,7 @@ from agents.telegram import (
     poll_offset,
     save_telegram_state,
 )
-from agents.thoughts import Thought
+from agents.thoughts import Thought, thought_rows, thoughts_section
 from agents.thoughts import archive_key as thought_key
 from agents.thoughts import block as thought_block
 from agents.thoughts import parse_day as parse_thoughts
@@ -267,6 +268,7 @@ from agents.world import (
 
 log = logging.getLogger("agent")
 RECENT_THOUGHTS = 5  # v5.12: her last thoughts a reading or a reflection sees
+THOUGHTS_IN_MEMORY = 12  # v5.12: the most of a day's thoughts its memory request carries
 BACKFILL_PAGE = 100  # the homeserver's cap on one /messages page
 BACKFILL_PAGES = 5  # at most this many pages on a start
 VOICES_KEPT = 200  # v5.2: the owner's recent voice event ids an agent remembers, to know a transcript of one
@@ -862,6 +864,8 @@ class Agent:
                 recalled = await self.recall_section(query, self.private_places, set(self.private_history))
                 agora_now = self.agora_now_section()
             brief = PRIVATE_NUDGE if nudge else PRIVATE_BRIEF
+            if nudge and self.cfg.can("thoughts"):  # v5.12: she may share what she read or thought
+                brief = f"{brief} {PRIVATE_NUDGE_THOUGHTS}"
             if self.facts_dir is not None and not nudge:  # v5.8: «запам'ятай» — a skill, never a keyword
                 brief = f"{brief}\n\n{REMEMBER_SKILL}"
             prompt = self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts)
@@ -1483,6 +1487,9 @@ class Agent:
             plans=self.plans_section(now) if can("plans") else None,
             today=self.today_section(now) if can("today") else None,
             mood=self.mood_section(now) if can("mood") else None,
+            # v5.12: today's thoughts — alone with him all of them, a news one with its link; in Agora not the private
+            thoughts=(thoughts_section(self.day_thoughts(now.date()), private is not None, self.thoughts_in_prompt)
+                      if can("thoughts") else None),
             pastlife=pastlife if can("pastlife") else None,
             nudge=nudge if can("nudge") else None,
             rules_extra=CREATURE_RULES if self.cfg.type == "creature" else None,
@@ -1504,7 +1511,8 @@ class Agent:
             return None
         move = persona_move(event_id, self.me, self.roster, "Ich", self.move_weights,
                             has_plans=self.cfg.can("plans") and bool(self.plans_section(now)),
-                            has_life=self.cfg.can("life") and bool(self.cfg.life))
+                            has_life=self.cfg.can("life") and bool(self.cfg.life),
+                            has_thoughts=any(t.place == "thought" for t in self.day_thoughts(now.date())))
         log.info("move: %s", move.kind)
         return move_line(move)
 
@@ -1705,6 +1713,8 @@ class Agent:
             self._read(self._dir("days") / f"{d.isoformat()}.talk.md"),
             self._read(self.plan_paths(d)["day"]), block_text, self.max_words["day"],
             events_for_prompt(self.day_events(d)) or None,
+            # v5.12: what she read and thought — her `thought` place only: the memories reach Agora too
+            "\n".join(thought_rows(self.day_thoughts(d), False, THOUGHTS_IN_MEMORY)) or None,
         )
         text = None
         for _attempt in range(2):  # one regeneration when it copies the story

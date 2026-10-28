@@ -261,6 +261,7 @@ def build_instruction(
     plans: str | None = None,
     today: str | None = None,
     mood: str | None = None,
+    thoughts: str | None = None,
     pastlife: str | None = None,
     nudge: str | None = None,
     rules_extra: str | None = None,
@@ -275,13 +276,13 @@ def build_instruction(
 ) -> str:
     """The system instruction, in contract order (ARCHITECTURE §Prompt assembly):
     canon → life so far → place and time → memories → plans → today →
-    (v4.2) the mood of the day → (v4.3) a past-life memory → (v4.3) a nudge's material and rule →
+    (v4.2) the mood of the day → (v5.12) what she thought today → (v4.3) a past-life memory → (v4.3) a nudge's material and rule →
     (v5.8) the facts about the owner (private only) → (v5.8) Agora today (private only) → (v5.8) what she recalls →
     last-session memory → (v5.6) the private chat's situation → (v4.6) the persona's move → (v5.3) its own
     questions of this session → (v5.9) her palette of voice tags → rules (v5.6: with the discretion line in Agora). Empty sections are skipped. Nothing
     here may say a persona is a model or a bot."""
     parts = [canon]
-    parts += [s for s in (life, world, memories, plans, today, mood, pastlife, nudge) if s]  # «Настрій дня», …
+    parts += [s for s in (life, world, memories, plans, today, mood, thoughts, pastlife, nudge) if s]  # «Настрій дня», …
     parts += [s for s in (facts, agora_now, recalled) if s]  # v5.8: what she knows, Agora today, what she recalls
     if summary:
         parts.append(f"Що ти пам'ятаєш з минулої розмови: {summary}")

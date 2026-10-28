@@ -8,8 +8,10 @@ tests, and the talk never turns into an interrogation:
   curiosity — the named member always answers (v4.5), and the wave limit and the resume coin bound any chain;
 - `disagree`: take the other side of the message answered, from your own view, with an argument and respect;
 - `plan`: mention something from your plans or today that fits the talk;
-- `story`: a short story from your own life or memories — only what is there.
-Pure: the event id, the roster, the weights and two flags in; a `Move` and its prompt line out.
+- `story`: a short story from your own life or memories — only what is there;
+- `thought` (v5.12, a person with `thoughts`): bring up what you read or thought today, if it fits — in your own
+  words, never a link; it is only a reply's move, so she never starts a talk with it.
+Pure: the event id, the roster, the weights and three flags in; a `Move` and its prompt line out.
 """
 
 from __future__ import annotations
@@ -20,20 +22,20 @@ from dataclasses import dataclass
 from agents.roster import Member, speakers
 from agents.turns import uniform
 
-KINDS = ("ask", "disagree", "plan", "story")  # drawn in this order; `answer` is what is left
-DEFAULT_WEIGHTS = {"ask": 0.25, "disagree": 0.15, "plan": 0.1, "story": 0.1}
+KINDS = ("ask", "disagree", "plan", "story", "thought")  # drawn in this order; `answer` is what is left
+DEFAULT_WEIGHTS = {"ask": 0.25, "disagree": 0.15, "plan": 0.1, "story": 0.1, "thought": 0.1}
 WEIGHT_VARS = {"ask": "PERSONA_ASK_P", "disagree": "PERSONA_DISAGREE_P", "plan": "PERSONA_PLAN_P",
-               "story": "PERSONA_STORY_P"}
+               "story": "PERSONA_STORY_P", "thought": "PERSONA_THOUGHT_P"}
 
 
 @dataclass(frozen=True)
 class Move:
-    kind: str                     # answer | ask | disagree | plan | story
+    kind: str                     # answer | ask | disagree | plan | story | thought
     addressee: str | None = None  # the display name asked (`ask` only): «Кіт», «Клод», «Бруно», «Ich»…
 
 
 def weights_from(env: Mapping[str, str]) -> tuple[dict[str, float], list[str]]:
-    """The four weights from the environment: a bad or out-of-range value falls back to its default (its name is
+    """The weights from the environment: a bad or out-of-range value falls back to its default (its name is
     returned to be logged); a sum above 1 is scaled down to 1."""
     out, bad = {}, []
     for kind, var in WEIGHT_VARS.items():
@@ -53,9 +55,11 @@ def weights_from(env: Mapping[str, str]) -> tuple[dict[str, float], list[str]]:
 
 
 def persona_move(event_id: str, me: Member, roster: Mapping[str, Member], owner_name: str,
-                 weights: Mapping[str, float], *, has_plans: bool, has_life: bool) -> Move:
+                 weights: Mapping[str, float], *, has_plans: bool, has_life: bool,
+                 has_thoughts: bool = False) -> Move:
     """The move for `me` answering `event_id`: one draw over the cumulative weights; `ask` draws its addressee
-    evenly among the others and the owner. A plan without plans, a story without a life fall back to `answer`."""
+    evenly among the others and the owner. A plan without plans, a story without a life, a thought without one of
+    today's (v5.12) fall back to `answer` — so a member without `thoughts` draws exactly what it drew before."""
     u = uniform(event_id, "move:" + me.localpart)
     edge, kind = 0.0, "answer"
     for k in KINDS:
@@ -63,7 +67,7 @@ def persona_move(event_id: str, me: Member, roster: Mapping[str, Member], owner_
         if u < edge:
             kind = k
             break
-    if kind == "plan" and not has_plans or kind == "story" and not has_life:
+    if kind == "plan" and not has_plans or kind == "story" and not has_life or kind == "thought" and not has_thoughts:
         return Move("answer")
     if kind != "ask":
         return Move(kind)
@@ -88,4 +92,7 @@ def move_line(move: Move) -> str | None:
     if move.kind == "story":
         return ("Цього разу: розкажи коротку (2–3 речення) історію зі свого життя чи спогадів, що пасує до розмови, — "
                 "лише те, що справді є в «Твоє життя досі» чи в спогадах, нічого нового про минуле чи про цю кімнату.")
+    if move.kind == "thought":
+        return ("Цього разу: якщо пасує до розмови, згадай те, що ти сьогодні прочитала чи подумала («Що ти сьогодні "
+                "думала»), — своїми словами, без посилань; якщо не пасує, відповідай як звичайно.")
     return None

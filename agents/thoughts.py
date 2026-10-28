@@ -19,10 +19,13 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from agents.world import PART_ADVERB, part_of_day
+
 KINDS = ("news", "reflection")
 PLACES = ("thought", "thought_private")  # the archive's places of her thoughts
 SOURCES = ("zaxid", "guardian", "private", "agora")
 
+THOUGHTS_TITLE = "Що ти сьогодні думала (це твої думки, а не сказане вголос):"
 _BLOCK_RE = re.compile(r"^## (\d{2}:\d{2}) · (\w+) · (\w+) · (\w+)\s*$", re.MULTILINE)
 _TITLE_RE = re.compile(r"<!-- title: (.*?) -->")
 _LINK_RE = re.compile(r"<!-- link: (\S+) -->")
@@ -78,3 +81,22 @@ def today_thoughts(thoughts: Iterable[Thought], private: bool, n: int) -> list[T
     """The last `n` thoughts a prompt may see: alone with the owner all of them, in Agora only the place `thought`."""
     seen = [t for t in thoughts if private or t.place == "thought"]
     return seen[-n:] if n > 0 else []
+
+
+def thought_rows(thoughts: Iterable[Thought], private: bool, n: int) -> list[str]:
+    """The last `n` of a day's thoughts a prompt may see, a line each with its part of the day — never a clock time;
+    a news thought names its title, and alone with the owner carries its link."""
+    rows = []
+    for t in today_thoughts(thoughts, private, n):
+        when = PART_ADVERB[part_of_day(int(t.time[:2]))]
+        read = f", прочитавши «{t.title}»" if t.kind == "news" and t.title else ""
+        link = f" (посилання: {t.link})" if private and t.kind == "news" and t.link else ""
+        rows.append(f"- {when}{read}: {t.text}{link}")
+    return rows
+
+
+def thoughts_section(thoughts: Iterable[Thought], private: bool, n: int) -> str | None:
+    """«Що ти сьогодні думала»: in Agora her `thought` place only, with no link; alone with the owner all of them,
+    a news thought with its link — so a line she writes first can share it. None without one."""
+    rows = thought_rows(thoughts, private, n)
+    return THOUGHTS_TITLE + "\n" + "\n".join(rows) if rows else None

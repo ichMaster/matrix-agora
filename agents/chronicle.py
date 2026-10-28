@@ -132,8 +132,10 @@ RULES = (
 
 def day_memory_request(name: str, canon: str, day: date, chapter_body: str,
                        previous: list[tuple[str, str]], journal: str | None, plan: str | None,
-                       today_block: str | None, max_words: int, events: str | None = None) -> tuple[str, str]:
-    """`events` (v5.11): what happened to her that day — told in the memory with its details."""
+                       today_block: str | None, max_words: int, events: str | None = None,
+                       thoughts: str | None = None) -> tuple[str, str]:
+    """`events` (v5.11): what happened to her that day — told in the memory with its details; `thoughts` (v5.12):
+    what she read and thought that day — never a private reflection, since the memories reach Agora too."""
     parts = [f"Твоє життя зараз:\n{chapter_body}"]
     if previous:
         parts.append("Твої спогади попередніх днів:\n" + "\n".join(f"{lb}: {tx}" for lb, tx in previous))
@@ -141,6 +143,8 @@ def day_memory_request(name: str, canon: str, day: date, chapter_body: str,
         parts.append(f"Твій план на той день:\n{visible_deviations(plan)}")
     if events:
         parts.append(f"Що з тобою того дня сталося (це справді було):\n{events}")
+    if thoughts:
+        parts.append(f"Що ти того дня прочитала і подумала (твої думки):\n{thoughts}")
     if today_block:
         parts.append(f"Як минав той день (твої нотатки протягом дня):\n{today_block}")
     parts.append(f"Журнал розмов в Агорі за той день:\n{journal}" if journal
@@ -152,6 +156,7 @@ def day_memory_request(name: str, canon: str, day: date, chapter_body: str,
         "позначкою [відхилення], найімовірніше, не здійснились — якщо природно, розкажи, що завадило "
         "(«хотілося…, але…»). Не повторюй заняття попередніх днів без потреби. Лише сам спогад, без вступу."
         + (" Розкажи і про те, що з тобою сталося того дня, з подробицями — і про важке теж." if events else "")
+        + (" Можеш згадати і те, що ти того дня прочитала й подумала." if thoughts else "")
     )
     return f"{canon}\n\nТи — {name}.", "\n\n".join(parts)
 

@@ -45,6 +45,13 @@ PRIVATE_NUDGE = (
 )
 
 
+# v5.12 — writing first, with `thoughts`: what she read or thought today, a news item with its link
+PRIVATE_NUDGE_THOUGHTS = (
+    "Або поділися тим, що ти сьогодні прочитала чи подумала («Що ти сьогодні думала»), якщо це варто йому "
+    "розповісти: новину — зі своєю думкою і посиланням, а думку про вашу розмову — своїми словами."
+)
+
+
 # v5.7 — a voice note she could not hear: a fixed line, no model call (a person's words, never a machine's)
 PRIVATE_NOT_HEARD = "Ой, не розчула. Скажеш ще раз або напишеш?"
 PRIVATE_CANT_LISTEN = "Зараз не можу послухати голосове — напишеш мені?"
