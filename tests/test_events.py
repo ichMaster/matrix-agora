@@ -267,3 +267,16 @@ def test_another_person_and_the_cat_have_no_events(tmp_path):
     agent = person(tmp_path, llm, "2026-10-27 14:00", caps=frozenset())
     tick(agent, "2026-10-27 14:00")
     assert not (tmp_path / "kira.events").exists() and llm.calls == [] and agent.day_events(at("2026-10-27 14:00").date()) == []
+
+
+def test_a_story_event_with_odd_spacing_enters_once(tmp_path):
+    """Review #2: a canon line with a double space or a tab was compared raw against the day file's normalized text,
+    so the event was entered again at every watcher tick."""
+    llm = EventLLM()
+    agent = person(tmp_path, llm, "2026-10-29 09:00", rolls=(0.99,) * 10)
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "life": parse_life(
+        STORY.replace("Подзвонила стара подруга з Единбурга.", "Подзвонила  стара\tподруга з Единбурга."))})
+    for when in ("09:00", "09:00", "09:30", "10:00"):
+        tick(agent, f"2026-10-29 {when}")
+    events = agent.day_events(at("2026-10-29 09:00").date())
+    assert [e.text for e in events] == ["Подзвонила стара подруга з Единбурга."]

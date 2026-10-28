@@ -111,7 +111,8 @@ def _split_events(chunk: str, start: int, end: int) -> tuple[str, tuple[LifeEven
             raise LifeError(f"chapter {start}–{end}: bad event date {m[1]}") from None
         if not start <= day.year <= end:
             raise LifeError(f"chapter {start}–{end}: the event of {m[1]} is outside the chapter's years")
-        events.append(LifeEvent(day, m[2], m[3]))
+        # one line of single spaces, as the day file keeps it — else it never matches there (review #2)
+        events.append(LifeEvent(day, m[2], " ".join(m[3].split())))
     body = (chunk[:head.start()].rstrip() + "\n\n" + chunk[stop:].lstrip()).strip()
     return body, tuple(sorted(events, key=lambda e: e.date))
 
