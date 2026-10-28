@@ -10,8 +10,8 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 ## Status
 
-v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 is complete through v5.12, released as `v5.12.0`
-(2026-10-28). Next come v5.13–v5.15, the backup for Кіра's private chat, then v6–v9 in order. Other further work (the
+v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 is complete through v5.13, released as `v5.13.0`
+(2026-10-28). Next come v5.14–v5.15, the rest of the backup for Кіра's private chat, then v6–v9 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
 
 | Phase | Title | Status | Release |
@@ -48,7 +48,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.10 | Кіра's mood of the day: the horoscope, the biorhythms and the Lviv weather | ✅ completed | `v5.10.0` (2026-10-27) |
 | v5.11 | Events of her life: known, generated every hour, and Lviv's news | ✅ completed | `v5.11.0` (2026-10-28) |
 | v5.12 | Кіра reads the news and thinks | ✅ completed | `v5.12.0` (2026-10-28) |
-| v5.13 | Gemini's blocks named: the stage, the reason and the category | ⏳ planned | — |
+| v5.13 | Gemini's blocks named: the stage, the reason and the category | ✅ completed | `v5.13.0` (2026-10-28) |
 | v5.14 | Her private chat past a Gemini block: GLM-4.6 on NovelAI, the censored mark and the route | ⏳ planned | — |
 | v5.15 | The judge: Gemma 4 31B rates the backup's talk | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
@@ -1606,7 +1606,11 @@ marked as hers («я думала…»), and she recalls them as she recalls wha
 
 ### v5.13 — Gemini's blocks named: the stage, the reason and the category
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.13.0` on 2026-10-28.
+- **Grown with the owner's live tests:** a refusal written as an answer is a block (AGORA-141), and the message it
+  answered is marked censored in her archive (AGORA-142).
+- **Verified on a real refusal** at the owner's request, then released by the owner's word.
+- **Two code-review fixes;** #3 was carried into v5.14.
 
 **Goal:** a block by Gemini's safety filter is named in the log, for every agent; today it passes for an empty reply.
 On a block the agent stays silent, as today. A few days of these logs show how often Кіра is blocked and at which
