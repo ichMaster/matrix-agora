@@ -1619,9 +1619,11 @@ commands in Telegram.
 - **The backup window:** a block → five minutes of backup only. When the window ends, a flagged last answer of hers
   opens the next five minutes; a clean one gives the chat back to Gemini.
 - **Telegram commands** to see and pin the route: `/status`, `/auto`, `/gemini`, `/backup`.
-- **Every line rated, a censored line only for a model that is not Gemini** (after the review of this phase,
-  2026-10-28):
-  - the judge rates each message of the owner's and each answer of hers, in every state, after it is sent;
+- **Only the backup's talk is rated; what passed through Gemini is clean by default** (after the review of this
+  phase, 2026-10-28):
+  - a message Gemini answered and her answer from Gemini are clean, and the judge never rates them in Gemini's state;
+  - the judge rates the backup's talk: each owner's message the backup answers and each answer of the backup's (after
+    a block, in the window, under a pin on the backup);
   - a line it flags is marked censored in the archive, for good;
   - a censored line goes into a prompt only when the model is not Gemini. Gemini never gets it: not in the history,
     the recall or the facts, not in a background call, and not as an embedding.
@@ -1630,8 +1632,9 @@ commands in Telegram.
 - **The judge's timeout is longer:** 30 s.
 - **The voice:** the backup's answers are voiced like hers. The owner checked ElevenLabs's terms.
 - **Agreed as proposed:**
-  - at a block, the lines of the blocked prompt that are still unrated are rated at once: the history, the recall and
-    the facts, since a block at the prompt stage may come from an older line;
+  - at a block the judge also rates the blocked prompt's lines it has not rated yet: the history, the recall and the
+    facts. A block at the prompt stage may come from an older line, so this is the one case when lines that passed
+    through Gemini are rated;
   - at the window's end the judge rates the owner's new message too;
   - the backup is started beside the judge, so a flagged message waits for nothing more;
   - a day cap of 10 blocks;
@@ -1642,8 +1645,8 @@ commands in Telegram.
 - **Replaced on the way:**
   - a mark the backup model writes about its own talk (an uncensored model judges content badly, and the mark was a
     service line in her prompt), and a careful mode built on it;
-  - the judge rating only at a block and in the window, with the flagged lines' keys kept 30 days in the route state.
-    The archive outlives 30 days, and the background calls read the private lines too.
+  - the flagged lines' keys kept 30 days in the route state, replaced by the archive's mark: the archive outlives 30
+    days, and the background calls read the private lines too.
 
 **Why** (checked 2026-10-28):
 - **A block is invisible today.** `finish_of` knows only `MAX_TOKENS`, so a block logs as an empty reply and she is
@@ -1682,13 +1685,14 @@ commands in Telegram.
   and malware; they name no rule on adult content.
 - **Speed:** 16 providers, from $0.10 / $0.34 per million tokens. The request asks for the lowest latency
   (`provider.sort: "latency"`), with the reasoning off and a one-line answer per rated line, so it needs no JSON
-  support and SambaNova's fast endpoint stays eligible. Rating every line costs under ten cents a month at about a
-  hundred lines a day.
+  support and SambaNova's fast endpoint stays eligible. A window's ratings cost a thousandth of a cent.
 - **Its own failures:**
   - **A refusal** counts as flagged.
   - **An error, a timeout or an answer that does not parse** leaves the line unrated. The timeout is
     `CLASSIFIER_TIMEOUT_S`, 30 s.
     - The line is rated again at the next watcher tick.
+    - Until then, a line of the backup's talk stays out of Gemini, and a line that passed through Gemini keeps its
+      default.
     - A failure alone never marks a line censored, so one failed call over many lines never takes them all from
       Gemini.
   - **At the window's end,** an unrated new message or last answer counts as flagged, so a doubt keeps the backup on.
@@ -1702,13 +1706,14 @@ its id. The Telegram command and the route say "backup", so nothing is renamed w
 
 | State | How an answer is made | Leaves when |
 |---|---|---|
-| Gemini | Gemini, as today, with the censored lines left out. After each exchange the judge rates the owner's line and her answer, in the background. A block → the backup answers that message; after it is sent, the judge rates the blocked prompt's lines still unrated (the history, the recall, the facts), the message and her answer | a block → the window |
+| Gemini | Gemini, as today, with the censored lines left out; nothing is rated, since what passed through Gemini is clean. A block → the backup answers that message; after it is sent, the judge rates the message, her answer and the blocked prompt's lines it has not rated yet (the history, the recall, the facts) | a block → the window |
 | the window (5 min) | The backup answers. After each exchange the judge rates the owner's line and her answer, in the background | the first message after 5 min (below) |
 | the window's end | The judge rates the new message, beside the backup already writing. Her last answer or the new message flagged → the backup's answer goes out and a new window opens. Both clean → Gemini answers, without the censored lines; if Gemini blocks, the backup's ready answer goes out and a new window opens. A line she writes first has no new message: her last answer's rating alone decides | — |
 
 - **What runs in parallel:**
-  - in every state the judge rates an exchange only after the answer is sent, so it never delays one;
-  - after a block, the blocked prompt's unrated lines are rated once the backup's answer is sent;
+  - in Gemini's state nothing else is called until a block; after a block the judge runs once the backup's answer is
+    sent;
+  - in the window the backup answers, and the judge runs after the answer is sent, so it never delays it;
   - at the window's end the judge and the backup start together. Gemini starts only after a clean rating, while the
     backup goes on writing, so its answer is ready if Gemini blocks too.
 - **The day cap:** 10 blocks in her local day → the window to the day's end.
@@ -1773,38 +1778,47 @@ its id. The Telegram command and the route say "backup", so nothing is renamed w
     - A refusal makes every line of the call flagged.
     - A missing or malformed line leaves that line unrated.
     - An error or the `CLASSIFIER_TIMEOUT_S` timeout leaves every line of the call unrated.
-  - Many lines (at a block, or the first rating of the archive) go in chunks of at most 25, in parallel.
+  - Many lines (the blocked prompt's, at a block) go in chunks of at most 25, in parallel.
   - A usage line of the kind `judge` with the model's id; the price in `PRICE_MODELS`.
 - **The censored mark** (`agents/archive.py`; the filter is pure).
-  - **The archive's lines get their rating:** unrated, clean or censored. The existing `state/kira.archive.db` is
-    migrated in place, with every line unrated.
-  - **A fact carries the mark too.** A fact kept from the backup's «запам'ятай» marker counts as censored until it is
-    rated.
-  - **`for_model(lines, model)`:** a Gemini model gets no censored line, and any other model gets every line. It is
-    applied wherever the private lines reach a model:
+  - **The archive's lines get a mark**, one of four:
+    - passed through Gemini, clean by default;
+    - rated clean;
+    - censored;
+    - waiting for the judge: a line of the backup's talk not rated yet.
+
+    The existing `state/kira.archive.db` is migrated in place, with every line marked as passed through Gemini.
+  - **A fact carries the mark too.** A fact from Gemini's answer or from the facts' extraction is clean by default. A
+    fact kept from the backup's «запам'ятай» marker waits for the judge.
+  - **`for_model(lines, model)`:**
+    - a Gemini model gets no censored line and no line waiting for the judge;
+    - any other model gets every line.
+
+    It is applied wherever the private lines reach a model:
     - her private answer and the line she writes first: the history, the recall and the facts;
     - the session summary and the facts' extraction at a session's end;
     - v5.12's reflection on the private chat;
     - the day memory.
-  - **Embeddings:** a private line is embedded only once it is rated clean. A censored line gets no vector, so the
-    backup's recall finds it by its words (FTS5).
+  - **Embeddings:**
+    - a line that passed through Gemini is embedded as today;
+    - a line of the backup's talk is embedded only once it is rated clean;
+    - a censored line gets no vector, so the backup's recall finds it by its words (FTS5).
   - **The private history** keeps each line's archive key and its mark. Today it holds only the speaker and the text.
-  - **The lines from before this phase:** after the first start, the judge rates the private archive's lines and the
-    facts once, newest first, in the background. Until rated, an old line is used as it is today.
 - **The route** (`agents/route.py`, pure, with an injected clock).
   - `state(now, route)` → Gemini, the window or the window's end; `after(route, now, outcome)` records a block, a
     rating or a Gemini answer.
   - `state/kira.route.json` (0600): load and save.
 - **The private answer** (`agents/agent.py`'s `_compose` for `private` and `private_nudge`, when `FALLBACK_MODEL` is
   set):
-  - **in every state,** after an answer is sent, the judge rates the owner's line and her answer in the background;
   - **Gemini:**
-    - the prompt is built without the censored lines;
+    - the prompt is built without the censored lines and the lines waiting for the judge;
+    - the owner's message and her answer are marked as passed through Gemini, and nothing is rated;
     - on a block, the backup answers with its own prompt and the window opens;
-    - after that answer is sent, the judge rates the blocked prompt's lines that are still unrated, the owner's
-      message and her answer;
-  - **the window:** the backup answers with its own prompt (`FALLBACK_HISTORY_N` lines, every line, within the
-    budget);
+    - after that answer is sent, the judge rates the owner's message, her answer and the blocked prompt's lines it has
+      not rated yet;
+  - **the window:**
+    - the backup answers with its own prompt: `FALLBACK_HISTORY_N` lines, every line, within the budget;
+    - after the answer is sent, the judge rates the owner's line and her answer in the background;
   - **the window's end:**
     - the judge on the new message and the backup start together;
     - on clean ratings, Gemini starts with the prompt without the censored lines;
@@ -1824,7 +1838,8 @@ its id. The Telegram command and the route say "backup", so nothing is renamed w
 - **Telegram commands** (`agents/telegram.py`, `agents/agent.py`). Today `allowed()` marks any text starting with «/»
   as `command` and ignores it. From now on the owner's commands are handled:
   - `/status`: the route, auto or pinned, and until when; the blocks in the last hour and today (out of the cap);
-    the censored lines still in the history and the lines still unrated; today's answers by Gemini and by the backup;
+    the censored lines still in the history and the lines waiting for the judge; today's answers by Gemini and by the
+    backup;
   - `/auto`: the rules decide (the default);
   - `/gemini`, `/backup`: pin Gemini or the backup;
   - an unknown command: the list.
@@ -1847,7 +1862,7 @@ its id. The Telegram command and the route say "backup", so nothing is renamed w
 - **The panel:** her card shows, read-only:
   - the route (auto or pinned) and the window's end;
   - today's blocks and the backup's answers;
-  - the censored lines and the lines still unrated.
+  - the censored lines and the lines waiting for the judge.
 
   The usage tables show both models as their own rows.
 - **ARCHITECTURE:**
@@ -1876,8 +1891,6 @@ its id. The Telegram command and the route say "backup", so nothing is renamed w
 - (Manual, owner) When a real block comes, the log names its stage, reason and category, she answers through the
   backup, `/status` and her card show the window, and the judge's ratings are in the log (counts, no text).
 - (Manual, owner) After a clean window Gemini answers again, and the log shows how many censored lines it left out.
-- (Manual, owner) Her card shows the private archive rated, with no line left unrated a day after the deploy.
-
 **Tests:**
 - `blocked_reason` over each prompt and answer reason, and over the non-blocks (`MAX_TOKENS`, `RECITATION`, an error,
   an empty answer);
@@ -1897,16 +1910,17 @@ its id. The Telegram command and the route say "backup", so nothing is renamed w
   - an error and a timeout (unrated, rated again, never censored by the failure alone);
   - many lines in chunks of 25;
 - the censored mark:
-  - the archive's migration, with every existing line unrated;
+  - the archive's migration, with every existing line marked as passed through Gemini;
   - `for_model` with a Gemini model and with another;
-  - the censored lines left out of every Gemini call that reads the private lines (the answer's history, recall and
-    facts; the session summary; the facts' extraction; the reflection; the day memory) and out of the embeddings,
-    and kept in the backup's prompt;
-  - a fact from the backup's answer censored until rated;
-  - the first rating of the old archive, newest first;
+  - the censored lines and the lines waiting for the judge left out of every Gemini call that reads the private
+    lines (the answer's history, recall and facts; the session summary; the facts' extraction; the reflection; the
+    day memory) and out of the embeddings, and kept in the backup's prompt;
+  - a fact from the backup's answer waiting for the judge;
 - the route with an injected clock:
-  - every exchange rated after its answer is sent, in every state;
-  - a block opens the window and has the blocked prompt's unrated lines rated (the history, the recall, the facts);
+  - nothing rated in Gemini's state, and its lines marked as passed through Gemini;
+  - each exchange of the backup's talk rated after its answer is sent: after a block, in the window, under a pin;
+  - a block opens the window and has the blocked prompt's lines the judge has not rated yet rated (the history, the
+    recall, the facts);
   - the window's end with a flagged answer, a flagged new message, an unrated one, and both clean;
   - a line she writes first at the window's end, decided by her last answer;
   - a Gemini block at the window's end using the backup's ready answer;
@@ -1914,8 +1928,8 @@ its id. The Telegram command and the route say "backup", so nothing is renamed w
   - a pin over the rules;
   - a restart reading the state;
 - the backup's prompt with `FALLBACK_HISTORY_N` lines;
-- the order of the calls: the judge after the answer in every state, the judge and the backup together at the
-  window's end;
+- the order of the calls: nothing extra in Gemini's state, the judge after the answer in the window, the judge and the
+  backup together at the window's end;
 - the backup checks: Russian letters, a Latin majority (an answer with audio tags is not one), another script, a run
   of one symbol, a self-named model;
 - the backup's usage line with no cost;
