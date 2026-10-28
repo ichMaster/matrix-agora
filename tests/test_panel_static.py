@@ -284,3 +284,15 @@ def test_the_models_lines_and_the_voice_tab():
     assert '["voice", "Voice"]' in js and "function voiceTabHtml(a, mem)" in js and "function modelLines(m)" in js
     assert 'a.engine === "gemini" && mem.models' in js and "emotion: ${m.emotion.tags.length} tags" in js
     assert "performed by her voice · never shown in the text" in js
+
+
+def test_the_card_shows_her_last_event():
+    """v5.11: an agent with `events` shows its latest event of the week on the card, under the mood — the text, its
+    day, time and kind, labelled as in the Events tab; none without the capability."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert ('${a.capabilities && can(a, "events") ? `<div style="display:flex;flex-direction:column;gap:3px">'
+            '<div class="label">Last event</div>${lastEventLine(mem)}</div>` : ""}') in js
+    assert js.index("${moodLine(mem)}${weatherLine(mem)}") < js.index("${lastEventLine(mem)}")
+    assert "const day = mem.events[0], e = day && day.events[day.events.length - 1];" in js
+    assert "${esc(shortDay(day.date))} · ${esc(e.time)} · ${esc(eventLabel(e))}" in js
+    assert "const label = eventLabel(e);" in js and "Nothing has happened this week yet" in js

@@ -402,6 +402,7 @@ function agentCardHtml(a) {
     </dl>
     ${can(a, "today") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Today</div>${today}</div>` : ""}
     ${can(a, "mood") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Mood of the day</div>${moodLine(mem)}${weatherLine(mem)}</div>` : ""}
+    ${a.capabilities && can(a, "events") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Last event</div>${lastEventLine(mem)}</div>` : ""}
     ${can(a, "pastlife") || can(a, "nudge") ? `<div class="muted" style="font-size:12px">${pastLifeLine(mem)}</div>` : ""}
     ${a.engine === "claude-sdk" ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Subscription</div>${claudeLines(mem)}</div>` : ""}
     ${can(a, "digest") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Digests</div>${digestLine(mem)}</div>` : ""}
@@ -539,6 +540,16 @@ function unavailableBox() {
 // v5.10 — a person's day of Lviv weather, under her mood (the cat has none: no line)
 function weatherLine(mem) {
   return mem.available && mem.weather ? `<div class="muted" style="font-size:12px" lang="uk">${icon("sun", 13)} ${esc(mem.weather.line)}</div>` : "";
+}
+
+// v5.11 — her latest event this week on the card, under her mood: the text (three lines at most), its day, time and kind
+function lastEventLine(mem) {
+  if (!mem.available) return `<div class="muted" style="font-size:13px">Memory unavailable</div>`;
+  if (!mem.events) return `<div class="muted" style="font-size:13px">Events unreadable</div>`;
+  const day = mem.events[0], e = day && day.events[day.events.length - 1];
+  if (!e) return `<div class="muted" style="font-size:13px">Nothing has happened this week yet</div>`;
+  return `<div class="today-line" lang="uk" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${esc(e.text)}</div>
+    <div class="muted" style="font-size:12px">${esc(shortDay(day.date))} · ${esc(e.time)} · ${esc(eventLabel(e))}</div>`;
 }
 
 function moodLine(mem) {
@@ -689,12 +700,13 @@ function moodTabHtml(mem) {
 
 // v5.11 — what happened to her: by day, newest first; the kind as a label, her story's and the news marked by source
 const EVENT_LABEL = {everyday: "everyday", joyful: "joyful", inspiring: "inspiring", heavy: "heavy", story: "story"};
+const eventLabel = (e) => e.source === "news" ? `news · ${e.kind}` : e.source === "rolled" ? EVENT_LABEL[e.kind] || e.kind : `${e.source}`;
 function eventsTabHtml(a, mem) {
   const days = mem.events;
   if (!days) return `<p class="muted">Events unreadable.</p>`;
   if (!days.length) return `<p class="muted">Nothing has happened to ${esc(a.display)} this week yet — events fall in her waking hours.</p>`;
   return days.map((d) => `<div class="section-label" style="margin:14px 0 6px">${esc(longDay(d.date))}</div>` + d.events.map((e) => {
-    const label = e.source === "news" ? `news · ${e.kind}` : e.source === "rolled" ? EVENT_LABEL[e.kind] || e.kind : `${e.source}`;
+    const label = eventLabel(e);
     const link = e.link && /^https:\/\//.test(e.link)
       ? ` <a href="${esc(e.link)}" target="_blank" rel="noopener noreferrer" class="muted" style="font-size:12px">source</a>` : "";
     return `<div class="rule-b" style="padding:8px 0;display:flex;gap:12px;align-items:flex-start">
