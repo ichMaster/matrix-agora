@@ -106,7 +106,7 @@ from agents.facts import (
     split_marker,
 )
 from agents.fallback import TOKEN_VAR as FALLBACK_TOKEN_VAR
-from agents.fallback import FallbackClient
+from agents.fallback import FallbackClient, FallbackResponder
 from agents.guardian import KEY_VAR as GUARDIAN_KEY_VAR
 from agents.guardian import Guardian
 from agents.life import current_chapter, events_due, known_ahead, life_section, next_chapter
@@ -117,10 +117,13 @@ from agents.logic import (
     CLAUDE_BRIEF_PHILOSOPHER,
     CLAUDE_NEWS_BRIEF,
     CREATURE_RULES,
+    CUT_LAYERS,
     append_history,
     asked_section,
     build_instruction,
+    build_transcript,
     clean_reply,
+    fit_budget,
     is_edit,
     members_phrase,
     outs_a_persona,
@@ -210,6 +213,9 @@ from agents.reading import load_state as load_reading
 from agents.reading import save_state as save_reading
 from agents.responder import Turn, responder_for, trim_to_sentence
 from agents.roster import Member, load_roster, speakers
+from agents.route import after as route_after
+from agents.route import day_bounds, load_route, save_route
+from agents.route import state as route_state
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.settings import VOICE_ID_RE
 from agents.settings import start as settings_start
@@ -415,6 +421,7 @@ class Agent:
         self.reading_sources = Sources(reading_key)
         # v5.14 — the backup for her private chat: on with `fallback`, a model and the token; its settings
         self.fallback: FallbackClient | None = None
+        self.fallback_responder: FallbackResponder | None = None
         self.fallback_window_s, self.fallback_day_max = 300, 10
         self.fallback_context, self.fallback_history_n = 32000, 60
         if cfg.can("fallback"):
@@ -425,6 +432,7 @@ class Agent:
             self.fallback_history_n = int(os.environ.get("FALLBACK_HISTORY_N", "60"))
             if model and fallback_token:
                 self.fallback = FallbackClient(fallback_token, model, sink=self.record_fallback_usage)
+                self.fallback_responder = FallbackResponder(self.fallback)
             elif model:
                 log.warning("backup off: %s is not set", FALLBACK_TOKEN_VAR)
         self._reading_lock, self._reflect_lock = asyncio.Lock(), asyncio.Lock()
@@ -904,26 +912,14 @@ class Agent:
                     await self.ensure_mood(local_now(self.clock(), self.tz))
                 except Exception:
                     log.exception("mood of the day failed (the private answer continues)")
-            recalled = agora_now = None
-            facts = self.facts_now()  # v5.8 review #6: mirrored before the recall, so a deleted fact is not recalled
-            if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
-                query = next((t for s, t in reversed(self.gemini_history()) if s == "Ich"), "")  # v5.14: open only
-                recalled = await self.recall_section(query, self.private_places, set(self.private_history))
-                agora_now = self.agora_now_section()
             brief = PRIVATE_NUDGE if nudge else PRIVATE_BRIEF
             if nudge and self.cfg.can("thoughts"):  # v5.12: she may share what she read or thought
                 brief = f"{brief} {PRIVATE_NUDGE_THOUGHTS}"
             if self.facts_dir is not None and not nudge:  # v5.8: «запам'ятай» — a skill, never a keyword
                 brief = f"{brief}\n\n{REMEMBER_SKILL}"
-            prompt = self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts)
-            LAST_BLOCK.set(None)
             seen = list(self._unanswered)  # v5.13 review #2: the lines this call answers — never one that comes later
-            text = await self._compose(prompt, lines=self.gemini_history(),
-                                       kind="private_nudge" if nudge else "private")
+            text, by = await self._private_text(brief, nudge, seen)
             if text is None:
-                block = LAST_BLOCK.get()
-                if block is not None and not nudge:  # v5.13: what Gemini refused never reaches it again
-                    self.mark_unanswered(block[0], seen)
                 return False
             sent_id = None
             if door == "matrix":
@@ -935,17 +931,150 @@ class Agent:
             self.last_private_ms = self.clock()
             self._unanswered = [u for u in self._unanswered if u not in seen]  # v5.13: answered (review #2)
             self._own_seq += 1
-            self._archive(sent_id or f"own:{door}:{self.clock()}:{self._own_seq}", self.clock(), "private", door,
-                          self.cfg.name, text)
+            key = sent_id or f"own:{door}:{self.clock()}:{self._own_seq}"
+            self._archive(key, self.clock(), "private", door, self.cfg.name, text)
             if self.cfg.can("summary"):
                 self.session.append((private_label(self.cfg.name), text))
-            log.info("private: %s%s", "wrote first" if nudge else "answered", " (telegram)" if door == "telegram" else "")
+            if by == "backup":  # v5.14: the backup's talk waits for the judge — her line too, closed to Gemini
+                self.close_lines([(self.cfg.name, str(text))])
+                if self.archive is not None:
+                    try:
+                        self.archive.mark([key], "waiting")
+                    except Exception as exc:  # noqa: BLE001
+                        log.error("archive: her line was not marked (%s)", type(exc).__name__)
+            log.info("private: %s%s%s", "wrote first" if nudge else "answered", " (telegram)" if door == "telegram" else "",
+                     " by the backup" if by == "backup" else "")
             return True
         finally:
             if action is not None:
                 action.cancel()
             if door == "matrix":
                 await self.client.room_typing(room, False)
+
+    # --- v5.14: the route of her private answer — Gemini, or the backup's window after a block --------------------------
+    @property
+    def route_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.route.json"
+
+    def route_step(self, outcome: str):
+        """The route after an outcome (`block`, `gemini`, `backup`, `pin:<x>`), saved — read fresh each time, so a
+        Telegram command in between is never lost. The new route."""
+        now_ms = self.clock()
+        day, start, end = day_bounds(now_ms, self.tz)
+        route = route_after(load_route(self.route_file), now_ms, outcome, self.fallback_window_s,
+                            self.fallback_day_max, day, start, end)
+        try:
+            save_route(self.route_file, route)
+        except OSError as exc:
+            log.error("route: not saved (%s)", type(exc).__name__)
+        return route
+
+    async def _gemini_private_prompt(self, brief: str) -> str:
+        """Her private instruction for Gemini: the history, the recall and the facts without a closed line (v5.14)."""
+        recalled = agora_now = None
+        facts = self.facts_now()  # v5.8 review #6: mirrored before the recall, so a deleted fact is not recalled
+        if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
+            query = next((t for s, t in reversed(self.gemini_history()) if s == "Ich"), "")  # v5.14: open only
+            recalled = await self.recall_section(query, self.private_places, set(self.private_history))
+            agora_now = self.agora_now_section()
+        return self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts)
+
+    async def _backup_private_prompt(self, brief: str) -> tuple[str, list[tuple[str, str]]]:
+        """Her private instruction and history for the backup: every line and fact, the recall by words only (its
+        query never goes to Gemini's embeddings), `FALLBACK_HISTORY_N` lines, fitted to `FALLBACK_CONTEXT` — the month
+        digests, the week digests, «Agora today», then the oldest lines (never fewer than 10) left out."""
+        history = self.private_history[-max(self.fallback_history_n, 1):]
+        facts = self.facts_now(gemini=False)
+        recalled = agora_now = None
+        if self.archive is not None:
+            query = next((t for s, t in reversed(history) if s == "Ich"), "")
+            recalled = await self.recall_section(query, self.private_places, set(history), gemini=False)
+            agora_now = self.agora_now_section()
+        built: dict[tuple[str, ...], str] = {}
+
+        def instruction(cuts: tuple[str, ...]) -> str:
+            if cuts not in built:
+                skip = frozenset().union(*(CUT_LAYERS.get(c, frozenset()) for c in cuts))
+                built[cuts] = self.build_prompt(private=brief, recalled=recalled, facts=facts, skip_layers=skip,
+                                                agora_now=None if "agora" in cuts else agora_now)
+            return built[cuts]
+
+        cuts, n = fit_budget(lambda c, k: len(instruction(c)) + len(build_transcript(history[-k:])),
+                             self.fallback_context, len(history))
+        if cuts or n < len(history):
+            log.info("backup: the prompt fitted (left out: %s; history %d of %d)", "+".join(cuts) or "nothing", n,
+                     len(history))
+        return instruction(cuts), history[-n:]
+
+    async def _backup_text(self, brief: str, kind: str):
+        prompt, lines = await self._backup_private_prompt(brief)
+        return await self._compose(prompt, lines=lines, kind=kind, responder=self.fallback_responder,
+                                   fact_mark="waiting")
+
+    async def _gemini_text(self, brief: str, kind: str):
+        """Gemini's line, and its block or refusal (v5.13's `LAST_BLOCK`, read in this task) when it gave none."""
+        LAST_BLOCK.set(None)
+        text = await self._compose(await self._gemini_private_prompt(brief), lines=self.gemini_history(), kind=kind)
+        return text, (LAST_BLOCK.get() if text is None else None)
+
+    async def _private_text(self, brief: str, nudge: bool, seen: list):
+        """(her line or None, who wrote it: `gemini` | `backup`). Without the backup, v5.13: a block or a refusal marks
+        his lines and is silence. With it (v5.14), by the route: Gemini — a block sends the backup, which answers, and
+        opens the window; the window — the backup alone; the window's end — both start together, Gemini's line wins
+        and closes the window, a block takes the backup's ready line and opens the next."""
+        kind = "private_nudge" if nudge else "private"
+
+        def to_backup(stage: str) -> None:  # his lines are the backup's talk from here, answered or not
+            if not nudge:
+                self.mark_unanswered(stage, seen)
+
+        if self.fallback_responder is None:
+            text, block = await self._gemini_text(brief, kind)
+            if block is not None and not nudge:  # v5.13: what Gemini refused never reaches it again
+                self.mark_unanswered(block[0], seen)
+            return text, "gemini"
+        where = route_state(load_route(self.route_file), self.clock())
+        if where == "window":
+            log.info("private: route=window — the backup answers")
+            to_backup("window")
+            text = await self._backup_text(brief, kind)
+            if text is not None:
+                self.route_step("backup")
+            return text, "backup"
+        if where == "gemini":
+            text, block = await self._gemini_text(brief, kind)
+            if text is not None:
+                self.route_step("gemini")
+                return text, "gemini"
+            if block is None:
+                return None, "gemini"  # silence, as ever: not a block
+            self.route_step("block")
+            to_backup(block[0])
+            log.warning("private: route=gemini — a %s, the backup answers", block[0])
+            text = await self._backup_text(brief, kind)
+            if text is not None:
+                self.route_step("backup")
+            return text, "backup"
+        # the window's end: both start together; Gemini never sees a closed line
+        log.info("private: route=window_end — Gemini (without %d closed lines) and the backup together",
+                 len(self.private_history) - len(self.gemini_history()))
+        backup = asyncio.create_task(self._backup_text(brief, kind))
+        try:
+            text, block = await self._gemini_text(brief, kind)
+        except BaseException:
+            backup.cancel()
+            raise
+        if text is not None:
+            backup.cancel()
+            self.route_step("gemini")
+            return text, "gemini"
+        if block is not None:
+            self.route_step("block")
+        to_backup(block[0] if block is not None else "window_end")
+        text = await backup
+        if text is not None:
+            self.route_step("backup")
+        return text, "backup"
 
     def gemini_history(self) -> list[tuple[str, str]]:
         """v5.14 — her private history as Gemini may read it: without the lines closed to it (conservatively: a same
@@ -1095,17 +1224,19 @@ class Agent:
         self.last_private_ms = max(self.last_private_ms or 0, lines[-1].ts_ms)
         log.info("private chat: %d lines of history from the archive", len(lines))
 
-    async def recall_section(self, query: str, places: tuple[str, ...], exclude: set) -> str | None:
+    async def recall_section(self, query: str, places: tuple[str, ...], exclude: set,
+                             gemini: bool = True) -> str | None:
         """What she recalls before an answer: the message she answers is the query — the word search and (when its
         embedding comes back) the meaning search within `places`, fused; the best `RECALL_N` lines not already in the
         prompt's window, each with its neighbours. A failure is no section, never a blocked answer."""
         if self.archive is None or self.recall_n <= 0 or not (query or "").strip():
             return None
         try:
-            word_ids = self.archive.search_words(query, places)
+            word_ids = self.archive.search_words(query, places, gemini=gemini)
             meaning_ids: list[int] = []
             try:  # v5.8 review #10: the meaning search fails on its own — the words' results stay
-                embed = getattr(self.llm, "embed", None)
+                # v5.14: the backup's recall is words only — its query never goes to Gemini's embeddings
+                embed = getattr(self.llm, "embed", None) if gemini else None
                 vector = await embed([query], task="RETRIEVAL_QUERY") if embed else None
                 if vector:
                     ids, matrix = self.archive.vectors(places)
@@ -1113,10 +1244,12 @@ class Agent:
             except Exception as exc:  # noqa: BLE001
                 log.error("recall: the meaning search failed (%s) — words only", type(exc).__name__)
             ranked = fuse(word_ids, meaning_ids)
-            picked = pick_recall(ranked, self.archive.lines(ranked[:2 * CANDIDATES]), exclude, self.recall_n)
+            picked = pick_recall(ranked, self.archive.lines(ranked[:2 * CANDIDATES], gemini=gemini), exclude,
+                                 self.recall_n)
             groups, seen = [], set()
             for line in sorted(picked, key=lambda x: (x.ts_ms, x.id)):
-                group = [n for n in (self.archive.around(line, 1) if line.place not in ("facts", *THOUGHT_PLACES)
+                group = [n for n in (self.archive.around(line, 1, gemini=gemini)
+                                     if line.place not in ("facts", *THOUGHT_PLACES)
                                      else [line])  # a fact or a thought is recalled alone
                          if n.id not in seen and (n.speaker, n.text) not in exclude]
                 seen.update(n.id for n in group)
@@ -1553,7 +1686,7 @@ class Agent:
 
     def build_prompt(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None,
                      private: str | None = None, recalled: str | None = None, agora_now: str | None = None,
-                     facts: str | None = None) -> str:
+                     facts: str | None = None, skip_layers: frozenset = frozenset()) -> str:
         """The full system instruction for a reply, in contract order; `pastlife` is a chosen thesis, `nudge` a
         nudge's material and rule (v4.3), `move` a persona's move line (v4.6), `private` the private chat's situation
         (v5.6; an Agora reply of a person with `private` closes its rules with the discretion line). An assistant
@@ -1571,7 +1704,7 @@ class Agent:
         return build_instruction(
             self.cfg.name, self.cfg.canon if can("canon") else "", self.summary if can("summary") else None,
             life=life, world=world,
-            memories=self.memories_section(now) if can("chronicle") else None,
+            memories=self.memories_section(now, skip_layers) if can("chronicle") else None,
             plans=self.plans_section(now) if can("plans") else None,
             today=self.today_section(now) if can("today") else None,
             mood=self.mood_section(now) if can("mood") else None,
@@ -1886,7 +2019,8 @@ class Agent:
             if not ok:
                 self._gen_retry_ms = now_ms + 600_000
 
-    def memories_section(self, now) -> str | None:
+    def memories_section(self, now, skip: frozenset = frozenset()) -> str | None:
+        """Her memories; `skip` (v5.14, the backup's budget) leaves out the layers of those kinds."""
         today = now.date()
         layers = select_layers(
             today, self.memory_days, self.memory_weeks, self.memory_months,
@@ -1894,6 +2028,8 @@ class Agent:
         )
         parts = []
         for kind, key in layers:
+            if kind in skip:
+                continue
             text = self._read(self._memory_path(kind, key))
             if text:
                 parts.append(f"{layer_label(kind, key, today)}: {text}")
@@ -2488,18 +2624,19 @@ class Agent:
             await self.client.room_typing(room_id, False)
 
     async def _compose(self, prompt: str, max_words: int | None = None, lines: list | None = None,
-                       effort: str | None = None, toolset: str | None = None, kind: str = "reply") -> str | None:
+                       effort: str | None = None, toolset: str | None = None, kind: str = "reply",
+                       responder=None, fact_mark: str = "gemini") -> str | None:
         """One model call → the line as it would be sent, or None (logged): never half a sentence, never another's
         words, PASS honoured, the creature's word cap applied (`max_words` overrides it: a telegram's joke)."""
-        reply = await self.responder.respond(Turn(list(self.history if lines is None else lines), prompt,
-                                                  self.reply_max_tokens, kind, effort, toolset))
+        reply = await (responder or self.responder).respond(Turn(list(self.history if lines is None else lines), prompt,
+                                                                 self.reply_max_tokens, kind, effort, toolset))
         if reply is None:
             return None  # already logged
         text = reply.text
         if self.facts_dir is not None:  # v5.8: the «ЗАПАМ'ЯТАЙ: …» line is kept, never sent — on every path
             text, asked = split_marker(text)
             for fact in asked:
-                self.remember(fact, "asked")
+                self.remember(fact, "asked", mark=fact_mark)  # v5.14: one the backup asked for waits
             if not text:
                 log.info("silent: only a line to remember")
                 return None

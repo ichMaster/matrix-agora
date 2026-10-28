@@ -18,6 +18,8 @@ import aiohttp
 
 from agents.emotion import split_tags
 from agents.llm import opening, refusal_marker
+from agents.logic import build_transcript
+from agents.responder import Reply, Turn
 
 log = logging.getLogger("agent.fallback")
 
@@ -135,3 +137,25 @@ class FallbackClient:
             log.error("backup returned an empty answer")
             return None
         return text, finish
+
+
+class FallbackResponder:
+    """The responder seam for her backup: her prompt and history to GLM-4.6, the answer through `backup_check` before
+    anything else reads it — a dropped one is silence, logged by its reason."""
+
+    MAX_TOKENS = 4096  # her answer's cap at most: 32,000 of prompt and this stay under Opus's 36,864
+
+    def __init__(self, client: FallbackClient) -> None:
+        self.client = client
+
+    async def respond(self, turn: Turn) -> Reply | None:
+        out = await self.client.reply(build_transcript(turn.lines), turn.instruction,
+                                      min(turn.max_tokens, self.MAX_TOKENS), turn.kind)
+        if out is None:
+            return None
+        text, finish = out
+        why = backup_check(text)
+        if why is not None:
+            log.warning("backup: dropped (%s)", why)
+            return None
+        return Reply(text, finish)

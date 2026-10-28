@@ -313,3 +313,28 @@ def echo_reply(name: str, text: str) -> str:
     if len(text) > ECHO_MAX_CHARS:
         text = text[:ECHO_MAX_CHARS] + "…"
     return f"{name} чує: {text}"
+
+
+# v5.14 — the backup's prompt budget (NovelAI's Opus takes 36,864 tokens): what it leaves out, in this order, before the
+# oldest history lines; the canon, the life section, the facts, the recall, «Сьогодні» and the mood are never cut
+BUDGET_CUTS = ("months", "weeks", "agora")
+CUT_LAYERS = {"months": frozenset({"month", "year"}), "weeks": frozenset({"week"})}
+CHARS_PER_TOKEN = 2.0  # under the measured 2.14–2.47 of her Ukrainian, so the estimate never runs over
+MIN_HISTORY = 10
+
+
+def fit_budget(measure, budget_tokens: int, history_n: int, min_history: int = MIN_HISTORY,
+               chars_per_token: float = CHARS_PER_TOKEN) -> tuple[tuple[str, ...], int]:
+    """(the cuts, the history lines kept) of the first request that fits: `measure(cuts, n)` is its length in
+    characters. Each of `BUDGET_CUTS` in turn, then the oldest history lines, never fewer than `min_history`."""
+    limit = budget_tokens * chars_per_token
+    cuts: tuple[str, ...] = ()
+    for cut in (None, *BUDGET_CUTS):
+        if cut:
+            cuts = (*cuts, cut)
+        if measure(cuts, history_n) <= limit:
+            return cuts, history_n
+    n = history_n
+    while n > min_history and measure(cuts, n) > limit:
+        n -= 1
+    return cuts, n
