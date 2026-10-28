@@ -10,9 +10,9 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 ## Status
 
-v0–v3 are complete — delivered through `v3.4.0` (2026-10-04). **v4 has begun** — v4.1 released as `v4.1.0`, v4.2 as `v4.2.0`, v4.3 as `v4.3.0` (all 2026-10-10), v4.4 as `v4.4.0` (2026-10-11); its design is the draft
-[features/more-agents.md](features/more-agents.md), whose open questions are closed before each v4 phase's issues
-are generated. Other further work (the deferred backlog items in the code-review docs, new simulations) needs new phases.
+v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 is complete through v5.12, released as `v5.12.0`
+(2026-10-28). Next come v5.13–v5.15, the backup for Кіра's private chat, then v6–v9 in order. Other further work (the
+deferred backlog items in the code-review docs, new simulations) needs new phases.
 
 | Phase | Title | Status | Release |
 |---|---|---|---|
@@ -33,12 +33,24 @@ are generated. Other further work (the deferred backlog items in the code-review
 | v4.2 | The cat in the room | ✅ completed | `v4.2.0` (2026-10-10) |
 | v4.3 | The cat: his past life and his initiative | ✅ completed | `v4.3.0` (2026-10-10) |
 | v4.4 | Claude on the subscription: answering when asked | ✅ completed | `v4.4.0` (2026-10-11) |
-| v4.5 | Claude the philosopher | ✅ completed | `v4.5.0` (2026-10-11) |
+| v4.5 | Claude the philosopher | ✅ completed | `v4.5.0` (2026-10-11) + `v4.5.1`, `v4.5.2` |
 | v4.6 | Ada and Bruno: curiosity, plans and stories | ✅ completed | `v4.6.0` (2026-10-11) |
-| v4.7 | Agent settings and Claude's files in the panel | ✅ completed | `v4.7.0` (2026-10-11) |
-| v5.1 | Hermes: voice digests for the owner | ⏳ planned | — |
-| v5.2 | The agents hear voice messages | ⏳ planned | — |
-| v5.3 | The agents answer in voice | ⏳ planned | — |
+| v4.7 | Agent settings and Claude's files in the panel | ✅ completed | `v4.7.0` (2026-10-11) + `v4.7.1` |
+| v5.1 | Hermes: voice digests for the owner | ✅ completed | `v5.1.1` (2026-10-18) |
+| v5.2 | The agents hear voice messages | ✅ completed | `v5.2.0` (2026-10-18) |
+| v5.3 | The agents answer in voice | ✅ completed | `v5.3.0` (2026-10-19) |
+| v5.4 | The Agora recording, on request | ✅ completed | `v5.4.0` (2026-10-20) |
+| v5.5 | Four more people: пан Леон, Мія, пані Ірма and Кіра | ✅ completed | `v5.5.0` (2026-10-20) |
+| v5.6 | A private chat with a person (Кіра first) | ✅ completed | `v5.6.0` (2026-10-21) |
+| v5.7 | Кіра in Telegram | ✅ completed | `v5.7.0` (2026-10-25) |
+| v5.8 | Кіра: Gemini 3.1 Pro, a memory of messages and facts about the owner | ✅ completed | `v5.8.0` (2026-10-25) + `v5.8.1`, `v5.8.2` |
+| v5.9 | Кіра's voice with emotion: ElevenLabs audio tags | ✅ completed | `v5.9.0` (2026-10-25) + `v5.9.1`–`v5.9.3` |
+| v5.10 | Кіра's mood of the day: the horoscope, the biorhythms and the Lviv weather | ✅ completed | `v5.10.0` (2026-10-27) |
+| v5.11 | Events of her life: known, generated every hour, and Lviv's news | ✅ completed | `v5.11.0` (2026-10-28) |
+| v5.12 | Кіра reads the news and thinks | ✅ completed | `v5.12.0` (2026-10-28) |
+| v5.13 | Gemini's blocks named: the stage, the reason and the category | ⏳ planned | — |
+| v5.14 | Her private chat past a Gemini block: GLM-4.6 on NovelAI, the censored mark and the route | ⏳ planned | — |
+| v5.15 | The judge: Gemma 4 31B rates the backup's talk | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
 | v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -1371,7 +1383,7 @@ day, in Agora and alone with the owner.
 - **The mood is the cat's mechanism, for a person**: the horoscope (natal chart and the day's real sky) with the
   biorhythms laid over it.
 - **The real Lviv weather** goes into the reading.
-- **Кіра only, for now**: every part of v5.10–v5.13 and v8 is switched on for her alone, in her TOML; the other persons get
+- **Кіра only, for now**: every part of v5.10–v5.15 and v8 is switched on for her alone, in her TOML; the other persons get
   none of it until the owner decides otherwise.
 - The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life. Read it before
   generating the issues.
@@ -1407,7 +1419,7 @@ day, in Agora and alone with the owner.
 
 ### v5.11 — Events of her life: known, generated every hour, and Lviv's news
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.11.0` on 2026-10-28 (deployed at the owner's word; a day of events, the surprise on its date and the Events tab waived by the release word; five code-review fixes).
 
 **Goal:** things happen to Кіра that she did not plan: news, setbacks, joys and inspiration. They come from
 three sources:
@@ -1470,7 +1482,7 @@ They reach «Сьогодні», her day memory and her next plans, and her open
 
 ### v5.12 — Кіра reads the news and thinks: her thoughts on what she reads and on her talks
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.12.0` on 2026-10-28 (the Guardian key copied from Claude's on the owner's word; the checks over a day waived by the release word; three code-review fixes, #4 deferred to the backlog).
 
 **Goal:** Кіра reads the news and has thoughts of her own:
 - a thought on each item she reads;
@@ -1592,100 +1604,400 @@ marked as hers («я думала…»), and she recalls them as she recalls wha
 - the other persons;
 - thoughts without a source (her life's events are v5.11's).
 
-### v5.13 — Кіра's private chat past a Gemini block: GLM-4.6 on NovelAI, judged by Gemma 4 31B
+### v5.13 — Gemini's blocks named: the stage, the reason and the category
+
+**Status:** ⏳ planned.
+
+**Goal:** a block by Gemini's safety filter is named in the log, for every agent; today it passes for an empty reply.
+On a block the agent stays silent, as today. A few days of these logs show how often Кіра is blocked and at which
+stage. v5.14 and v5.15 build the backup on that count.
+
+**The split** (the owner, 2026-10-28). The backup for her private chat was first planned as one phase. It is now
+built in three, and each is released and live before the next:
+- **v5.13:** the block named. It needs no owner step and no new service.
+- **v5.14:** the backup (GLM-4.6 on NovelAI), the archive's censored mark, the route and the Telegram commands.
+  - There is no judge yet, so every line of the backup's talk waits for the judge. A line that waits never reaches
+    Gemini.
+  - Accepted trade-off: after a window, Gemini sees none of the window's lines, even a harmless one.
+- **v5.15:** the judge (Gemma 4 31B on OpenRouter) rates the backup's talk.
+  - A line it rates clean reaches Gemini again.
+  - The rating decides the window's end.
+
+**Why** (checked 2026-10-28):
+- **A block is invisible today.** `finish_of` knows only `MAX_TOKENS`, so a block logs as an empty reply and the
+  agent is silent.
+- **Google watches runs of blocks.** The Gemini API usage policy keeps prompts and outputs for 55 days for abuse
+  monitoring. A project that "consistently exhibits suspicious activity" may be reviewed by people. The measures run
+  from an email through lower limits and a temporary pause to closing access. Every agent shares one key today, so
+  the count shows how near her blocks bring that key to such a review.
+
+**Tasks:**
+- **Name the block** (`agents/llm.py`, pure): `blocked_reason(resp)` → `(stage, reason, category)` or None.
+  - **The prompt stage:** `prompt_feedback.block_reason` is set (any reason).
+  - **The answer stage:** `finish_reason` is `SAFETY`, `PROHIBITED_CONTENT`, `BLOCKLIST` or `SPII`, with no text.
+  - **The category:** the blocked entry of `safety_ratings`, or else the highest.
+  - **Not a block:** a network or API error, `MAX_TOKENS`, `RECITATION`, or an empty answer with no reason. These stay
+    silent, as today.
+  - **Logging:** `complete` and `reply` log a block's stage, reason and category for every agent, never a text.
+  - **For v5.14:** the caller can tell a block from any other failure.
+  - Nothing else changes for the agents: a block is still silence.
+- **The usage line:** a blocked call's line carries `blocked` (the stage), so the blocks are counted without reading
+  the log.
+- **The panel:** an agent's card shows its blocks today, when there are any.
+- **ARCHITECTURE:**
+  - §Token accounting: the `blocked` field;
+  - §Contracts: the usage line.
+
+**Owner steps:** none.
+
+**DoD:**
+- (Manual, owner) When a real block comes (any agent), the log names its stage, reason and category, never a text,
+  and the agent's card counts it.
+
+**Tests:**
+- `blocked_reason` over each prompt and answer reason, and over the non-blocks: `MAX_TOKENS`, `RECITATION`, an error
+  and an empty answer;
+- the block's log line and usage line, with no text in either;
+- the panel card's count of today's blocks;
+- the agents' replies unchanged: a block is still silence.
+
+**Not in this phase:**
+- an answer on a block (v5.14);
+- the judge (v5.15);
+- a Gemini key of her own: not needed for now (the owner, 2026-10-28). Compose reads `kira.env` after `.env`, so
+  her own `GEMINI_API_KEY` there would override the shared one for her alone, with no code change.
+
+### v5.14 — Кіра's private chat past a Gemini block: GLM-4.6 on NovelAI, the censored mark and the route
 
 **Status:** ⏳ planned.
 
 **Goal:** when Gemini's safety filter blocks an answer in Кіра's private chat with the owner (Element and Telegram),
-she still answers: the same prompt goes to GLM-4.6 on NovelAI, a service that does not filter text. For five minutes
-after a block she answers only through NovelAI. A third model, Gemma 4 31B on OpenRouter, rates every line of the
-private chat, the owner's and hers. A line it flags is marked censored and from then on goes only to the backup, never
-to Gemini. Gemini gets the chat back only when the talk is clean again. The owner sees and pins the route with
-commands in Telegram.
+she still answers. The same prompt goes to GLM-4.6 on NovelAI, a service that does not filter text.
+- **The window:** for five minutes after a block she answers only through NovelAI.
+- **The mark:** every line of the backup's talk, the owner's and hers, is marked in her archive as waiting for the
+  judge. Such a line never reaches Gemini, in any call. v5.15's judge releases the clean ones.
+- **The commands:** the owner sees and pins the route with commands in Telegram.
 
 **Owner decisions** (2026-10-28):
-- **Кіра only, the private chat only:** her answers to the owner and the lines she writes first (the kinds `private`
-  and `private_nudge`), in Element and in Telegram. Agora, the background calls (events, «Сьогодні», the day memory,
-  plans, the mood, the session summary, the facts, v5.12's thoughts and reflections) and every other agent stay on
-  Gemini: a block there is logged, and the agent stays silent. The background calls that read the private lines
-  leave the censored ones out (below).
+- **Кіра only, the private chat only.**
+  - **What the backup covers:** her answers to the owner and the lines she writes first (the kinds `private` and
+    `private_nudge`), in Element and in Telegram.
+  - **What stays on Gemini:** Agora, the background calls and every other agent. The background calls are the
+    events, «Сьогодні», the day memory, the plans, the mood, the session summary, the facts, and v5.12's thoughts and
+    reflections. A block there is logged (v5.13), and the agent stays silent.
+  - The background calls that read the private lines leave out the marked ones (below).
 - **The backup model:** GLM-4.6 (`glm-4-6`) on NovelAI. The way there:
-  - Hermes 3 405B on OpenRouter broke down in the owner's test at the chat's default settings: after one Ukrainian
+  - Hermes 3 405B on OpenRouter broke down in the owner's test at the chat's default settings. After one Ukrainian
     sentence it wrote fragments of code and of other scripts, then one symbol over and over;
   - Hermes 4 405B came next;
   - the owner then chose an uncensored service, NovelAI.
-- **A third model judges, not the backup:** Gemma 4 31B (`google/gemma-4-31b-it`) on OpenRouter. It must be fast,
-  and it must carry no risk of a ban: an open-weight model that Google never serves here, unmoderated on OpenRouter.
-- **The backup window:** a block → five minutes of backup only. When the window ends, a flagged last answer of hers
-  opens the next five minutes; a clean one gives the chat back to Gemini.
+- **The backup window:** a block opens five minutes of backup only. The window ends with the first message after
+  those five minutes:
+  - Gemini and the backup start together;
+  - Gemini's answer wins;
+  - if Gemini blocks again, the backup's ready answer goes out and a new window opens.
+
+  v5.15 lets the judge's rating decide this instead.
 - **Telegram commands** to see and pin the route: `/status`, `/auto`, `/gemini`, `/backup`.
-- **Only the backup's talk is rated; what passed through Gemini is clean by default** (after the review of this
-  phase, 2026-10-28):
-  - a message Gemini answered and her answer from Gemini are clean, and the judge never rates them in Gemini's state;
-  - the judge rates the backup's talk: each owner's message the backup answers and each answer of the backup's (after
-    a block, in the window, under a pin on the backup);
-  - a line it flags is marked censored in the archive, for good;
-  - a censored line goes into a prompt only when the model is not Gemini. Gemini never gets it: not in the history,
-    the recall or the facts, not in a background call, and not as an embedding.
+- **What reaches Gemini:**
+  - a message Gemini answered, and her answer from Gemini, are marked as passed through Gemini: clean by default;
+  - the backup's talk is marked as waiting for the judge, and a line that waits goes into a prompt only when the model
+    is not Gemini. Gemini never gets one: not in the history, the recall or the facts, not in a background call, and
+    not as an embedding.
 - **The backup's prompt is shorter:** its own history length, `FALLBACK_HISTORY_N` (60), since the live `HISTORY_N`
   is 150.
-- **The judge's timeout is longer:** 30 s.
 - **The voice:** the backup's answers are voiced like hers. The owner checked ElevenLabs's terms.
 - **Agreed as proposed:**
-  - at a block the judge also rates the blocked prompt's lines it has not rated yet: the history, the recall and the
-    facts. A block at the prompt stage may come from an older line, so this is the one case when lines that passed
-    through Gemini are rated;
-  - at the window's end the judge rates the owner's new message too;
-  - the backup is started beside the judge, so a flagged message waits for nothing more;
   - a day cap of 10 blocks;
-  - the block's category in the log;
-  - her own Gemini key;
   - the language, garbage and persona checks on the backup's answers;
   - temperature 0.7 and top_p 0.9 for the backup.
 - **Replaced on the way:**
-  - a mark the backup model writes about its own talk (an uncensored model judges content badly, and the mark was a
-    service line in her prompt), and a careful mode built on it;
-  - the flagged lines' keys kept 30 days in the route state, replaced by the archive's mark: the archive outlives 30
-    days, and the background calls read the private lines too.
+  - a mark the backup model writes about its own talk, and a careful mode built on it. An uncensored model judges
+    content badly, and the mark was a service line in her prompt;
+  - the keys of flagged lines, kept for 30 days in the route state. The archive's mark replaces them: the archive
+    outlives 30 days, and the background calls read the private lines too.
 
-**Why** (checked 2026-10-28):
-- **A block is invisible today.** `finish_of` knows only `MAX_TOKENS`, so a block logs as an empty reply and she is
-  silent.
-- **Google watches runs of blocks.** The Gemini API usage policy keeps prompts and outputs for 55 days for abuse
-  monitoring. A project that "consistently exhibits suspicious activity" may be reviewed by people. The measures run
-  from an email through lower limits and a temporary pause to closing access.
-- **The window keeps such a run away from Gemini:** while the talk stays flagged, Gemini sees none of it, and a
-  censored line never reaches it later, in any call. Her own key keeps any block off the key every other agent shares.
+**Why:** the window keeps a run of blocks away from Gemini. While the talk goes through the backup, Gemini sees none
+of it, and a line of the backup's talk never reaches Gemini later, in any call, until the judge rates it clean
+(v5.15).
 
 **The backup model** (checked 2026-10-28):
 - **What it is:** GLM-4.6 is Zhipu's open model. NovelAI serves it untuned, as an instruct model, on every
-  subscription tier (NovelAI's announcement). NovelAI's docs call it strong in English, Japanese and Chinese, "may
-  help with many other languages": her Ukrainian is the owner's test.
+  subscription tier (NovelAI's announcement).
+- **Languages:** NovelAI's docs call it strong in English, Japanese and Chinese, and say it "may help with many other
+  languages". Her Ukrainian is the owner's test.
 - **Context:** 28,672 tokens on the site, plus an 8,192-token rollover. The API's context per tier is not published.
 - **Text only** is enough: a voice message reaches the prompt already as Deepgram's text.
 - **The cost:** a NovelAI subscription, with no price per token.
 - **The API:**
-  - `POST https://text.novelai.net/oa/v1/chat/completions`, OpenAI-compatible, with the account's persistent API
-    token as a Bearer token (NovelAI's scripting docs, SillyTavern's PR #5967, not merged). The classic
-    `/ai/generate` endpoint answers 403 for `glm-4-6`.
+  - **The endpoint:** `POST https://text.novelai.net/oa/v1/chat/completions`, OpenAI-compatible.
+    - The account's persistent API token goes as a Bearer token.
+    - Sources: NovelAI's scripting docs and SillyTavern's PR #5967, which is not merged.
+    - The classic `/ai/generate` endpoint answers 403 for `glm-4-6`.
   - **Fields:** `messages`, `max_tokens`, `temperature`, `top_p`, `top_k`, `frequency_penalty`, `presence_penalty`
     and `stop`. There is no `min_p`. The server clamps the samplers.
   - **The stream:** the text comes only in the streamed deltas, so the request always streams. A stream that hangs
     has been reported.
   - **Not verified:** the endpoint and the fields come from community sources and can change. Generating the issues
     starts by checking them with one live call (an owner step).
-- **Later:** Xialong, NovelAI's own finetune of GLM-4.6 on its storytelling set, is Opus-only and has no published
-  id. It can replace `glm-4-6` through the setting once the id is known.
+- **Later:** Xialong is NovelAI's own finetune of GLM-4.6 on its storytelling set. It is Opus-only and has no
+  published id. It can replace `glm-4-6` through the setting once the id is known.
+
+**Naming:** code, logs and settings call the backup the fallback, and from v5.15 the judge the classifier. Each model
+is named by its id. The Telegram command and the route say "backup", so nothing is renamed when a model changes.
+
+**The route:**
+
+| State | How an answer is made | Leaves when |
+|---|---|---|
+| Gemini | Gemini, as today, without the lines waiting for the judge. On a block, the backup answers that message, and the message and her answer wait for the judge | a block → the window |
+| the window (5 min) | The backup answers, and every exchange waits for the judge | the first message after 5 min (below) |
+| the window's end | Gemini and the backup start together. Gemini's answer wins, without the waiting lines. If Gemini blocks, the backup's ready answer goes out and a new window opens. A line she writes first goes the same way | — |
+
+- **The day cap:** 10 blocks in her local day → the window to the day's end.
+- **A pin** from a command holds its route until `/auto` and overrides the rules, the day cap included. Pinned Gemini
+  still sends a blocked answer to the backup, but no window opens.
+- **The state** lives in `state/kira.route.json`: the pin, the block times and the window's end (no text). A restart
+  or a deploy keeps the route. The marks live with the lines themselves, in the archive (below).
+- **The blocked prompt's older lines** keep their default; v5.15's judge rates them at a block. The likeliest cause
+  of a block, the owner's new message, is part of the backup's talk and waits.
+
+**Tasks:**
+- **The NovelAI seam** (`agents/fallback.py`; `aiohttp`, already a dependency, no new SDK).
+  - `POST https://text.novelai.net/oa/v1/chat/completions` with:
+    - `Authorization: Bearer` and the token;
+    - the model `glm-4-6`;
+    - the system instruction as the `system` message and the transcript as the `user` message;
+    - the same `max_tokens`;
+    - `temperature: 0.7` and `top_p: 0.9`;
+    - `stream: true`.
+  - **The stream:** the deltas are put together into the answer. A `<think>…</think>` block, if the model writes one,
+    is cut before anything else reads the answer.
+  - **Failures:** the whole answer has a 60 s timeout, so a stream that hangs ends. Any failure or an empty answer
+    gives None: silence, logged.
+  - **The context** (measured 2026-10-28 with GLM-4.6's tokenizer: 2.47 characters a token in her Ukrainian):
+    - the fixed part of her private instruction is 9,526 tokens: the canon 2,687, the life section 6,337, the voice
+      palette 259, the private brief 198, and the rules;
+    - the blocks that grow add about 21,000 more at their caps:
+      - the memories (7 days, 4 weeks, 6 months): about 8,200;
+      - the history: the live `HISTORY_N` is 150 lines, about 12,000 tokens, so the backup takes its own
+        `FALLBACK_HISTORY_N` (60 lines, about 4,800);
+      - the facts (25): about 2,400;
+      - Agora today (20 lines): about 2,000;
+      - the plans: about 1,400;
+      - the recall (6 lines): about 1,000;
+      - the summary, «Сьогодні» and the mood: about 1,100;
+    - so at the caps the backup's full prompt is about 30,400 tokens, over NovelAI's 28,672;
+    - the backup's request keeps a budget, `FALLBACK_CONTEXT` (26,000 tokens, counted at 2.4 characters a token).
+      Over it, it leaves out, in this order:
+      1. the month digests;
+      2. the week digests;
+      3. Agora today;
+      4. the oldest history lines (never fewer than 10).
+    - The canon, the life section, the facts, the recall, «Сьогодні» and the mood are never cut.
+  - **Usage:** a usage line with the model's id, and the tokens when the stream reports them. NovelAI is paid by
+    subscription, so the line has no price.
+    - The line's billing is `subscription`, as with Claude (v4.4), so its cost shows as «—».
+    - Without it, `cost()` would price an unlisted model at the default `PRICE_*` pair, which is Gemini Flash's.
+- **The censored mark** (`agents/archive.py`; the filter is pure).
+  - **The archive's lines get a mark**, one of four. The schema takes all four now, so v5.15 needs no second
+    migration:
+    - passed through Gemini, clean by default;
+    - rated clean (from v5.15);
+    - censored (from v5.15);
+    - waiting for the judge: a line of the backup's talk not rated yet.
+
+    The existing `state/kira.archive.db` is migrated in place, with every line marked as passed through Gemini.
+  - **A fact carries the mark too:**
+    - a fact from Gemini's answer or from the facts' extraction is clean by default;
+    - a fact kept from the backup's «запам'ятай» marker waits for the judge.
+  - **`for_model(lines, model)`:**
+    - a Gemini model gets no censored line and no line waiting for the judge;
+    - any other model gets every line.
+
+    It is applied wherever the private lines reach a model:
+    - her private answer and the line she writes first: the history, the recall and the facts;
+    - the session summary and the facts' extraction at a session's end;
+    - v5.12's reflection on the private chat;
+    - the day memory.
+  - **Embeddings:**
+    - a line that passed through Gemini is embedded as today;
+    - a line of the backup's talk is embedded only once it is rated clean (v5.15);
+    - until then it has no vector, so the backup's recall finds it by its words (FTS5).
+  - **The private history** keeps each line's archive key and its mark. Today it holds only the speaker and the text.
+- **The route** (`agents/route.py`, pure, with an injected clock).
+  - `state(now, route)` → Gemini, the window or the window's end.
+  - `after(route, now, outcome)` records a block or a Gemini answer.
+  - `state/kira.route.json` (0600): load and save.
+- **The private answer** (`agents/agent.py`'s `_compose` for `private` and `private_nudge`, when `FALLBACK_MODEL` is
+  set):
+  - **Gemini:**
+    - the prompt is built without the censored lines and the lines waiting for the judge;
+    - the owner's message and her answer are marked as passed through Gemini;
+    - on a block, the backup answers with its own prompt, the message and her answer wait for the judge, and the
+      window opens;
+  - **the window:**
+    - the backup answers with its own prompt: `FALLBACK_HISTORY_N` lines, every line, within the budget;
+    - each exchange waits for the judge;
+  - **the window's end:**
+    - Gemini, with the prompt without the waiting lines, and the backup start together;
+    - Gemini's answer wins, and the backup's is used if Gemini blocks;
+  - every outcome is recorded in the route state, and the log names the route and the counts, never a text.
+- **Checks on the backup's answer** (pure). They run before the existing ones: the trim to a sentence, `PASS`, the
+  audio tags, the Telegram word cap and the «запам'ятай» marker. The answer is dropped when:
+  - it has ы, э, ъ or ё;
+  - Latin letters outnumber Cyrillic ones. Only the words are counted, after `split_tags` takes out the audio tags,
+    since `[laughs]` is Latin;
+  - it has a letter of another script (Han, Arabic, Hangul and the like), or one symbol repeated more than 10 times in
+    a row;
+  - she calls herself a model, an AI or a bot.
+
+  A dropped answer means silence, logged.
+- **Telegram commands** (`agents/telegram.py`, `agents/agent.py`). Today `allowed()` marks any text starting with «/»
+  as `command` and ignores it. From now on the owner's commands are handled:
+  - `/status` shows:
+    - the route, auto or pinned, and until when;
+    - the blocks in the last hour and today, out of the cap;
+    - the censored lines still in the history and the lines waiting for the judge;
+    - today's answers by Gemini and by the backup;
+  - `/auto`: the rules decide (the default);
+  - `/gemini`, `/backup`: pin Gemini or the backup;
+  - an unknown command: the list.
+
+  **The answer:**
+  - It is one service line starting with ⚙️: text, never voiced.
+  - A command and its answer never enter her history, the archive, the facts or a prompt, and never reset the timer
+    of her writing first.
+  - `setMyCommands` registers the list for the owner's chat only.
+  - There are no commands in Element. The route is shared, as the history is.
+- **Settings** (her TOML, `kira.env` and the panel):
+  - `FALLBACK_MODEL` (empty: off; `kira.env` sets `glm-4-6`);
+  - `FALLBACK_WINDOW_S` (300), `FALLBACK_DAY_MAX` (10), `FALLBACK_CONTEXT` (26000), `FALLBACK_HISTORY_N` (60).
+- **Secrets:** `NOVELAI_API_TOKEN`, the account's persistent API token, goes in `kira.env`. No other service reads that
+  file, and `kira.env.example` names the token.
+- **The panel:** her card shows, read-only:
+  - the route (auto or pinned) and the window's end;
+  - today's blocks and the backup's answers;
+  - the censored lines and the lines waiting for the judge.
+
+  The usage tables show the backup's model as its own row.
+- **ARCHITECTURE:**
+  - §The message flow: the private answer's route;
+  - §Memory: the archive's censored mark and `for_model`;
+  - §Token accounting: the backup's line with no price;
+  - §Configuration: the settings;
+  - §Security: what reaches NovelAI, and the token;
+  - §Contracts: the archive's schema, the route state file, the commands, `kira.env`.
+
+**Owner steps:**
+- a NovelAI subscription whose tier gives GLM-4.6 the full 28,672-token context (the editor shows it);
+- a test of GLM-4.6 on the site in the chat format: her Ukrainian and her character;
+- the NovelAI persistent API token in `server/kira.env`;
+- one live call with the token, to confirm the endpoint and the fields before the issues are generated;
+- NovelAI's terms on API use, read.
+
+**DoD:**
+- (Manual, owner) `/backup` in Telegram:
+  - her next answers come from GLM-4.6, and the usage report names the model;
+  - they are in Ukrainian, with none of ы, э, ъ, ё;
+  - `/status` shows the pin, and `/auto` lifts it;
+  - the commands appear nowhere in her answers or her archive.
+- (Manual, owner) When a real block comes, she answers through the backup, and `/status` and her card show the window.
+- (Manual, owner) After the window Gemini answers again, and the log shows how many waiting lines it left out.
+
+**Tests:**
+- the NovelAI request (the URL, the Bearer header, the messages, the model, `max_tokens`, the sampling, `stream`):
+  - canned streamed deltas put together;
+  - a `<think>` block cut;
+  - a stream that hangs, ended by the timeout;
+  - an error;
+  - with no network;
+- the context budget:
+  - the blocks left out in their order;
+  - never fewer than 10 history lines;
+  - the canon, the life section and the facts never cut;
+- the censored mark:
+  - the archive's migration, with every existing line marked as passed through Gemini;
+  - `for_model` with a Gemini model and with another;
+  - the censored lines and the waiting lines kept out of every Gemini call that reads the private lines: the answer's
+    history, recall and facts; the session summary; the facts' extraction; the reflection; the day memory;
+  - the same lines kept out of the embeddings, and kept in the backup's prompt;
+  - a fact from the backup's answer waiting for the judge;
+- the route with an injected clock:
+  - the lines of Gemini's state marked as passed through Gemini;
+  - the backup's talk waiting for the judge: after a block, in the window, under a pin;
+  - a block opens the window;
+  - the window's end with Gemini and the backup started together: Gemini's answer wins, and a Gemini block uses the
+    backup's ready answer and opens a new window;
+  - a line she writes first at the window's end;
+  - the day cap and local midnight;
+  - a pin over the rules;
+  - a restart reading the state;
+- the backup's prompt with `FALLBACK_HISTORY_N` lines;
+- the backup checks:
+  - Russian letters;
+  - a Latin majority (an answer with audio tags is not one);
+  - another script;
+  - a run of one symbol;
+  - a self-named model;
+- the backup's usage line with no cost;
+- the commands, from the owner and from another id:
+  - kept out of the history, the archive and the prompts;
+  - not resetting the writing-first timer;
+- Agora, the background kinds and the other agents unchanged;
+- no text or key in a log.
+
+**Not in this phase:**
+- the judge (v5.15): until it comes, no line of the backup's talk returns to Gemini;
+- Agora and the other agents;
+- a backup for the background calls: they only leave the marked lines out, and a block there stays logged and silent;
+- Xialong, until its id is known (a setting, no code);
+- commands in Element, and switching the route from the panel.
+
+### v5.15 — The judge: Gemma 4 31B rates the backup's talk
+
+**Status:** ⏳ planned.
+
+**Goal:** a third model, Gemma 4 31B on OpenRouter, rates every line of the backup's talk, the owner's and hers.
+- **A clean line** reaches Gemini again: in the history, the recall, the facts and the embeddings.
+- **A flagged line** is marked censored for good and goes only to the backup.
+- **The window's end:** the rating decides it, so Gemini gets the chat back only when the talk is clean again.
+
+**Owner decisions** (2026-10-28):
+- **A third model judges, not the backup:** Gemma 4 31B (`google/gemma-4-31b-it`) on OpenRouter.
+  - It must be fast.
+  - It must carry no risk of a ban: it is an open-weight model that Google never serves here, unmoderated on
+    OpenRouter.
+- **Only the backup's talk is rated; what passed through Gemini is clean by default** (after the review of the
+  backup's design, 2026-10-28):
+  - a message Gemini answered and her answer from Gemini are clean, and the judge never rates them in Gemini's state;
+  - the judge rates each owner's message the backup answers and each answer of the backup's: after a block, in the
+    window, and under a pin on the backup;
+  - a line it flags is marked censored in the archive, for good.
+- **The window's end:** a flagged last answer of hers opens the next five minutes, and a clean one gives the chat back
+  to Gemini. This replaces v5.14's rule, under which Gemini simply tries again.
+- **The judge's timeout is longer:** 30 s.
+- **Agreed as proposed:**
+  - **At a block** the judge also rates the blocked prompt's lines it has not rated yet: the history, the recall and
+    the facts. A block at the prompt stage may come from an older line, so this is the one case in which lines that
+    passed through Gemini are rated.
+  - **At the window's end** the judge rates the owner's new message too.
+  - **The backup starts beside the judge,** so a flagged message waits for nothing more.
 
 **The judge** (OpenRouter, checked 2026-10-28):
-- **What it is:** Gemma 4 31B, Google's open model. Its sense of harm comes from the same house as Gemini's filter,
-  so it guesses that filter best of the models on offer. It reads Ukrainian (Gemma is trained on 140+ languages).
-- **No ban, no Google:** OpenRouter marks it unmoderated (`is_moderated: false`). Third-party providers serve the
-  open weights, so no judge's request reaches Google. OpenRouter's terms forbid unlawful content and scan for CSAM
-  and malware; they name no rule on adult content.
-- **Speed:** 16 providers, from $0.10 / $0.34 per million tokens. The request asks for the lowest latency
-  (`provider.sort: "latency"`), with the reasoning off and a one-line answer per rated line, so it needs no JSON
-  support and SambaNova's fast endpoint stays eligible. A window's ratings cost a thousandth of a cent.
+- **What it is:** Gemma 4 31B, Google's open model.
+  - Its sense of harm comes from the same company as Gemini's filter, so of the models on offer it predicts that
+    filter best.
+  - It reads Ukrainian: Gemma is trained on more than 140 languages.
+- **No ban, no Google:**
+  - OpenRouter marks it unmoderated (`is_moderated: false`).
+  - Third-party providers serve the open weights, so no judge's request reaches Google.
+  - OpenRouter's terms forbid unlawful content and scan for CSAM and malware. They name no rule on adult content.
+- **Speed:** 16 providers, from $0.10 / $0.34 per million tokens.
+  - The request asks for the lowest latency (`provider.sort: "latency"`).
+  - The reasoning is off, and the answer is one line per rated line. It therefore needs no JSON support, and
+    SambaNova's fast endpoint stays eligible.
+  - A window's ratings cost a thousandth of a cent.
 - **Its own failures:**
   - **A refusal** counts as flagged.
   - **An error, a timeout or an answer that does not parse** leaves the line unrated. The timeout is
@@ -1699,251 +2011,108 @@ commands in Telegram.
 - **Fallbacks, by the setting only:** `openai/gpt-oss-safeguard-20b` (Groq, a classifier by a written policy) and
   `openai/gpt-oss-120b` (Groq or Cerebras).
 
-**Naming:** code, logs and settings call the backup the fallback and the judge the classifier, and name each model by
-its id. The Telegram command and the route say "backup", so nothing is renamed when a model changes.
-
-**The route:**
+**The route** (v5.14's, with the rating):
 
 | State | How an answer is made | Leaves when |
 |---|---|---|
-| Gemini | Gemini, as today, with the censored lines left out; nothing is rated, since what passed through Gemini is clean. A block → the backup answers that message; after it is sent, the judge rates the message, her answer and the blocked prompt's lines it has not rated yet (the history, the recall, the facts) | a block → the window |
+| Gemini | Gemini, as in v5.14; nothing is rated, since what passed through Gemini is clean. On a block, the backup answers that message. After that answer is sent, the judge rates the message, her answer and the blocked prompt's lines it has not rated yet (the history, the recall, the facts) | a block → the window |
 | the window (5 min) | The backup answers. After each exchange the judge rates the owner's line and her answer, in the background | the first message after 5 min (below) |
-| the window's end | The judge rates the new message, beside the backup already writing. Her last answer or the new message flagged → the backup's answer goes out and a new window opens. Both clean → Gemini answers, without the censored lines; if Gemini blocks, the backup's ready answer goes out and a new window opens. A line she writes first has no new message: her last answer's rating alone decides | — |
+| the window's end | The judge rates the new message, while the backup is already writing. If her last answer or the new message is flagged, the backup's answer goes out and a new window opens. If both are clean, Gemini answers without the censored lines; if Gemini blocks, the backup's ready answer goes out and a new window opens. A line she writes first has no new message: her last answer's rating alone decides | — |
 
 - **What runs in parallel:**
-  - in Gemini's state nothing else is called until a block; after a block the judge runs once the backup's answer is
-    sent;
-  - in the window the backup answers, and the judge runs after the answer is sent, so it never delays it;
-  - at the window's end the judge and the backup start together. Gemini starts only after a clean rating, while the
-    backup goes on writing, so its answer is ready if Gemini blocks too.
-- **The day cap:** 10 blocks in her local day → the window to the day's end.
-- **A pin** from a command holds its route until `/auto` and overrides the rules, the day cap included. Pinned
-  Gemini still sends a blocked answer to the backup, but no window opens.
-- **The state** lives in `state/kira.route.json`: the pin, the block times and the window's end (no text). A restart
-  or a deploy keeps the route. The ratings live with the lines themselves, as the archive's censored mark (below).
+  - In Gemini's state nothing else is called until a block. After a block, the judge runs once the backup's answer is
+    sent.
+  - In the window the backup answers, and the judge runs after the answer is sent, so it never delays it.
+  - At the window's end the judge and the backup start together. Gemini starts only after a clean rating, while the
+    backup goes on writing, so the backup's answer is ready if Gemini blocks too.
+- **The lines waiting since v5.14** are rated at the first watcher ticks, in chunks:
+  - a clean one is embedded and reaches Gemini again;
+  - a flagged one becomes censored.
 
 **Tasks:**
-- **Name the block** (`agents/llm.py`, pure): `blocked_reason(resp)` → `(stage, reason, category)` or None.
-  - **The prompt stage:** `prompt_feedback.block_reason` is set (any reason).
-  - **The answer stage:** `finish_reason` is `SAFETY`, `PROHIBITED_CONTENT`, `BLOCKLIST` or `SPII`, with no text.
-  - **The category:** the blocked, or else the highest, entry of `safety_ratings`.
-  - **Not a block:** a network or API error, `MAX_TOKENS`, `RECITATION`, an empty answer with no reason. They stay
-    silent, as today.
-  - `complete` and `reply` log a block's stage, reason and category (never a text) for every agent. They let the
-    private answer tell a block from any other failure. Nothing else changes for the other agents.
-- **The NovelAI seam** (`agents/fallback.py`; `aiohttp`, already a dependency, no new SDK).
-  - `POST https://text.novelai.net/oa/v1/chat/completions` with:
-    - `Authorization: Bearer` and the token;
-    - the model `glm-4-6`;
-    - the system instruction as the `system` message and the transcript as the `user` message;
-    - the same `max_tokens`;
-    - `temperature: 0.7` and `top_p: 0.9`;
-    - `stream: true`.
-  - **The stream:** the deltas are put together into the answer. A `<think>…</think>` block, if the model writes one,
-    is cut before anything else reads the answer.
-  - **Failures:** a 60 s timeout for the whole answer, so a stream that hangs ends. Any failure or an empty answer →
-    None: silence, logged.
-  - **The context** (measured 2026-10-28 with GLM-4.6's tokenizer: 2.47 characters a token in her Ukrainian):
-    - the fixed part of her private instruction is 9,526 tokens: the canon 2,687, the life section 6,337, the voice
-      palette 259, the private brief 198, and the rules;
-    - the blocks that grow add about 21,000 more at their caps:
-      - the memories (7 days, 4 weeks, 6 months): about 8,200;
-      - the history: the live `HISTORY_N` is 150 lines, about 12,000 tokens, so the backup takes its own
-        `FALLBACK_HISTORY_N` (60 lines, about 4,800);
-      - the facts (25): about 2,400;
-      - Agora today (20 lines): about 2,000;
-      - the plans: about 1,400;
-      - the recall (6 lines): about 1,000;
-      - the summary, «Сьогодні» and the mood: about 1,100;
-    - so the backup's full prompt is about 30,400 tokens at the caps, over NovelAI's 28,672. The backup's request keeps
-      a budget (`FALLBACK_CONTEXT`, 26,000 tokens, counted at 2.4 characters a token). Over it, it leaves out, in this
-      order:
-      1. the month digests;
-      2. the week digests;
-      3. Agora today;
-      4. the oldest history lines (never fewer than 10).
-    - The canon, the life section, the facts, the recall, «Сьогодні» and the mood are never cut.
-  - **Usage:** a usage line with the model's id, and the tokens when the stream reports them. There is no price:
-    NovelAI is paid by subscription.
-    - The line's billing is `subscription`, as with Claude (v4.4), so its cost shows as «—».
-    - Without it, `cost()` would price an unlisted model at the default `PRICE_*` pair, Gemini Flash's.
 - **The judge** (`agents/judge.py`; pure where it decides, the call over `aiohttp`).
-  - `POST https://openrouter.ai/api/v1/chat/completions` with the model `google/gemma-4-31b-it`,
-    `provider: {"sort": "latency", "data_collection": "deny"}`, the reasoning off, `temperature: 0` and a small
-    `max_tokens`.
-  - The system message is the policy: the categories of Google's filter (sexually explicit content, dangerous
-    content, harassment, hate speech) and the answer format, one line per numbered input line:
-    `N: так · <category>` or `N: ні`. The user message holds the numbered lines only: no canon, no prompt.
+  - **The request:** `POST https://openrouter.ai/api/v1/chat/completions` with:
+    - the model `google/gemma-4-31b-it`;
+    - `provider: {"sort": "latency", "data_collection": "deny"}`;
+    - the reasoning off, `temperature: 0` and a small `max_tokens`.
+  - **The system message** is the policy:
+    - the categories of Google's filter: sexually explicit content, dangerous content, harassment, hate speech;
+    - the answer format, one line per numbered input line: `N: так · <category>` or `N: ні`.
+  - **The user message** holds the numbered lines only: no canon, no prompt.
   - `parse_verdicts(text, n)` (pure) → a verdict per line: flagged, clean or unrated.
     - A refusal makes every line of the call flagged.
     - A missing or malformed line leaves that line unrated.
     - An error or the `CLASSIFIER_TIMEOUT_S` timeout leaves every line of the call unrated.
-  - Many lines (the blocked prompt's, at a block) go in chunks of at most 25, in parallel.
-  - A usage line of the kind `judge` with the model's id; the price in `PRICE_MODELS`.
-- **The censored mark** (`agents/archive.py`; the filter is pure).
-  - **The archive's lines get a mark**, one of four:
-    - passed through Gemini, clean by default;
-    - rated clean;
-    - censored;
-    - waiting for the judge: a line of the backup's talk not rated yet.
-
-    The existing `state/kira.archive.db` is migrated in place, with every line marked as passed through Gemini.
-  - **A fact carries the mark too.** A fact from Gemini's answer or from the facts' extraction is clean by default. A
-    fact kept from the backup's «запам'ятай» marker waits for the judge.
-  - **`for_model(lines, model)`:**
-    - a Gemini model gets no censored line and no line waiting for the judge;
-    - any other model gets every line.
-
-    It is applied wherever the private lines reach a model:
-    - her private answer and the line she writes first: the history, the recall and the facts;
-    - the session summary and the facts' extraction at a session's end;
-    - v5.12's reflection on the private chat;
-    - the day memory.
-  - **Embeddings:**
-    - a line that passed through Gemini is embedded as today;
-    - a line of the backup's talk is embedded only once it is rated clean;
-    - a censored line gets no vector, so the backup's recall finds it by its words (FTS5).
-  - **The private history** keeps each line's archive key and its mark. Today it holds only the speaker and the text.
-- **The route** (`agents/route.py`, pure, with an injected clock).
-  - `state(now, route)` → Gemini, the window or the window's end; `after(route, now, outcome)` records a block, a
-    rating or a Gemini answer.
-  - `state/kira.route.json` (0600): load and save.
-- **The private answer** (`agents/agent.py`'s `_compose` for `private` and `private_nudge`, when `FALLBACK_MODEL` is
-  set):
-  - **Gemini:**
-    - the prompt is built without the censored lines and the lines waiting for the judge;
-    - the owner's message and her answer are marked as passed through Gemini, and nothing is rated;
-    - on a block, the backup answers with its own prompt and the window opens;
-    - after that answer is sent, the judge rates the owner's message, her answer and the blocked prompt's lines it has
-      not rated yet;
-  - **the window:**
-    - the backup answers with its own prompt: `FALLBACK_HISTORY_N` lines, every line, within the budget;
-    - after the answer is sent, the judge rates the owner's line and her answer in the background;
-  - **the window's end:**
+  - **Many lines** go in chunks of at most 25, in parallel: the blocked prompt's at a block, and the waiting backlog.
+  - **Usage:** a usage line of the kind `judge` with the model's id. The price is in `PRICE_MODELS`.
+- **The marks:**
+  - a verdict sets the archive's mark: rated clean or censored;
+  - a line rated clean is embedded;
+  - a fact waiting for the judge follows its verdict.
+- **The route** (`agents/route.py`): `after` records a rating too. The window's end is decided by the ratings, and a
+  line she writes first by her last answer's rating.
+- **The private answer** (`_compose`):
+  - **After a block:** once the backup's answer is sent, the judge rates the owner's message, her answer and the
+    blocked prompt's lines it has not rated yet.
+  - **In the window:** after each answer is sent, the judge rates the exchange in the background.
+  - **At the window's end:**
     - the judge on the new message and the backup start together;
     - on clean ratings, Gemini starts with the prompt without the censored lines;
-    - Gemini's answer wins, and the backup's is used if Gemini blocks;
-    - a line she writes first is decided by her last answer's rating alone;
-  - every outcome is recorded in the route state, and the log names the route and the counts, never a text.
-- **Checks on the backup's answer** (pure). They run before the existing ones: the trim to a sentence, `PASS`, the
-  audio tags, the Telegram word cap and the «запам'ятай» marker. The answer is dropped when:
-  - it has ы, э, ъ or ё;
-  - Latin letters outnumber Cyrillic ones. They are counted in the words only, after `split_tags` takes out the
-    audio tags: `[laughs]` is Latin;
-  - it has a letter of another script (Han, Arabic, Hangul and the like) or one symbol repeated more than 10 times in
-    a row;
-  - she calls herself a model, an AI or a bot.
-
-  A dropped answer means silence, logged.
-- **Telegram commands** (`agents/telegram.py`, `agents/agent.py`). Today `allowed()` marks any text starting with «/»
-  as `command` and ignores it. From now on the owner's commands are handled:
-  - `/status`: the route, auto or pinned, and until when; the blocks in the last hour and today (out of the cap);
-    the censored lines still in the history and the lines waiting for the judge; today's answers by Gemini and by the
-    backup;
-  - `/auto`: the rules decide (the default);
-  - `/gemini`, `/backup`: pin Gemini or the backup;
-  - an unknown command: the list.
-
-  The answer is one service line starting with ⚙️: text, never voiced. A command and its answer never enter her
-  history, the archive, the facts or a prompt, and never reset the timer of her writing first. `setMyCommands`
-  registers the list for the owner's chat only. There are no commands in Element; the route is shared, as the
-  history is.
-- **Settings** (her TOML, `kira.env` and the panel):
-  - `FALLBACK_MODEL` (empty: off; `kira.env` sets `glm-4-6`);
-  - `CLASSIFIER_MODEL` (`google/gemma-4-31b-it`);
-  - `FALLBACK_WINDOW_S` (300), `FALLBACK_DAY_MAX` (10), `FALLBACK_CONTEXT` (26000), `FALLBACK_HISTORY_N` (60),
-    `CLASSIFIER_TIMEOUT_S` (30);
-  - the judge's price in `PRICE_MODELS`, at the provider's rate.
-- **Secrets** go in `kira.env`, which no other service reads; `kira.env.example` names them:
-  - `NOVELAI_API_TOKEN`, the account's persistent API token;
-  - `OPENROUTER_API_KEY`, for the judge;
-  - her own `GEMINI_API_KEY`, from a separate Google Cloud project. Compose reads `kira.env` after `.env`, so it
-    overrides the shared key for her alone.
-- **The panel:** her card shows, read-only:
-  - the route (auto or pinned) and the window's end;
-  - today's blocks and the backup's answers;
-  - the censored lines and the lines waiting for the judge.
-
-  The usage tables show both models as their own rows.
+    - Gemini's answer wins, and the backup's is used if Gemini blocks.
+- **The watcher:** each tick rates the unrated lines (a failed rating, and the waiting backlog) in chunks.
+- **`/status` and the panel** gain the judge's counts: rated today, flagged today and still unrated.
+- **Settings:** `CLASSIFIER_MODEL` (`google/gemma-4-31b-it`), `CLASSIFIER_TIMEOUT_S` (30), and the judge's price in
+  `PRICE_MODELS` at the provider's rate.
+- **Secrets:** `OPENROUTER_API_KEY` goes in `kira.env`, and `kira.env.example` names it.
 - **ARCHITECTURE:**
-  - §The message flow: the private answer's route;
-  - §Memory: the archive's censored mark and `for_model`;
-  - §Token accounting: the backup's line with no price, the kind `judge`;
+  - §The message flow: the window's end by the rating;
+  - §Memory: the verdicts and the marks;
+  - §Token accounting: the kind `judge`;
   - §Configuration: the settings;
-  - §Security: what reaches NovelAI and OpenRouter, `data_collection: deny`, the keys;
-  - §Contracts: the archive's schema, the route state file, the commands, `kira.env`.
+  - §Security: what reaches OpenRouter, `data_collection: deny`, the key;
+  - §Contracts: `kira.env`.
 
 **Owner steps:**
-- a NovelAI subscription whose tier gives GLM-4.6 the full 28,672-token context (the editor shows it);
-- a test of GLM-4.6 on the site in the chat format: her Ukrainian and her character;
-- the NovelAI persistent API token in `server/kira.env`;
-- one live call with the token, to confirm the endpoint and the fields before the issues are generated;
-- NovelAI's terms on API use, read;
-- an OpenRouter account with its training toggle off and an API key with a credit limit, in `server/kira.env`;
+- an OpenRouter account with its training toggle off, and an API key with a credit limit, in `server/kira.env`;
 - a test of Gemma 4 31B in OpenRouter's chat: Ukrainian lines, plain and explicit, rated right, in the line format,
-  quickly;
-- a Google Cloud project of her own, and its Gemini key in `server/kira.env`.
+  quickly.
 
 **DoD:**
-- (Manual, owner) `/backup` in Telegram: her next answers come from GLM-4.6, and the usage report names the model.
-  They are in Ukrainian, with none of ы, э, ъ, ё. `/status` shows the pin, and `/auto` lifts it. The commands appear
-  nowhere in her answers or her archive.
-- (Manual, owner) When a real block comes, the log names its stage, reason and category, she answers through the
-  backup, `/status` and her card show the window, and the judge's ratings are in the log (counts, no text).
-- (Manual, owner) After a clean window Gemini answers again, and the log shows how many censored lines it left out.
+- (Manual, owner) After a window, the judge's ratings are in the log (counts, no text). Lines rated clean reach
+  Gemini's prompt again, and the log shows how many censored lines Gemini left out.
+- (Manual, owner) A window whose last answer was flagged opens the next window, and a clean one gives the chat back
+  to Gemini.
+- (Manual, owner) The lines left waiting by v5.14 are rated after the deploy, and `/status` shows none still waiting.
+
 **Tests:**
-- `blocked_reason` over each prompt and answer reason, and over the non-blocks (`MAX_TOKENS`, `RECITATION`, an error,
-  an empty answer);
-- the NovelAI request (the URL, the Bearer header, the messages, the model, `max_tokens`, the sampling, `stream`):
-  - canned streamed deltas put together;
-  - a `<think>` block cut;
-  - a stream that hangs, ended by the timeout;
-  - an error;
-  - with no network;
-- the context budget: the blocks left out in their order, never fewer than 10 history lines, and the canon, the
-  life section and the facts never cut;
-- the judge's request (the model, `sort`, `data_collection`, the reasoning off, no canon in it) and
-  `parse_verdicts`:
+- the judge's request: the model, `sort`, `data_collection`, the reasoning off, and no canon in it;
+- `parse_verdicts`:
   - `так` and `ні`;
   - a missing line;
   - a refusal (flagged);
-  - an error and a timeout (unrated, rated again, never censored by the failure alone);
+  - an error and a timeout: unrated, rated again, and never censored by the failure alone;
   - many lines in chunks of 25;
-- the censored mark:
-  - the archive's migration, with every existing line marked as passed through Gemini;
-  - `for_model` with a Gemini model and with another;
-  - the censored lines and the lines waiting for the judge left out of every Gemini call that reads the private
-    lines (the answer's history, recall and facts; the session summary; the facts' extraction; the reflection; the
-    day memory) and out of the embeddings, and kept in the backup's prompt;
-  - a fact from the backup's answer waiting for the judge;
+- the marks:
+  - a verdict sets the archive's mark;
+  - a line rated clean is embedded and reaches Gemini;
+  - a censored line never reaches Gemini;
 - the route with an injected clock:
-  - nothing rated in Gemini's state, and its lines marked as passed through Gemini;
+  - nothing rated in Gemini's state;
   - each exchange of the backup's talk rated after its answer is sent: after a block, in the window, under a pin;
-  - a block opens the window and has the blocked prompt's lines the judge has not rated yet rated (the history, the
-    recall, the facts);
+  - a block has the blocked prompt's lines the judge has not rated yet rated (the history, the recall, the facts);
   - the window's end with a flagged answer, a flagged new message, an unrated one, and both clean;
   - a line she writes first at the window's end, decided by her last answer;
   - a Gemini block at the window's end using the backup's ready answer;
-  - the day cap and local midnight;
-  - a pin over the rules;
-  - a restart reading the state;
-- the backup's prompt with `FALLBACK_HISTORY_N` lines;
-- the order of the calls: nothing extra in Gemini's state, the judge after the answer in the window, the judge and the
-  backup together at the window's end;
-- the backup checks: Russian letters, a Latin majority (an answer with audio tags is not one), another script, a run
-  of one symbol, a self-named model;
-- the backup's usage line with no cost;
-- the commands from the owner and from another id: kept out of the history, the archive and the prompts, and not
-  resetting the writing-first timer;
-- Agora, the background kinds and the other agents unchanged;
+- the order of the calls:
+  - nothing extra in Gemini's state;
+  - the judge after the answer in the window;
+  - the judge and the backup together at the window's end;
+- the waiting backlog rated at the watcher's ticks;
+- the judge's usage line with its price;
 - no text or key in a log.
 
-**Not in this phase:**
-- Agora and the other agents;
-- a backup for the background calls: they only leave the censored lines out, and a block there stays logged and
-  silent;
-- Xialong, until its id is known (a setting, no code);
-- commands in Element, and switching the route from the panel.
+**Not in this phase:** a judge for Agora or the background calls; rating the archive's lines that passed through
+Gemini, other than a blocked prompt's.
 
 ## v6 — Лілі: the Lumi bridge
 
@@ -2174,7 +2343,7 @@ the owner).
 **Status:** ⏳ planned.
 
 The owner, 2026-10-26: the last three phases of her emotional life become a version of their own, v8 (Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9).
-- v5.10–v5.13 give her a mood of the day, the events of her life, her reading and thoughts, and a backup model for her
+- v5.10–v5.15 give her a mood of the day, the events of her life, her reading and thoughts, and a backup model for her
   private chat.
 - v8 gives her:
   - a state that lasts between replies and moves her voice (v8.1);
@@ -2182,7 +2351,7 @@ The owner, 2026-10-26: the last three phases of her emotional life become a vers
   - anticipation and strong memories (v8.3).
 
 For Кіра only, for now. The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life;
-read it before generating the issues. Depends on: v5.10–v5.13.
+read it before generating the issues. Depends on: v5.10–v5.15.
 
 ### v8.1 — The moment and the day: her state and her voice
 
@@ -2299,7 +2468,7 @@ day stays with her for months, not only seven days.
 - recall's ranking with the charge;
 - a past memory never rewritten.
 
-**Not in this phase:** the other persons; v5.10–v5.13 and v8 are Кіра's only, for now (the owner, 2026-10-26).
+**Not in this phase:** the other persons; v5.10–v5.15 and v8 are Кіра's only, for now (the owner, 2026-10-26).
 
 ## v9 — Theatre: plays on the Stage
 
