@@ -1937,11 +1937,12 @@ class Agent:
         return "\n\n".join(reversed(kept)) or None
 
     def events_ahead(self, today, until) -> str | None:
-        """v5.11: the known events of her story after today up to `until` — never a surprise."""
+        """v5.11: the known events of her story from today up to `until` — never a surprise."""
         life = self.cfg.life
         if not self.cfg.can("events") or life is None:
             return None
-        return "\n".join(f"- {day_label(e.date, today)}: {e.text}" for e in known_ahead(life, today, until)) or None
+        return "\n".join(f"- {'сьогодні' if e.date == today else day_label(e.date, today)}: {e.text}"
+                         for e in known_ahead(life, today, until)) or None
 
     def _append_events(self, day, text: str) -> None:
         """Appended, never rewritten; private from birth, like the mood log."""

@@ -81,7 +81,8 @@ def test_known_ahead_never_a_surprise_and_at_the_edges():
     s = story()
     assert [e.date for e in known_ahead(s, TODAY, date(2026, 11, 3))] == [date(2026, 11, 3)]
     assert known_ahead(s, TODAY, date(2026, 11, 2)) == []                       # `until` is inclusive, not beyond
-    assert known_ahead(s, date(2026, 11, 3), date(2026, 12, 31)) == []          # today itself is not ahead
+    assert [e.date for e in known_ahead(s, date(2026, 11, 3), date(2026, 12, 31))] == [date(2026, 11, 3)]  # review #3:
+    assert known_ahead(s, date(2026, 11, 4), date(2026, 12, 31)) == []          # its own day, never after
     assert all(e.kind == "known" for e in known_ahead(s, date(2026, 1, 1), date(2027, 12, 31)))
     assert len(known_ahead(s, date(2026, 1, 1), date(2027, 12, 31))) == 2
 

@@ -123,8 +123,9 @@ def events_due(story: LifeStory, day: date) -> list[LifeEvent]:
 
 
 def known_ahead(story: LifeStory, today: date, until: date) -> list[LifeEvent]:
-    """The known events after today up to `until`, for her plans — never a surprise."""
-    return [e for c in story.chapters for e in c.events if e.kind == "known" and today < e.date <= until]
+    """The known events from today up to `until`, for her plans — today's too, so the day's own plan expects it
+    (review #3); never a surprise."""
+    return [e for c in story.chapters for e in c.events if e.kind == "known" and today <= e.date <= until]
 
 
 def current_chapter(story: LifeStory, today: date) -> Chapter | None:

@@ -124,3 +124,12 @@ def test_no_event_naming_the_room_ever_reaches_a_request(tmp_path):
     agent = person(tmp_path / "b", banned, "2026-10-27 14:00")
     asyncio.run(agent.ensure_events(now_is(agent, "2026-10-27 14:00")))
     assert agent.day_events(date(2026, 10, 27)) == []
+
+
+def test_the_days_own_plan_expects_its_known_event(tmp_path):
+    """Review #3: a known event was in no plan on its own day — the day and week plans made that day missed it."""
+    llm = FlowLLM()
+    agent = person(tmp_path, llm, "2026-11-03 00:05")
+    asyncio.run(agent.ensure_plans(date(2026, 11, 3)))
+    day = llm.of("plan")[-1]
+    assert "- сьогодні: Дедлайн статті про змінні зорі." in day
