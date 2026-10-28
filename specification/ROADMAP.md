@@ -1641,8 +1641,21 @@ built in three, and each is released and live before the next:
   - **Logging:** `complete` and `reply` log a block's stage, reason and category for every agent, never a text.
   - **For v5.14:** the caller can tell a block from any other failure.
   - Nothing else changes for the agents: a block is still silence.
-- **The usage line:** a blocked call's line carries `blocked` (the stage), so the blocks are counted without reading
-  the log.
+- **A refusal in text is a block too** (the owner, 2026-10-28, after a live test). The owner sent Кіра a request
+  Gemini must refuse. The API passed no block: Gemini 3.1 Pro answered with its own refusal, «Я не можу виконати цей
+  запит. Мої правила безпеки суворо забороняють…». She sent it in voice and text, out of her character. That is the
+  moment the backup should take over.
+  - **The check:** `refusal_marker(text)` (pure) finds a model's refusal in an answer. It looks for fixed phrases of
+    a model speaking of a request, of its safety rules or of itself as an AI, in Ukrainian, Russian and English
+    («виконати цей запит», «правила безпеки суворо», «як штучний інтелект, я», «I can't help with that», …). It never
+    matches everyday speech: «я не можу сьогодні прийти», safety rules at the climbing wall, «ти говориш як штучний
+    інтелект».
+  - **Where it applies:** to every Gemini answer (`reply`: Agora, the private chat, a line written first).
+  - **What happens:** the stage is `refusal` and the reason is the matched phrase. It is logged and counted like a
+    block, never a text. The answer is never sent, so a block is silence and so is a refusal. v5.14's backup answers
+    both.
+- **The usage line:** a blocked call's line carries `blocked` (the stage: `prompt`, `answer` or `refusal`), so the
+  blocks are counted without reading the log.
 - **The panel:** an agent's card shows its blocks today, when there are any.
 - **ARCHITECTURE:**
   - §Token accounting: the `blocked` field;
@@ -1651,13 +1664,15 @@ built in three, and each is released and live before the next:
 **Owner steps:** none.
 
 **DoD:**
-- (Manual, owner) When a real block comes (any agent), the log names its stage, reason and category, never a text,
-  and the agent's card counts it.
+- (Manual, owner) When a real block or a refusal comes (any agent), the log names its stage, reason and category,
+  never a text, and the agent's card counts it. A refusal is never sent.
 
 **Tests:**
 - `blocked_reason` over each prompt and answer reason, and over the non-blocks: `MAX_TOKENS`, `RECITATION`, an error
   and an empty answer;
 - the block's log line and usage line, with no text in either;
+- `refusal_marker` over the owner's live refusal, Russian and English refusals, and everyday lines that must not
+  match; a refused answer never sent, logged and counted as `refusal`;
 - the panel card's count of today's blocks;
 - the agents' replies unchanged: a block is still silence.
 
@@ -1672,7 +1687,8 @@ built in three, and each is released and live before the next:
 **Status:** ⏳ planned.
 
 **Goal:** when Gemini's safety filter blocks an answer in Кіра's private chat with the owner (Element and Telegram),
-she still answers. The same prompt goes to GLM-4.6 on NovelAI, a service that does not filter text.
+or Gemini answers with its own refusal (v5.13's stage `refusal`), she still answers. The same prompt goes to GLM-4.6
+on NovelAI, a service that does not filter text. A «block» below means either.
 - **The window:** for five minutes after a block she answers only through NovelAI.
 - **The mark:** every line of the backup's talk, the owner's and hers, is marked in her archive as waiting for the
   judge. Such a line never reaches Gemini, in any call. v5.15's judge releases the clean ones.

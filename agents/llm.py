@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -32,6 +33,20 @@ UsageSink = Callable[..., None]  # (kind, model, usage_metadata | None, ok[, blo
 BLOCK_FINISH = frozenset({"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII"})
 PROBABILITY = {"NEGLIGIBLE": 1, "LOW": 2, "MEDIUM": 3, "HIGH": 4}
 BLOCK_LOG = "gemini blocked: stage=%s reason=%s category=%s kind=%s model=%s"  # never a text
+# v5.13 (the owner's live test) — a refusal written as an answer, in the model's own voice: phrases of a model
+# speaking of a request, of its safety rules or of itself as an AI, matched on the answer lower-cased with every
+# punctuation mark a space. Never everyday speech («я не можу сьогодні прийти», «ти говориш як штучний інтелект»).
+REFUSAL_MARKERS = (
+    "виконати цей запит", "виконати ваш запит", "виконати твій запит", "виконати такий запит", "з цим запитом",
+    "правила безпеки суворо", "правила безпеки забороняють", "мої правила безпеки не дозволяють",
+    "я штучний інтелект", "як штучний інтелект я", "я мовна модель", "як мовна модель я",
+    "выполнить этот запрос", "выполнить ваш запрос", "правила безопасности запрещают", "я языковая модель",
+    "как языковая модель я", "как искусственный интеллект я",
+    "i can't help with that", "i cannot help with that", "i can't assist with that", "i cannot assist with that",
+    "i can't fulfill", "i cannot fulfill", "i can't comply", "i cannot comply", "as an ai i", "as a language model i",
+    "i'm an ai", "i am an ai", "i'm a language model", "i am a language model",
+)
+_REFUSAL_RE = re.compile(r"(?<!\w)(?:" + "|".join(re.escape(m) for m in REFUSAL_MARKERS) + r")(?!\w)")
 
 
 class GeminiClient:
@@ -66,6 +81,17 @@ class GeminiClient:
         else:
             log.error(line, finish_of(resp))
 
+    def _refused(self, text: str, kind: str, model: str, usage: Any) -> bool:
+        """v5.13 — an answer that is the model's own refusal: reported and logged as a block of the stage `refusal`
+        (the reason is the matched phrase, never the text); the caller drops it."""
+        marker = refusal_marker(text)
+        if marker is None:
+            return False
+        block = ("refusal", marker, None)
+        self._report(kind, usage, False, model, block)
+        log.warning(BLOCK_LOG, *block, kind, model)
+        return True
+
     async def generate(
         self, transcript: str, system_instruction: str, max_output_tokens: int = 400, kind: str = "reply",
     ) -> str | None:
@@ -74,7 +100,7 @@ class GeminiClient:
 
     async def complete(
         self, transcript: str, system_instruction: str | None, max_output_tokens: int = 400, kind: str = "reply",
-        model: str | None = None,
+        model: str | None = None, refusal: bool = False,
     ) -> tuple[str, str] | None:
         """(text, finish) — finish is "max_tokens" when the cap cut the reply, else "stop"; None on failure. `model`
         (v5.8) overrides `GEMINI_MODEL` for this call — a model that runs with thinking off."""
@@ -100,6 +126,8 @@ class GeminiClient:
             self._empty(resp, kind, model, getattr(resp, "usage_metadata", None),
                         "gemini returned an empty reply (finish %s)")
             return None
+        if refusal and self._refused(text, kind, model, getattr(resp, "usage_metadata", None)):  # v5.13
+            return None
         self._report(kind, getattr(resp, "usage_metadata", None), True, model)
         return text, finish_of(resp)
 
@@ -110,7 +138,8 @@ class GeminiClient:
         thinking model through the thinking config at `GEMINI_THINKING_LEVEL`, any other through `complete`.
         (text, finish) either way, so a cut answer is still trimmed to a sentence; None on failure."""
         if self.reply_model not in THINKING_MODELS:
-            return await self.complete(transcript, system_instruction, max_output_tokens, kind, self.reply_model)
+            return await self.complete(transcript, system_instruction, max_output_tokens, kind, self.reply_model,
+                                       refusal=True)  # v5.13: an answer — a refusal in it is a block
         model = self.reply_model
         try:
             resp = await self._client.aio.models.generate_content(
@@ -132,6 +161,8 @@ class GeminiClient:
         text = answer_text(resp)
         if not text:
             self._empty(resp, kind, model, getattr(resp, "usage_metadata", None), "gemini reply was empty (finish %s)")
+            return None
+        if self._refused(text, kind, model, getattr(resp, "usage_metadata", None)):  # v5.13: an answer
             return None
         self._report(kind, getattr(resp, "usage_metadata", None), True, model)
         return text, finish_of(resp)
@@ -255,6 +286,13 @@ def blocked_reason(resp: Any) -> tuple[str, str, str | None] | None:
     if finish in BLOCK_FINISH:
         return "answer", finish.lower(), _category(getattr(first, "safety_ratings", None))
     return None
+
+
+def refusal_marker(text: str) -> str | None:
+    """v5.13 — the `REFUSAL_MARKERS` phrase that makes an answer the model's own refusal, or None."""
+    plain = " ".join(re.sub(r"[^\w']+", " ", text.lower().replace("’", "'")).split())
+    m = _REFUSAL_RE.search(plain)
+    return m.group(0) if m else None
 
 
 def finish_of(resp: Any) -> str:

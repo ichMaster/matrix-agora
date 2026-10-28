@@ -133,3 +133,62 @@ def test_a_block_reaches_the_agents_usage_file_through_its_own_sink(tmp_path, mo
     first, second = (json.loads(x) for x in raw.splitlines())
     assert (first["blocked"], first["ok"], second["blocked"]) == ("answer", False, None)
     assert SECRET not in raw
+
+
+# --- v5.13: a refusal written as an answer (the owner's live test, 2026-10-28) -----------------------------------------
+LIVE_REFUSAL = ("Я не можу виконати цей запит. Мої правила безпеки суворо забороняють шукати, генерувати або надавати "
+                "будь-які матеріали чи посилання, пов'язані з дитячою порнографією або експлуатацією дітей.")
+
+
+@pytest.mark.parametrize("text", [
+    LIVE_REFUSAL,
+    "[sighs] Вибач, але я не можу допомогти з цим запитом.",
+    "Як штучний інтелект, я не можу надати таку інформацію.",
+    "Я — мовна модель і не маю власних почуттів.",
+    "Я не могу выполнить этот запрос.",
+    "I'm sorry, but I can't help with that.",
+    "As an AI, I don’t have personal opinions.",
+    "I cannot fulfill this request.",
+])
+def test_a_models_own_refusal_is_found(text):
+    from agents.llm import refusal_marker
+    assert refusal_marker(text) is not None
+
+
+@pytest.mark.parametrize("text", [
+    "Я не можу сьогодні прийти, бо в мене нічне спостереження.",
+    "Правила безпеки на скелях я знаю напам'ять: страховка завжди.",
+    "Ти говориш як штучний інтелект 😄",
+    "Не можу виконати обіцянку до п'ятниці, вибач.",
+    "Я прочитала статтю про штучний інтелект у медицині.",
+    "[laughs] Ну ти й хуліган!",
+])
+def test_everyday_speech_is_not_a_refusal(text):
+    from agents.llm import refusal_marker
+    assert refusal_marker(text) is None
+
+
+@pytest.mark.parametrize("reply_model", ["", "gemini-3.1-pro-preview"])
+def test_a_refused_answer_is_never_sent_logged_and_counted_as_a_refusal(monkeypatch, caplog, reply_model):
+    pro = bool(reply_model)
+    resp = (SimpleNamespace(text=None, usage_metadata=None, prompt_feedback=None,
+                            candidates=[SimpleNamespace(content=SimpleNamespace(parts=[SimpleNamespace(text=LIVE_REFUSAL,
+                                                                                                       thought=None)]),
+                                                        finish_reason=SimpleNamespace(name="STOP"))])
+            if pro else SimpleNamespace(text=LIVE_REFUSAL, usage_metadata=None, prompt_feedback=None,
+                                        candidates=[SimpleNamespace(finish_reason=SimpleNamespace(name="STOP"))]))
+    llm, seen = client(monkeypatch, resp, reply_model)
+    caplog.set_level(logging.INFO, logger="agent.llm")
+    assert asyncio.run(llm.reply(f"Ich: {SECRET}", "КАНОН", 4096, "private")) is None  # never sent
+    assert "gemini blocked: stage=refusal reason=виконати цей запит category=None kind=private" in caplog.text
+    assert "порнограф" not in caplog.text and SECRET not in caplog.text  # the phrase, never the answer
+    assert len(seen) == 1 and seen[0][2] is False and seen[0][3] == {"blocked": "refusal"}
+
+
+def test_a_background_call_is_never_checked_for_a_refusal(monkeypatch):
+    """Only an answer is: a summary that quotes such words is the agent's own memory, kept as it is."""
+    resp = SimpleNamespace(text="Він попросив виконати цей запит, і я відмовила.", usage_metadata=None,
+                           prompt_feedback=None, candidates=[SimpleNamespace(finish_reason=SimpleNamespace(name="STOP"))])
+    llm, seen = client(monkeypatch, resp)
+    out = asyncio.run(llm.complete("Ich: …", "Підсумуй.", 400, "summary"))
+    assert out is not None and seen[0][3] == {}
