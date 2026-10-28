@@ -1,3 +1,33 @@
+Version 5.11.0 (2026-10-28)
+---------------------------
+- Phase v5.11 - events of her life: things now happen to Kira that she
+  did not plan - known turning points of her story, an hourly roll in her
+  waking hours, and Lviv's news woven in rarely (AGORA-126..131)
+- Her life story may hold a dated list (### Події, known or surprise, with
+  an optional time); it is cut out of every prompt, a surprise arrives only
+  on its date and the plans see only the known ones (AGORA-126)
+- The hourly roll: EVENT_P 0.12 in EVENT_HOURS 08-23, a kind by
+  EVENT_WEIGHTS (everyday, joyful, inspiring, heavy), one call inside her
+  life's frame under a truth guard (no Ich, no member, no banned word);
+  state/<name>.events/YYYY-MM-DD.md, append-only, 0600 (AGORA-127)
+- Lviv's news: Zaxid.net's feed refreshed every three hours and merged,
+  each item rolled once at CITY_NEWS_P 0.01 (x5 when it names Lviv), at
+  most one an hour and CITY_NEWS_MAX 2 a day, touching her life in one of
+  five ways; a real person stays a stranger (AGORA-128)
+- Where events go: «Сьогодні» (refreshed within the hour when one falls),
+  the day memory and the next plans (AGORA-129)
+- The panel: an Events tab by day and «Last event» on her card
+  (AGORA-130)
+- Code review: the panel reads the today tag with the event count (#1); a
+  story event enters once whatever its spacing (#2); the day's own plan
+  expects its known event (#3); a story event may carry its time and falls
+  from then (#4); the visibility rule names the event call (#5)
+- Owner checks: deployed at the owner's word with sha-a60b38f; a day of
+  events, the surprise on its date and the Events tab waived by the
+  release word («релізь», 2026-10-28)
+- Ops, beside the phase: Kira writes first every two hours, 08:00-01:00,
+  up to nine a day, in Telegram (server/kira.env)
+
 Version 5.10.0 (2026-10-27)
 ---------------------------
 - Phase v5.10 - Kira's mood of the day: the cat's horoscope and biorhythms,
