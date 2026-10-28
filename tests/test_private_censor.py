@@ -74,9 +74,8 @@ def test_only_the_lines_since_her_last_answer_are_marked_and_the_session_loses_t
 def test_a_block_on_a_line_she_writes_first_marks_nothing(tmp_path, monkeypatch):
     agent = kira(tmp_path, monkeypatch, BlockLLM(blocks=1, stage="prompt"))
     agent.private_line("Добраніч", ms(1), "telegram", "tg:1")
-    agent._unanswered = ["tg:1"]
     asyncio.run(agent.private_reply(nudge=True))
-    assert marks(agent)["tg:1"] == "gemini" and agent._unanswered == ["tg:1"]
+    assert marks(agent)["tg:1"] == "gemini" and agent._unanswered == [("tg:1", "Добраніч")]
 
 
 def test_silence_without_a_block_marks_nothing(tmp_path, monkeypatch):
@@ -86,3 +85,38 @@ def test_silence_without_a_block_marks_nothing(tmp_path, monkeypatch):
     agent.private_line("Ок", ms(17), "telegram", "tg:1")
     asyncio.run(agent.private_reply())
     assert marks(agent)["tg:1"] == "gemini" and agent.private_history == [("Ich", "Ок")]
+
+
+# --- v5.13 code review #2: a message that arrives while she composes ----------------------------------------------------
+class MidComposeLLM(BlockLLM):
+    """The owner writes again while Gemini composes her answer to his earlier line."""
+
+    def __init__(self, agent_ref, blocks):
+        super().__init__(blocks=blocks)
+        self.agent_ref = agent_ref
+
+    async def generate(self, transcript, system_instruction, max_output_tokens=400, kind="reply"):
+        self.agent_ref[0].private_line("вибач, я пожартував", ms(17, 2), "telegram", "tg:2")
+        return await super().generate(transcript, system_instruction, max_output_tokens, kind)
+
+
+def test_a_block_censors_only_the_line_gemini_saw_never_one_that_came_while_she_composed(tmp_path, monkeypatch):
+    ref = []
+    agent = kira(tmp_path, monkeypatch, MidComposeLLM(ref, blocks=1))
+    ref.append(agent)
+    agent.private_line(CENSORED, ms(17), "telegram", "tg:1")
+    asyncio.run(agent.private_reply())
+    got = marks(agent)
+    assert (got["tg:1"], got["tg:2"]) == ("censored", "gemini")
+    assert agent.private_history == [("Ich", "вибач, я пожартував")]           # the refused line left, not the new one
+    assert agent.session == [(private_label("Ich"), "вибач, я пожартував")]
+    assert agent._unanswered == [("tg:2", "вибач, я пожартував")]               # still to be answered
+
+
+def test_an_answer_keeps_a_line_that_came_while_she_composed_unanswered(tmp_path, monkeypatch):
+    ref = []
+    agent = kira(tmp_path, monkeypatch, MidComposeLLM(ref, blocks=0))
+    ref.append(agent)
+    agent.private_line("Привіт", ms(17), "telegram", "tg:1")
+    asyncio.run(agent.private_reply())
+    assert agent._unanswered == [("tg:2", "вибач, я пожартував")]

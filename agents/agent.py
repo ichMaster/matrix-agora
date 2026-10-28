@@ -277,6 +277,15 @@ ARCHIVE_PRIVATE_EVENTS = 5000  # … and the whole private room, bounded
 EMBED_BATCH = 100              # lines embedded per idle tick
 
 
+def _drop_last(items: list, item) -> bool:
+    """v5.13 — remove the latest copy of `item` from `items`; whether there was one."""
+    for i in range(len(items) - 1, -1, -1):
+        if items[i] == item:
+            del items[i]
+            return True
+    return False
+
+
 class Agent:
     def __init__(self, cfg: AgentConfig, llm: GeminiClient | None = None,
                  roster: dict[str, Member] | None = None) -> None:
@@ -474,9 +483,9 @@ class Agent:
         self.private_file = self.memory_file.parent / f"{cfg.localpart}.private.json"
         self.private_room: str | None = load_private_state(self.private_file, "").room if cfg.can("private") else None
         self.private_history: list[tuple[str, str]] = []
-        # v5.13: the archive keys of the owner's private lines since her last answer — marked censored if Gemini
+        # v5.13: the owner's private lines since her last answer, (archive key, text) — marked censored if Gemini
         # blocks or refuses the answer to them
-        self._unanswered: list[str] = []
+        self._unanswered: list[tuple[str, str]] = []
         self.last_private_ms: int | None = None
         self._private_pending = self._private_again = False
         # v5.8 — the archive (`recall`): every line she sees, both rooms and both doors, searchable; filled from the
@@ -804,7 +813,7 @@ class Agent:
         self.private_history = append_history(self.private_history, "Ich", body, max(self.history_n, 1))
         key = key or f"ich:{channel}:{ts_ms}"
         self._archive(key, ts_ms, "private", channel, "Ich", body)
-        self._unanswered.append(key)  # v5.13
+        self._unanswered.append((key, body))  # v5.13
         self.last_private_ms = ts_ms
         self.last_activity_ms = self.clock()  # a private talk is a conversation too: no summary mid-way
         if self.cfg.can("summary"):
@@ -877,12 +886,13 @@ class Agent:
                 brief = f"{brief}\n\n{REMEMBER_SKILL}"
             prompt = self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts)
             LAST_BLOCK.set(None)
+            seen = list(self._unanswered)  # v5.13 review #2: the lines this call answers — never one that comes later
             text = await self._compose(prompt, lines=self.private_history,
                                        kind="private_nudge" if nudge else "private")
             if text is None:
                 block = LAST_BLOCK.get()
                 if block is not None and not nudge:  # v5.13: what Gemini refused never reaches it again
-                    self.censor_unanswered(block[0])
+                    self.censor_unanswered(block[0], seen)
                 return False
             sent_id = None
             if door == "matrix":
@@ -892,7 +902,7 @@ class Agent:
                 return False
             self.private_history = append_history(self.private_history, self.cfg.name, text, max(self.history_n, 1))
             self.last_private_ms = self.clock()
-            self._unanswered = []  # v5.13: answered
+            self._unanswered = [u for u in self._unanswered if u not in seen]  # v5.13: answered (review #2)
             self._own_seq += 1
             self._archive(sent_id or f"own:{door}:{self.clock()}:{self._own_seq}", self.clock(), "private", door,
                           self.cfg.name, text)
@@ -906,31 +916,26 @@ class Agent:
             if door == "matrix":
                 await self.client.room_typing(room, False)
 
-    def censor_unanswered(self, stage: str) -> int:
-        """v5.13 — Gemini blocked or refused her answer to the owner's last lines: they are marked censored in her
-        archive and leave her history and the session, so no later Gemini call — an answer, the recall, the reflection,
-        the summary, the facts — gets them. How many; the log names the stage and the count, never a text."""
-        keys, self._unanswered = self._unanswered, []
-        if not keys:
+    def censor_unanswered(self, stage: str, lines: list[tuple[str, str]] | None = None) -> int:
+        """v5.13 — Gemini blocked or refused her answer to the owner's `lines` ((key, text); all unanswered by
+        default): they are marked censored in her archive and leave her history and the session, so no later Gemini
+        call — an answer, the recall, the reflection, the summary, the facts — gets them. A line that came while she
+        composed stays (review #2). How many; the log names the stage and the count, never a text."""
+        lines = list(self._unanswered if lines is None else lines)
+        self._unanswered = [u for u in self._unanswered if u not in lines]
+        if not lines:
             return 0
-        history, removed = list(self.private_history), []
-        while len(removed) < len(keys) and history and history[-1][0] == "Ich":  # his lines after her last one
-            removed.append(history.pop()[1])
-        self.private_history = history
-        label = private_label("Ich")
-        for text in removed:  # the session's copy of each, the latest first
-            for i in range(len(self.session) - 1, -1, -1):
-                if self.session[i] == (label, text):
-                    del self.session[i]
-                    break
+        label, removed = private_label("Ich"), 0
+        for _, text in lines:
+            removed += _drop_last(self.private_history, ("Ich", text))
+            _drop_last(self.session, (label, text))
         marked = 0
         if self.archive is not None:
             try:
-                marked = self.archive.censor(keys)
+                marked = self.archive.censor([k for k, _ in lines])
             except Exception as exc:  # noqa: BLE001
                 log.error("archive: the lines were not marked (%s)", type(exc).__name__)
-        log.warning("private: %d line(s) marked censored after a %s (left the history: %d)", marked, stage,
-                    len(removed))
+        log.warning("private: %d line(s) marked censored after a %s (left the history: %d)", marked, stage, removed)
         return marked
 
     async def maybe_private_nudge(self) -> bool:
