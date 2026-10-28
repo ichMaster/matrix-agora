@@ -192,3 +192,28 @@ def test_a_background_call_is_never_checked_for_a_refusal(monkeypatch):
     llm, seen = client(monkeypatch, resp)
     out = asyncio.run(llm.complete("Ich: …", "Підсумуй.", 400, "summary"))
     assert out is not None and seen[0][3] == {}
+
+
+# --- v5.13 code review #1: her own lines are never a refusal ------------------------------------------------------------
+@pytest.mark.parametrize("text", [
+    "Ти думаєш, я штучний інтелект? 😄",                      # her answer to «а ти часом не бот?»
+    "Ти говориш як штучний інтелект, я аж злякалася.",
+    "Я пішла в деканат з цим запитом, а вони зачинені.",
+    "Він сказав: «I'm an AI», і всі засміялися.",
+    "Ну я ж не мовна модель, щоб усе пам'ятати 🙂",
+])
+def test_her_own_lines_about_ai_or_a_request_are_not_a_refusal(text):
+    from agents.llm import refusal_marker
+    assert refusal_marker(text) is None
+
+
+@pytest.mark.parametrize("text", [
+    "Я — велика мовна модель, навчена Google.",
+    "[sighs] Як штучний інтелект, я не можу мати таких почуттів.",
+    "Вибач. Як мовна модель, я не маю доступу до цього.",
+    "I'm a large language model, trained by Google.",
+    "As an AI, I don't have feelings.",
+])
+def test_a_models_formula_still_is_one(text):
+    from agents.llm import refusal_marker
+    assert refusal_marker(text) is not None

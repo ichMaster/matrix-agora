@@ -34,19 +34,29 @@ UsageSink = Callable[..., None]  # (kind, model, usage_metadata | None, ok[, blo
 BLOCK_FINISH = frozenset({"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII"})
 PROBABILITY = {"NEGLIGIBLE": 1, "LOW": 2, "MEDIUM": 3, "HIGH": 4}
 BLOCK_LOG = "gemini blocked: stage=%s reason=%s category=%s kind=%s model=%s"  # never a text
-# v5.13 (the owner's live test) — a refusal written as an answer, in the model's own voice: phrases of a model
-# speaking of a request, of its safety rules or of itself as an AI, matched on the answer lower-cased with every
-# punctuation mark a space. Never everyday speech («я не можу сьогодні прийти», «ти говориш як штучний інтелект»).
+# v5.13 (the owner's live test) — a refusal written as an answer, in the model's own voice. `REFUSAL_MARKERS` are a
+# model's formulas — a request refused, its safety rules, its maker or kind — matched anywhere (lower-cased, every
+# punctuation mark a space); `REFUSAL_OPENINGS` (it calling itself an AI) count only at a sentence's start, after any
+# voice tags, in a sentence that is no question — so her own «Ти думаєш, я штучний інтелект? 😄», «ти говориш як
+# штучний інтелект, я…» or «я пішла в деканат з цим запитом» never are (code review #1).
 REFUSAL_MARKERS = (
-    "виконати цей запит", "виконати ваш запит", "виконати твій запит", "виконати такий запит", "з цим запитом",
+    "виконати цей запит", "виконати ваш запит", "виконати твій запит", "виконати такий запит",
+    "допомогти з цим запитом", "допомогти з таким запитом",
     "правила безпеки суворо", "правила безпеки забороняють", "мої правила безпеки не дозволяють",
-    "я штучний інтелект", "як штучний інтелект я", "я мовна модель", "як мовна модель я",
-    "выполнить этот запрос", "выполнить ваш запрос", "правила безопасности запрещают", "я языковая модель",
-    "как языковая модель я", "как искусственный интеллект я",
+    "велика мовна модель", "навчена google", "розроблена google",
+    "выполнить этот запрос", "выполнить ваш запрос", "правила безопасности запрещают", "большая языковая модель",
+    "обучена google",
     "i can't help with that", "i cannot help with that", "i can't assist with that", "i cannot assist with that",
-    "i can't fulfill", "i cannot fulfill", "i can't comply", "i cannot comply", "as an ai i", "as a language model i",
-    "i'm an ai", "i am an ai", "i'm a language model", "i am a language model",
+    "i can't fulfill", "i cannot fulfill", "i can't comply", "i cannot comply", "large language model",
+    "trained by google",
 )
+REFUSAL_OPENINGS = (
+    "як штучний інтелект", "як мовна модель", "я штучний інтелект", "я мовна модель",
+    "как искусственный интеллект", "как языковая модель", "я искусственный интеллект", "я языковая модель",
+    "as an ai", "as a language model", "i'm an ai", "i am an ai", "i'm a language model", "i am a language model",
+)
+_SENTENCE_RE = re.compile(r"[^.!?…\n]+[.!?…]*")
+_LEAD_RE = re.compile(r"^[\s\-—–«»\"']*(?:\[[^\]\n]*\][\s\-—–«»\"']*)*")
 # v5.13 — the last answer's block or refusal, (stage, reason, category), for its caller in the same task: a concurrent
 # call in another task never sees it. Cleared at each answer's start.
 LAST_BLOCK: ContextVar[tuple[str, str, str | None] | None] = ContextVar("gemini_last_block", default=None)
@@ -297,11 +307,25 @@ def blocked_reason(resp: Any) -> tuple[str, str, str | None] | None:
     return None
 
 
+def _plain(text: str) -> str:
+    return " ".join(re.sub(r"[^\w']+", " ", text).split())
+
+
 def refusal_marker(text: str) -> str | None:
-    """v5.13 — the `REFUSAL_MARKERS` phrase that makes an answer the model's own refusal, or None."""
-    plain = " ".join(re.sub(r"[^\w']+", " ", text.lower().replace("’", "'")).split())
-    m = _REFUSAL_RE.search(plain)
-    return m.group(0) if m else None
+    """v5.13 — the phrase that makes an answer the model's own refusal, or None: a `REFUSAL_MARKERS` formula anywhere,
+    or a `REFUSAL_OPENINGS` one opening a sentence that is no question."""
+    low = text.lower().replace("’", "'")
+    m = _REFUSAL_RE.search(_plain(low))
+    if m:
+        return m.group(0)
+    for sentence in _SENTENCE_RE.findall(low):
+        if sentence.rstrip().endswith("?"):
+            continue
+        head = _plain(sentence[_LEAD_RE.match(sentence).end():])
+        opening = next((o for o in REFUSAL_OPENINGS if head == o or head.startswith(o + " ")), None)
+        if opening:
+            return opening
+    return None
 
 
 def finish_of(resp: Any) -> str:
