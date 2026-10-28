@@ -1,0 +1,117 @@
+"""v5.14 — the route of Кіра's private answer: Gemini, or the backup's window after a block (pure, an injected clock).
+
+`state` says how the next answer is made: `gemini`; `window` (the backup alone, for `FALLBACK_WINDOW_S` after a block,
+or to her day's end once `FALLBACK_DAY_MAX` blocks fell in her local day); `window_end` (the first message after the
+window: Gemini and the backup start together — Gemini's answer wins and closes the window, a block opens the next).
+A pin from a Telegram command overrides the rules, the day cap included, until `/auto`: pinned `backup` is a window with
+no end, pinned `gemini` is Gemini's state where a block still goes to the backup but opens no window.
+`state/<name>.route.json` keeps the pin, the block times, the window's end and today's answers — never a text.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+PINS = ("auto", "gemini", "backup")
+STATES = ("gemini", "window", "window_end")
+OUTCOMES = ("block", "gemini", "backup")  # and `pin:<auto|gemini|backup>`
+HOUR_MS = 3_600_000
+
+
+@dataclass(frozen=True)
+class Route:
+    pin: str = "auto"
+    pinned_at_ms: int | None = None
+    blocks: tuple[int, ...] = ()            # the block times (ms) of her day and the last hour
+    window_until_ms: int | None = None      # an opened window's end; None: no window
+    day: str = ""                           # her local day the answers count
+    answers: dict = field(default_factory=lambda: {"gemini": 0, "backup": 0})
+
+
+def day_bounds(now_ms: int, tz: str) -> tuple[str, int, int]:
+    """Her local day of `now_ms`: (ISO date, its start, its end) in ms — a DST day is 23 or 25 hours long."""
+    zone = ZoneInfo(tz)
+    now = datetime.fromtimestamp(now_ms / 1000, zone)
+    start = datetime(now.year, now.month, now.day, tzinfo=zone)
+    nxt = start.date() + timedelta(days=1)
+    end = datetime(nxt.year, nxt.month, nxt.day, tzinfo=zone)
+    return start.date().isoformat(), int(start.timestamp() * 1000), int(end.timestamp() * 1000)
+
+
+def state(route: Route, now_ms: int) -> str:
+    """How the next answer is made: `gemini`, `window` or `window_end`."""
+    if route.pin == "gemini":
+        return "gemini"
+    if route.pin == "backup":
+        return "window"
+    if route.window_until_ms is None:
+        return "gemini"
+    return "window" if now_ms < route.window_until_ms else "window_end"
+
+
+def blocks_since(route: Route, since_ms: int) -> int:
+    return sum(1 for t in route.blocks if t >= since_ms)
+
+
+def after(route: Route, now_ms: int, outcome: str, window_s: int, day_max: int, day: str, day_start_ms: int,
+          day_end_ms: int) -> Route:
+    """The route after an outcome: `block` (Gemini blocked or refused), `gemini` / `backup` (who answered), or
+    `pin:<auto|gemini|backup>` (a command)."""
+    answers = dict(route.answers) if route.day == day else {"gemini": 0, "backup": 0}
+    keep_from = min(day_start_ms, now_ms - HOUR_MS)
+    r = replace(route, day=day, answers=answers, blocks=tuple(t for t in route.blocks if t >= keep_from))
+    if outcome == "block":
+        r = replace(r, blocks=(*r.blocks, now_ms))
+        if r.pin == "auto":  # pinned `gemini` opens no window; pinned `backup` never asks Gemini
+            until = day_end_ms if blocks_since(r, day_start_ms) >= day_max else now_ms + window_s * 1000
+            r = replace(r, window_until_ms=max(r.window_until_ms or 0, until))
+    elif outcome in ("gemini", "backup"):
+        r = replace(r, answers={**answers, outcome: answers.get(outcome, 0) + 1})
+        if outcome == "gemini" and r.pin == "auto" and r.window_until_ms is not None and now_ms >= r.window_until_ms:
+            r = replace(r, window_until_ms=None)  # the talk is Gemini's again
+    elif outcome.startswith("pin:") and outcome[4:] in PINS:
+        pin = outcome[4:]
+        r = replace(r, pin=pin, pinned_at_ms=None if pin == "auto" else now_ms)
+    return r
+
+
+def _int(value) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def load_route(path: Path) -> Route:
+    """The saved route; missing or corrupt → `auto`, nothing open."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return Route()
+    if not isinstance(data, dict):
+        return Route()
+    answers = data.get("answers") if isinstance(data.get("answers"), dict) else {}
+    blocks = data.get("blocks") if isinstance(data.get("blocks"), list) else []
+    return Route(pin=data.get("pin") if data.get("pin") in PINS else "auto",
+                 pinned_at_ms=_int(data.get("pinned_at_ms")),
+                 blocks=tuple(t for t in (_int(b) for b in blocks) if t is not None),
+                 window_until_ms=_int(data.get("window_until_ms")),
+                 day=str(data.get("day") or ""),
+                 answers={k: _int(answers.get(k)) or 0 for k in ("gemini", "backup")})
+
+
+def save_route(path: Path, route: Route) -> None:
+    """Atomic, private from birth (0600) — a pin, times and counts, never a text."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, json.dumps({"pin": route.pin, "pinned_at_ms": route.pinned_at_ms, "blocks": list(route.blocks),
+                                 "window_until_ms": route.window_until_ms, "day": route.day,
+                                 "answers": route.answers}).encode())
+    finally:
+        os.close(fd)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
