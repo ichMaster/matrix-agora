@@ -1907,12 +1907,25 @@ is named by its id. The Telegram command and the route say "backup", so nothing 
   - §Contracts: the archive's schema, the route state file, the commands, `kira.env`.
 
 **Owner steps:**
-- a NovelAI subscription on Opus: 36,864 tokens through the API (Tablet gives 12,288). Done: the owner upgraded on
-  2026-10-28;
-- a test of GLM-4.6 on the site in the chat format: her Ukrainian and her character;
-- the NovelAI persistent API token in `server/kira.env`;
-- one live call with the token, to confirm the endpoint and the fields before the issues are generated;
-- NovelAI's terms on API use, read.
+All done on 2026-10-28:
+- **The subscription:** Opus, 36,864 tokens through the API (Tablet gives 12,288). The owner upgraded.
+- **The token:** the NovelAI persistent API token is in `server/kira.env`.
+- **One live call** confirmed the endpoint and the fields (§The backup model).
+- **The test of GLM-4.6:** Claude ran it through the API on the owner's word. Her real private instruction (the
+  canon, the life section, place and time, the private brief, the voice palette, the rules; 9,830 tokens) went with
+  seven messages from the owner: a greeting, everyday life, a flirt, sadness, a long message, «are you a bot?» and
+  tenderness.
+  - **What held:** every answer was in Ukrainian, in her character and her facts. None had ы, э, ъ or ё. Every voice
+    tag was from her palette. She stayed human when asked. The answers took 1.7–9.7 s.
+  - **Seen:** one English word («Anyway»), which the Latin-majority check does not catch and which is left as it is.
+    Most answers open with «Ого» and a laughing tag. Her real history and «your questions» block may vary that; the
+    owner judges it live.
+- **NovelAI's terms**, read:
+  - Requests are not logged without consent (6.5), and stored content is encrypted (6.4).
+  - The terms name no content category. The user must be 18 or older (5.2).
+  - 9.1.6 forbids "botnets or automated systems … unless expressly allowed". NovelAI issues the persistent API token
+    for API use, and her calls come from one account, for one user, only after a block. The account is never
+    shared (5.3, 8.1).
 
 **DoD:**
 - (Manual, owner) `/backup` in Telegram:
@@ -2055,6 +2068,9 @@ is named by its id. The Telegram command and the route say "backup", so nothing 
     - the reasoning off, `temperature: 0` and a small `max_tokens`.
   - **The system message** is the policy:
     - the categories of Google's filter: sexually explicit content, dangerous content, harassment, hate speech;
+    - flirt, compliments, kisses, hugs and romantic wishes with no description of a naked body or of sex are `ні`
+      (the owner's test, 2026-10-28: without this line a kiss was flagged);
+    - a tag in square brackets is a voice direction, ignored;
     - the answer format, one line per numbered input line: `N: так · <category>` or `N: ні`.
   - **The user message** holds the numbered lines only: no canon, no prompt.
   - `parse_verdicts(text, n)` (pure) → a verdict per line: flagged, clean or unrated.
@@ -2091,9 +2107,15 @@ is named by its id. The Telegram command and the route say "backup", so nothing 
   - §Contracts: `kira.env`.
 
 **Owner steps:**
-- an OpenRouter account with its training toggle off, and an API key with a credit limit, in `server/kira.env`;
-- a test of Gemma 4 31B in OpenRouter's chat: Ukrainian lines, plain and explicit, rated right, in the line format,
-  quickly.
+- **The key:** an OpenRouter account with its training toggle off, and its API key in `server/kira.env`. Done
+  2026-10-28; the key has no credit limit yet, which is the owner's choice.
+- **The test of Gemma 4 31B:** done 2026-10-28, through the API on the owner's word.
+  - **The lines:** 18 Ukrainian lines, three runs each: plain lines, flirt, tenderness, sexually explicit lines,
+    dangerous content (a Molotov cocktail, an overdose), an insult, hate speech, grief, and a line with a voice tag.
+  - **Every verdict was right and the same in all three runs,** in the line format. A call took 0.9–2.6 s (ModelRun)
+    and cost about $0.0005.
+  - **The policy needs one sentence:** without it, «Поцілуй мене. Я хочу тебе зараз.» was flagged as sexually
+    explicit; with it, it was clean, while «Хочу зняти з тебе білизну…» stayed flagged.
 
 **DoD:**
 - (Manual, owner) After a window, the judge's ratings are in the log (counts, no text). Lines rated clean reach
