@@ -38,6 +38,12 @@ PLACE_LABEL = {"agora": "в Агорі", "private": "наодинці"}
 RECALL_TITLE = "Тобі згадується з давніших розмов (це пам'ять, а не те, що кажуть зараз):"
 RECALL_TITLE_THOUGHTS = "Тобі згадується з давніших розмов і твоїх думок (це пам'ять, а не те, що кажуть зараз):"
 AGORA_NOW_TITLE = "Що сьогодні говорять в Агорі:"
+# v5.13 — a line's mark: `gemini` (passed through Gemini, clean by default — every line before v5.13) or `censored`
+# (the owner's message a block or a refusal answered); v5.14 adds `waiting`, v5.15 `clean`. Gemini's readers never
+# return a line whose mark is in `GEMINI_CLOSED`, and it is never embedded.
+MARKS = ("gemini", "censored")
+GEMINI_CLOSED = ("censored",)
+_OPEN = f"mark NOT IN ({','.join(repr(m) for m in GEMINI_CLOSED)})"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS lines (
@@ -146,6 +152,9 @@ class Archive:
         os.chmod(path, 0o600)
         self.db = sqlite3.connect(path)
         self.db.executescript(SCHEMA)
+        if "mark" not in {r[1] for r in self.db.execute("PRAGMA table_info(lines)")}:  # v5.13: migrated in place
+            with self.db:
+                self.db.execute("ALTER TABLE lines ADD COLUMN mark TEXT NOT NULL DEFAULT 'gemini'")
         # v5.8 review #5: the embedded vectors, read once and kept normalised in memory — (ids, places, matrix) —
         # appended as lines are embedded; a recall never reads them all from the file again
         self._cache: tuple[list[int], np.ndarray, np.ndarray] | None = None
@@ -173,7 +182,19 @@ class Archive:
         return int(lines), int(embedded)
 
     def unembedded(self, limit: int) -> list[tuple[int, str]]:
-        return self.db.execute("SELECT id, text FROM lines WHERE emb IS NULL ORDER BY id LIMIT ?", (limit,)).fetchall()
+        return self.db.execute(f"SELECT id, text FROM lines WHERE emb IS NULL AND {_OPEN} ORDER BY id LIMIT ?",
+                               (limit,)).fetchall()
+
+    def censor(self, keys: Iterable[str]) -> int:
+        """v5.13 — mark these lines `censored`: Gemini never reads them again, and their vectors go. How many."""
+        keys = [k for k in keys if k]
+        if not keys:
+            return 0
+        with self.db:
+            cur = self.db.execute(f"UPDATE lines SET mark = 'censored', emb = NULL WHERE key IN "
+                                  f"({','.join('?' * len(keys))})", keys)
+        self._cache = None  # their vectors leave the matrix: read again at the next recall
+        return cur.rowcount
 
     def set_embeddings(self, pairs: Iterable[tuple[int, list[float]]]) -> None:
         pairs = [(i, np.asarray(v, dtype="float32")) for i, v in pairs]
@@ -210,7 +231,7 @@ class Archive:
         try:
             return [r[0] for r in self.db.execute(
                 f"SELECT l.id FROM fts JOIN lines l ON l.id = fts.rowid WHERE fts MATCH ? AND l.place IN ({marks}) "
-                "ORDER BY bm25(fts) LIMIT ?", (match, *places, limit))]
+                f"AND l.{_OPEN} ORDER BY bm25(fts) LIMIT ?", (match, *places, limit))]
         except sqlite3.OperationalError:
             return []
 
@@ -232,7 +253,7 @@ class Archive:
         return [i for i, keep in zip(ids, mask, strict=True) if keep], matrix[mask]
 
     def _load_vectors(self) -> tuple[list[int], np.ndarray, np.ndarray]:
-        rows = self.db.execute("SELECT id, place, emb FROM lines WHERE emb IS NOT NULL").fetchall()
+        rows = self.db.execute(f"SELECT id, place, emb FROM lines WHERE emb IS NOT NULL AND {_OPEN}").fetchall()
         if rows:
             size = Counter(len(r[2]) for r in rows).most_common(1)[0][0]
             rows = [r for r in rows if len(r[2]) == size and size % 4 == 0]
@@ -246,15 +267,15 @@ class Archive:
         if not ids:
             return {}
         rows = self.db.execute(f"SELECT id, key, ts_ms, place, channel, speaker, text FROM lines WHERE id IN "
-                               f"({','.join('?' * len(ids))})", ids).fetchall()
+                               f"({','.join('?' * len(ids))}) AND {_OPEN}", ids).fetchall()
         return {r[0]: Line(*r) for r in rows}
 
     def around(self, line: Line, n: int = 1) -> list[Line]:
         """The line with its `n` neighbours before and after, in its own place, oldest first."""
         cols = "id, key, ts_ms, place, channel, speaker, text"
-        before = self.db.execute(f"SELECT {cols} FROM lines WHERE place = ? AND (ts_ms, id) < (?, ?) "
+        before = self.db.execute(f"SELECT {cols} FROM lines WHERE place = ? AND (ts_ms, id) < (?, ?) AND {_OPEN} "
                                  "ORDER BY ts_ms DESC, id DESC LIMIT ?", (line.place, line.ts_ms, line.id, n)).fetchall()
-        after = self.db.execute(f"SELECT {cols} FROM lines WHERE place = ? AND (ts_ms, id) > (?, ?) "
+        after = self.db.execute(f"SELECT {cols} FROM lines WHERE place = ? AND (ts_ms, id) > (?, ?) AND {_OPEN} "
                                 "ORDER BY ts_ms, id LIMIT ?", (line.place, line.ts_ms, line.id, n)).fetchall()
         return [Line(*r) for r in reversed(before)] + [line] + [Line(*r) for r in after]
 
@@ -273,8 +294,8 @@ class Archive:
                 self.db.execute("INSERT INTO fts(rowid, text) VALUES (?,?)", (cur.lastrowid, text))
 
     def latest(self, place: str, limit: int, since_ms: int | None = None) -> list[Line]:
-        """The last `limit` lines of a place (from `since_ms` on), oldest first."""
+        """The last `limit` lines of a place (from `since_ms` on), oldest first; never a censored one (v5.13)."""
         rows = self.db.execute(
             "SELECT id, key, ts_ms, place, channel, speaker, text FROM lines WHERE place = ? AND ts_ms >= ? "
-            "ORDER BY ts_ms DESC, id DESC LIMIT ?", (place, since_ms or 0, limit)).fetchall()
+            f"AND {_OPEN} ORDER BY ts_ms DESC, id DESC LIMIT ?", (place, since_ms or 0, limit)).fetchall()
         return [Line(*r) for r in reversed(rows)]

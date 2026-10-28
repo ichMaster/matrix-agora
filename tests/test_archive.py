@@ -307,3 +307,43 @@ def test_the_vectors_are_read_from_the_file_once_and_kept_up_to_date(arc):
     arc.sync_facts([("f1", "Ich любить гори")], ms(10))                         # the facts change: read again
     arc.vectors(["agora"])
     assert len(reads) == 2
+
+
+# --- v5.13: the mark ---------------------------------------------------------------------------------------------------
+def test_an_archive_before_v5_13_is_migrated_with_every_line_passed_through_gemini(tmp_path):
+    path = tmp_path / "kira.archive.db"
+    old = sqlite3.connect(path)
+    old.executescript("""
+        CREATE TABLE lines (id INTEGER PRIMARY KEY, key TEXT UNIQUE NOT NULL, ts_ms INTEGER NOT NULL,
+            place TEXT NOT NULL, channel TEXT NOT NULL, speaker TEXT NOT NULL, text TEXT NOT NULL, emb BLOB);
+        INSERT INTO lines(key, ts_ms, place, channel, speaker, text) VALUES ('tg:1', 1, 'private', 'telegram', 'Ich',
+            'стара розмова');""")
+    old.commit()
+    old.close()
+    a = Archive(path)
+    try:
+        assert a.db.execute("SELECT key, mark FROM lines").fetchall() == [("tg:1", "gemini")]
+        assert a.append("tg:2", 2, "private", "telegram", "Ich", "нова")
+        assert a.db.execute("SELECT mark FROM lines WHERE key = 'tg:2'").fetchone() == ("gemini",)
+    finally:
+        a.close()
+    Archive(path).close()  # opened again: no second migration
+
+
+def test_a_censored_line_is_read_by_no_gemini_reader_and_never_embedded_again(arc):
+    for i, (key, body) in enumerate((("a", "зоряне небо над Львовом"), ("b", "заборонене небо прохання"),
+                                     ("c", "ще одне небо"))):
+        arc.append(key, 10 + i, "private", "telegram", "Ich", body)
+    ids = [r[0] for r in arc.db.execute("SELECT id FROM lines ORDER BY id")]
+    arc.set_embeddings([(i, [1.0, float(n)]) for n, i in enumerate(ids)])
+    assert set(arc.vectors(("private",))[0]) == set(ids)          # the cache filled
+    assert arc.censor(["b", "missing"]) == 1
+    assert arc.db.execute("SELECT mark, emb FROM lines WHERE key = 'b'").fetchone() == ("censored", None)
+    assert ids[1] not in arc.vectors(("private",))[0]              # the cache dropped it
+    assert ids[1] not in arc.search_words("заборонене прохання", ("private",))
+    assert set(arc.search_words("небо", ("private",))) == {ids[0], ids[2]}
+    assert [line.key for line in arc.latest("private", 10)] == ["a", "c"]
+    assert [line.key for line in arc.around(arc.lines([ids[0]])[ids[0]], 1)] == ["a", "c"]  # never a neighbour
+    assert arc.lines([ids[1]]) == {}
+    assert ids[1] not in [i for i, _ in arc.unembedded(10)]
+    assert arc.censor([]) == 0 and arc.counts()[0] == 3            # kept, never deleted

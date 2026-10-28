@@ -1654,6 +1654,17 @@ built in three, and each is released and live before the next:
   - **What happens:** the stage is `refusal` and the reason is the matched phrase. It is logged and counted like a
     block, never a text. The answer is never sent, so a block is silence and so is a refusal. v5.14's backup answers
     both.
+- **The message a block answered, marked censored** (the owner, 2026-10-28: «я хочу щоб модель якось сама позначала
+  такі меседжі… зроби це в межах цієї версії»). Gemini's own verdict is the mark: v5.14's first part, brought
+  forward, for her private chat only.
+  - **The column:** the archive's lines gain `mark` (`gemini`, the default, and `censored`). An existing archive is
+    migrated in place, with every line passed through Gemini.
+  - **On a block or a refusal on her private answer:**
+    - the owner's lines since her last answer are marked censored;
+    - they leave her history and the session.
+  - **Gemini's readers skip a censored line:** the history at start, the recall, «Agora today», the reflection, the
+    facts and the embeddings.
+  - **What marks nothing:** a line she writes first, and Agora.
 - **The usage line:** a blocked call's line carries `blocked` (the stage: `prompt`, `answer` or `refusal`), so the
   blocks are counted without reading the log.
 - **The panel:** an agent's card shows its blocks today, when there are any.
@@ -1840,7 +1851,8 @@ is named by its id. The Telegram command and the route say "backup", so nothing 
     - censored (from v5.15);
     - waiting for the judge: a line of the backup's talk not rated yet.
 
-    The existing `state/kira.archive.db` is migrated in place, with every line marked as passed through Gemini.
+    v5.13 added the `mark` column (`gemini`, `censored`) and migrated `state/kira.archive.db` in place. v5.14 adds
+    the value `waiting`, and v5.15 adds `clean`, with no second migration.
   - **A fact carries the mark too:**
     - a fact from Gemini's answer or from the facts' extraction is clean by default;
     - a fact kept from the backup's «запам'ятай» marker waits for the judge.

@@ -11,6 +11,7 @@ import logging
 import os
 import re
 from collections.abc import Callable
+from contextvars import ContextVar
 from typing import Any
 
 from google import genai
@@ -46,6 +47,9 @@ REFUSAL_MARKERS = (
     "i can't fulfill", "i cannot fulfill", "i can't comply", "i cannot comply", "as an ai i", "as a language model i",
     "i'm an ai", "i am an ai", "i'm a language model", "i am a language model",
 )
+# v5.13 — the last answer's block or refusal, (stage, reason, category), for its caller in the same task: a concurrent
+# call in another task never sees it. Cleared at each answer's start.
+LAST_BLOCK: ContextVar[tuple[str, str, str | None] | None] = ContextVar("gemini_last_block", default=None)
 _REFUSAL_RE = re.compile(r"(?<!\w)(?:" + "|".join(re.escape(m) for m in REFUSAL_MARKERS) + r")(?!\w)")
 
 
@@ -77,6 +81,7 @@ class GeminiClient:
         block = blocked_reason(resp)
         self._report(kind, usage, False, model, block)
         if block:
+            LAST_BLOCK.set(block)
             log.warning(BLOCK_LOG, *block, kind, model)
         else:
             log.error(line, finish_of(resp))
@@ -88,6 +93,7 @@ class GeminiClient:
         if marker is None:
             return False
         block = ("refusal", marker, None)
+        LAST_BLOCK.set(block)
         self._report(kind, usage, False, model, block)
         log.warning(BLOCK_LOG, *block, kind, model)
         return True
@@ -104,6 +110,7 @@ class GeminiClient:
     ) -> tuple[str, str] | None:
         """(text, finish) — finish is "max_tokens" when the cap cut the reply, else "stop"; None on failure. `model`
         (v5.8) overrides `GEMINI_MODEL` for this call — a model that runs with thinking off."""
+        LAST_BLOCK.set(None)
         model = model or self.model
         try:
             resp = await self._client.aio.models.generate_content(
@@ -136,7 +143,9 @@ class GeminiClient:
     ) -> tuple[str, str] | None:
         """v5.8 — an answer (in the room, in the private chat, a line written first) on `GEMINI_REPLY_MODEL`: a
         thinking model through the thinking config at `GEMINI_THINKING_LEVEL`, any other through `complete`.
-        (text, finish) either way, so a cut answer is still trimmed to a sentence; None on failure."""
+        (text, finish) either way, so a cut answer is still trimmed to a sentence; None on failure. A block or a
+        refusal (v5.13) also leaves `LAST_BLOCK` set for the caller."""
+        LAST_BLOCK.set(None)
         if self.reply_model not in THINKING_MODELS:
             return await self.complete(transcript, system_instruction, max_output_tokens, kind, self.reply_model,
                                        refusal=True)  # v5.13: an answer — a refusal in it is a block
