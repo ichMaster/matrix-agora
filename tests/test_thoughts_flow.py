@@ -29,9 +29,9 @@ def ms(h, mi=0, d=20):
 class ThinkLLM:
     """Answers by kind from a queue; a kind may raise or wait on an event."""
 
-    def __init__(self, answers=None, hold=None, raise_on=()):
+    def __init__(self, answers=None, hold=None, raise_on=(), none_on=()):
         self.answers = {k: list(v) for k, v in (answers or {}).items()}
-        self.calls, self.hold, self.raise_on = [], hold or {}, raise_on
+        self.calls, self.hold, self.raise_on, self.none_on = [], hold or {}, raise_on, set(none_on)
 
     async def generate(self, contents, system, max_output_tokens=400, kind="reply"):
         self.calls.append((kind, system, contents))
@@ -39,6 +39,8 @@ class ThinkLLM:
             raise RuntimeError("down")
         if kind in self.hold:
             await self.hold[kind].wait()
+        if kind in self.none_on:  # the client's failure: logged by it, None to the caller
+            return None
         queue = self.answers.get(kind)
         return queue.pop(0) if queue else "Привіт, сонце."
 
@@ -274,3 +276,37 @@ def test_her_guardian_key_leaves_the_environment_and_claudes_is_untouched(monkey
     Agent(AgentConfig(name="Ада", user_id="@ada:agora.lan", canon="К.", homeserver="h", room_id=AGORA, owner=OWNER,
                       password="pw"), llm=ThinkLLM())
     assert os.environ["GUARDIAN_API_KEY"] == "claudes-key"     # only a person with `thoughts` takes it
+
+
+# --- code review #1: a failed call uses nothing up -------------------------------------------------------------
+def test_a_failed_pick_keeps_the_items_fresh_and_the_reading_comes_back_soon(tmp_path, monkeypatch):
+    llm = ThinkLLM({"reading": ["1"], "thought": ["Телескоп! Піду в суботу."]}, none_on={"reading"})
+    agent, clock = thinker(tmp_path, monkeypatch, llm)
+    asyncio.run(agent.ensure_reading(now_of(agent)))
+    state = load_state(agent.reading_file)
+    assert state.seen == {} and state.last_reading_ms == 0          # nothing shown is used up, the time restored
+    assert agent._reading_retry_ms == ms(10) + 600_000               # tried again in 10 minutes
+    llm.none_on.clear()
+    clock[0] = ms(10, 5)
+    asyncio.run(agent.ensure_reading(now_of(agent)))                 # still backing off
+    assert llm.kinds() == ["reading"]
+    clock[0] = ms(10, 11)
+    asyncio.run(agent.ensure_reading(now_of(agent)))
+    assert llm.kinds() == ["reading", "reading", "thought"]
+    assert "1. [ZAXID.NET] Новий телескоп у планетарії" in llm.calls[1][2]   # the same items, shown again
+    assert [t.text for t in agent.day_thoughts(now_of(agent).date())] == ["Телескоп! Піду в суботу."]
+
+
+def test_a_failed_reflection_keeps_its_place_and_reads_the_same_lines_next_time(tmp_path, monkeypatch):
+    llm = ThinkLLM({"reflection": ["Він питав, як я."]}, none_on={"reflection"})
+    agent, clock = thinker(tmp_path, monkeypatch, llm)
+    asyncio.run(agent.ensure_reflection(now_of(agent)))
+    talk(agent, "private", [("Ich", "Привіт, як ти?")], ms(10, 20))
+    clock[0] = ms(11, 5)
+    asyncio.run(agent.ensure_reflection(now_of(agent)))
+    assert llm.kinds() == ["reflection"] and agent.day_thoughts(now_of(agent).date()) == []
+    llm.none_on.clear()
+    clock[0] = ms(12, 10)
+    asyncio.run(agent.ensure_reflection(now_of(agent)))
+    assert llm.kinds() == ["reflection", "reflection"] and "Ich: Привіт, як ти?" in llm.calls[1][2]
+    assert [t.text for t in agent.day_thoughts(now_of(agent).date())] == ["Він питав, як я."]

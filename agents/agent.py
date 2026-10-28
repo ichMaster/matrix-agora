@@ -2086,6 +2086,7 @@ class Agent:
 
     async def _reading_tick(self, now) -> None:
         start = self.clock()
+        before = load_reading(self.reading_file).last_reading_ms
         self._reading_state(lambda s: setattr(s, "last_reading_ms", start))
         day = now.date()
         zaxid = from_citynews(await self.ensure_citynews(now))
@@ -2095,11 +2096,14 @@ class Agent:
         if not items:
             log.info("reading: nothing new")
             return
-        self._reading_state(lambda s: s.seen.update({it.id: start for it in items}))  # shown once, never again
         mood, recent = self._mood_today(day), self._recent_thoughts(day)
         system, contents = pick_request(self.cfg.name, self.cfg.canon, self.cfg.reading, mood, recent, items,
                                         self.reading_picks)
         raw = await self.llm.generate(contents, system, max_output_tokens=PICK_MAX_TOKENS, kind="reading")
+        if raw is None:  # review #1: a failed call reads nothing — the items stay fresh, the reading is tried again
+            self._reading_state(lambda s: setattr(s, "last_reading_ms", before))
+            raise RuntimeError("the pick call failed")
+        self._reading_state(lambda s: s.seen.update({it.id: start for it in items}))  # shown once, never again
         picks = parse_picks(raw, len(items), self.reading_picks)
         log.info("reading: %d items shown, %d picked", len(items), len(picks))
         for i in picks:
@@ -2110,7 +2114,7 @@ class Agent:
                 continue
             recalled = await self.recall_section(item.title, THOUGHT_PLACES, set())  # what she thought before
             system, contents = thought_request(self.cfg.name, self.cfg.canon, mood, recalled, item, body)
-            for text in await self._think(contents, system, THOUGHT_MAX_TOKENS, "thought"):
+            for text in await self._think(contents, system, THOUGHT_MAX_TOKENS, "thought") or []:
                 at = local_now(self.clock(), self.tz)
                 self.keep_thought(at, Thought(f"{at:%H:%M}", "news", "thought", item.source, text, item.title,
                                               item.link))
@@ -2144,6 +2148,9 @@ class Agent:
                                                   self._recent_thoughts(day), place,
                                                   [(line.speaker, line.text) for line in lines])
             texts = await self._think(contents, system, REFLECTION_MAX_TOKENS, "reflection", reflection=True)
+            if texts is None:  # review #1: a failed call keeps the mark — the same lines are read next time
+                log.info("reflection: the call on %s failed — tried again later", place)
+                continue
             last = lines[-1].ts_ms
             self._reading_state(lambda s, p=place, m=last: s.reflected.__setitem__(p, m))
             at = local_now(self.clock(), self.tz)
@@ -2153,14 +2160,14 @@ class Agent:
             log.info("reflection: %d thoughts on %s", len(texts), place)
 
     async def _think(self, contents: str, system: str, max_tokens: int, kind: str,
-                     reflection: bool = False) -> list[str]:
+                     reflection: bool = False) -> list[str] | None:
         """One call for her thoughts; one regeneration when a thought holds a banned word, then none — logged by
-        kind, never by text."""
+        kind, never by text. None when a call failed (review #1: nothing was read, so nothing is used up)."""
         for attempt in range(2):
             raw = await self.llm.generate(contents, system, max_output_tokens=max_tokens, kind=kind)
             if raw is None:
                 log.error("thoughts: the %s call failed", kind)
-                return []
+                return None
             texts = split_reflection(raw) if reflection else [" ".join(raw.split())]
             if texts and all(t and not BANNED_RE.search(t) for t in texts):
                 return texts
