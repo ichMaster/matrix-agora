@@ -310,3 +310,26 @@ def test_a_failed_reflection_keeps_its_place_and_reads_the_same_lines_next_time(
     asyncio.run(agent.ensure_reflection(now_of(agent)))
     assert llm.kinds() == ["reflection", "reflection"] and "Ich: Привіт, як ти?" in llm.calls[1][2]
     assert [t.text for t in agent.day_thoughts(now_of(agent).date())] == ["Він питав, як я."]
+
+
+# --- code review #2: a private thought never reaches a thought Agora sees ---------------------------------------
+def test_a_private_reflection_never_reaches_a_news_thought_or_an_agora_reflection(tmp_path, monkeypatch):
+    from agents.thoughts import Thought
+    secret = "Ich сьогодні був тихий про телескоп, я чекала більшого."
+    llm = ThinkLLM({"reading": ["1"], "thought": ["Телескоп — це масштаб."],
+                    "reflection": ["Він питав про телескоп.", "Ада про слова."]})
+    agent, clock = thinker(tmp_path, monkeypatch, llm)
+    agent.keep_thought(now_of(agent), Thought("09:00", "reflection", "thought_private", "private", secret))
+    agent.keep_thought(now_of(agent), Thought("09:30", "reflection", "thought", "agora", "Мія знову кепкувала."))
+    asyncio.run(agent.ensure_reading(now_of(agent)))
+    news_call = next(c for c in llm.calls if c[0] == "thought")
+    pick_call = next(c for c in llm.calls if c[0] == "reading")
+    assert secret not in news_call[1] and secret not in pick_call[1]            # neither the recall nor the recent
+    asyncio.run(agent.ensure_reflection(now_of(agent)))                          # the marks start
+    talk(agent, "private", [("Ich", "Як телескоп?")], ms(10, 20))
+    talk(agent, "agora", [("Ада", "Слово «зоря» гарне.")], ms(10, 30))
+    clock[0] = ms(11, 10)
+    asyncio.run(agent.ensure_reflection(now_of(agent)))
+    private_call, agora_call = [c for c in llm.calls if c[0] == "reflection"]
+    assert "наодинці" in private_call[1] and secret in private_call[1]            # alone with him she sees it
+    assert "в Агорі" in agora_call[1] and secret not in agora_call[1] and "Мія знову кепкувала." in agora_call[1]

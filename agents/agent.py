@@ -2055,10 +2055,11 @@ class Agent:
     def _mood_today(self, day) -> str | None:
         return person_mood(self.mood.resolution) if self.mood is not None and self.mood.date == day.isoformat() else None
 
-    def _recent_thoughts(self, day) -> list[str]:
-        """Her last thoughts of yesterday and today, for her reading and reflection — never a private one in vain:
-        these calls are hers alone and send nothing."""
-        return [t.text for t in [*self.day_thoughts(day - timedelta(days=1)), *self.day_thoughts(day)]][-RECENT_THOUGHTS:]
+    def _recent_thoughts(self, day, private: bool = False) -> list[str]:
+        """Her last thoughts of yesterday and today, for her reading and reflection. Only a reflection on the private
+        chat sees her private ones: every other call writes a thought Agora sees (code review #2)."""
+        thoughts = [*self.day_thoughts(day - timedelta(days=1)), *self.day_thoughts(day)]
+        return [t.text for t in thoughts if private or t.place == "thought"][-RECENT_THOUGHTS:]
 
     def reading_is_due(self, now) -> bool:
         if not self.cfg.can("thoughts") or self._reading_lock.locked() or self.clock() < self._reading_retry_ms:
@@ -2112,7 +2113,8 @@ class Agent:
             if not body:
                 log.info("reading: a %s pick had no text — skipped", item.source)
                 continue
-            recalled = await self.recall_section(item.title, THOUGHT_PLACES, set())  # what she thought before
+            # what she thought before — never a private thought: this one is Agora's to see (code review #2)
+            recalled = await self.recall_section(item.title, ("thought",), set())
             system, contents = thought_request(self.cfg.name, self.cfg.canon, mood, recalled, item, body)
             for text in await self._think(contents, system, THOUGHT_MAX_TOKENS, "thought") or []:
                 at = local_now(self.clock(), self.tz)
@@ -2145,7 +2147,7 @@ class Agent:
             if not any(line.speaker != self.cfg.name for line in lines):
                 continue
             system, contents = reflection_request(self.cfg.name, self.cfg.canon, self._mood_today(day),
-                                                  self._recent_thoughts(day), place,
+                                                  self._recent_thoughts(day, private=place == "private"), place,
                                                   [(line.speaker, line.text) for line in lines])
             texts = await self._think(contents, system, REFLECTION_MAX_TOKENS, "reflection", reflection=True)
             if texts is None:  # review #1: a failed call keeps the mark — the same lines are read next time
