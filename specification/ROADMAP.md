@@ -1,6 +1,6 @@
 # Roadmap — matrix-agora
 
-Ten self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, a second model for her private chat when Gemini blocks, and her reading and thoughts) → **v6** Лілі (the Lumi bridge: when named, then under the full rules) → **v7** Applications (the panel's System and Applications; Telegram as an application) → **v8** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation) → **v9** Theatre (plays on the Stage, recorded by Hermes). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Ten self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, her reading and thoughts, and a backup model for her private chat when Gemini blocks) → **v6** Лілі (the Lumi bridge: when named, then under the full rules) → **v7** Applications (the panel's System and Applications; Telegram as an application) → **v8** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation) → **v9** Theatre (plays on the Stage, recorded by Hermes). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
 **Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v9→9), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
@@ -1440,8 +1440,8 @@ They reach «Сьогодні», her day memory and her next plans, and her open
     plan, the mood of the day, the last events, and the next chapter as a silent direction.
 - **Lviv's news.**
   - Once a day, the day's items from Zaxid.net's RSS (`zaxid.net/rss/all.xml`, Lviv's outlet), kept in
-    `state/kira.citynews.json`. It is the same local source as v5.13's reading (the owner, 2026-10-26), with real
-    items and real links instead of a grounded search. The fetcher is built here, and v5.13 adds the full text.
+    `state/kira.citynews.json`. It is the same local source as v5.12's reading (the owner, 2026-10-26), with real
+    items and real links instead of a grounded search. The fetcher is built here, and v5.12 adds the full text.
   - Each item is rolled into her life with a probability, at most two a day.
   - Each woven item gets one of these kinds: she was there, she heard it from her people, it touched her work, it
     touched one of her people, it changed her plans.
@@ -1468,7 +1468,131 @@ They reach «Сьогодні», her day memory and her next plans, and her open
 
 **Not in this phase:** the emotional state; feelings toward people.
 
-### v5.12 — Кіра's private chat past a Gemini block: GLM-4.6 on NovelAI
+### v5.12 — Кіра reads the news and thinks: her thoughts on what she reads and on her talks
+
+**Status:** ⏳ planned.
+
+**Goal:** Кіра reads the news and has thoughts of her own:
+- a thought on each item she reads;
+- her own reflection on her talks, with the owner and in Agora.
+
+Her thoughts come on a schedule, even while she is in a conversation. They go into her archive next to the chat,
+marked as hers («я думала…»), and she recalls them as she recalls what was said.
+
+**Owner decisions** (2026-10-26):
+- **Two sources:**
+  - a local one with the full text: Zaxid.net, Lviv's outlet;
+  - The Guardian, so she may pick what Claude did not.
+- **A thought on each item she reads**, and **her own reflection** on the chat with the owner and on Agora.
+- **On a schedule, even while she talks.** A thought never waits for silence and never holds up a reply.
+- **Into the archive, like the chat**, marked «я думала…».
+- **Agreed as proposed:**
+  - **A reflection on the private chat** stays out of Agora's recall, by the archive's places, as the private chat's
+    lines already do.
+  - **Topics:** from her canon (her work, Lviv, Ukraine, what she cares about). Claude drafts a paragraph on what
+    she reads, and the owner edits it.
+  - **Politics and war:** she reacts to events and holds views, as a person in Lviv does. She does not argue party
+    politics unless asked.
+  - **Links:** an item she shares in the private chat or Telegram carries its link. In Agora she tells it in her own
+    words.
+- The design is in [features/voice-emotion.md](features/voice-emotion.md) §Reading and thoughts.
+
+**Tasks:**
+- **The sources** (`agents/reading.py`; pure where it decides, with an injectable fetch).
+  - **Zaxid.net:**
+    - The RSS gives about 50 newest items, each a title and a short description.
+    - The full text is the article page's JSON-LD `articleBody` (checked 2026-10-26). It is fetched only for an
+      item she picked.
+    - Parsing uses the stdlib (`xml.etree`, `json`) over `aiohttp`, already a dependency.
+  - **The Guardian:**
+    - Code calls `agents/guardian.py`'s `search_url`, `read_url`, `results` and `article` directly, with no SDK and
+      no tools, over the sections of her interests.
+    - `GUARDIAN_API_KEY` goes into `server/kira.env` (an owner step). Without it the Guardian is skipped, and this
+      is logged once.
+    - She reads it in English and thinks in Ukrainian.
+  - **No state shared with Claude:** she picks by her own interests and never reads his files.
+  - **Seen items:** kept in `state/kira.reading.json` (ids and times, no texts), so nothing is read twice.
+- **A reading,** every `READING_EVERY_S` (default 3 hours) within `READING_HOURS` (default `08-01`):
+  - One call gets the fresh titles and descriptions from both sources, with her canon, the mood of the day and her
+    recent thoughts. It picks at most `READING_PICKS` (default 2) items, or none.
+  - Code fetches the full text of each pick.
+  - One call per pick writes her thought, built only on the article's facts:
+    - first person, 1–3 sentences;
+    - her earlier thoughts on the topic come from recall;
+    - a changed mind is a new thought, and the old one stays.
+- **A reflection,** every `REFLECT_EVERY_S` (default 1 hour), for each place with new lines since her last
+  reflection there: the private chat (Element and Telegram) and Agora.
+  - One call reads those lines with her canon, the mood of the day and her last thoughts.
+  - It writes one or two thoughts of hers about the talk.
+  - It runs mid-conversation too, off the reply path, and sends nothing.
+  - It never invents Ich's or a member's words or deeds.
+- **Storage.**
+  - **The day file:** `state/kira.thoughts/YYYY-MM-DD.md` keeps each thought with its time, kind (`news` or
+    `reflection`) and place, and for news the source, title and link. It is appended and never rewritten.
+  - **The archive:** each thought is a line of `state/kira.archive.db`, with her name as the speaker, embedded like
+    the rest.
+    - A news thought or a reflection on Agora has the place `thought`.
+    - A reflection on the private chat has the place `thought_private`.
+  - **Recall:** the private recall searches both places. Agora's recall searches `thought` only, as it already
+    searches only `agora`.
+  - **How it reads:** a recalled thought renders as «вчора я думала: …», never as something said and never with a
+    date or an hour. A date gives her away: a person does not remember the day of a thought (the owner,
+    2026-10-26).
+    - The pure `ago(ts, now)` (injected clock) picks the words:
+      - «сьогодні вранці / вдень / ввечері / вночі»;
+      - «вчора»;
+      - «позавчора»;
+      - «цього тижня»;
+      - «минулого тижня»;
+      - «цього місяця»;
+      - «минулого місяця»;
+      - «якось».
+    - The week starts on Monday, and the nearest band wins.
+    - The recall title names thoughts too.
+- **Where thoughts go.**
+  - **Recall,** as above.
+  - **Her prompts:** a block «Що ти сьогодні думала» with the last `THOUGHTS_IN_PROMPT` (3) of today. Each has its
+    part of the day, never a clock time. A `thought_private` thought appears only in the private prompt.
+  - **Writing first:** an item with her thought and its link, or a reflection she comes back to.
+  - **Agora:** a persona move `thought` (`PERSONA_THOUGHT_P`, taken from the plain answer's share). She brings up
+    what she read or thought when it fits, and never starts a talk with it.
+  - **The day memory:** what she read and thought.
+- **The capability** `thoughts`: a person's only, needs `recall` (`NEEDS`), and is on in `kira.toml`.
+- **Settings and the panel:**
+  - the settings `READING_EVERY_S`, `READING_HOURS`, `READING_PICKS`, `REFLECT_EVERY_S`, `THOUGHTS_IN_PROMPT` and
+    `PERSONA_THOUGHT_P`;
+  - a Thoughts tab showing her thoughts by day, with kind, place, source and link.
+- **ARCHITECTURE:**
+  - §Memory: thoughts in the archive;
+  - §Prompt assembly;
+  - §Token accounting: the kinds `reading`, `thought` and `reflection`, on `GEMINI_MODEL`;
+  - §Contracts: the capability, the archive's places, the state files, the settings and `kira.env.example`.
+
+**DoD:**
+- (Manual, owner) Over a day she reads items from both sources, and her Thoughts tab shows her thoughts with their
+  links.
+- (Manual, owner) During a long talk a reflection is written with no pause in her answers. Asked later, she
+  remembers it as what she thought, not as what was said.
+- (Manual, owner) A reflection on the private chat never comes up in Agora.
+
+**Tests:**
+- the RSS and JSON-LD parse on saved pages, and a page without `articleBody` skipped;
+- the Guardian calls with canned payloads, and no key meaning no Guardian;
+- the reading's and the reflection's schedule with an injected clock, within the hours and while a session is open;
+- an item never read twice;
+- a thought appended to the day file and to the archive with its place;
+- `ago` over each band and its edges with an injected clock (midnight, Monday, the 1st of a month, a year's turn);
+- a recalled or today's thought carrying no date and no clock time;
+- the recall rendering «… я думала: …», and Agora's recall never returning `thought_private`;
+- no reply waiting on a thought;
+- the reflection prompt forbidding invented words or deeds;
+- no banned word, and no text or key in a log.
+
+**Not in this phase:**
+- the other persons;
+- thoughts without a source (her life's events are v5.11's).
+
+### v5.13 — Кіра's private chat past a Gemini block: GLM-4.6 on NovelAI
 
 **Status:** ⏳ planned.
 
@@ -1480,8 +1604,8 @@ and pins the mode with commands in Telegram.
 **Owner decisions** (2026-10-28):
 - **Кіра only, the private chat only:** her answers to the owner and the lines she writes first (the kinds `private`
   and `private_nudge`), in Element and in Telegram. Agora, the background calls (events, «Сьогодні», the day memory,
-  plans, the mood, the session summary, v5.13's thoughts) and every other agent stay as they are: a block there is
-  logged, and the agent stays silent.
+  plans, the mood, the session summary, v5.12's thoughts and reflections) and every other agent stay as they are: a
+  block there is logged, and the agent stays silent.
 - **The backup model:** GLM-4.6 (`glm-4-6`) on NovelAI. The way there:
   - Hermes 3 405B on OpenRouter broke down in the owner's test at the chat's default settings: after one Ukrainian
     sentence it wrote fragments of code and of other scripts, then one symbol over and over;
@@ -1697,130 +1821,6 @@ modes say "backup", so nothing is renamed when the model changes.
 - a separate classifier model before Gemini;
 - Xialong, until its id is known (a setting, no code);
 - commands in Element, and switching the mode from the panel.
-
-### v5.13 — Кіра reads the news and thinks: her thoughts on what she reads and on her talks
-
-**Status:** ⏳ planned (numbered v5.12 until 2026-10-28, when the owner put the fallback model before it).
-
-**Goal:** Кіра reads the news and has thoughts of her own:
-- a thought on each item she reads;
-- her own reflection on her talks, with the owner and in Agora.
-
-Her thoughts come on a schedule, even while she is in a conversation. They go into her archive next to the chat,
-marked as hers («я думала…»), and she recalls them as she recalls what was said.
-
-**Owner decisions** (2026-10-26):
-- **Two sources:**
-  - a local one with the full text: Zaxid.net, Lviv's outlet;
-  - The Guardian, so she may pick what Claude did not.
-- **A thought on each item she reads**, and **her own reflection** on the chat with the owner and on Agora.
-- **On a schedule, even while she talks.** A thought never waits for silence and never holds up a reply.
-- **Into the archive, like the chat**, marked «я думала…».
-- **Agreed as proposed:**
-  - **A reflection on the private chat** stays out of Agora's recall, by the archive's places, as the private chat's
-    lines already do.
-  - **Topics:** from her canon (her work, Lviv, Ukraine, what she cares about). Claude drafts a paragraph on what
-    she reads, and the owner edits it.
-  - **Politics and war:** she reacts to events and holds views, as a person in Lviv does. She does not argue party
-    politics unless asked.
-  - **Links:** an item she shares in the private chat or Telegram carries its link. In Agora she tells it in her own
-    words.
-- The design is in [features/voice-emotion.md](features/voice-emotion.md) §Reading and thoughts.
-
-**Tasks:**
-- **The sources** (`agents/reading.py`; pure where it decides, with an injectable fetch).
-  - **Zaxid.net:**
-    - The RSS gives about 50 newest items, each a title and a short description.
-    - The full text is the article page's JSON-LD `articleBody` (checked 2026-10-26). It is fetched only for an
-      item she picked.
-    - Parsing uses the stdlib (`xml.etree`, `json`) over `aiohttp`, already a dependency.
-  - **The Guardian:**
-    - Code calls `agents/guardian.py`'s `search_url`, `read_url`, `results` and `article` directly, with no SDK and
-      no tools, over the sections of her interests.
-    - `GUARDIAN_API_KEY` goes into `server/kira.env` (an owner step). Without it the Guardian is skipped, and this
-      is logged once.
-    - She reads it in English and thinks in Ukrainian.
-  - **No state shared with Claude:** she picks by her own interests and never reads his files.
-  - **Seen items:** kept in `state/kira.reading.json` (ids and times, no texts), so nothing is read twice.
-- **A reading,** every `READING_EVERY_S` (default 3 hours) within `READING_HOURS` (default `08-01`):
-  - One call gets the fresh titles and descriptions from both sources, with her canon, the mood of the day and her
-    recent thoughts. It picks at most `READING_PICKS` (default 2) items, or none.
-  - Code fetches the full text of each pick.
-  - One call per pick writes her thought, built only on the article's facts:
-    - first person, 1–3 sentences;
-    - her earlier thoughts on the topic come from recall;
-    - a changed mind is a new thought, and the old one stays.
-- **A reflection,** every `REFLECT_EVERY_S` (default 1 hour), for each place with new lines since her last
-  reflection there: the private chat (Element and Telegram) and Agora.
-  - One call reads those lines with her canon, the mood of the day and her last thoughts.
-  - It writes one or two thoughts of hers about the talk.
-  - It runs mid-conversation too, off the reply path, and sends nothing.
-  - It never invents Ich's or a member's words or deeds.
-- **Storage.**
-  - **The day file:** `state/kira.thoughts/YYYY-MM-DD.md` keeps each thought with its time, kind (`news` or
-    `reflection`) and place, and for news the source, title and link. It is appended and never rewritten.
-  - **The archive:** each thought is a line of `state/kira.archive.db`, with her name as the speaker, embedded like
-    the rest.
-    - A news thought or a reflection on Agora has the place `thought`.
-    - A reflection on the private chat has the place `thought_private`.
-  - **Recall:** the private recall searches both places. Agora's recall searches `thought` only, as it already
-    searches only `agora`.
-  - **How it reads:** a recalled thought renders as «вчора я думала: …», never as something said and never with a
-    date or an hour. A date gives her away: a person does not remember the day of a thought (the owner,
-    2026-10-26).
-    - The pure `ago(ts, now)` (injected clock) picks the words:
-      - «сьогодні вранці / вдень / ввечері / вночі»;
-      - «вчора»;
-      - «позавчора»;
-      - «цього тижня»;
-      - «минулого тижня»;
-      - «цього місяця»;
-      - «минулого місяця»;
-      - «якось».
-    - The week starts on Monday, and the nearest band wins.
-    - The recall title names thoughts too.
-- **Where thoughts go.**
-  - **Recall,** as above.
-  - **Her prompts:** a block «Що ти сьогодні думала» with the last `THOUGHTS_IN_PROMPT` (3) of today. Each has its
-    part of the day, never a clock time. A `thought_private` thought appears only in the private prompt.
-  - **Writing first:** an item with her thought and its link, or a reflection she comes back to.
-  - **Agora:** a persona move `thought` (`PERSONA_THOUGHT_P`, taken from the plain answer's share). She brings up
-    what she read or thought when it fits, and never starts a talk with it.
-  - **The day memory:** what she read and thought.
-- **The capability** `thoughts`: a person's only, needs `recall` (`NEEDS`), and is on in `kira.toml`.
-- **Settings and the panel:**
-  - the settings `READING_EVERY_S`, `READING_HOURS`, `READING_PICKS`, `REFLECT_EVERY_S`, `THOUGHTS_IN_PROMPT` and
-    `PERSONA_THOUGHT_P`;
-  - a Thoughts tab showing her thoughts by day, with kind, place, source and link.
-- **ARCHITECTURE:**
-  - §Memory: thoughts in the archive;
-  - §Prompt assembly;
-  - §Token accounting: the kinds `reading`, `thought` and `reflection`, on `GEMINI_MODEL`;
-  - §Contracts: the capability, the archive's places, the state files, the settings and `kira.env.example`.
-
-**DoD:**
-- (Manual, owner) Over a day she reads items from both sources, and her Thoughts tab shows her thoughts with their
-  links.
-- (Manual, owner) During a long talk a reflection is written with no pause in her answers. Asked later, she
-  remembers it as what she thought, not as what was said.
-- (Manual, owner) A reflection on the private chat never comes up in Agora.
-
-**Tests:**
-- the RSS and JSON-LD parse on saved pages, and a page without `articleBody` skipped;
-- the Guardian calls with canned payloads, and no key meaning no Guardian;
-- the reading's and the reflection's schedule with an injected clock, within the hours and while a session is open;
-- an item never read twice;
-- a thought appended to the day file and to the archive with its place;
-- `ago` over each band and its edges with an injected clock (midnight, Monday, the 1st of a month, a year's turn);
-- a recalled or today's thought carrying no date and no clock time;
-- the recall rendering «… я думала: …», and Agora's recall never returning `thought_private`;
-- no reply waiting on a thought;
-- the reflection prompt forbidding invented words or deeds;
-- no banned word, and no text or key in a log.
-
-**Not in this phase:**
-- the other persons;
-- thoughts without a source (her life's events are v5.11's).
 
 ## v6 — Лілі: the Lumi bridge
 
@@ -2051,8 +2051,8 @@ the owner).
 **Status:** ⏳ planned.
 
 The owner, 2026-10-26: the last three phases of her emotional life become a version of their own, v8 (Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9).
-- v5.10–v5.13 give her a mood of the day, the events of her life, a second model for her private chat, and her reading
-  and thoughts.
+- v5.10–v5.13 give her a mood of the day, the events of her life, her reading and thoughts, and a backup model for her
+  private chat.
 - v8 gives her:
   - a state that lasts between replies and moves her voice (v8.1);
   - feelings toward each person, open threads, and bounded effects on what she does (v8.2);
