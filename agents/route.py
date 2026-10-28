@@ -117,30 +117,48 @@ def save_route(path: Path, route: Route) -> None:
     os.replace(tmp, path)
 
 
-PIN_NAMES = {"auto": "авто", "gemini": "Gemini", "backup": "резерв"}
+PIN_NAMES = {"auto": "auto", "gemini": "gemini", "backup": "backup"}  # the commands' own words
 
 
 def _hhmm(ms: int, tz: str) -> str:
     return datetime.fromtimestamp(ms / 1000, ZoneInfo(tz)).strftime("%H:%M")
 
 
-def status_text(route: Route, now_ms: int, tz: str, day: str, day_start_ms: int, day_max: int,
-                waiting: int, censored: int) -> str:
-    """`/status`: the route, auto or pinned and until when; the blocks in the last hour and today, out of the cap;
-    the lines of her private chat waiting for the judge and censored; today's answers by Gemini and by the backup.
-    One service line block, never a text of the talk."""
+def status_text(route: Route, now_ms: int, tz: str, day_max: int, waiting: int, censored: int,
+                answers: dict, blocks_hour: int, blocks_today: int) -> str:
+    """`/status`: the route, auto or pinned since when (lifted by `/auto`); the blocks in the last hour and today, out
+    of the cap; the lines of her private chat waiting for the judge and censored; today's answers by Gemini and by the
+    backup. The counts are the whole day's (the owner's live test: from her usage lines, not only since the route's
+    file began). One service line block, never a text of the talk."""
     if route.pin != "auto":
-        since = f" (з {_hhmm(route.pinned_at_ms, tz)})" if route.pinned_at_ms else ""
-        where = f"закріплено: {PIN_NAMES[route.pin]}{since}, до /auto"
+        since = f"закріплено о {_hhmm(route.pinned_at_ms, tz)}; " if route.pinned_at_ms else "закріплено; "
+        where = f"{PIN_NAMES[route.pin]} ({since}скасувати: /auto)"
     elif state(route, now_ms) == "window":
-        where = f"авто: резерв до {_hhmm(route.window_until_ms, tz)}"
+        where = f"auto: backup до {_hhmm(route.window_until_ms, tz)}"
     elif state(route, now_ms) == "window_end":
-        where = "авто: вікно резерву скінчилось — наступне повідомлення вирішить"
+        where = "auto: вікно backup скінчилось — наступне повідомлення вирішить"
     else:
-        where = "авто: Gemini"
-    answers = route.answers if route.day == day else {"gemini": 0, "backup": 0}
+        where = "auto: gemini"
     return (f"⚙️ Маршрут — {where}\n"
-            f"Блоків: за годину {blocks_since(route, now_ms - HOUR_MS)}, сьогодні {blocks_since(route, day_start_ms)} "
-            f"з {day_max}\n"
+            f"Блоків: за годину {blocks_hour}, сьогодні {blocks_today} з {day_max}\n"
             f"Приватний чат: чекають на суддю {waiting}, цензуровані {censored}\n"
-            f"Сьогодні відповіла: через Gemini {answers.get('gemini', 0)}, через резерв {answers.get('backup', 0)}")
+            f"Сьогодні відповіла: через gemini {answers.get('gemini', 0)}, через backup {answers.get('backup', 0)}")
+
+
+def day_counts(records: list[dict], day: str, now_ms: int) -> tuple[dict, int, int]:
+    """Her private answers of `day` from her usage lines: ({gemini, backup} answered, blocks in the last hour, blocks
+    today) — a block or a refusal is the line's `blocked` (v5.13), the backup's engine `novelai` (v5.14)."""
+    answers, hour, today = {"gemini": 0, "backup": 0}, 0, 0
+    for r in records:
+        ts = str(r.get("ts", ""))
+        if not ts.startswith(day) or r.get("kind") not in ("private", "private_nudge"):
+            continue
+        if r.get("blocked"):
+            today += 1
+            try:
+                hour += datetime.fromisoformat(ts).timestamp() * 1000 >= now_ms - HOUR_MS
+            except ValueError:
+                pass
+        elif r.get("ok"):
+            answers["backup" if r.get("engine") == "novelai" else "gemini"] += 1
+    return answers, hour, today

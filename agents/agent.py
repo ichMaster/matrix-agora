@@ -214,7 +214,7 @@ from agents.reading import save_state as save_reading
 from agents.responder import Turn, responder_for, trim_to_sentence
 from agents.roster import Member, load_roster, speakers
 from agents.route import after as route_after
-from agents.route import day_bounds, load_route, save_route, status_text
+from agents.route import day_bounds, day_counts, load_route, save_route, status_text
 from agents.route import state as route_state
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.settings import VOICE_ID_RE
@@ -1435,7 +1435,7 @@ class Agent:
         name = command_of(text)
         known = {n for n, _ in COMMANDS}
         if name in ("auto", "gemini", "backup") and self.fallback_responder is None:
-            answer = "⚙️ Резерв вимкнено: її відповіді завжди через Gemini"
+            answer = "⚙️ Backup вимкнено: її відповіді завжди через gemini"
         elif name in ("auto", "gemini", "backup"):
             self.route_step(f"pin:{name}")
             answer = self.status_answer()
@@ -1450,16 +1450,21 @@ class Agent:
     def status_answer(self) -> str:
         """The `/status` line: the route, the blocks, the marks of her private chat and today's answers."""
         now_ms = self.clock()
-        day, start, _ = day_bounds(now_ms, self.tz)
+        day = day_bounds(now_ms, self.tz)[0]
         counts: dict[str, int] = {}
         if self.archive is not None:
             try:
                 counts = self.archive.mark_counts("private")
             except Exception as exc:  # noqa: BLE001
                 log.error("archive: the marks were not counted (%s)", type(exc).__name__)
-        text = status_text(load_route(self.route_file), now_ms, self.tz, day, start, self.fallback_day_max,
-                           counts.get("waiting", 0), counts.get("censored", 0))
-        return text if self.fallback_responder is not None else text + "\n(резерв вимкнено)"
+        try:  # the whole day's answers and blocks (the owner's live test), from her usage lines — no text in them
+            records = parse_lines(self.usage_file.read_text(encoding="utf-8").splitlines())[0]
+        except OSError:
+            records = []
+        answers, hour, today = day_counts(records, day, now_ms)
+        text = status_text(load_route(self.route_file), now_ms, self.tz, self.fallback_day_max,
+                           counts.get("waiting", 0), counts.get("censored", 0), answers, hour, today)
+        return text if self.fallback_responder is not None else text + "\n(backup вимкнено)"
 
     async def telegram_hear(self, update: Update) -> None:
         """The owner's voice note as words: the capped download (in memory only), Deepgram, a `stt` usage line —

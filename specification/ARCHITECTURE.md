@@ -115,9 +115,11 @@ The invariants every reply path must honor:
    (`TELEGRAM_OWNER_ID`) in a private chat is handled (`allowed`); a stranger, a group, an edit or another kind is
    logged `ignored: <reason> (telegram <kind>)`, never an id or a word. **The owner's commands (v5.14, pinned by
    `tests/test_telegram_commands.py`):** a «/» text of his, sent after the start, is `telegram_command`'s and never a
-   line of her talk — `/status` (the route, auto or pinned and until when; the blocks in the last hour and today out of
-   `FALLBACK_DAY_MAX`; her private chat's lines waiting for the judge and censored; today's answers by Gemini and by
-   the backup — `status_text`, `agents/route.py`), `/auto`, `/gemini`, `/backup` (a pin, through `route_step`), and
+   line of her talk — `/status` (the route in the commands' own words — `auto: gemini`, `auto: backup до 14:05`,
+   `backup (закріплено о 21:27; скасувати: /auto)`; the blocks in the last hour and today out of `FALLBACK_DAY_MAX`;
+   her private chat's lines waiting for the judge and censored; today's answers by gemini and by backup — the day's
+   counts from her usage lines (`day_counts`: the answer kinds, `blocked`, the engine), never only since the route's
+   file began; `status_text`, `agents/route.py`), `/auto`, `/gemini`, `/backup` (a pin, through `route_step`), and
    any other the list (`COMMAND_HELP`); without the backup a pin says it is off. The answer is one ⚙️ service line,
    text only, never voiced; a command and its answer never reach her history, the archive, the facts, the session or
    a prompt, and never reset her writing-first timer; logged by the command's name only. A command from before the
