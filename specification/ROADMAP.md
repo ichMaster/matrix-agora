@@ -1852,7 +1852,8 @@ is named by its id. The Telegram command and the route say "backup", so nothing 
     - waiting for the judge: a line of the backup's talk not rated yet.
 
     v5.13 added the `mark` column (`gemini`, `censored`) and migrated `state/kira.archive.db` in place. v5.14 adds
-    the value `waiting`, and v5.15 adds `clean`, with no second migration.
+    the value `waiting`, and v5.15 adds `clean`, with no second migration. v5.13's `censored` lines rest on Gemini's verdict alone,
+    so v5.14 re-marks them `waiting`, and v5.15's judge rates them like the backup's talk (v5.13 review #3).
   - **A fact carries the mark too:**
     - a fact from Gemini's answer or from the facts' extraction is clean by default;
     - a fact kept from the backup's «запам'ятай» marker waits for the judge.
