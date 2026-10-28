@@ -212,6 +212,48 @@ def test_the_memory_route_serves_her_events_and_only_hers(state, monkeypatch):
     assert c.get("/api/agents/kira/memory").status_code == 401
 
 
+# --- v5.12: her thoughts, by day ---------------------------------------------------------------------------------------
+THOUGHTS_TODAY = ("\n## 09:15 · news · thought · zaxid\n<!-- title: Новий телескоп -->\n<!-- link: https://zaxid.net/n1 -->\n"
+                  "Аж мурашки.\n\n## 21:40 · reflection · thought_private · private\nВін був тихий.\n")
+
+
+def test_the_thoughts_view_by_day_newest_first(state):
+    folder = state / "kira.thoughts"
+    folder.mkdir()
+    (folder / "2026-10-04.md").write_text(THOUGHTS_TODAY, encoding="utf-8")
+    (folder / "2026-10-02.md").write_text("\n## 14:05 · reflection · thought · agora\nАда про слова.\n", encoding="utf-8")
+    (folder / "2026-09-20.md").write_text("\n## 10:00 · news · thought · guardian\nДавно.\n", encoding="utf-8")
+    view = memory_view(state, "kira", TODAY, with_thoughts=True)["thoughts"]
+    assert [d["date"] for d in view] == ["2026-10-04", "2026-10-02"]
+    assert view[0]["thoughts"] == [
+        {"time": "09:15", "kind": "news", "place": "thought", "source": "zaxid", "title": "Новий телескоп",
+         "text": "Аж мурашки.", "link": "https://zaxid.net/n1"},
+        {"time": "21:40", "kind": "reflection", "place": "thought_private", "source": "private", "title": None,
+         "text": "Він був тихий.", "link": None}]
+    assert memory_view(state, "kira", TODAY)["thoughts"] is None                       # no `thoughts`
+    assert memory_view(state, "ada", TODAY, with_thoughts=True)["thoughts"] == []      # none yet
+    (folder / "2026-10-04.md").write_bytes(b"\n## 09:00 \xd0\xff broken")
+    assert [d["date"] for d in memory_view(state, "kira", TODAY, with_thoughts=True)["thoughts"]] == ["2026-10-02"]
+
+
+def test_an_unreadable_thoughts_folder_is_null_never_a_500(state):
+    (state / "kira.thoughts").write_text("not a folder", encoding="utf-8")
+    assert memory_view(state, "kira", TODAY, with_thoughts=True)["thoughts"] is None
+
+
+def test_the_memory_route_serves_her_thoughts_and_only_hers(state, monkeypatch):
+    monkeypatch.setattr(app_mod, "local_today", lambda: TODAY)
+    (state / "kira.thoughts").mkdir()
+    (state / "kira.thoughts" / "2026-10-04.md").write_text(THOUGHTS_TODAY, encoding="utf-8")
+    reg = Registry()
+    c = TestClient(create_app(token=TOKEN, registry=reg, docker_reader=DockerReader(client_factory=lambda: None),
+                              prober=Prober(reg), state_dir=state, background=False))
+    kira = c.get("/api/agents/kira/memory", headers=AUTH).json()
+    assert kira["thoughts"][0]["thoughts"][0]["link"] == "https://zaxid.net/n1"
+    assert c.get("/api/agents/ada/memory", headers=AUTH).json()["thoughts"] is None
+    assert c.get("/api/agents/kira/memory").status_code == 401
+
+
 # --- v4.3: the cat's past life and initiative -----------------------------------------------------------------------
 @pytest.mark.canon
 def test_the_cat_shows_his_theses_his_last_nudge_and_todays_count(state, monkeypatch):

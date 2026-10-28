@@ -8,11 +8,11 @@ const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today",
 // review #11: a kind not listed above still shows, after the listed ones — a tab's rows always add up to its total
 function kindsOf(byKind) { return [...KIND_ORDER.filter((k) => byKind[k]), ...Object.keys(byKind).filter((k) => !KIND_ORDER.includes(k)).sort()]; }
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
-              ["today", "Today"], ["mood", "Mood"], ["events", "Events"], ["facts", "Facts"], ["voice", "Voice"], ["tokens", "Tokens"],
+              ["today", "Today"], ["mood", "Mood"], ["events", "Events"], ["thoughts", "Thoughts"], ["facts", "Facts"], ["voice", "Voice"], ["tokens", "Tokens"],
               ["files", "Files"], ["settings", "Settings"]];
 // v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
 const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", facts: "facts",
-                 voice: "voice", events: "events"};
+                 voice: "voice", events: "events", thoughts: "thoughts"};
 const SERIES = ["a", "b", "c", "d", "e"];  // stacked token bars: one tint of the accent per agent (v4.2: N agents)
 const PRONOUN = {she: "She", he: "He", it: "It"};
 function can(a, cap) { return !a.capabilities || a.capabilities.includes(cap); }
@@ -403,6 +403,7 @@ function agentCardHtml(a) {
     ${can(a, "today") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Today</div>${today}</div>` : ""}
     ${can(a, "mood") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Mood of the day</div>${moodLine(mem)}${weatherLine(mem)}</div>` : ""}
     ${a.capabilities && can(a, "events") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Last event</div>${lastEventLine(mem)}</div>` : ""}
+    ${a.capabilities && can(a, "thoughts") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Last thought</div>${lastThoughtLine(mem)}</div>` : ""}
     ${can(a, "pastlife") || can(a, "nudge") ? `<div class="muted" style="font-size:12px">${pastLifeLine(mem)}</div>` : ""}
     ${a.engine === "claude-sdk" ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Subscription</div>${claudeLines(mem)}</div>` : ""}
     ${can(a, "digest") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Digests</div>${digestLine(mem)}</div>` : ""}
@@ -550,6 +551,17 @@ function lastEventLine(mem) {
   if (!e) return `<div class="muted" style="font-size:13px">Nothing has happened this week yet</div>`;
   return `<div class="today-line" lang="uk" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${esc(e.text)}</div>
     <div class="muted" style="font-size:12px">${esc(shortDay(day.date))} · ${esc(e.time)} · ${esc(eventLabel(e))}</div>`;
+}
+
+// v5.12 — her latest thought this week on the card, under her last event: the text (three lines at most), its day,
+// time and label
+function lastThoughtLine(mem) {
+  if (!mem.available) return `<div class="muted" style="font-size:13px">Memory unavailable</div>`;
+  if (!mem.thoughts) return `<div class="muted" style="font-size:13px">Thoughts unreadable</div>`;
+  const day = mem.thoughts[0], t = day && day.thoughts[day.thoughts.length - 1];
+  if (!t) return `<div class="muted" style="font-size:13px">No thoughts this week yet</div>`;
+  return `<div class="today-line" lang="uk" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">${esc(t.text)}</div>
+    <div class="muted" style="font-size:12px">${esc(shortDay(day.date))} · ${esc(t.time)} · ${esc(thoughtLabel(t))}</div>`;
 }
 
 function moodLine(mem) {
@@ -716,12 +728,31 @@ function eventsTabHtml(a, mem) {
   }).join("")).join("");
 }
 
+// v5.12 — what she read and thought: by day, newest first; a news thought with its title and source link
+const THOUGHT_SOURCE = {zaxid: "Zaxid.net", guardian: "The Guardian", private: "alone", agora: "Agora"};
+const thoughtLabel = (t) => `${t.kind} · ${THOUGHT_SOURCE[t.source] || t.source}`;
+function thoughtsTabHtml(a, mem) {
+  const days = mem.thoughts;
+  if (!days) return `<p class="muted">Thoughts unreadable.</p>`;
+  if (!days.length) return `<p class="muted">${esc(a.display)} has had no thoughts this week yet — she reads every few hours and thinks over her talks.</p>`;
+  return days.map((d) => `<div class="section-label" style="margin:14px 0 6px">${esc(longDay(d.date))}</div>` + d.thoughts.map((t) => {
+    const link = t.link && /^https:\/\//.test(t.link)
+      ? ` <a href="${esc(t.link)}" target="_blank" rel="noopener noreferrer" class="muted" style="font-size:12px">source</a>` : "";
+    const title = t.kind === "news" && t.title ? `<div class="muted" style="font-size:12px" lang="${t.source === "guardian" ? "en" : "uk"}">${esc(t.title)}</div>` : "";
+    return `<div class="rule-b" style="padding:8px 0;display:flex;gap:12px;align-items:flex-start">
+      <span class="mono muted" style="font-size:12px;min-width:42px">${esc(t.time)}</span>
+      <span class="kind-tag" style="white-space:nowrap">${esc(thoughtLabel(t))}</span>
+      <div style="flex:1;min-width:0">${title}<div lang="uk">${esc(t.text)}${link}</div></div></div>`;
+  }).join("")).join("");
+}
+
 function agentTabHtml(a, mem, tab) {
   if (tab === "files") return filesTabHtml(a);
   if (tab === "settings") return `<div class="muted" style="font-size:12.5px;margin-bottom:12px">${esc(a.display)}'s own settings, whatever the service · a save restarts ${esc(a.display)}</div>${settingsHtml()}`;
   if (!mem.available) return unavailableBox();
   if (tab === "mood") return moodTabHtml(mem);
   if (tab === "events") return eventsTabHtml(a, mem);
+  if (tab === "thoughts") return thoughtsTabHtml(a, mem);
   if (tab === "facts") return factsTabHtml(a, mem);
   if (tab === "voice") return voiceTabHtml(a, mem);
   if (tab === "session") {

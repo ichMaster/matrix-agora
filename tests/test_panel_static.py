@@ -73,8 +73,8 @@ def test_the_page_follows_capabilities():
     pronoun; with every capability on (Ada, Bruno) the page is unchanged."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert ('const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", '
-            'facts: "facts",\n                 voice: "voice", events: "events"};') in js  # v5.8 Facts, v5.9 Voice,
-    # v5.11 Events need their capability
+            'facts: "facts",\n                 voice: "voice", events: "events", thoughts: "thoughts"};') in js
+    # v5.8 Facts, v5.9 Voice, v5.11 Events, v5.12 Thoughts need their capability
     assert 'rel="noopener noreferrer"' in js and "eventsTabHtml(a, mem)" in js
     assert 'PRONOUN = {she: "She", he: "He", it: "It"}' in js
     assert "agentTabs(a)" in js and 'dr.tab = "log"' in js
@@ -296,3 +296,25 @@ def test_the_card_shows_her_last_event():
     assert "const day = mem.events[0], e = day && day.events[day.events.length - 1];" in js
     assert "${esc(shortDay(day.date))} · ${esc(e.time)} · ${esc(eventLabel(e))}" in js
     assert "const label = eventLabel(e);" in js and "Nothing has happened this week yet" in js
+
+
+# --- v5.12: her thoughts ------------------------------------------------------------------------------------------
+def test_the_thoughts_tab_and_the_card_line():
+    """v5.12: an agent with `thoughts` gets a Thoughts tab — by day, each thought's time, kind and source as a label,
+    a news thought's title and an https-only source link, every text escaped — and «Last thought» under «Last
+    event» on her card."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert '["events", "Events"], ["thoughts", "Thoughts"], ["facts", "Facts"]' in js
+    assert 'if (tab === "thoughts") return thoughtsTabHtml(a, mem);' in js
+    tab = js[js.index("function thoughtsTabHtml(a, mem) {"):]
+    tab = tab[:tab.index("\n}\n")]
+    assert "const link = t.link && /^https:\\/\\//.test(t.link)" in tab
+    assert 'target="_blank" rel="noopener noreferrer"' in tab
+    assert "${esc(t.title)}" in tab and "${esc(t.text)}" in tab and "${esc(t.time)}" in tab
+    assert "${esc(thoughtLabel(t))}" in tab and "Thoughts unreadable." in tab
+    assert 'THOUGHT_SOURCE = {zaxid: "Zaxid.net", guardian: "The Guardian", private: "alone", agora: "Agora"}' in js
+    assert ('${a.capabilities && can(a, "thoughts") ? `<div style="display:flex;flex-direction:column;gap:3px">'
+            '<div class="label">Last thought</div>${lastThoughtLine(mem)}</div>` : ""}') in js
+    assert js.index("${lastEventLine(mem)}") < js.index("${lastThoughtLine(mem)}")
+    assert "const day = mem.thoughts[0], t = day && day.thoughts[day.thoughts.length - 1];" in js
+    assert "No thoughts this week yet" in js
