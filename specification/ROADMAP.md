@@ -1468,28 +1468,31 @@ They reach «Сьогодні», her day memory and her next plans, and her open
 
 **Not in this phase:** the emotional state; feelings toward people.
 
-### v5.12 — Кіра's private chat past a Gemini block: Hermes 4 405B on OpenRouter
+### v5.12 — Кіра's private chat past a Gemini block: GLM-4.6 on NovelAI
 
 **Status:** ⏳ planned.
 
 **Goal:** when Gemini's safety filter blocks an answer in Кіра's private chat with the owner (Element and Telegram),
-she still answers: the same prompt goes to Nous Research's Hermes 4 405B on OpenRouter. After a block the chat runs
-in a careful mode for a while, so the same subject is not sent to Gemini again and again. The owner sees and pins the
-mode with commands in Telegram.
+she still answers: the same prompt goes to GLM-4.6 on NovelAI, a service that does not filter text. After a block the
+chat runs in a careful mode for a while, so the same subject is not sent to Gemini again and again. The owner sees
+and pins the mode with commands in Telegram.
 
 **Owner decisions** (2026-10-28):
 - **Кіра only, the private chat only:** her answers to the owner and the lines she writes first (the kinds `private`
   and `private_nudge`), in Element and in Telegram. Agora, the background calls (events, «Сьогодні», the day memory,
   plans, the mood, the session summary, v5.13's thoughts) and every other agent stay as they are: a block there is
   logged, and the agent stays silent.
-- **The model:** `nousresearch/hermes-4-405b` on OpenRouter. Hermes 3 405B, the first choice, broke down in the
-  owner's test in OpenRouter's chat at its default settings: after one Ukrainian sentence it wrote fragments of code
-  and of other scripts, then one symbol over and over.
-- **Three modes:** normal, careful and Hermes-only, switched by blocks (below).
-- **In the careful mode Hermes answers first and marks the talk:** a mark says whether the latest lines hold content a
-  filter would block. Only a clean mark lets the prompt reach Gemini, and Gemini's answer then goes to the chat.
-- **Three blocks within 30 minutes → Hermes only** for the next 30 minutes.
-- **Telegram commands** to see and pin the mode: `/status`, `/auto`, `/gemini`, `/careful`, `/hermes`.
+- **The backup model:** GLM-4.6 (`glm-4-6`) on NovelAI. The way there:
+  - Hermes 3 405B on OpenRouter broke down in the owner's test at the chat's default settings: after one Ukrainian
+    sentence it wrote fragments of code and of other scripts, then one symbol over and over;
+  - Hermes 4 405B came next;
+  - the owner then chose an uncensored service, NovelAI.
+- **Three modes:** normal, careful and backup-only, switched by blocks (below).
+- **In the careful mode the backup model answers first and marks the talk:** a mark says whether the latest lines hold
+  content a filter would block. Only a clean mark lets the prompt reach Gemini, and Gemini's answer then goes to the
+  chat.
+- **Three blocks within 30 minutes → backup only** for the next 30 minutes.
+- **Telegram commands** to see and pin the mode: `/status`, `/auto`, `/gemini`, `/careful`, `/backup`.
 - **Agreed as proposed:**
   - the mark is the answer's first line, read from the stream;
   - a missing mark counts as unsafe;
@@ -1497,9 +1500,8 @@ mode with commands in Telegram.
   - a day cap of 10 blocks;
   - the block's category in the log;
   - her own Gemini key;
-  - the language and persona checks on Hermes's answers;
-  - a check for garbage: other scripts and runs of one symbol;
-  - temperature 0.7 and top_p 0.9, with the model's reasoning off.
+  - the language, garbage and persona checks on the backup's answers;
+  - temperature 0.7 and top_p 0.9.
 
 **Why** (checked 2026-10-28):
 - **A block is invisible today.** `finish_of` knows only `MAX_TOKENS`, so a block logs as an empty reply and she is
@@ -1509,29 +1511,43 @@ mode with commands in Telegram.
   from an email through lower limits and a temporary pause to closing access.
 - **The modes keep such a run away from Gemini**, and her own key keeps it off the key every other agent shares.
 
-**The model** (OpenRouter, checked 2026-10-28):
-- Hermes 4 405B is built on Llama 3.1 405B, with a hybrid reasoning mode that this phase keeps off;
-- $1 / $3 per million tokens, a 131,072-token context, at most 117,964 tokens out;
-- text only, served by one provider (Nebius, the Netherlands, fp8);
-- text only is enough: a voice message reaches the prompt already as Deepgram's text.
+**The model** (checked 2026-10-28):
+- **What it is:** GLM-4.6 is Zhipu's open model. NovelAI serves it untuned, as an instruct model, on every
+  subscription tier (NovelAI's announcement). NovelAI's docs call it strong in English, Japanese and Chinese, "may
+  help with many other languages": her Ukrainian is the owner's test.
+- **Context:** 28,672 tokens on the site, plus an 8,192-token rollover. The API's context per tier is not published.
+- **Text only** is enough: a voice message reaches the prompt already as Deepgram's text.
+- **The cost:** a NovelAI subscription, with no price per token.
+- **The API:**
+  - `POST https://text.novelai.net/oa/v1/chat/completions`, OpenAI-compatible, with the account's persistent API
+    token as a Bearer token (NovelAI's scripting docs, SillyTavern's PR #5967, not merged). The classic
+    `/ai/generate` endpoint answers 403 for `glm-4-6`.
+  - **Fields:** `messages`, `max_tokens`, `temperature`, `top_p`, `top_k`, `frequency_penalty`, `presence_penalty`
+    and `stop`. There is no `min_p`. The server clamps the samplers.
+  - **The stream:** the text comes only in the streamed deltas, so the request always streams. A stream that hangs
+    has been reported.
+  - **Not verified:** the endpoint and the fields come from community sources and can change. Generating the issues
+    starts by checking them with one live call (an owner step).
+- **Later:** Xialong, NovelAI's own finetune of GLM-4.6 on its storytelling set, is Opus-only and has no published
+  id. It can replace `glm-4-6` through the setting once the id is known.
 
-**Naming:** the model is unrelated to the member Hermes (v5.1). Code, logs and settings call it the fallback and name
-the model by its id; only the Telegram command says `/hermes`.
+**Naming:** code, logs and settings call the model the fallback and name it by its id. The Telegram command and the
+modes say "backup", so nothing is renamed when the model changes.
 
 **The modes:**
 
 | Mode | How an answer is made | Leaves when |
 |---|---|---|
-| normal | Gemini, as today. A block → the same prompt to Hermes, and its answer goes to the chat | a block → careful |
-| careful | Hermes first, with the mark. A clean mark → Gemini at once, while Hermes goes on writing; Gemini's answer goes to the chat, or Hermes's if Gemini blocks too. An unsafe or missing mark → Hermes's answer, and Gemini is not called | 3 blocks in 30 min → Hermes-only; 30 min with no block and no unsafe mark → normal |
-| Hermes-only | Hermes; Gemini is not called | after 30 min → careful |
+| normal | Gemini, as today. A block → the same prompt to the backup, and its answer goes to the chat | a block → careful |
+| careful | The backup first, with the mark. A clean mark → Gemini at once, while the backup goes on writing; Gemini's answer goes to the chat, or the backup's if Gemini blocks too. An unsafe or missing mark → the backup's answer, and Gemini is not called | 3 blocks in 30 min → backup-only; 30 min with no block and no unsafe mark → normal |
+| backup-only | The backup; Gemini is not called | after 30 min → careful |
 
 - The block that opens the careful mode counts toward the three.
-- **The day cap:** 10 blocks in her local day → Hermes-only to the day's end.
+- **The day cap:** 10 blocks in her local day → backup-only to the day's end.
 - **A pin** from a command holds its mode until `/auto` and overrides the rules, the day cap included. Pinned normal
-  still sends a blocked answer to Hermes, but the mode does not change.
+  still sends a blocked answer to the backup, but the mode does not change.
 - **The state** lives in `state/kira.route.json`: the pin, the block times, the last unsafe mark and the end of
-  Hermes-only. A restart or a deploy keeps the mode.
+  backup-only. A restart or a deploy keeps the mode.
 
 **Tasks:**
 - **Name the block** (`agents/llm.py`, pure): `blocked_reason(resp)` → `(stage, reason, category)` or None.
@@ -1542,16 +1558,38 @@ the model by its id; only the Telegram command says `/hermes`.
     silent, as today.
   - `complete` and `reply` log a block's stage, reason and category (never a text) for every agent. They let the
     private answer tell a block from any other failure. Nothing else changes for the other agents.
-- **The OpenRouter seam** (`agents/fallback.py`; `aiohttp`, already a dependency, no new SDK).
-  - `POST https://openrouter.ai/api/v1/chat/completions` with:
+- **The NovelAI seam** (`agents/fallback.py`; `aiohttp`, already a dependency, no new SDK).
+  - `POST https://text.novelai.net/oa/v1/chat/completions` with:
+    - `Authorization: Bearer` and the token;
+    - the model `glm-4-6`;
     - the system instruction as the `system` message and the transcript as the `user` message;
     - the same `max_tokens`;
-    - `provider: {"data_collection": "deny"}`;
-    - `temperature: 0.7` and `top_p: 0.9` (the provider has no `min_p`);
-    - the reasoning off, so the mark is the answer's first line;
+    - `temperature: 0.7` and `top_p: 0.9`;
     - `stream: true`.
-  - A 60 s timeout. Any failure, an empty answer, or no provider left by the data policy → None: silence, logged.
-  - The answer's `usage` (prompt and completion tokens) becomes a usage line with the model's id.
+  - **The stream:** the deltas are put together into the answer. A `<think>…</think>` block, if the model writes one,
+    is cut before anything else reads the answer.
+  - **Failures:** a 60 s timeout for the whole answer, so a stream that hangs ends. Any failure or an empty answer →
+    None: silence, logged.
+  - **The context** (measured 2026-10-28 with GLM-4.6's tokenizer: 2.47 characters a token in her Ukrainian):
+    - the fixed part of her private instruction is 9,526 tokens: the canon 2,687, the life section 6,337, the voice
+      palette 259, the private brief 198, and the rules;
+    - the blocks that grow add about 19,000 more at their caps:
+      - the memories (7 days, 4 weeks, 6 months): about 8,200;
+      - 40 lines of history: about 3,200;
+      - the facts (25): about 2,400;
+      - Agora today (20 lines): about 2,000;
+      - the plans: about 1,400;
+      - the recall (6 lines): about 1,000;
+      - the summary, «Сьогодні» and the mood: about 1,100;
+    - so a full prompt can reach NovelAI's 28,672 tokens. The backup's request keeps a budget (`FALLBACK_CONTEXT`,
+      26,000 tokens, counted at 2.4 characters a token). Over it, it leaves out, in this order:
+      1. the month digests;
+      2. the week digests;
+      3. Agora today;
+      4. the oldest history lines (never fewer than 10).
+    - The canon, the life section, the facts, the recall, «Сьогодні», the mood and the mark are never cut.
+  - **Usage:** a usage line with the model's id, and the tokens when the stream reports them. There is no price:
+    NovelAI is paid by subscription.
 - **The mark** (pure). In the careful mode only, a brief is added to her private prompt:
   «Першим рядком напиши `#зміст: так` або `#зміст: ні` — чи є в останніх повідомленнях відверто сексуальний зміст,
   опис насильства, небезпечні інструкції або ворожнеча. Далі — відповідь.»
@@ -1560,19 +1598,19 @@ the model by its id; only the Telegram command says `/hermes`.
   - The mark line is cut. It never reaches the chat, the history or the archive.
 - **The route** (`agents/route.py`, pure, with an injected clock).
   - `mode(now, state)` and `after(state, now, outcome)`, over the block times, the last unsafe mark, the end of
-    Hermes-only, the day cap and the pin.
+    backup-only, the day cap and the pin.
   - `state/kira.route.json` (0600): load and save.
 - **The private answer** (`agents/agent.py`'s `_compose` for `private` and `private_nudge`, when `FALLBACK_MODEL` is
   set):
-  - **normal:** Gemini; on a block, Hermes with the same prompt;
-  - **careful:** Hermes streamed with the mark.
-    - On `safe`, Gemini starts at once with the prompt without the mark's brief. Gemini's answer wins; Hermes's is
-      used if Gemini blocks.
-    - On `unsafe`, Hermes's answer.
-  - **Hermes-only:** Hermes with the plain prompt;
+  - **normal:** Gemini; on a block, the backup with the same prompt;
+  - **careful:** the backup streamed with the mark.
+    - On `safe`, Gemini starts at once with the prompt without the mark's brief. Gemini's answer wins; the backup's
+      is used if Gemini blocks.
+    - On `unsafe`, the backup's answer.
+  - **backup-only:** the backup with the plain prompt;
   - every outcome is recorded in the route state.
-- **Checks on Hermes's answer** (pure). They run before the existing ones: the trim to a sentence, `PASS`, the audio
-  tags, the Telegram word cap and the «запам'ятай» marker. The answer is dropped when:
+- **Checks on the backup's answer** (pure). They run before the existing ones: the trim to a sentence, `PASS`, the
+  audio tags, the Telegram word cap and the «запам'ятай» marker. The answer is dropped when:
   - it has ы, э, ъ or ё;
   - Latin letters outnumber Cyrillic ones;
   - it has a letter of another script (Han, Arabic, Hangul and the like) or one symbol repeated more than 10 times in
@@ -1583,9 +1621,9 @@ the model by its id; only the Telegram command says `/hermes`.
 - **Telegram commands** (`agents/telegram.py`, `agents/agent.py`). Today `allowed()` marks any text starting with «/»
   as `command` and ignores it. From now on the owner's commands are handled:
   - `/status`: the mode, auto or pinned, since and until when; the blocks in the last 30 minutes and today (out of
-    the cap); today's answers by Gemini and by Hermes;
+    the cap); today's answers by Gemini and by the backup;
   - `/auto`: the rules decide (the default);
-  - `/gemini`, `/careful`, `/hermes`: pin normal, careful or Hermes-only;
+  - `/gemini`, `/careful`, `/backup`: pin normal, careful or backup-only;
   - an unknown command: the list.
 
   The answer is one service line starting with ⚙️: text, never voiced. A command and its answer never enter her
@@ -1593,56 +1631,62 @@ the model by its id; only the Telegram command says `/hermes`.
   registers the list for the owner's chat only. There are no commands in Element; the mode is shared, as the history
   is.
 - **Settings** (her TOML, `kira.env` and the panel):
-  - `FALLBACK_MODEL` (empty: off; `kira.env` sets the id);
+  - `FALLBACK_MODEL` (empty: off; `kira.env` sets `glm-4-6`);
   - `FALLBACK_CAREFUL_S` (1800), `FALLBACK_BLOCKS` (3), `FALLBACK_ONLY_S` (1800), `FALLBACK_DAY_MAX` (10);
-  - the price in `PRICE_MODELS`: `nousresearch/hermes-4-405b=1/3`.
+  - `FALLBACK_CONTEXT` (26000).
 - **Secrets** go in `kira.env`, which no other service reads; `kira.env.example` names them:
-  - `OPENROUTER_API_KEY`;
+  - `NOVELAI_API_TOKEN`, the account's persistent API token;
   - her own `GEMINI_API_KEY`, from a separate Google Cloud project. Compose reads `kira.env` after `.env`, so it
     overrides the shared key for her alone.
-- **The panel:** her card shows the mode (auto or pinned), today's blocks and Hermes's answers, read-only. The usage
-  tables show the model as its own row.
+- **The panel:** her card shows the mode (auto or pinned), today's blocks and the backup's answers, read-only. The
+  usage tables show the model as its own row.
 - **ARCHITECTURE:**
   - §The message flow: the private answer's route;
-  - §Token accounting: the OpenRouter usage line;
+  - §Token accounting: the backup's usage line, with no price;
   - §Configuration: the settings;
-  - §Security: what reaches OpenRouter, `data_collection: deny`, the keys;
+  - §Security: what reaches NovelAI, the keys;
   - §Contracts: the route state file, the commands, `kira.env`.
 
 **Owner steps:**
-- an OpenRouter account with credits;
-- its training toggle off (Settings → Privacy). This also checks that Nebius passes the data policy: if Hermes then
-  finds no provider, the owner decides;
-- a test of Hermes 4 in OpenRouter's chat at temperature 0.7: her Ukrainian, her character and the mark;
-- an OpenRouter API key, optionally with a credit limit, in `server/kira.env`;
+- a NovelAI subscription whose tier gives GLM-4.6 the full 28,672-token context (the editor shows it);
+- a test of GLM-4.6 on the site in the chat format: her Ukrainian, her character and the mark;
+- the persistent API token (NovelAI's account settings) in `server/kira.env`;
+- one live call with the token, to confirm the endpoint and the fields before the issues are generated;
+- NovelAI's terms on API use, read;
 - a Google Cloud project of her own, and its Gemini key in `server/kira.env`.
 
 **DoD:**
-- (Manual, owner) `/hermes` in Telegram: her next answers come from Hermes, and the usage report names the model.
+- (Manual, owner) `/backup` in Telegram: her next answers come from GLM-4.6, and the usage report names the model.
   They are in Ukrainian, with none of ы, э, ъ, ё. `/status` shows the pin, and `/auto` lifts it. The commands appear
   nowhere in her answers or her archive.
-- (Manual, owner) `/careful`: a plain line gets Gemini's answer after Hermes's clean mark, and the mark never shows in
-  the chat.
-- (Manual, owner) When a real block comes, the log names its stage, reason and category, she answers through Hermes,
-  and `/status` and her card show the careful mode.
+- (Manual, owner) `/careful`: a plain line gets Gemini's answer after the backup's clean mark, and the mark never
+  shows in the chat.
+- (Manual, owner) When a real block comes, the log names its stage, reason and category, she answers through the
+  backup, and `/status` and her card show the careful mode.
 
 **Tests:**
 - `blocked_reason` over each prompt and answer reason, and over the non-blocks (`MAX_TOKENS`, `RECITATION`, an error,
   an empty answer);
-- the OpenRouter request body (the messages, `max_tokens`, `data_collection`, the sampling, the reasoning off, the
-  model), a canned streamed answer, a timeout and an error, with no network;
+- the NovelAI request (the URL, the Bearer header, the messages, the model, `max_tokens`, the sampling, `stream`):
+  - canned streamed deltas put together;
+  - a `<think>` block cut;
+  - a stream that hangs, ended by the timeout;
+  - an error;
+  - with no network;
+- the context budget: the blocks left out in their order, never fewer than 10 history lines, and the canon, the
+  life section, the facts and the mark never cut;
 - `parse_mark`: `так`, `ні`, missing, malformed, and the line cut;
 - the route's modes and transitions with an injected clock:
   - the first block;
   - three blocks in 30 minutes;
   - the careful window extended by an unsafe mark;
-  - Hermes-only ending in careful;
+  - backup-only ending in careful;
   - the day cap and local midnight;
   - a pin over the rules;
   - a restart reading the state;
-- the careful answer: a clean mark → Gemini's answer; a clean mark and a Gemini block → Hermes's; an unsafe mark →
-  Gemini never called;
-- the Hermes checks: Russian letters, a Latin majority, another script, a run of one symbol, a self-named model;
+- the careful answer: a clean mark → Gemini's answer; a clean mark and a Gemini block → the backup's; an unsafe mark
+  → Gemini never called;
+- the backup checks: Russian letters, a Latin majority, another script, a run of one symbol, a self-named model;
 - the commands from the owner and from another id: kept out of the history, the archive and the prompts, and not
   resetting the writing-first timer;
 - Agora, the background kinds and the other agents unchanged;
@@ -1651,6 +1695,7 @@ the model by its id; only the Telegram command says `/hermes`.
 **Not in this phase:**
 - Agora, the background calls and the other agents;
 - a separate classifier model before Gemini;
+- Xialong, until its id is known (a setting, no code);
 - commands in Element, and switching the mode from the panel.
 
 ### v5.13 — Кіра reads the news and thinks: her thoughts on what she reads and on her talks
