@@ -59,5 +59,14 @@ def _no_network_fetchers(monkeypatch):
     monkeypatch.setattr(agent, "fetch_citynews", citynews)
     monkeypatch.setattr(reading_module, "http_fetch", reading)
     monkeypatch.setattr(reading_module, "http_text", reading)
+
+    from agents import fallback as fallback_module
+
+    class NoSession:  # v5.14: her backup's NovelAI client — a test passes its own session
+        def __init__(self, *_a, **_k):
+            reached.append("novelai")
+            raise RuntimeError("a test reached the network: patch agents.fallback.ClientSession")
+
+    monkeypatch.setattr(fallback_module, "ClientSession", NoSession)
     yield
     assert not reached, f"a test reached the network through the default fetcher: {', '.join(reached)}"

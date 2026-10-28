@@ -76,6 +76,18 @@ def tts_usage_line(ts_iso: str, agent: str, model: str, characters: int, ok: boo
     }
 
 
+def fallback_usage_line(ts_iso: str, agent: str, kind: str, model: str, ok: bool) -> dict:
+    """v5.14 — one record per call of Кіра's backup model (GLM-4.6 on NovelAI): the subscription pays it, so it is
+    never priced, and the stream reports no token counts. Never any text."""
+    return {
+        "ts": ts_iso, "agent": agent, "kind": kind, "model": model,
+        "prompt_tokens": None, "output_tokens": None, "total_tokens": None, "ok": bool(ok),
+        "engine": "novelai", "billing": "subscription",
+        "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
+        "characters": None, "audio_ms": None, "blocked": None,
+    }
+
+
 def stt_usage_line(ts_iso: str, agent: str, model: str, audio_ms: int | None, ok: bool) -> dict:
     """v5.2 — one record per speech-to-text call (Deepgram): counted by the audio's length (usage line v4,
     `audio_ms`), paid from the plan's credits (`subscription`, never priced); no tokens. Never any text."""

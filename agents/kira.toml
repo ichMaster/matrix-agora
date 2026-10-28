@@ -19,6 +19,7 @@ emotion = true          # v5.9: audio tags from her palette, performed by her vo
 mood = true             # v5.10: her mood of the day — her chart under the day's sky, the biorhythms, the Lviv weather
 events = true           # v5.11: events of her life — her story's dated ones, an hourly roll, Lviv's news
 thoughts = true         # v5.12: she reads the news and thinks — her thoughts in her archive, «я думала…»
+fallback = true         # v5.14: GLM-4.6 on NovelAI answers her private chat when Gemini blocks (FALLBACK_MODEL on)
 
 [turns]
 mode = "ranked"         # ranked | ambient | mention-only

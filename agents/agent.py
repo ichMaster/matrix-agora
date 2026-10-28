@@ -103,6 +103,8 @@ from agents.facts import (
     replace_fact,
     split_marker,
 )
+from agents.fallback import TOKEN_VAR as FALLBACK_TOKEN_VAR
+from agents.fallback import FallbackClient
 from agents.guardian import KEY_VAR as GUARDIAN_KEY_VAR
 from agents.guardian import Guardian
 from agents.life import current_chapter, events_due, known_ahead, life_section, next_chapter
@@ -244,7 +246,14 @@ from agents.turns import (
     wave_count,
     wave_frees_at,
 )
-from agents.usage import parse_lines, sdk_usage_line, stt_usage_line, tts_usage_line, usage_line
+from agents.usage import (
+    fallback_usage_line,
+    parse_lines,
+    sdk_usage_line,
+    stt_usage_line,
+    tts_usage_line,
+    usage_line,
+)
 from agents.voice import (
     STT_MODEL,
     TTS_MODEL,
@@ -298,6 +307,9 @@ class Agent:
         stt_key = os.environ.pop("DEEPGRAM_API_KEY", "").strip()
         # v5.12 — her own Guardian key (server/kira.env), for her reading: out of the environment the same way
         reading_key = os.environ.pop(GUARDIAN_KEY_VAR, "").strip() if cfg.can("thoughts") else ""
+        # v5.14 — the backup's NovelAI token (server/kira.env): out of the environment for every agent, used by hers
+        fallback_token = os.environ.pop(FALLBACK_TOKEN_VAR, "").strip()
+        os.environ.pop("OPENROUTER_API_KEY", None)  # v5.15's judge reads it then; until then it stays out of reach
         # the room's members come from the registry (v4.1): nothing in the code names them
         self.roster = roster if roster is not None else load_roster(cfg.simulation, strict_for=cfg.localpart)
         self.me = self.roster.get(cfg.localpart) or Member(cfg.localpart, cfg.user_id, cfg.name, (cfg.name.lower(),))
@@ -399,6 +411,20 @@ class Agent:
             self.thoughts_in_prompt = int(os.environ.get("THOUGHTS_IN_PROMPT", "3"))
         # her own key (taken above), never Claude's state; the seam: tests pass canned fetches
         self.reading_sources = Sources(reading_key)
+        # v5.14 — the backup for her private chat: on with `fallback`, a model and the token; its settings
+        self.fallback: FallbackClient | None = None
+        self.fallback_window_s, self.fallback_day_max = 300, 10
+        self.fallback_context, self.fallback_history_n = 32000, 60
+        if cfg.can("fallback"):
+            model = os.environ.get("FALLBACK_MODEL", "").strip()
+            self.fallback_window_s = int(float(os.environ.get("FALLBACK_WINDOW_S", "300")))
+            self.fallback_day_max = int(os.environ.get("FALLBACK_DAY_MAX", "10"))
+            self.fallback_context = int(os.environ.get("FALLBACK_CONTEXT", "32000"))
+            self.fallback_history_n = int(os.environ.get("FALLBACK_HISTORY_N", "60"))
+            if model and fallback_token:
+                self.fallback = FallbackClient(fallback_token, model, sink=self.record_fallback_usage)
+            elif model:
+                log.warning("backup off: %s is not set", FALLBACK_TOKEN_VAR)
         self._reading_lock, self._reflect_lock = asyncio.Lock(), asyncio.Lock()
         self._reading_retry_ms = self._reflect_retry_ms = self._reflect_ms = 0
         # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.
@@ -1668,6 +1694,10 @@ class Agent:
         """One JSON line per Gemini call (v3.1) — no texts; a write error never blocks. `blocked` (v5.13): the stage
         of a safety block."""
         self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked))
+
+    def record_fallback_usage(self, kind: str, model: str, ok: bool) -> None:
+        """v5.14 — one line per call of her backup model: `novelai`, the subscription, never priced, no text."""
+        self._append_usage(lambda ts: fallback_usage_line(ts, self.cfg.localpart, kind, model, ok))
 
     def record_sdk_usage(self, kind: str, model: str, usage: dict | None, ok: bool,
                          reported_cost: float | None) -> None:

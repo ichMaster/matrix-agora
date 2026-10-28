@@ -312,7 +312,8 @@ def test_kiras_env_example_holds_the_bot_the_owner_and_her_hearing_only():
                                                                "DEEPGRAM_API_KEY", "GEMINI_REPLY_MODEL",
                                                                "PRIVATE_FIRST_DOOR", "ELEVENLABS_MODEL",
                                                                "VOICE_STABILITY",  # v5.8, v5.8.2, v5.9
-                                                               "GUARDIAN_API_KEY"}  # v5.12: her reading
+                                                               "GUARDIAN_API_KEY",  # v5.12: her reading
+                                                               "NOVELAI_API_TOKEN", "FALLBACK_MODEL"}  # v5.14
     for example in (".env.example", "server/.env.example"):
         assert not env_keys(ROOT / example) & {"TELEGRAM_BOT_TOKEN", "TELEGRAM_OWNER_ID"}, example
 

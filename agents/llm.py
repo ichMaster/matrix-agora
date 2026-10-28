@@ -311,21 +311,24 @@ def _plain(text: str) -> str:
     return " ".join(re.sub(r"[^\w']+", " ", text).split())
 
 
-def refusal_marker(text: str) -> str | None:
-    """v5.13 — the phrase that makes an answer the model's own refusal, or None: a `REFUSAL_MARKERS` formula anywhere,
-    or a `REFUSAL_OPENINGS` one opening a sentence that is no question."""
-    low = text.lower().replace("’", "'")
-    m = _REFUSAL_RE.search(_plain(low))
-    if m:
-        return m.group(0)
-    for sentence in _SENTENCE_RE.findall(low):
+def opening(text: str, phrases: tuple[str, ...]) -> str | None:
+    """The first of `phrases` that opens a sentence of `text` — after any voice tags, in a sentence that is no
+    question — or None (v5.13; v5.14: the backup's «я бот»)."""
+    for sentence in _SENTENCE_RE.findall(text.lower().replace("’", "'")):
         if sentence.rstrip().endswith("?"):
             continue
         head = _plain(sentence[_LEAD_RE.match(sentence).end():])
-        opening = next((o for o in REFUSAL_OPENINGS if head == o or head.startswith(o + " ")), None)
-        if opening:
-            return opening
+        hit = next((o for o in phrases if head == o or head.startswith(o + " ")), None)
+        if hit:
+            return hit
     return None
+
+
+def refusal_marker(text: str) -> str | None:
+    """v5.13 — the phrase that makes an answer the model's own refusal, or None: a `REFUSAL_MARKERS` formula anywhere,
+    or a `REFUSAL_OPENINGS` one opening a sentence that is no question."""
+    m = _REFUSAL_RE.search(_plain(text.lower().replace("’", "'")))
+    return m.group(0) if m else opening(text, REFUSAL_OPENINGS)
 
 
 def finish_of(resp: Any) -> str:

@@ -165,6 +165,18 @@ SCHEMA: tuple[Setting, ...] = (
        86400),
     _s("THOUGHTS_IN_PROMPT", "int", "3", "life", "cap:thoughts", None, "Скільки сьогоднішніх думок бачить у розмові",
        "", 0, 10),
+    # v5.14 — the backup for her private chat (`fallback`): GLM-4.6 on NovelAI when Gemini blocks or refuses; empty
+    # model: off. The window after a block, the day cap of blocks, the backup's prompt budget and its history length
+    _s("FALLBACK_MODEL", "choice", "", "fallback", "cap:fallback", None, "Резервна модель (порожньо — вимкнено)",
+       choices=("", "glm-4-6")),
+    _s("FALLBACK_WINDOW_S", "int", "300", "fallback", "cap:fallback", None, "Скільки після блоку відповідає резерв",
+       "s", 60, 3600),
+    _s("FALLBACK_DAY_MAX", "int", "10", "fallback", "cap:fallback", None,
+       "Скільки блоків на день, після чого резерв до кінця дня", "", 1, 100),
+    _s("FALLBACK_CONTEXT", "int", "32000", "fallback", "cap:fallback", None, "Бюджет промпту резерву", "tokens", 4000,
+       36000),
+    _s("FALLBACK_HISTORY_N", "int", "60", "fallback", "cap:fallback", None, "Скільки рядків історії бачить резерв",
+       "", 10, 300),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
        choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),
@@ -187,7 +199,7 @@ SERVICE_GROUPS = (("turns", "Room & turns"), ("moves", "Ада і Бруно: х
                   ("claude", "Клод у кімнаті"), ("hermes", "Гермес"), ("voice", "Голоси агентів"),
                   ("session", "Сесії розмови"))
 AGENT_GROUPS = (("memory", "Пам'ять"), ("plans", "Плани"), ("life", "Життя"), ("model", "Модель"),
-                ("voice", "Голос"), ("private", "Особистий чат"))
+                ("voice", "Голос"), ("private", "Особистий чат"), ("fallback", "Резерв"))
 
 
 def validate(name: str, raw: object) -> tuple[str | None, str | None]:
