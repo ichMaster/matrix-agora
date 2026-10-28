@@ -140,8 +140,11 @@ def test_the_backups_usage_line_is_novelai_on_the_subscription_never_priced():
     assert set(line) == set(usage_line("t", "a", "k", "m", None, True))  # one shape
     assert (line["engine"], line["billing"], line["total_tokens"], line["blocked"]) == (
         "novelai", "subscription", None, None)
-    row = aggregate([line])[("2026-10-28", "kira", "private")]
-    assert isinstance(row, Row) and cost(row, 0.3, 2.5) is None
+    gemini = usage_line("2026-10-28T21:01:00+02:00", "kira", "private", "gemini-3.1-pro-preview", None, True)
+    rows = aggregate([line, gemini])
+    row = rows[("2026-10-28", "kira", "private (glm-4-6)")]  # its own row, named by the model (v5.14)
+    assert isinstance(row, Row) and cost(row, 0.3, 2.5) is None and row.engine == "novelai"
+    assert rows[("2026-10-28", "kira", "private")].engine == "gemini"
 
 
 def test_the_backup_is_a_persons_capability_that_needs_her_private_chat_and_archive():

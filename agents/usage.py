@@ -212,8 +212,11 @@ def aggregate(records: list[dict], since: date | None = None,
         day = str(r["ts"])[:10]
         if (since and date.fromisoformat(day) < since) or (until and date.fromisoformat(day) > until):
             continue
-        row = rows[(day, str(r.get("agent", "?")), str(r.get("kind", "?")))]
         engine, billing = str(r.get("engine", "gemini")), str(r.get("billing", "api"))  # a v1 line is Gemini's
+        kind = str(r.get("kind", "?"))
+        if engine == "novelai":  # v5.14: her backup's answers are a row of their own, named by the model
+            kind = f"{kind} ({r.get('model') or 'backup'})"
+        row = rows[(day, str(r.get("agent", "?")), kind)]
         row.engine, row.billing = _merge(row.engine, engine), _merge(row.billing, billing)
         row.calls += 1
         row.failed += 0 if r.get("ok") else 1

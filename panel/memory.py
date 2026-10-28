@@ -231,11 +231,37 @@ def archive_view(state_dir: Path, name: str) -> dict | None:
         con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
         try:
             lines, embedded = con.execute("SELECT COUNT(*), COUNT(emb) FROM lines").fetchone()
+            marks: dict = {}
+            if "mark" in {r[1] for r in con.execute("PRAGMA table_info(lines)")}:  # v5.13: an older one has none
+                marks = dict(con.execute("SELECT mark, COUNT(*) FROM lines GROUP BY mark").fetchall())
         finally:
             con.close()
     except sqlite3.Error:
         return None
-    return {"lines": int(lines), "embedded": int(embedded)}
+    return {"lines": int(lines), "embedded": int(embedded),  # v5.14: the lines closed to Gemini, by mark
+            "waiting": int(marks.get("waiting", 0)), "censored": int(marks.get("censored", 0))}
+
+
+def route_view(state_dir: Path, name: str, today: date) -> dict | None:
+    """v5.14 — her private answer's route (`<name>.route.json`, `agents/route.py`): the pin, an open window's end
+    (ISO, or null), today's blocks and today's answers by Gemini and by the backup. No file yet → auto, nothing open;
+    unreadable → None, never a 500. No text is in it."""
+    from agents.route import load_route
+
+    path = state_dir / f"{name}.route.json"
+    try:
+        if path.exists():
+            json.loads(path.read_text(encoding="utf-8"))  # a corrupt file is "unreadable" here, `auto` for her
+        route = load_route(path)
+        tz = ZoneInfo(os.environ.get("TIMEZONE", "Europe/Kyiv"))
+        start = int(datetime(today.year, today.month, today.day, tzinfo=tz).timestamp() * 1000)
+    except (OSError, ValueError):
+        return None
+    window = (datetime.fromtimestamp(route.window_until_ms / 1000, tz).isoformat(timespec="minutes")
+              if route.window_until_ms is not None else None)
+    answers = route.answers if route.day == today.isoformat() else {"gemini": 0, "backup": 0}
+    return {"pin": route.pin, "window_until": window, "blocks_today": sum(1 for t in route.blocks if t >= start),
+            "answers": {"gemini": int(answers.get("gemini", 0)), "backup": int(answers.get("backup", 0))}}
 
 
 def models_view(state_dir: Path, name: str, voice_spec: Path | None = None) -> dict | None:
@@ -271,7 +297,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
                 memories: Path | None = None, with_nudge: bool = False, with_ratelimit: bool = False,
                 with_news: bool = False, with_digest: bool = False, with_facts: bool = False,
                 with_archive: bool = False, with_models: bool = False, voice_spec: Path | None = None,
-                with_events: bool = False, with_thoughts: bool = False) -> dict:
+                with_events: bool = False, with_thoughts: bool = False, with_route: bool = False) -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -321,6 +347,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "models": models_view(state_dir, name, voice_spec) if with_models else None,     # v5.9: models, voice
         "events": events_view(state_dir, name, today) if with_events else None,          # v5.11: her events
         "thoughts": thoughts_view(state_dir, name, today) if with_thoughts else None,    # v5.12: her thoughts
+        "route": route_view(state_dir, name, today) if with_route else None,             # v5.14: her backup
     }
 
 

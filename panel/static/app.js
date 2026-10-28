@@ -408,6 +408,7 @@ function agentCardHtml(a) {
     ${a.engine === "claude-sdk" ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Subscription</div>${claudeLines(mem)}</div>` : ""}
     ${can(a, "digest") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Digests</div>${digestLine(mem)}</div>` : ""}
     ${a.capabilities && can(a, "recall") ? `<div class="muted" style="font-size:12px">${archiveLine(mem)}</div>` : ""}
+    ${a.capabilities && can(a, "fallback") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Route</div><div class="muted" style="font-size:13px">${esc(routeLine(mem))}</div></div>` : ""}
     ${blocksLine(a.name)}
     ${a.engine === "gemini" && mem.models ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Models</div>${modelLines(mem.models)}</div>` : ""}
     <div class="card-foot rule-t"><div class="meta">${tokens == null ? `${icon("database", 13)} Memory unavailable` : `7 days · ${esc(tokens)}`}</div>
@@ -641,6 +642,17 @@ function blocksLine(name) {
   const u = S.data.usage, t = u && u.available ? u.per_agent[name] : null;
   if (!t || !(t.blocked_today > 0)) return "";
   return `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Blocks today</div><div class="muted" style="font-size:13px">${esc(fmtInt(t.blocked_today))} · ${esc(fmtInt(t.blocked))} in ${esc(fmtInt(u.per_day.length))} days</div></div>`;
+}
+
+function routeLine(mem) {
+  // v5.14: her private answer's route — auto or pinned, an open window, today's backup answers, the waiting lines
+  if (!mem.available) return "Memory unavailable";
+  const r = mem.route;
+  if (!r) return "Route unreadable";
+  const pin = r.pin === "auto" ? "auto" : `pinned ${r.pin}`;
+  const until = r.pin === "auto" && r.window_until ? ` · window until ${r.window_until.slice(11, 16)}` : "";
+  const waiting = mem.archive ? ` · waiting ${fmtInt(mem.archive.waiting || 0)}` : "";
+  return `${pin}${until} · blocks today ${fmtInt(r.blocks_today)} · backup answers today ${fmtInt(r.answers.backup)}${waiting}`;
 }
 
 function archiveLine(mem) {

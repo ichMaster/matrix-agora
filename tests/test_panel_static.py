@@ -329,3 +329,16 @@ def test_an_agents_card_shows_its_blocks_today_only_when_there_are_any():
     assert "if (!t || !(t.blocked_today > 0)) return \"\";" in fn
     assert '<div class="label">Blocks today</div>' in fn
     assert "${esc(fmtInt(t.blocked_today))} · ${esc(fmtInt(t.blocked))} in ${esc(fmtInt(u.per_day.length))} days" in fn
+
+
+def test_her_card_shows_her_route_only_with_the_backup():
+    """v5.14 — «Route» from the memory view's `route` and the archive's waiting count, escaped, degrading."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    card = js[js.index("function agentCardHtml(a) {"):]
+    assert ('${a.capabilities && can(a, "fallback") ? `<div style="display:flex;flex-direction:column;gap:3px">'
+            '<div class="label">Route</div><div class="muted" style="font-size:13px">${esc(routeLine(mem))}</div></div>` '
+            ': ""}') in card
+    fn = js[js.index("function routeLine(mem) {"):]
+    fn = fn[:fn.index("\n}\n")]
+    assert 'if (!r) return "Route unreadable";' in fn and "pinned ${r.pin}" in fn
+    assert "window until ${r.window_until.slice(11, 16)}" in fn and "backup answers today" in fn and "waiting" in fn

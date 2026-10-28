@@ -212,7 +212,8 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
                            found.engine == "gemini" and found.type != "herald",
                            # v5.9: the palette by the registry's own path, never request data
                            Path(found.voice_spec) if found.voice_spec and "emotion" in found.capabilities else None,
-                           "events" in found.capabilities, "thoughts" in found.capabilities)
+                           "events" in found.capabilities, "thoughts" in found.capabilities,
+                           "fallback" in found.capabilities)
 
     # ── v5.8: a person's facts about the owner — re-pin or delete one; the id resolves only inside her own folder ──
     def facts_folder(name: str) -> Path:

@@ -1,5 +1,6 @@
 import json
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
@@ -445,3 +446,35 @@ def test_the_blocks_are_counted_per_agent_and_for_today(state):
     assert v["total"]["blocked"] == 3
     assert {(r["day"], r["agent"]): r["blocked"] for r in v["rows"] if r["agent"] == "kira"} == {
         ("2026-10-03", "kira"): 1, ("2026-10-04", "kira"): 2}
+
+
+def test_her_route_and_the_archives_marks_for_her_card(state, monkeypatch):
+    """v5.14 — the route file read as the card needs it, today's counts only; the archive counts the closed lines."""
+    import sqlite3
+
+    from agents.archive import Archive
+    from agents.route import Route, save_route
+    from panel.memory import archive_view, route_view
+    monkeypatch.setenv("TIMEZONE", "Europe/Kyiv")
+    assert route_view(state, "kira", TODAY) == {"pin": "auto", "window_until": None, "blocks_today": 0,
+                                                "answers": {"gemini": 0, "backup": 0}}
+    day0 = int(datetime(2026, 10, 4, tzinfo=ZoneInfo("Europe/Kyiv")).timestamp() * 1000)
+    save_route(state / "kira.route.json", Route(blocks=(day0 - 1000, day0 + 60_000), window_until_ms=day0 + 3_600_000,
+                                                day="2026-10-04", answers={"gemini": 3, "backup": 2}))
+    view = route_view(state, "kira", TODAY)
+    assert view["window_until"] == "2026-10-04T01:00+03:00" and view["blocks_today"] == 1
+    assert view["answers"] == {"gemini": 3, "backup": 2}
+    (state / "kira.route.json").write_text("{broken")
+    assert route_view(state, "kira", TODAY) is None
+    a = Archive(state / "kira.archive.db")
+    for key, mark in (("a", "gemini"), ("b", "waiting"), ("c", "waiting"), ("d", "censored")):
+        a.append(key, 1, "private", "telegram", "Ich", f"рядок {key}")
+        a.mark([key], mark)
+    a.close()
+    assert archive_view(state, "kira") == {"lines": 4, "embedded": 0, "waiting": 2, "censored": 1}
+    old = sqlite3.connect(state / "ada.archive.db")  # before v5.13: no mark column
+    old.execute("CREATE TABLE lines (id INTEGER PRIMARY KEY, emb BLOB)")
+    old.commit()
+    old.close()
+    assert archive_view(state, "ada") == {"lines": 0, "embedded": 0, "waiting": 0, "censored": 0}
+    assert memory_view(state, "kira", TODAY, with_route=False)["route"] is None
