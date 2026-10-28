@@ -347,3 +347,53 @@ def test_a_censored_line_is_read_by_no_gemini_reader_and_never_embedded_again(ar
     assert arc.lines([ids[1]]) == {}
     assert ids[1] not in [i for i, _ in arc.unembedded(10)]
     assert arc.censor([]) == 0 and arc.counts()[0] == 3            # kept, never deleted
+
+
+# --- v5.14: the mark `waiting` and the backup's readers ------------------------------------------------------------------
+def test_v5_13s_censored_lines_wait_once_and_the_judges_censored_stay(tmp_path):
+    path = tmp_path / "kira.archive.db"
+    a = Archive(path)
+    a.append("a", 1, "private", "telegram", "Ich", "рядок")
+    a.db.execute("UPDATE lines SET mark = 'censored'")
+    a.db.execute("PRAGMA user_version = 0")  # as v5.13 left it
+    a.db.commit()
+    a.close()
+    a = Archive(path)
+    try:
+        assert a.db.execute("SELECT mark FROM lines").fetchone() == ("waiting",)  # v5.13 review #3
+        a.mark(["a"], "censored")  # v5.15's judge: for good
+    finally:
+        a.close()
+    a = Archive(path)
+    try:
+        assert a.db.execute("SELECT mark FROM lines").fetchone() == ("censored",)  # never migrated again
+    finally:
+        a.close()
+
+
+def test_a_waiting_line_is_for_the_backup_only(arc):
+    for i, (key, body) in enumerate((("a", "зоряне небо над Львовом"), ("b", "небо резерву"), ("c", "ще одне небо"))):
+        arc.append(key, 10 + i, "private", "telegram", "Ich", body)
+    ids = [r[0] for r in arc.db.execute("SELECT id FROM lines ORDER BY id")]
+    arc.set_embeddings([(i, [1.0, float(n)]) for n, i in enumerate(ids)])
+    assert arc.mark(["b"], "waiting") == 1 and arc.mark(["c"], "nonsense") == 0
+    assert arc.db.execute("SELECT mark, emb FROM lines WHERE key = 'b'").fetchone() == ("waiting", None)
+    assert ids[1] not in arc.search_words("небо", ("private",)) and ids[1] in arc.search_words("небо", ("private",),
+                                                                                                  gemini=False)
+    assert [x.key for x in arc.latest("private", 10)] == ["a", "c"]
+    assert [(x.key, x.mark) for x in arc.latest("private", 10, gemini=False)] == [
+        ("a", "gemini"), ("b", "waiting"), ("c", "gemini")]
+    first = arc.lines([ids[0]])[ids[0]]
+    assert [x.key for x in arc.around(first, 1)] == ["a", "c"] and [x.key for x in arc.around(first, 1, gemini=False)] \
+        == ["a", "b"]
+    assert arc.lines([ids[1]]) == {} and arc.lines([ids[1]], gemini=False)[ids[1]].mark == "waiting"
+    assert ids[1] not in arc.vectors(("private",))[0] and ids[1] not in [i for i, _ in arc.unembedded(10)]
+    arc.mark(["b"], "gemini")  # opened again (v5.15's judge, clean): embedded again on the next tick
+    assert ids[1] in [i for i, _ in arc.unembedded(10)]
+
+
+def test_a_facts_mark_reaches_the_archive_mirror(arc):
+    arc.sync_facts((("f1", "любить каву"), ("f2", "живе біля парку", "waiting")), 5)
+    assert dict(arc.db.execute("SELECT key, mark FROM lines WHERE place = 'facts'").fetchall()) == {
+        "fact:f1": "gemini", "fact:f2": "waiting"}
+    assert [arc.lines([i])[i].key for i in arc.search_words("живе парку", ("facts",))] == []

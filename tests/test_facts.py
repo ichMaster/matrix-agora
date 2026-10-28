@@ -419,3 +419,38 @@ def test_a_malformed_answer_never_stops_the_seed(tmp_path):
     bad = json.dumps({"add": [{"text": "Ich любить какао", "pin": 2}], "replace": [{"id": ["x"], "text": "y"}]})
     out = io.StringIO()
     assert asyncio.run(run_seed(chat(10), tmp_path / "f", SeedLLM([bad]), "Кіра", TODAY, 100, 240, False, out)) == 1
+
+
+# --- v5.14: a fact the backup asked for waits for the judge ----------------------------------------------------------------
+def test_a_waiting_fact_is_written_read_kept_through_edits_and_only_for_the_backup(tmp_path):
+    from agents.facts import add_fact, facts_section, load_facts, parse_fact, replace_fact, set_pin
+    folder = tmp_path / "kira.facts"
+    plain = add_fact(folder, "Любить каву зранку", 1, "private", "2026-10-28", 50, 240)
+    waits = add_fact(folder, "Живе біля парку", 1, "asked", "2026-10-28", 50, 240, mark="waiting")
+    assert "mark:" not in (folder / f"{plain}.md").read_text(encoding="utf-8")  # an older file's shape, unchanged
+    assert "mark: waiting" in (folder / f"{waits}.md").read_text(encoding="utf-8")
+    assert {f.id: f.mark for f in load_facts(folder)} == {plain: "gemini", waits: "waiting"}
+    assert set_pin(folder, waits, 2) and replace_fact(folder, waits, "Живе біля Стрийського парку", "2026-10-29", 240)
+    assert parse_fact(waits, (folder / f"{waits}.md").read_text(encoding="utf-8")).mark == "waiting"
+    facts = load_facts(folder)
+    assert "парку" not in facts_section(facts, 10, 240) and "парку" in facts_section(facts, 10, 240, gemini=False)
+    assert parse_fact("x", "---\npin: 1\nmark: whatever\n---\nтекст\n").mark == "gemini"
+
+
+def test_the_extraction_never_sees_a_closed_fact(tmp_path, monkeypatch):
+    from agents.facts import add_fact
+    from tests.test_archive import kira
+    agent = kira(tmp_path, monkeypatch)
+    agent.facts_dir = tmp_path / "kira.facts"
+    add_fact(agent.facts_dir, "Відкритий факт", 1, "private", "2026-10-28", 50, 240)
+    add_fact(agent.facts_dir, "Закритий факт", 1, "asked", "2026-10-28", 50, 240, mark="waiting")
+    seen = []
+
+    async def generate(contents, system, max_output_tokens=1024, kind="facts"):
+        seen.append(contents + system)
+        return '{"add": [], "replace": []}'
+
+    monkeypatch.setattr(agent.llm, "generate", generate)
+    asyncio.run(agent.extract_facts([("Ich (наодинці)", "привіт")]))
+    assert "Відкритий факт" in seen[0] and "Закритий факт" not in seen[0]
+    assert "Закритий" not in (agent.facts_now() or "") and "Закритий" in agent.facts_now(gemini=False)

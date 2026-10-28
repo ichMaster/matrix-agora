@@ -83,6 +83,12 @@ def off_limits(text: str) -> str | None:
     return next((why for pattern, why in OFF_LIMITS if pattern.search(text or "")), None)
 
 
+# v5.14 — a fact's mark, as an archive line's: `gemini` (the default, never written), or `waiting` — kept from the
+# backup's «запам'ятай», closed to Gemini until v5.15's judge rates it — or `censored`
+FACT_MARKS = ("gemini", "waiting", "censored")
+CLOSED_MARKS = ("waiting", "censored")
+
+
 @dataclass(frozen=True)
 class Fact:
     id: str
@@ -90,6 +96,7 @@ class Fact:
     added: str
     source: str
     text: str
+    mark: str = "gemini"
 
 
 def _norm(text: str) -> str:
@@ -119,7 +126,9 @@ def parse_fact(name: str, raw: str) -> Fact | None:
     text = _norm(body)
     if not text:
         return None
-    return Fact(name, pin if pin in (0, 1, 2) else 0, head.get("added", ""), head.get("source", "private"), text)
+    mark = head.get("mark", "gemini")
+    return Fact(name, pin if pin in (0, 1, 2) else 0, head.get("added", ""), head.get("source", "private"), text,
+                mark if mark in FACT_MARKS else "gemini")
 
 
 def load_facts(folder: Path) -> list[Fact]:
@@ -141,7 +150,8 @@ def _write(path: Path, fact: Fact) -> None:
     tmp = path.with_suffix(".tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        os.write(fd, f"---\npin: {fact.pin}\nadded: {fact.added}\nsource: {fact.source}\n---\n{fact.text}\n".encode())
+        mark = f"mark: {fact.mark}\n" if fact.mark != "gemini" else ""  # v5.14: an older file stays as it was
+        os.write(fd, f"---\npin: {fact.pin}\nadded: {fact.added}\nsource: {fact.source}\n{mark}---\n{fact.text}\n".encode())
     finally:
         os.close(fd)
     os.chmod(tmp, 0o600)
@@ -156,8 +166,10 @@ def fact_path(folder: Path, fact_id: str) -> Path | None:
     return path if path.is_file() else None
 
 
-def add_fact(folder: Path, text: str, pin: int, source: str, today: str, max_facts: int, max_chars: int) -> str | None:
-    """A new fact's id — or None for an empty or overlong text, a text already held, or a full store."""
+def add_fact(folder: Path, text: str, pin: int, source: str, today: str, max_facts: int, max_chars: int,
+             mark: str = "gemini") -> str | None:
+    """A new fact's id — or None for an empty or overlong text, a text already held, or a full store. `mark` (v5.14):
+    `waiting` for a fact the backup's answer asked her to keep."""
     text = _norm(text)
     if not text or len(text) > max_chars or pin not in (0, 1, 2):
         return None
@@ -168,7 +180,8 @@ def add_fact(folder: Path, text: str, pin: int, source: str, today: str, max_fac
     name, n = base, 2
     while (folder / f"{name}.md").exists():
         name, n = f"{base}-{n}", n + 1
-    _write(folder / f"{name}.md", Fact(name, pin, today, source if source in SOURCES else "private", text))
+    _write(folder / f"{name}.md", Fact(name, pin, today, source if source in SOURCES else "private", text,
+                                       mark if mark in FACT_MARKS else "gemini"))
     return name
 
 
@@ -181,7 +194,7 @@ def replace_fact(folder: Path, fact_id: str, text: str, today: str, max_chars: i
     old = parse_fact(fact_id, path.read_text(encoding="utf-8"))
     if old is None:
         return False
-    _write(path, Fact(fact_id, old.pin, today, old.source, text))
+    _write(path, Fact(fact_id, old.pin, today, old.source, text, old.mark))
     return True
 
 
@@ -192,7 +205,7 @@ def set_pin(folder: Path, fact_id: str, pin: int) -> bool:
     old = parse_fact(fact_id, path.read_text(encoding="utf-8"))
     if old is None:
         return False
-    _write(path, Fact(fact_id, pin, old.added, old.source, old.text))
+    _write(path, Fact(fact_id, pin, old.added, old.source, old.text, old.mark))
     return True
 
 
@@ -204,10 +217,10 @@ def remove_fact(folder: Path, fact_id: str) -> bool:
     return True
 
 
-def facts_section(facts: list[Fact], in_prompt: int, max_chars: int) -> str | None:
+def facts_section(facts: list[Fact], in_prompt: int, max_chars: int, gemini: bool = True) -> str | None:
     """Her private prompt's block: pin 1 first, then pin 2 while there is room, each newest first — past the limit a
-    fact just asked for still gets in (v5.8 review #7); pin 0 never."""
-    pinned = [f for f in facts if f.pin in (1, 2)]
+    fact just asked for still gets in (v5.8 review #7); pin 0 never; for Gemini never a closed fact (v5.14)."""
+    pinned = [f for f in facts if f.pin in (1, 2) and not (gemini and f.mark in CLOSED_MARKS)]
     chosen = sorted(sorted(pinned, key=lambda f: (f.added, f.id), reverse=True), key=lambda f: f.pin)[:max(in_prompt, 0)]
     if not chosen:
         return None
@@ -282,7 +295,7 @@ async def run_seed(lines: list[tuple[str, str]], folder: Path, llm, name: str, t
     """Her first facts, from the private chat she already had with the owner (both sides, oldest first): the
     session-end extraction over it in chunks, each seeing the facts kept so far; every fact through `off_limits`.
     `--dry-run` prints what would be kept and what was dropped, and writes nothing. The number kept."""
-    known = load_facts(folder)
+    known = [f for f in load_facts(folder) if f.mark not in CLOSED_MARKS]  # v5.14: Gemini never sees a closed one
     kept = dropped = 0
     for start in range(0, len(lines), SEED_CHUNK):
         chunk = lines[start:start + SEED_CHUNK]

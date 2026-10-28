@@ -1,5 +1,6 @@
-"""v5.13 — the owner's message a block or a refusal answered is marked censored in her archive and never reaches
-Gemini again: not her history, not the session, not a reader of the archive (nio and Gemini mocked)."""
+"""v5.13, v5.14 — the owner's message a block or a refusal answered is marked `waiting` in her archive (v5.13:
+`censored`) and never reaches Gemini again: not Gemini's view of her history, not the session, not a Gemini reader of
+the archive — while the backup still reads it (nio and Gemini mocked)."""
 
 import asyncio
 import logging
@@ -39,8 +40,9 @@ def test_a_refused_answer_marks_his_unanswered_lines_and_they_never_reach_gemini
     caplog.set_level(logging.INFO)
     agent.private_line("Привіт!", ms(17), "telegram", "tg:1")
     asyncio.run(agent.private_reply())                                # refused
-    assert agent._unanswered == [] and marks(agent)["tg:1"] == "censored"
-    assert agent.private_history == [] and not agent.session
+    assert agent._unanswered == [] and marks(agent)["tg:1"] == "waiting"
+    assert agent.private_history == [("Ich", "Привіт!")] and agent.gemini_history() == []  # the backup's, not Gemini's
+    assert not agent.session
 
     llm2 = BlockLLM(blocks=0)
     agent.llm = agent.responder.llm = llm2
@@ -48,7 +50,7 @@ def test_a_refused_answer_marks_his_unanswered_lines_and_they_never_reach_gemini
     asyncio.run(agent.private_reply())
     assert "Привіт!" not in llm2.transcripts[-1] and "Привіт ще раз" in llm2.transcripts[-1]
     assert agent._unanswered == [] and marks(agent)["tg:2"] == "gemini"
-    assert "1 line(s) marked censored after a refusal" in caplog.text and "Привіт!" not in caplog.text
+    assert "1 line(s) marked waiting after a refusal" in caplog.text and "Привіт!" not in caplog.text
 
 
 def test_only_the_lines_since_her_last_answer_are_marked_and_the_session_loses_them(tmp_path, monkeypatch):
@@ -62,9 +64,11 @@ def test_only_the_lines_since_her_last_answer_are_marked_and_the_session_loses_t
     assert len(agent.session) == 4                                   # both his lines are in the session
     asyncio.run(agent.private_reply())
     got = marks(agent)
-    assert (got["tg:1"], got["$p1"], got["tg:2"]) == ("gemini", "censored", "censored")
+    assert (got["tg:1"], got["$p1"], got["tg:2"]) == ("gemini", "waiting", "waiting")
     assert [v for k, v in got.items() if k not in ("tg:1", "$p1", "tg:2")] == ["gemini"]  # her answer
-    assert [t for s, t in agent.private_history] == ["Як ти?", "Привіт, сонце."]
+    assert [t for s, t in agent.private_history] == ["Як ти?", "Привіт, сонце.", CENSORED, "і ще одне"]
+    assert [t for s, t in agent.gemini_history()] == ["Як ти?", "Привіт, сонце."]
+    assert {CENSORED, "і ще одне"} <= {line.text for line in agent.archive.latest("private", 10, gemini=False)}
     assert agent.session == [(private_label("Ich"), "Як ти?"), (private_label("Кіра"), "Привіт, сонце.")]
     assert [line.text for line in agent.archive.latest("private", 10)] == ["Як ти?", "Привіт, сонце."]
     assert agent.archive.search_words(SECRET, ("private",)) == []
@@ -107,8 +111,8 @@ def test_a_block_censors_only_the_line_gemini_saw_never_one_that_came_while_she_
     agent.private_line(CENSORED, ms(17), "telegram", "tg:1")
     asyncio.run(agent.private_reply())
     got = marks(agent)
-    assert (got["tg:1"], got["tg:2"]) == ("censored", "gemini")
-    assert agent.private_history == [("Ich", "вибач, я пожартував")]           # the refused line left, not the new one
+    assert (got["tg:1"], got["tg:2"]) == ("waiting", "gemini")
+    assert agent.gemini_history() == [("Ich", "вибач, я пожартував")]          # the refused line closed, not the new one
     assert agent.session == [(private_label("Ich"), "вибач, я пожартував")]
     assert agent._unanswered == [("tg:2", "вибач, я пожартував")]               # still to be answered
 
@@ -120,3 +124,15 @@ def test_an_answer_keeps_a_line_that_came_while_she_composed_unanswered(tmp_path
     agent.private_line("Привіт", ms(17), "telegram", "tg:1")
     asyncio.run(agent.private_reply())
     assert agent._unanswered == [("tg:2", "вибач, я пожартував")]
+
+
+# --- v5.14: the closed lines survive a restart, kept apart for Gemini -----------------------------------------------------
+def test_a_restart_reads_every_line_for_the_backup_and_keeps_the_closed_ones_from_gemini(tmp_path, monkeypatch):
+    agent = kira(tmp_path, monkeypatch, BlockLLM())
+    agent.private_line("Привіт", ms(16), "telegram", "tg:1")
+    agent.private_line(CENSORED, ms(17), "telegram", "tg:2")
+    agent.archive.mark(["tg:2"], "waiting")
+    agent.private_history, agent._closed = [], set()
+    agent.seed_private_from_archive()
+    assert agent.private_history == [("Ich", "Привіт"), ("Ich", CENSORED)]
+    assert agent.gemini_history() == [("Ich", "Привіт")]

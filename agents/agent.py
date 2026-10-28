@@ -35,6 +35,7 @@ from nio import (
 
 from agents.archive import (
     CANDIDATES,
+    GEMINI_CLOSED,
     THOUGHT_PLACES,
     Archive,
     cosine_top,
@@ -93,6 +94,7 @@ from agents.events import (  # v5.11: events of her life
     rolled_marker,
 )
 from agents.facts import (
+    CLOSED_MARKS,
     REMEMBER_SKILL,
     add_fact,
     extraction_request,
@@ -512,6 +514,9 @@ class Agent:
         # v5.13: the owner's private lines since her last answer, (archive key, text) — marked censored if Gemini
         # blocks or refuses the answer to them
         self._unanswered: list[tuple[str, str]] = []
+        # v5.14: the (speaker, text) of her history's lines closed to Gemini — the backup's talk, waiting for the judge;
+        # the backup reads them, Gemini never (`gemini_history`)
+        self._closed: set[tuple[str, str]] = set()
         self.last_private_ms: int | None = None
         self._private_pending = self._private_again = False
         # v5.8 — the archive (`recall`): every line she sees, both rooms and both doors, searchable; filled from the
@@ -902,7 +907,7 @@ class Agent:
             recalled = agora_now = None
             facts = self.facts_now()  # v5.8 review #6: mirrored before the recall, so a deleted fact is not recalled
             if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
-                query = next((t for s, t in reversed(self.private_history) if s == "Ich"), "")
+                query = next((t for s, t in reversed(self.gemini_history()) if s == "Ich"), "")  # v5.14: open only
                 recalled = await self.recall_section(query, self.private_places, set(self.private_history))
                 agora_now = self.agora_now_section()
             brief = PRIVATE_NUDGE if nudge else PRIVATE_BRIEF
@@ -913,12 +918,12 @@ class Agent:
             prompt = self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts)
             LAST_BLOCK.set(None)
             seen = list(self._unanswered)  # v5.13 review #2: the lines this call answers — never one that comes later
-            text = await self._compose(prompt, lines=self.private_history,
+            text = await self._compose(prompt, lines=self.gemini_history(),
                                        kind="private_nudge" if nudge else "private")
             if text is None:
                 block = LAST_BLOCK.get()
                 if block is not None and not nudge:  # v5.13: what Gemini refused never reaches it again
-                    self.censor_unanswered(block[0], seen)
+                    self.mark_unanswered(block[0], seen)
                 return False
             sent_id = None
             if door == "matrix":
@@ -942,27 +947,37 @@ class Agent:
             if door == "matrix":
                 await self.client.room_typing(room, False)
 
-    def censor_unanswered(self, stage: str, lines: list[tuple[str, str]] | None = None) -> int:
-        """v5.13 — Gemini blocked or refused her answer to the owner's `lines` ((key, text); all unanswered by
-        default): they are marked censored in her archive and leave her history and the session, so no later Gemini
-        call — an answer, the recall, the reflection, the summary, the facts — gets them. A line that came while she
-        composed stays (review #2). How many; the log names the stage and the count, never a text."""
+    def gemini_history(self) -> list[tuple[str, str]]:
+        """v5.14 — her private history as Gemini may read it: without the lines closed to it (conservatively: a same
+        text open elsewhere is left out too)."""
+        return [line for line in self.private_history if line not in self._closed]
+
+    def mark_unanswered(self, stage: str, lines: list[tuple[str, str]] | None = None, mark: str = "waiting") -> int:
+        """v5.13, v5.14 — Gemini blocked or refused her answer to the owner's `lines` ((key, text); all unanswered by
+        default): they are marked `waiting` in her archive (v5.13 marked `censored`; v5.15's judge rates them), stay in
+        her history for the backup but are closed to Gemini, and leave the session — so no later Gemini call (an
+        answer, the recall, the reflection, the summary, the facts) gets them. A line that came while she composed
+        stays (v5.13 review #2). How many; the log names the stage and the count, never a text."""
         lines = list(self._unanswered if lines is None else lines)
         self._unanswered = [u for u in self._unanswered if u not in lines]
         if not lines:
             return 0
-        label, removed = private_label("Ich"), 0
-        for _, text in lines:
-            removed += _drop_last(self.private_history, ("Ich", text))
-            _drop_last(self.session, (label, text))
+        self.close_lines([("Ich", text) for _, text in lines])
         marked = 0
         if self.archive is not None:
             try:
-                marked = self.archive.censor([k for k, _ in lines])
+                marked = self.archive.mark([k for k, _ in lines], mark)
             except Exception as exc:  # noqa: BLE001
                 log.error("archive: the lines were not marked (%s)", type(exc).__name__)
-        log.warning("private: %d line(s) marked censored after a %s (left the history: %d)", marked, stage, removed)
+        log.warning("private: %d line(s) marked %s after a %s", marked, mark, stage)
         return marked
+
+    def close_lines(self, lines: list[tuple[str, str]]) -> None:
+        """v5.14 — these (speaker, text) lines of her private chat are closed to Gemini: kept in her history for the
+        backup, out of the session (its summary, its facts and the day journal are Gemini's)."""
+        for speaker, text in lines:
+            self._closed.add((speaker, text))
+            _drop_last(self.session, (private_label(speaker), text))
 
     async def maybe_private_nudge(self) -> bool:
         """After a long private silence, in the owner's hours, under the day's cap: one line of her own — never
@@ -1068,14 +1083,15 @@ class Agent:
         Telegram line survives a restart — and the time of the last one."""
         if self.archive is None:
             return
-        try:
-            lines = self.archive.latest("private", max(self.history_n, 1))
+        try:  # v5.14: every mark — the backup reads them; the closed ones are kept apart for Gemini
+            lines = self.archive.latest("private", max(self.history_n, 1), gemini=False)
         except Exception as exc:  # noqa: BLE001 — v5.8 review #4: the homeserver's history stays
             log.error("archive: the private history was not read (%s)", type(exc).__name__)
             return
         if not lines:
             return
         self.private_history = [(line.speaker, line.text) for line in lines]
+        self._closed = {(line.speaker, line.text) for line in lines if line.mark in GEMINI_CLOSED}
         self.last_private_ms = max(self.last_private_ms or 0, lines[-1].ts_ms)
         log.info("private chat: %d lines of history from the archive", len(lines))
 
@@ -1135,23 +1151,24 @@ class Agent:
             return None
 
     # --- v5.8: facts about the owner (`facts`) -----------------------------------------------------------------------
-    def facts_now(self) -> str | None:
+    def facts_now(self, gemini: bool = True) -> str | None:
         """Her facts about the owner, read from disk (a panel edit counts at the next answer), mirrored into the
-        archive when they changed, and rendered for her private prompt."""
+        archive (with their marks, v5.14) when they changed, and rendered for her private prompt — for Gemini without
+        a closed fact."""
         if self.facts_dir is None:
             return None
         facts = load_facts(self.facts_dir)
-        seen = tuple((f.id, f.text) for f in facts)
+        seen = tuple((f.id, f.text, f.mark) for f in facts)
         if self.archive is not None and seen != self._facts_seen:
             try:
                 self.archive.sync_facts(seen, self.clock())
                 self._facts_seen = seen
             except Exception as exc:  # noqa: BLE001
                 log.error("archive: the facts were not mirrored (%s)", type(exc).__name__)
-        return facts_section(facts, self.facts_in_prompt, self.fact_max_chars)
+        return facts_section(facts, self.facts_in_prompt, self.fact_max_chars, gemini)
 
-    def remember(self, text: str, source: str, pin: int = 1) -> bool:
-        """One fact kept — never its words in a log."""
+    def remember(self, text: str, source: str, pin: int = 1, mark: str = "gemini") -> bool:
+        """One fact kept — never its words in a log. `mark` (v5.14): `waiting` for one the backup's answer asked for."""
         if self.facts_dir is None:
             return False
         why = off_limits(text)  # v5.8 review #3: an asked fact is the model's words, so the same filter holds
@@ -1159,7 +1176,8 @@ class Agent:
             log.info("facts: not kept (%s, %s)", why, source)
             return False
         today = local_now(self.clock(), self.tz).date().isoformat()
-        kept = add_fact(self.facts_dir, text, pin, source, today, self.facts_max, self.fact_max_chars) is not None
+        kept = add_fact(self.facts_dir, text, pin, source, today, self.facts_max, self.fact_max_chars,
+                        mark) is not None
         log.info("facts: %s (%s)", "kept one" if kept else "not kept (empty, too long, known or full)", source)
         return kept
 
@@ -1188,7 +1206,7 @@ class Agent:
         the owner spoke. Whether the lines are done with (a valid answer, or nothing to learn)."""
         if not any(who.startswith("Ich") for who, _ in session):
             return True  # nothing to learn: done
-        held = load_facts(self.facts_dir)
+        held = [f for f in load_facts(self.facts_dir) if f.mark not in CLOSED_MARKS]  # v5.14: never a closed one
         system, contents = extraction_request(self.cfg.name, session, held, self.fact_max_chars)
         raw = await self.llm.generate(contents, system, max_output_tokens=1024, kind="facts")
         parsed = parse_extraction(raw or "", {f.id for f in held}, self.fact_max_chars)

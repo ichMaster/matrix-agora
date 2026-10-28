@@ -38,12 +38,20 @@ PLACE_LABEL = {"agora": "в Агорі", "private": "наодинці"}
 RECALL_TITLE = "Тобі згадується з давніших розмов (це пам'ять, а не те, що кажуть зараз):"
 RECALL_TITLE_THOUGHTS = "Тобі згадується з давніших розмов і твоїх думок (це пам'ять, а не те, що кажуть зараз):"
 AGORA_NOW_TITLE = "Що сьогодні говорять в Агорі:"
-# v5.13 — a line's mark: `gemini` (passed through Gemini, clean by default — every line before v5.13) or `censored`
-# (the owner's message a block or a refusal answered); v5.14 adds `waiting`, v5.15 `clean`. Gemini's readers never
-# return a line whose mark is in `GEMINI_CLOSED`, and it is never embedded.
-MARKS = ("gemini", "censored")
-GEMINI_CLOSED = ("censored",)
+# v5.13 — a line's mark: `gemini` (passed through Gemini, clean by default — every line before v5.13), v5.14
+# `waiting` (a line of the backup's talk, or one a block or a refusal answered: closed to Gemini until v5.15's judge
+# rates it) and `censored` (the judge's verdict, for good); v5.15 adds `clean`. Gemini's readers never return a line
+# whose mark is in `GEMINI_CLOSED`, and it is never embedded; the backup's readers (`gemini=False`) return every one.
+MARKS = ("gemini", "waiting", "censored")
+GEMINI_CLOSED = ("censored", "waiting")
 _OPEN = f"mark NOT IN ({','.join(repr(m) for m in GEMINI_CLOSED)})"
+_COLS = "id, key, ts_ms, place, channel, speaker, text, mark"
+SCHEMA_VERSION = 1  # v5.14: v5.13's `censored` lines (Gemini's verdict alone) became `waiting` once (review #3)
+
+
+def _open_to(gemini: bool, alias: str = "") -> str:
+    """The SQL condition on a line's mark for a reader: Gemini's skips the closed ones, the backup's reads all."""
+    return f"{alias}{_OPEN}" if gemini else "1 = 1"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS lines (
@@ -63,6 +71,7 @@ class Line:
     channel: str
     speaker: str
     text: str
+    mark: str = "gemini"  # v5.13
 
 
 def words_query(text: str) -> str | None:
@@ -155,6 +164,10 @@ class Archive:
         if "mark" not in {r[1] for r in self.db.execute("PRAGMA table_info(lines)")}:  # v5.13: migrated in place
             with self.db:
                 self.db.execute("ALTER TABLE lines ADD COLUMN mark TEXT NOT NULL DEFAULT 'gemini'")
+        if self.db.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:  # v5.14, once (v5.13 review #3)
+            with self.db:
+                self.db.execute("UPDATE lines SET mark = 'waiting' WHERE mark = 'censored'")
+                self.db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         # v5.8 review #5: the embedded vectors, read once and kept normalised in memory — (ids, places, matrix) —
         # appended as lines are embedded; a recall never reads them all from the file again
         self._cache: tuple[list[int], np.ndarray, np.ndarray] | None = None
@@ -185,16 +198,23 @@ class Archive:
         return self.db.execute(f"SELECT id, text FROM lines WHERE emb IS NULL AND {_OPEN} ORDER BY id LIMIT ?",
                                (limit,)).fetchall()
 
-    def censor(self, keys: Iterable[str]) -> int:
-        """v5.13 — mark these lines `censored`: Gemini never reads them again, and their vectors go. How many."""
+    def mark(self, keys: Iterable[str], mark: str) -> int:
+        """v5.14 — set these lines' mark; a mark closed to Gemini drops their vectors (they are never embedded again).
+        How many."""
         keys = [k for k in keys if k]
-        if not keys:
+        if not keys or mark not in MARKS:
             return 0
+        closed = mark in GEMINI_CLOSED
         with self.db:
-            cur = self.db.execute(f"UPDATE lines SET mark = 'censored', emb = NULL WHERE key IN "
-                                  f"({','.join('?' * len(keys))})", keys)
-        self._cache = None  # their vectors leave the matrix: read again at the next recall
+            cur = self.db.execute(f"UPDATE lines SET mark = ?{', emb = NULL' if closed else ''} WHERE key IN "
+                                  f"({','.join('?' * len(keys))})", (mark, *keys))
+        if closed:
+            self._cache = None  # their vectors leave the matrix: read again at the next recall
         return cur.rowcount
+
+    def censor(self, keys: Iterable[str]) -> int:
+        """v5.13 — mark these lines `censored`: Gemini never reads them again. How many."""
+        return self.mark(keys, "censored")
 
     def set_embeddings(self, pairs: Iterable[tuple[int, list[float]]]) -> None:
         pairs = [(i, np.asarray(v, dtype="float32")) for i, v in pairs]
@@ -221,8 +241,10 @@ class Archive:
                        np.concatenate([places, np.array([place_of[i] for i, _ in rows], dtype=object)]),
                        added if not matrix.shape[0] else np.vstack([matrix, added]))
 
-    def search_words(self, query: str, places: Iterable[str], limit: int = CANDIDATES) -> list[int]:
-        """BM25 over FTS5 within `places`, the best first; no usable word → nothing."""
+    def search_words(self, query: str, places: Iterable[str], limit: int = CANDIDATES,
+                     gemini: bool = True) -> list[int]:
+        """BM25 over FTS5 within `places`, the best first; no usable word → nothing. `gemini=False` (v5.14, the
+        backup) reads the closed lines too."""
         match = words_query(query)
         places = tuple(places)
         if match is None or not places:
@@ -231,7 +253,7 @@ class Archive:
         try:
             return [r[0] for r in self.db.execute(
                 f"SELECT l.id FROM fts JOIN lines l ON l.id = fts.rowid WHERE fts MATCH ? AND l.place IN ({marks}) "
-                f"AND l.{_OPEN} ORDER BY bm25(fts) LIMIT ?", (match, *places, limit))]
+                f"AND {_open_to(gemini, 'l.')} ORDER BY bm25(fts) LIMIT ?", (match, *places, limit))]
         except sqlite3.OperationalError:
             return []
 
@@ -262,40 +284,42 @@ class Archive:
         matrix = _normalised(np.vstack([np.frombuffer(r[2], dtype="float32") for r in rows]))
         return [r[0] for r in rows], np.array([r[1] for r in rows], dtype=object), matrix
 
-    def lines(self, ids: Iterable[int]) -> dict[int, Line]:
+    def lines(self, ids: Iterable[int], gemini: bool = True) -> dict[int, Line]:
         ids = list(ids)
         if not ids:
             return {}
-        rows = self.db.execute(f"SELECT id, key, ts_ms, place, channel, speaker, text FROM lines WHERE id IN "
-                               f"({','.join('?' * len(ids))}) AND {_OPEN}", ids).fetchall()
+        rows = self.db.execute(f"SELECT {_COLS} FROM lines WHERE id IN "
+                               f"({','.join('?' * len(ids))}) AND {_open_to(gemini)}", ids).fetchall()
         return {r[0]: Line(*r) for r in rows}
 
-    def around(self, line: Line, n: int = 1) -> list[Line]:
+    def around(self, line: Line, n: int = 1, gemini: bool = True) -> list[Line]:
         """The line with its `n` neighbours before and after, in its own place, oldest first."""
-        cols = "id, key, ts_ms, place, channel, speaker, text"
-        before = self.db.execute(f"SELECT {cols} FROM lines WHERE place = ? AND (ts_ms, id) < (?, ?) AND {_OPEN} "
+        where = _open_to(gemini)
+        before = self.db.execute(f"SELECT {_COLS} FROM lines WHERE place = ? AND (ts_ms, id) < (?, ?) AND {where} "
                                  "ORDER BY ts_ms DESC, id DESC LIMIT ?", (line.place, line.ts_ms, line.id, n)).fetchall()
-        after = self.db.execute(f"SELECT {cols} FROM lines WHERE place = ? AND (ts_ms, id) > (?, ?) AND {_OPEN} "
+        after = self.db.execute(f"SELECT {_COLS} FROM lines WHERE place = ? AND (ts_ms, id) > (?, ?) AND {where} "
                                 "ORDER BY ts_ms, id LIMIT ?", (line.place, line.ts_ms, line.id, n)).fetchall()
         return [Line(*r) for r in reversed(before)] + [line] + [Line(*r) for r in after]
 
-    def sync_facts(self, facts: Iterable[tuple[str, str]], ts_ms: int) -> None:
-        """The `facts` place mirrors her facts (id, text): few and edited often, so replaced whole each time they
-        change (Noos's reindexing) — their embeddings follow on the next ticks."""
+    def sync_facts(self, facts: Iterable[tuple], ts_ms: int) -> None:
+        """The `facts` place mirrors her facts (id, text[, mark] — v5.14): few and edited often, so replaced whole each
+        time they change (Noos's reindexing) — their embeddings follow on the next ticks (an open fact's only)."""
         self._cache = None  # their rows go: the vectors are read again at the next recall
         with self.db:
             for row_id, text in self.db.execute("SELECT id, text FROM lines WHERE place = 'facts'").fetchall():
                 self.db.execute("INSERT INTO fts(fts, rowid, text) VALUES ('delete', ?, ?)", (row_id, text))
             self.db.execute("DELETE FROM lines WHERE place = 'facts'")
-            for fact_id, text in facts:
+            for fact_id, text, *rest in facts:
+                mark = rest[0] if rest and rest[0] in MARKS else "gemini"
                 cur = self.db.execute(
-                    "INSERT INTO lines(key, ts_ms, place, channel, speaker, text) VALUES (?,?,?,?,?,?)",
-                    (f"fact:{fact_id}", int(ts_ms), "facts", "", "факт", text))
+                    "INSERT INTO lines(key, ts_ms, place, channel, speaker, text, mark) VALUES (?,?,?,?,?,?,?)",
+                    (f"fact:{fact_id}", int(ts_ms), "facts", "", "факт", text, mark))
                 self.db.execute("INSERT INTO fts(rowid, text) VALUES (?,?)", (cur.lastrowid, text))
 
-    def latest(self, place: str, limit: int, since_ms: int | None = None) -> list[Line]:
-        """The last `limit` lines of a place (from `since_ms` on), oldest first; never a censored one (v5.13)."""
+    def latest(self, place: str, limit: int, since_ms: int | None = None, gemini: bool = True) -> list[Line]:
+        """The last `limit` lines of a place (from `since_ms` on), oldest first; for Gemini never a closed one (v5.13),
+        for the backup (`gemini=False`, v5.14) every one, each with its mark."""
         rows = self.db.execute(
-            "SELECT id, key, ts_ms, place, channel, speaker, text FROM lines WHERE place = ? AND ts_ms >= ? "
-            f"AND {_OPEN} ORDER BY ts_ms DESC, id DESC LIMIT ?", (place, since_ms or 0, limit)).fetchall()
+            f"SELECT {_COLS} FROM lines WHERE place = ? AND ts_ms >= ? "
+            f"AND {_open_to(gemini)} ORDER BY ts_ms DESC, id DESC LIMIT ?", (place, since_ms or 0, limit)).fetchall()
         return [Line(*r) for r in reversed(rows)]
