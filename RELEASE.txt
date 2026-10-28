@@ -1,3 +1,35 @@
+Version 5.13.0 (2026-10-28)
+---------------------------
+- Phase v5.13 - Gemini's blocks named: a block by Gemini's safety filter
+  no longer passes for an empty reply, and Gemini's own refusal written as
+  an answer counts as one (AGORA-138..142)
+- blocked_reason (pure): the prompt stage (any prompt_feedback.block_reason)
+  or the answer stage (SAFETY, PROHIBITED_CONTENT, BLOCKLIST, SPII) with the
+  category of the blocked or most probable safety rating; complete, reply and
+  think log "gemini blocked: stage=... reason=... category=..." with no text;
+  usage line v5 carries `blocked` (AGORA-138)
+- The panel: "Blocks today: n - m in 7 days" on any agent's card that has
+  one today (AGORA-139)
+- A refusal in text is a block, the stage `refusal`: a model's formula
+  anywhere, or it calling itself an AI opening a sentence that is no
+  question; never sent (AGORA-141, added after the owner's live test)
+- The message a block or a refusal answered in Kira's private chat is marked
+  censored in her archive (the new `mark` column, migrated in place, every
+  older line `gemini`): it leaves her history and the session, and no Gemini
+  reader of the archive returns or embeds it again (AGORA-142, the owner:
+  "model should mark such messages itself ... within this version")
+- Live: deployed at the owner's word (sha-34a4c30, then sha-9279ce0); a real
+  refusal at 20:21:45 was logged, never sent, the owner's line censored and
+  counted on her card - verified by Claude at the owner's request and
+  released by the owner's word ("релізь", 2026-10-28)
+- Code review fixes: her own lines about AI or a request are never a refusal
+  (#1); a block censors only the lines Gemini saw, never one that came while
+  she composed (#2); #3 carried into v5.14, #4 and #5 to the backlog
+- Docs: ROADMAP - the backup split into v5.13-v5.15; NovelAI verified (Opus,
+  36,864 tokens, a User-Agent required), GLM-4.6 tested with her real
+  instruction, NovelAI's terms read, Gemma 4 31B rated 18 lines right with
+  the flirt sentence in its policy
+
 Version 5.12.0 (2026-10-28)
 ---------------------------
 - Phase v5.12 - Kira reads the news and thinks: a thought on what she
