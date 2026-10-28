@@ -1,3 +1,42 @@
+Version 5.12.0 (2026-10-28)
+---------------------------
+- Phase v5.12 - Kira reads the news and thinks: a thought on what she
+  reads and her own reflection on her talks, kept in her archive and
+  recalled as «я думала…» (AGORA-132..137)
+- What she reads: Zaxid.net's day items with the full text from the
+  article page's JSON-LD (only an https page on zaxid.net is fetched) and
+  the newest items of the Guardian's sections of her interests, with her
+  own GUARDIAN_API_KEY; state/<name>.reading.json keeps the items she has
+  seen, ids only (AGORA-132)
+- Her thoughts kept: the capability `thoughts` (needs recall) with the
+  TOML's `reading` file in her private canon; state/<name>.thoughts/
+  YYYY-MM-DD.md; the archive's places `thought` and `thought_private` -
+  a reflection on the private chat is recalled only alone with the owner
+  (AGORA-133)
+- The reading every READING_EVERY_S (3 h) in READING_HOURS (08-01): a pick
+  of at most READING_PICKS (2), a thought on each; the reflection every
+  REFLECT_EVERY_S (1 h) on each place with new lines, mid-talk too, sending
+  nothing; both off the reply path, on GEMINI_MODEL (kinds reading,
+  thought, reflection) (AGORA-134)
+- Where thoughts go: «Що ти сьогодні думала» after the mood (in Agora no
+  private one and no link), writing first may share a news item with its
+  link, Agora's move `thought` (PERSONA_THOUGHT_P 0.1), the day memory
+  (AGORA-135)
+- The panel: a Thoughts tab by day and «Last thought» on her card
+  (AGORA-136)
+- Live: deployed as sha-dcefc7a on the owner's word; the key copied from
+  Claude's; the owner kept the drafted reading paragraph (AGORA-137)
+- Owner's manual checks over a day (both sources and the Thoughts tab, a
+  reflection during a long talk with no pause, a private reflection never
+  in Agora) waived by the owner's release word («релізь», 2026-10-28)
+- Code review fixes: a failed call never uses up her news or her lines
+  (#1); a private thought never reaches a thought Agora sees (#2); a link
+  she shares is never read aloud by her voice (#3)
+- Docs: ROADMAP v5.13 - her private chat past a Gemini block: GLM-4.6 on
+  NovelAI for five minutes after a block, Gemma 4 31B on OpenRouter rating
+  the backup's talk, a censored line never reaching Gemini, Telegram
+  commands (planned)
+
 Version 5.11.0 (2026-10-28)
 ---------------------------
 - Phase v5.11 - events of her life: things now happen to Kira that she
