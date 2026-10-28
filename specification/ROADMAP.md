@@ -1732,6 +1732,8 @@ of it, and a line of the backup's talk never reaches Gemini later, in any call, 
     answers 400 with the exact count: «too much context. got N + M, max is 12288».
   - **Not enough for her prompt:** her private instruction's fixed part alone is 9,526 tokens, so the plan needs the
     tier with the full context.
+  - **Measured on Opus** (2026-10-28, after the owner's upgrade): 36,864 tokens, the site's 28,672 plus the 8,192
+    rollover. A 30,545-token prompt went through, and the code word at its very start came back.
   - **The token count:** a Ukrainian filler text counted 2.14 characters a token, under the 2.47 measured on her
     prompt.
 - **Text only** is enough: a voice message reaches the prompt already as Deepgram's text.
@@ -1799,9 +1801,11 @@ is named by its id. The Telegram command and the route say "backup", so nothing 
       - the plans: about 1,400;
       - the recall (6 lines): about 1,000;
       - the summary, «Сьогодні» and the mood: about 1,100;
-    - so at the caps the backup's full prompt is about 30,400 tokens, over NovelAI's 28,672;
-    - the backup's request keeps a budget, `FALLBACK_CONTEXT` (26,000 tokens, counted at 2.0 characters a token, under
-      the measured 2.14–2.47, so the estimate never runs over).
+    - so at the caps the backup's full prompt is about 30,400 tokens, near Opus's 36,864 once room is kept for the
+      answer;
+    - the backup's request keeps a budget, `FALLBACK_CONTEXT`. It is 32,000 tokens: Opus's 36,864 less 4,096 for the
+      answer, with a margin. It is counted at 2.0 characters a token, under the measured 2.14–2.47, so the estimate
+      never runs over.
       Over it, it leaves out, in this order:
       1. the month digests;
       2. the week digests;
@@ -1885,7 +1889,7 @@ is named by its id. The Telegram command and the route say "backup", so nothing 
   - There are no commands in Element. The route is shared, as the history is.
 - **Settings** (her TOML, `kira.env` and the panel):
   - `FALLBACK_MODEL` (empty: off; `kira.env` sets `glm-4-6`);
-  - `FALLBACK_WINDOW_S` (300), `FALLBACK_DAY_MAX` (10), `FALLBACK_CONTEXT` (26000), `FALLBACK_HISTORY_N` (60).
+  - `FALLBACK_WINDOW_S` (300), `FALLBACK_DAY_MAX` (10), `FALLBACK_CONTEXT` (32000), `FALLBACK_HISTORY_N` (60).
 - **Secrets:** `NOVELAI_API_TOKEN`, the account's persistent API token, goes in `kira.env`. No other service reads that
   file, and `kira.env.example` names the token.
 - **The panel:** her card shows, read-only:
@@ -1903,8 +1907,8 @@ is named by its id. The Telegram command and the route say "backup", so nothing 
   - §Contracts: the archive's schema, the route state file, the commands, `kira.env`.
 
 **Owner steps:**
-- a NovelAI subscription whose tier gives GLM-4.6 the full 28,672-token context (the editor shows it; Tablet gives
-  12,288, measured 2026-10-28);
+- a NovelAI subscription on Opus: 36,864 tokens through the API (Tablet gives 12,288). Done: the owner upgraded on
+  2026-10-28;
 - a test of GLM-4.6 on the site in the chat format: her Ukrainian and her character;
 - the NovelAI persistent API token in `server/kira.env`;
 - one live call with the token, to confirm the endpoint and the fields before the issues are generated;
