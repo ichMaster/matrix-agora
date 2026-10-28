@@ -722,8 +722,8 @@ class Herald:
                 log.exception("digest watcher failed (he keeps running)")
 
     # --- usage ------------------------------------------------------------------------------------------------------
-    def record_usage(self, kind: str, model: str, usage, ok: bool) -> None:
-        self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok))
+    def record_usage(self, kind: str, model: str, usage, ok: bool, blocked: str | None = None) -> None:
+        self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked))
 
     def record_stt(self, audio_ms: int | None, ok: bool) -> None:
         self._append_usage(lambda ts: stt_usage_line(ts, self.cfg.localpart, STT_MODEL, audio_ms, ok))

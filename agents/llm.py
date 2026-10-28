@@ -25,7 +25,13 @@ THINKING_MODELS = frozenset({"gemini-3.1-pro-preview"})
 EMBED_MODEL = "gemini-embedding-001"  # v5.8: the archive's meaning search (the owner, 2026-10-25: Gemini's)
 EMBED_DIM = 768
 
-UsageSink = Callable[[str, str, Any, bool], None]  # (kind, model, usage_metadata | None, ok)
+UsageSink = Callable[..., None]  # (kind, model, usage_metadata | None, ok[, blocked=stage]) — v5.13: a block's stage
+
+# v5.13 — a block by Gemini's safety filter: the answer-stage finish reasons that mean one (an empty answer only), and
+# the order of a safety rating's probability, for the category when none is marked `blocked`
+BLOCK_FINISH = frozenset({"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII"})
+PROBABILITY = {"NEGLIGIBLE": 1, "LOW": 2, "MEDIUM": 3, "HIGH": 4}
+BLOCK_LOG = "gemini blocked: stage=%s reason=%s category=%s kind=%s model=%s"  # never a text
 
 
 class GeminiClient:
@@ -38,13 +44,27 @@ class GeminiClient:
         self.reply_model = os.environ.get("GEMINI_REPLY_MODEL", "").strip() or self.model
         self.thinking_level = os.environ.get("GEMINI_THINKING_LEVEL", "low").strip() or "low"
 
-    def _report(self, kind: str, usage: Any, ok: bool, model: str | None = None) -> None:
+    def _report(self, kind: str, usage: Any, ok: bool, model: str | None = None,
+                block: tuple[str, str, str | None] | None = None) -> None:
         if self._sink is None:
             return
         try:
-            self._sink(kind, model or self.model, usage, ok)
+            if block:  # v5.13: only a block passes its stage, so a four-argument sink keeps working
+                self._sink(kind, model or self.model, usage, ok, blocked=block[0])
+            else:
+                self._sink(kind, model or self.model, usage, ok)
         except Exception:
             log.exception("usage accounting failed")
+
+    def _empty(self, resp: Any, kind: str, model: str, usage: Any, line: str) -> None:
+        """v5.13 — an empty answer: a block is reported with its stage and logged by stage, reason and category (never
+        a text); anything else logs `line` as before."""
+        block = blocked_reason(resp)
+        self._report(kind, usage, False, model, block)
+        if block:
+            log.warning(BLOCK_LOG, *block, kind, model)
+        else:
+            log.error(line, finish_of(resp))
 
     async def generate(
         self, transcript: str, system_instruction: str, max_output_tokens: int = 400, kind: str = "reply",
@@ -76,10 +96,11 @@ class GeminiClient:
             self._report(kind, None, False, model)
             return None
         text = (resp.text or "").strip() if resp is not None else ""
-        self._report(kind, getattr(resp, "usage_metadata", None), bool(text), model)
         if not text:
-            log.error("gemini returned an empty reply")
+            self._empty(resp, kind, model, getattr(resp, "usage_metadata", None),
+                        "gemini returned an empty reply (finish %s)")
             return None
+        self._report(kind, getattr(resp, "usage_metadata", None), True, model)
         return text, finish_of(resp)
 
     async def reply(
@@ -109,10 +130,10 @@ class GeminiClient:
             self._report(kind, None, False, model)
             return None
         text = answer_text(resp)
-        self._report(kind, getattr(resp, "usage_metadata", None), bool(text), model)
         if not text:
-            log.error("gemini reply was empty (finish %s)", finish_of(resp))
+            self._empty(resp, kind, model, getattr(resp, "usage_metadata", None), "gemini reply was empty (finish %s)")
             return None
+        self._report(kind, getattr(resp, "usage_metadata", None), True, model)
         return text, finish_of(resp)
 
 
@@ -183,10 +204,11 @@ class GeminiClient:
             self._report(kind, None, False, model)
             return None
         text = answer_text(resp)
-        self._report(kind, getattr(resp, "usage_metadata", None), bool(text), model)
         if not text:
-            log.error("gemini think returned no answer (finish %s)", finish_of(resp))
+            self._empty(resp, kind, model, getattr(resp, "usage_metadata", None),
+                        "gemini think returned no answer (finish %s)")
             return None
+        self._report(kind, getattr(resp, "usage_metadata", None), True, model)
         return text
 
 
@@ -199,6 +221,40 @@ def answer_text(resp: Any) -> str:
         return (getattr(resp, "text", None) or "").strip() if resp is not None else ""
     return "".join(p.text for p in parts if isinstance(getattr(p, "text", None), str)
                    and not getattr(p, "thought", False)).strip()
+
+
+def _name(value: Any) -> str:
+    """An enum's name or a plain string, upper-cased; "" for anything else (None, a test double's attribute)."""
+    name = getattr(value, "name", value)
+    return name.upper() if isinstance(name, str) else ""
+
+
+def _category(ratings: Any) -> str | None:
+    """The safety rating that blocked, or else the most probable one: `HARM_CATEGORY_SEXUALLY_EXPLICIT` →
+    `sexually_explicit`; None with no ratings."""
+    ratings = [r for r in (ratings if isinstance(ratings, list | tuple) else []) if _name(getattr(r, "category", None))]
+    if not ratings:
+        return None
+    hit = next((r for r in ratings if getattr(r, "blocked", None) is True), None)
+    if hit is None:
+        hit = max(ratings, key=lambda r: PROBABILITY.get(_name(getattr(r, "probability", None)), 0))
+    return _name(hit.category).removeprefix("HARM_CATEGORY_").lower()
+
+
+def blocked_reason(resp: Any) -> tuple[str, str, str | None] | None:
+    """v5.13 — (stage, reason, category) when Gemini's safety filter blocked the call, else None. Called on an empty
+    answer: the prompt stage is any `prompt_feedback.block_reason`; the answer stage a `finish_reason` in
+    `BLOCK_FINISH`. `MAX_TOKENS`, `RECITATION`, `OTHER` or no reason is not a block."""
+    feedback = getattr(resp, "prompt_feedback", None)
+    reason = _name(getattr(feedback, "block_reason", None))
+    if reason and reason != "BLOCKED_REASON_UNSPECIFIED":
+        return "prompt", reason.lower(), _category(getattr(feedback, "safety_ratings", None))
+    candidates = getattr(resp, "candidates", None)
+    first = candidates[0] if isinstance(candidates, list | tuple) and candidates else None
+    finish = _name(getattr(first, "finish_reason", None))
+    if finish in BLOCK_FINISH:
+        return "answer", finish.lower(), _category(getattr(first, "safety_ratings", None))
+    return None
 
 
 def finish_of(resp: Any) -> str:

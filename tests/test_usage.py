@@ -22,10 +22,22 @@ def test_usage_line_shape_and_no_text():
     line = usage_line("2026-10-03T14:00:00+03:00", "ada", "reply", "gemini-2.5-flash", META, True)
     assert set(line) == {"ts", "agent", "kind", "model", "prompt_tokens", "output_tokens", "total_tokens", "ok",
                          "engine", "billing", "cache_read_tokens", "cache_write_tokens", "reported_cost_usd",
-                         "characters", "audio_ms"}  # v2; v3 (v5.1) `characters`; v4 (v5.2) `audio_ms`
-    assert line["characters"] is None and line["audio_ms"] is None
+                         "characters", "audio_ms",  # v2; v3 (v5.1) `characters`; v4 (v5.2) `audio_ms`
+                         "blocked"}  # v5 (v5.13): a safety block's stage
+    assert line["characters"] is None and line["audio_ms"] is None and line["blocked"] is None
     assert (line["engine"], line["billing"]) == ("gemini", "api")
     assert (line["prompt_tokens"], line["output_tokens"], line["total_tokens"], line["ok"]) == (1200, 80, 1280, True)
+    assert usage_line("2026-10-28T14:00:00", "kira", "private", "m", None, False, "prompt")["blocked"] == "prompt"
+
+
+def test_an_older_line_without_blocked_still_parses():
+    from agents.usage import parse_lines
+    old = {"ts": "2026-10-03T14:00:00", "agent": "ada", "kind": "reply", "model": "m", "prompt_tokens": 1,
+           "output_tokens": 1, "total_tokens": 2, "ok": True}
+    new = {**old, "blocked": "answer", "ok": False}
+    records, bad = parse_lines([json.dumps(old), json.dumps({**old, "blocked": None}), json.dumps(new)])
+    assert (len(records), bad) == (3, 0)
+    assert parse_lines([json.dumps({**old, "blocked": 7})]) == ([], 1)  # never a number
 
 
 def test_missing_metadata_gives_nulls():

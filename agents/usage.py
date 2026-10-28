@@ -37,9 +37,11 @@ def _output(usage: Any) -> int | None:
     return (answer or 0) + (thoughts or 0)
 
 
-def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: bool) -> dict:
+def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: bool,
+               blocked: str | None = None) -> dict:
     """One record per Gemini call (v2 since v4.4: engine, billing, cache tokens; v3 since v5.1: `characters`, null
-    here, and the thinking counted in the output). Missing metadata → nulls. Never any text."""
+    here, and the thinking counted in the output; v5 since v5.13: `blocked`, the stage of a safety block — `prompt`
+    or `answer` — or null). Missing metadata → nulls. Never any text."""
     return {
         "ts": ts_iso,
         "agent": agent,
@@ -56,6 +58,7 @@ def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: b
         "reported_cost_usd": None,
         "characters": None,
         "audio_ms": None,
+        "blocked": blocked,
     }
 
 
@@ -69,6 +72,7 @@ def tts_usage_line(ts_iso: str, agent: str, model: str, characters: int, ok: boo
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
         "characters": int(characters),
         "audio_ms": None,
+        "blocked": None,  # v5.13: one line shape — only a Gemini call is ever blocked
     }
 
 
@@ -81,6 +85,7 @@ def stt_usage_line(ts_iso: str, agent: str, model: str, audio_ms: int | None, ok
         "engine": "deepgram", "billing": "subscription",
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
         "characters": None, "audio_ms": int(audio_ms) if isinstance(audio_ms, int) else None,
+        "blocked": None,
     }
 
 
@@ -109,6 +114,7 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
         "reported_cost_usd": cost,
         "characters": None,
         "audio_ms": None,
+        "blocked": None,
     }
 
 
@@ -128,7 +134,8 @@ def _valid(rec: Any) -> bool:
                     for f in COUNT_FIELDS)
     return (counts_ok and isinstance(rec.get("ok"), bool)
             and isinstance(rec.get("agent"), str) and isinstance(rec.get("kind"), str)
-            and rec.get("billing", "api") in BILLING and isinstance(rec.get("engine", "gemini"), str))
+            and rec.get("billing", "api") in BILLING and isinstance(rec.get("engine", "gemini"), str)
+            and isinstance(rec.get("blocked") or "", str))  # v5.13: missing or null on an older line
 
 
 def parse_lines(lines: list[str]) -> tuple[list[dict], int]:

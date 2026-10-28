@@ -1622,9 +1622,10 @@ class Agent:
     def usage_file(self) -> Path:
         return self.memory_file.parent / f"{self.cfg.localpart}.usage.jsonl"
 
-    def record_usage(self, kind: str, model: str, usage, ok: bool) -> None:
-        """One JSON line per Gemini call (v3.1) — no texts; a write error never blocks."""
-        self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok))
+    def record_usage(self, kind: str, model: str, usage, ok: bool, blocked: str | None = None) -> None:
+        """One JSON line per Gemini call (v3.1) — no texts; a write error never blocks. `blocked` (v5.13): the stage
+        of a safety block."""
+        self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked))
 
     def record_sdk_usage(self, kind: str, model: str, usage: dict | None, ok: bool,
                          reported_cost: float | None) -> None:

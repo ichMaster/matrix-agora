@@ -334,9 +334,9 @@ def main(argv: list[str] | None = None) -> int:
     state = Path("state")
     usage_file = state / f"{args.agent}.usage.jsonl"
 
-    def sink(kind, model, meta, ok):  # the seed's calls are counted under the agent, like any other
+    def sink(kind, model, meta, ok, blocked=None):  # the seed's calls are counted under the agent, like any other
         line = usage_line(local_now(int(time.time() * 1000), tz).isoformat(timespec="seconds"), args.agent, kind,
-                          model, meta, ok)
+                          model, meta, ok, blocked)
         fd = os.open(usage_file, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
         try:
             os.write(fd, (json.dumps(line, ensure_ascii=False) + "\n").encode())
