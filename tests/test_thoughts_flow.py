@@ -260,3 +260,17 @@ def test_the_watcher_spawns_them_and_an_agent_without_thoughts_never_reads(tmp_p
                               owner=OWNER, password="pw"), llm=llm)
     assert not other.reading_is_due(now_of(agent)) and not other.reflection_is_due()
     assert other.reading_sources._key == ""
+
+
+def test_her_guardian_key_leaves_the_environment_and_claudes_is_untouched(monkeypatch):
+    import os
+    monkeypatch.setenv("GUARDIAN_API_KEY", "her-key")
+    caps = frozenset({"canon", "summary", "voice", "world", "private", "recall", "thoughts"})
+    cfg = AgentConfig(name="Кіра", user_id=KIRA, canon="К.", homeserver="http://hs", room_id=AGORA, owner=OWNER,
+                      password="pw", capabilities=caps, reading="Р.")
+    agent = Agent(cfg, llm=ThinkLLM())
+    assert agent.reading_sources._key == "her-key" and "GUARDIAN_API_KEY" not in os.environ
+    monkeypatch.setenv("GUARDIAN_API_KEY", "claudes-key")
+    Agent(AgentConfig(name="Ада", user_id="@ada:agora.lan", canon="К.", homeserver="h", room_id=AGORA, owner=OWNER,
+                      password="pw"), llm=ThinkLLM())
+    assert os.environ["GUARDIAN_API_KEY"] == "claudes-key"     # only a person with `thoughts` takes it

@@ -287,6 +287,8 @@ class Agent:
         tg_token = os.environ.pop("TELEGRAM_BOT_TOKEN", "").strip()
         tg_owner = os.environ.pop("TELEGRAM_OWNER_ID", "").strip()
         stt_key = os.environ.pop("DEEPGRAM_API_KEY", "").strip()
+        # v5.12 — her own Guardian key (server/kira.env), for her reading: out of the environment the same way
+        reading_key = os.environ.pop(GUARDIAN_KEY_VAR, "").strip() if cfg.can("thoughts") else ""
         # the room's members come from the registry (v4.1): nothing in the code names them
         self.roster = roster if roster is not None else load_roster(cfg.simulation, strict_for=cfg.localpart)
         self.me = self.roster.get(cfg.localpart) or Member(cfg.localpart, cfg.user_id, cfg.name, (cfg.name.lower(),))
@@ -386,8 +388,8 @@ class Agent:
             self.reading_sections = parse_sections(sections)
             self.reflect_every_ms = int(float(os.environ.get("REFLECT_EVERY_S", "3600")) * 1000)
             self.thoughts_in_prompt = int(os.environ.get("THOUGHTS_IN_PROMPT", "3"))
-        # her own key (server/kira.env), never Claude's state; the seam: tests pass canned fetches
-        self.reading_sources = Sources(os.environ.get("GUARDIAN_API_KEY", "") if cfg.can("thoughts") else "")
+        # her own key (taken above), never Claude's state; the seam: tests pass canned fetches
+        self.reading_sources = Sources(reading_key)
         self._reading_lock, self._reflect_lock = asyncio.Lock(), asyncio.Lock()
         self._reading_retry_ms = self._reflect_retry_ms = self._reflect_ms = 0
         # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.
