@@ -35,6 +35,7 @@ from nio import (
 
 from agents.archive import (
     CANDIDATES,
+    THOUGHT_PLACES,
     Archive,
     cosine_top,
     fuse,
@@ -200,6 +201,10 @@ from agents.telegram import (
     poll_offset,
     save_telegram_state,
 )
+from agents.thoughts import Thought
+from agents.thoughts import archive_key as thought_key
+from agents.thoughts import block as thought_block
+from agents.thoughts import parse_day as parse_thoughts
 from agents.turns import (
     claude_mode,
     decide_reply,
@@ -815,7 +820,7 @@ class Agent:
             facts = self.facts_now()  # v5.8 review #6: mirrored before the recall, so a deleted fact is not recalled
             if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
                 query = next((t for s, t in reversed(self.private_history) if s == "Ich"), "")
-                recalled = await self.recall_section(query, ("agora", "private", "facts"), set(self.private_history))
+                recalled = await self.recall_section(query, self.private_places, set(self.private_history))
                 agora_now = self.agora_now_section()
             brief = PRIVATE_NUDGE if nudge else PRIVATE_BRIEF
             if self.facts_dir is not None and not nudge:  # v5.8: «запам'ятай» — a skill, never a keyword
@@ -982,7 +987,8 @@ class Agent:
             picked = pick_recall(ranked, self.archive.lines(ranked[:2 * CANDIDATES]), exclude, self.recall_n)
             groups, seen = [], set()
             for line in sorted(picked, key=lambda x: (x.ts_ms, x.id)):
-                group = [n for n in (self.archive.around(line, 1) if line.place != "facts" else [line])
+                group = [n for n in (self.archive.around(line, 1) if line.place not in ("facts", *THOUGHT_PLACES)
+                                     else [line])  # a fact or a thought is recalled alone
                          if n.id not in seen and (n.speaker, n.text) not in exclude]
                 seen.update(n.id for n in group)
                 groups.append(group)
@@ -992,6 +998,16 @@ class Agent:
         except Exception as exc:  # noqa: BLE001
             log.error("recall failed (%s) — answering without it", type(exc).__name__)
             return None
+
+    @property
+    def private_places(self) -> tuple[str, ...]:
+        """What her private recall searches: both rooms and her facts; v5.12: all her thoughts."""
+        return ("agora", "private", "facts", *(THOUGHT_PLACES if self.cfg.can("thoughts") else ()))
+
+    @property
+    def agora_places(self) -> tuple[str, ...]:
+        """What her Agora recall searches: Agora only; v5.12: and her thoughts but those on the private chat."""
+        return ("agora", "thought") if self.cfg.can("thoughts") else ("agora",)
 
     def agora_now_section(self) -> str | None:
         """Agora's latest `PRIVATE_AGORA_N` lines of today (local), for the private chat."""
@@ -1948,6 +1964,32 @@ class Agent:
                          f"{f', о {e.time}' if e.time else ''}: {e.text}"
                          for e in known_ahead(life, today, until)) or None
 
+    # --- v5.12: her thoughts (`thoughts`) ------------------------------------------------------------------------
+    def thoughts_file(self, day) -> Path:
+        return self._dir("thoughts") / f"{day.isoformat()}.md"
+
+    def day_thoughts(self, day) -> list[Thought]:
+        """Her thoughts of `day`, oldest first (none without `thoughts`)."""
+        if not self.cfg.can("thoughts"):
+            return []
+        return parse_thoughts(self._read_raw(self.thoughts_file(day)))
+
+    def keep_thought(self, now, thought: Thought) -> None:
+        """A thought into her day file (appended, 0600, the folder 0700) and her archive under its place."""
+        day = now.date()
+        n = len(self.day_thoughts(day))
+        path = self.thoughts_file(day)
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        try:
+            if stat.S_IMODE(os.fstat(fd).st_mode) != 0o600:
+                os.fchmod(fd, 0o600)
+            os.write(fd, thought_block(thought).encode("utf-8"))
+        finally:
+            os.close(fd)
+        self._archive(thought_key(day.isoformat(), thought, n), int(now.timestamp() * 1000), thought.place, "thought",
+                      self.cfg.name, thought.text)
+
     def _append_events(self, day, text: str) -> None:
         """Appended, never rewritten; private from birth, like the mood log."""
         path = self.events_file(day)
@@ -2127,7 +2169,7 @@ class Agent:
             recalled = None
             if self.archive is not None:  # v5.8: Agora recalls only Agora — the place is the search's, in code
                 query = self._texts.get(trigger, "") if trigger else (self.last_owner[1] if self.last_owner else "")
-                recalled = await self.recall_section(query, ("agora",), set(self.history))
+                recalled = await self.recall_section(query, self.agora_places, set(self.history))
             prompt = self.build_prompt(pastlife_section(self.cfg.theses[memory]) if memory is not None else None,
                                        move=move, recalled=recalled)
             lines, effort = None, None

@@ -43,6 +43,7 @@ class AgentConfig:
     natal: str = ""  # v4.2: the natal text (Lumi's natal.md format) for an agent with the `mood` capability
     theses: tuple = ()  # v4.3: the past-life theses (agents.pastlife.Thesis) for an agent with `pastlife`
     voice_spec: str = ""  # v5.9: the palette of tags verified on her voice, for an agent with `emotion`
+    reading: str = ""  # v5.12: what she reads and how she sees the news, for an agent with `thoughts` (private canon)
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -106,6 +107,8 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         required.append("memories")
     if member.can("emotion"):
         required.append("voice_spec")
+    if member.can("thoughts"):
+        required.append("reading")
     for key in required:
         if not str(data.get(key, "")).strip():
             raise ConfigError(f"{toml_path}: missing '{key}'")
@@ -156,6 +159,17 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         if not voice_spec:
             raise ConfigError(f"voice spec is empty: {spec_path}")
 
+    reading = ""
+    if member.can("thoughts"):  # v5.12: what she reads, next to her canon; `#` lines are notes, never her words
+        reading_path = Path(str(data["reading"]))
+        try:
+            lines = reading_path.read_text(encoding="utf-8").splitlines()
+        except FileNotFoundError as exc:
+            raise ConfigError(f"reading file not found: {reading_path}") from exc
+        reading = "\n".join(line for line in lines if not line.lstrip().startswith("#")).strip()
+        if not reading:
+            raise ConfigError(f"reading file is empty: {reading_path}")
+
     if env is None:
         load_dotenv()
         env = dict(os.environ)
@@ -187,4 +201,5 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         natal=natal,
         theses=theses,
         voice_spec=voice_spec,
+        reading=reading,
     )

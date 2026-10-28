@@ -8,6 +8,7 @@ engine = "gemini"
 name_forms = ["кіра", "кіри", "кірі", "кіру", "кірою", "кіро", "kira"]  # what addresses this agent in the room (any case, a whole word)
 voice_spec = "agents/canon/kira.voice.md"  # v5.9: the tags verified on her voice (features/voice-emotion.md)
 natal = "agents/canon/kira.natal.md"   # v5.10: her natal chart, Lumi's format, read by her mood of the day (agents/mood.py)
+reading = "agents/canon/kira.reading.md"  # v5.12: what she reads and how she sees the news (private canon)
 
 [capabilities]
 private = true          # v5.6: a private chat with the owner (the owner, 2026-10-20: Кіра first)
@@ -17,6 +18,7 @@ facts = true            # v5.8: facts about the owner, in her private prompt onl
 emotion = true          # v5.9: audio tags from her palette, performed by her voice, never shown in the text
 mood = true             # v5.10: her mood of the day — her chart under the day's sky, the biorhythms, the Lviv weather
 events = true           # v5.11: events of her life — her story's dated ones, an hourly roll, Lviv's news
+thoughts = true         # v5.12: she reads the news and thinks — her thoughts in her archive, «я думала…»
 
 [turns]
 mode = "ranked"         # ranked | ambient | mention-only

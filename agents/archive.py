@@ -25,7 +25,10 @@ import numpy as np
 
 from agents.world import ago, local_now
 
-PLACES = ("agora", "private", "facts")  # facts (v5.8, `facts`): searchable by a private recall only
+# facts (v5.8, `facts`): searchable by a private recall only; v5.12 (`thoughts`): her thoughts — `thought` (on what
+# she read, on Agora) recalled anywhere, `thought_private` (on the private chat) alone with the owner only
+PLACES = ("agora", "private", "facts", "thought", "thought_private")
+THOUGHT_PLACES = ("thought", "thought_private")
 RRF_K = 60       # Noos's reciprocal rank fusion constant
 CANDIDATES = 50  # each ranked list's length before the fusion
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
@@ -33,6 +36,7 @@ LINE_MAX_CHARS = 400  # a recalled line is cut here: the gist, not a long news i
 PLACE_LABEL = {"agora": "в Агорі", "private": "наодинці"}
 # the prompt sections (ARCHITECTURE §Prompt assembly) — her memory, never told as what is said now
 RECALL_TITLE = "Тобі згадується з давніших розмов (це пам'ять, а не те, що кажуть зараз):"
+RECALL_TITLE_THOUGHTS = "Тобі згадується з давніших розмов і твоїх думок (це пам'ять, а не те, що кажуть зараз):"
 AGORA_NOW_TITLE = "Що сьогодні говорять в Агорі:"
 
 SCHEMA = """
@@ -106,8 +110,8 @@ def _cut(text: str) -> str:
 def render_recalled(groups: list[list[Line]], tz, now: datetime) -> str | None:
     """The recall section: each recalled line with its neighbours, a group a paragraph, oldest first, each line
     with when it was, as a person remembers it, and its place («минулого тижня, в Агорі — Ада: …»; never a date —
-    the owner, 2026-10-26); a fact as what she knows."""
-    out = []
+    the owner, 2026-10-26); a fact as what she knows; v5.12: a thought as hers, «вчора я думала: …» — never said."""
+    out, thought = [], False
     for group in groups:
         rows = []
         for line in group:
@@ -115,10 +119,14 @@ def render_recalled(groups: list[list[Line]], tz, now: datetime) -> str | None:
                 rows.append(f"(те, що ти знаєш про Ich) {_cut(line.text)}")
                 continue
             when = ago(local_now(line.ts_ms, tz), now)
+            if line.place in THOUGHT_PLACES:
+                rows.append(f"{when} я думала: {_cut(line.text)}")
+                thought = True
+                continue
             rows.append(f"{when}, {PLACE_LABEL.get(line.place, line.place)} — {line.speaker}: {_cut(line.text)}")
         if rows:
             out.append("\n".join(rows))
-    return RECALL_TITLE + "\n" + "\n\n".join(out) if out else None
+    return (RECALL_TITLE_THOUGHTS if thought else RECALL_TITLE) + "\n" + "\n\n".join(out) if out else None
 
 
 def render_agora_now(lines: list[Line], tz) -> str | None:

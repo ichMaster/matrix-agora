@@ -52,7 +52,7 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
     assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES) - {"mood", "pastlife", "nudge", "news",
                                                                               "digest", "transcribe", "private",
                                                                               "telegram", "recall", "facts",
-                                                                              "emotion", "events"}
+                                                                              "emotion", "events", "thoughts"}
     assert ada.panel["name"] == "Ada"
 
 
@@ -69,7 +69,8 @@ def test_the_four_newcomers_are_people_like_ada_and_bruno(name, shown, forms):
         f"@{name}:agora.lan", shown, "persona", "gemini", "ranked", 1.0)
     assert m.name_forms == forms and m.can("voice")
     # v5.10: her mood of the day is hers alone, with her natal chart; the others have neither
-    assert m.capabilities == TYPES["persona"] | ({"private", "telegram", "recall", "facts", "emotion", "mood", "events"}
+    assert m.capabilities == TYPES["persona"] | ({"private", "telegram", "recall", "facts", "emotion", "mood", "events",
+                                                  "thoughts"}
                                                  if name == "kira" else set())
     assert m.natal == ("agents/canon/kira.natal.md" if name == "kira" else "")
     assert m.panel["name"] == name.capitalize()
