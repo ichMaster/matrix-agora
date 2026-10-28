@@ -22,6 +22,8 @@ TAG_RE = re.compile(r"\[([^\W\d_][^\[\]\n\d]{1,39})\](?!\()")
 
 
 RUN_RE = re.compile(rf"[ \t]*(?:{TAG_RE.pattern}[ \t]*)+")  # a run of tags with the spaces around it
+# v5.12 review #3: a link is for the eyes — her voice never reads «https://…» aloud (the text keeps it)
+LINK_RE = re.compile(r"[ \t]*\(?\s*https?://\S+")
 
 
 def _gap(m: re.Match) -> str:
@@ -51,8 +53,13 @@ class Spoken(str):
 
 
 def spoken(line: str) -> tuple[str, str]:
-    """(the words, what the synthesiser gets) of a line — a plain `str` is both."""
-    return str(line), getattr(line, "speech", None) or str(line)
+    """(the words, what the synthesiser gets) of a line — a plain `str` is both; the synthesiser never gets a link
+    (v5.12 review #3: a news item she shares keeps its link in the text alone)."""
+    speech = getattr(line, "speech", None) or str(line)
+    if not LINK_RE.search(speech):
+        return str(line), speech
+    speech = LINK_RE.sub("", speech)
+    return str(line), "\n".join(" ".join(row.split()) for row in speech.split("\n")).strip()
 
 
 def speech_for(model: str, text: str, speech: str) -> str:

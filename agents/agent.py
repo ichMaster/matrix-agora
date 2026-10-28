@@ -1240,7 +1240,7 @@ class Agent:
         text, speech = spoken(text)  # v5.9: her voice gets the tags, the message her words
         why = self.voice_off
         if self.tts is not None:
-            if not voiceable(text):
+            if not voiceable(text) or not voiceable(speech):  # v5.12 review #3: a link alone is never voiced
                 why = "not voiceable"
             elif self._speakers_month_used() + len(speech) > self.voice_monthly_chars:
                 why = "monthly cap"
@@ -1267,7 +1267,7 @@ class Agent:
         text, speech = spoken(text)  # v5.9: her voice gets the tags, the message her words
         why = self.voice_off
         if self.tts is not None:
-            if not voiceable(text):
+            if not voiceable(text) or not voiceable(speech):  # v5.12 review #3: a link alone is never voiced
                 why = "not voiceable"
             elif not voice_due(voice_of is not None, event_key or "", self.cfg.localpart, self.voice_reply_p):
                 why = "share"

@@ -476,3 +476,22 @@ def test_a_closed_chosen_door_falls_back_to_element(tmp_path, monkeypatch, ogg):
 def test_the_first_door_setting(tmp_path, monkeypatch, value, door):
     monkeypatch.setenv("PRIVATE_FIRST_DOOR", value)
     assert kira(tmp_path, monkeypatch).private_first_door == door
+
+
+# --- v5.12 code review #3: a link is for the eyes ------------------------------------------------------------------
+def test_a_link_she_shares_is_in_the_text_and_never_read_aloud(tmp_path, monkeypatch, ogg):
+    from agents.emotion import Spoken, spoken
+    agent = kira(tmp_path, monkeypatch)
+    line = "Глянь, що пишуть (https://zaxid.net/news/n1) — аж мурашки."
+    assert asyncio.run(agent.send_telegram(line))
+    assert agent.tts.calls == ["Глянь, що пишуть — аж мурашки."]
+    agent.telegram.send_message.assert_awaited_with(OWNER_TG, line)            # the text keeps the link
+    assert spoken(Spoken("Ось.", "[laughs] Ось. https://www.theguardian.com/x")) == ("Ось.", "[laughs] Ось.")
+    assert spoken("Без посилань,  як є.") == ("Без посилань,  як є.", "Без посилань,  як є.")   # untouched
+
+
+def test_a_line_that_is_only_a_link_goes_out_as_text_alone(tmp_path, monkeypatch, ogg):
+    agent = kira(tmp_path, monkeypatch)
+    assert asyncio.run(agent.send_telegram("https://zaxid.net/news/n1"))
+    assert agent.tts.calls == [] and not agent.telegram.send_voice.await_count
+    agent.telegram.send_message.assert_awaited_with(OWNER_TG, "https://zaxid.net/news/n1")
