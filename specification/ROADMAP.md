@@ -1726,7 +1726,14 @@ of it, and a line of the backup's talk never reaches Gemini later, in any call, 
   subscription tier (NovelAI's announcement).
 - **Languages:** NovelAI's docs call it strong in English, Japanese and Chinese, and say it "may help with many other
   languages". Her Ukrainian is the owner's test.
-- **Context:** 28,672 tokens on the site, plus an 8,192-token rollover. The API's context per tier is not published.
+- **Context:** 28,672 tokens on the site, plus an 8,192-token rollover. NovelAI does not publish the API's context
+  per tier.
+  - **Measured on Tablet** (2026-10-28): 12,288 tokens, counted as the prompt plus `max_tokens`. A longer request
+    answers 400 with the exact count: «too much context. got N + M, max is 12288».
+  - **Not enough for her prompt:** her private instruction's fixed part alone is 9,526 tokens, so the plan needs the
+    tier with the full context.
+  - **The token count:** a Ukrainian filler text counted 2.14 characters a token, under the 2.47 measured on her
+    prompt.
 - **Text only** is enough: a voice message reaches the prompt already as Deepgram's text.
 - **The cost:** a NovelAI subscription, with no price per token.
 - **The API:**
@@ -1738,8 +1745,13 @@ of it, and a line of the backup's talk never reaches Gemini later, in any call, 
     and `stop`. There is no `min_p`. The server clamps the samplers.
   - **The stream:** the text comes only in the streamed deltas, so the request always streams. A stream that hangs
     has been reported.
-  - **Not verified:** the endpoint and the fields come from community sources and can change. Generating the issues
-    starts by checking them with one live call (an owner step).
+  - **Verified** with the owner's token (2026-10-28):
+    - **The endpoint:** the Bearer token, the model `glm-4-6`, the sampling and `stream: true` work. A short Ukrainian
+      answer came in about a second, in deltas, ending with `finish_reason: stop`.
+    - **The `User-Agent`:** the request must send one of its own. Cloudflare refuses a client's default (Python's)
+      with 403 «error code: 1010».
+    - **No usage:** the stream reports no token counts, so the backup's usage line has none.
+    - **The subscription:** `api.novelai.net/user/subscription` has moved to `image.novelai.net`.
 - **Later:** Xialong is NovelAI's own finetune of GLM-4.6 on its storytelling set. It is Opus-only and has no
   published id. It can replace `glm-4-6` through the setting once the id is known.
 
@@ -1788,7 +1800,8 @@ is named by its id. The Telegram command and the route say "backup", so nothing 
       - the recall (6 lines): about 1,000;
       - the summary, «Сьогодні» and the mood: about 1,100;
     - so at the caps the backup's full prompt is about 30,400 tokens, over NovelAI's 28,672;
-    - the backup's request keeps a budget, `FALLBACK_CONTEXT` (26,000 tokens, counted at 2.4 characters a token).
+    - the backup's request keeps a budget, `FALLBACK_CONTEXT` (26,000 tokens, counted at 2.0 characters a token, under
+      the measured 2.14–2.47, so the estimate never runs over).
       Over it, it leaves out, in this order:
       1. the month digests;
       2. the week digests;
@@ -1890,7 +1903,8 @@ is named by its id. The Telegram command and the route say "backup", so nothing 
   - §Contracts: the archive's schema, the route state file, the commands, `kira.env`.
 
 **Owner steps:**
-- a NovelAI subscription whose tier gives GLM-4.6 the full 28,672-token context (the editor shows it);
+- a NovelAI subscription whose tier gives GLM-4.6 the full 28,672-token context (the editor shows it; Tablet gives
+  12,288, measured 2026-10-28);
 - a test of GLM-4.6 on the site in the chat format: her Ukrainian and her character;
 - the NovelAI persistent API token in `server/kira.env`;
 - one live call with the token, to confirm the endpoint and the fields before the issues are generated;
