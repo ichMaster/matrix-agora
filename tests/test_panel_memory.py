@@ -428,3 +428,20 @@ def test_the_today_block_with_the_days_event_count_still_shows(state):
                                          encoding="utf-8")
     assert memory_view(state, "kira", TODAY)["today"] == {
         "hour": 14, "text": "Сьогодні вже: робота.\nЩе сьогодні: сеанс.", "first_line": "Сьогодні вже: робота."}
+
+
+def test_the_blocks_are_counted_per_agent_and_for_today(state):
+    """v5.13 — a line with `blocked` counts on its day; an older line without the field counts 0."""
+    lines = [json.dumps(usage_line(ts, ag, "private", "m", None, False, stage))
+             for ts, ag, stage in (("2026-10-04T09:00:00+03:00", "kira", "prompt"),
+                                   ("2026-10-04T10:00:00+03:00", "kira", "answer"),
+                                   ("2026-10-03T22:00:00+03:00", "kira", "answer"),
+                                   ("2026-10-04T11:00:00+03:00", "kira", None))]
+    (state / "kira.usage.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    v = usage_view(state, 7, TODAY)
+    kira = v["per_agent"]["kira"]
+    assert (kira["blocked"], kira["blocked_today"], kira["calls"]) == (3, 2, 4)
+    assert (v["per_agent"]["ada"]["blocked"], v["per_agent"]["ada"]["blocked_today"]) == (0, 0)  # no field: 0
+    assert v["total"]["blocked"] == 3
+    assert {(r["day"], r["agent"]): r["blocked"] for r in v["rows"] if r["agent"] == "kira"} == {
+        ("2026-10-03", "kira"): 1, ("2026-10-04", "kira"): 2}

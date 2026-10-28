@@ -318,3 +318,14 @@ def test_the_thoughts_tab_and_the_card_line():
     assert js.index("${lastEventLine(mem)}") < js.index("${lastThoughtLine(mem)}")
     assert "const day = mem.thoughts[0], t = day && day.thoughts[day.thoughts.length - 1];" in js
     assert "No thoughts this week yet" in js
+
+
+def test_an_agents_card_shows_its_blocks_today_only_when_there_are_any():
+    """v5.13 — «Blocks today» from the usage view's per-agent counts, escaped, for any agent."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert "    ${blocksLine(a.name)}\n" in js[js.index("function agentCardHtml(a) {"):]
+    fn = js[js.index("function blocksLine(name) {"):]
+    fn = fn[:fn.index("\n}\n")]
+    assert "if (!t || !(t.blocked_today > 0)) return \"\";" in fn
+    assert '<div class="label">Blocks today</div>' in fn
+    assert "${esc(fmtInt(t.blocked_today))} · ${esc(fmtInt(t.blocked))} in ${esc(fmtInt(u.per_day.length))} days" in fn

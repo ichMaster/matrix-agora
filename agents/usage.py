@@ -167,6 +167,7 @@ class Row:
     engine: str = ""        # the rows' engine and billing; "mixed" when a total spans several
     billing: str = ""
     characters: int = 0     # v5.1: text-to-speech characters (ElevenLabs)
+    blocked: int = 0        # v5.13: calls Gemini's safety filter blocked
     by_model: dict[str, list[int]] = field(default_factory=dict)  # v5.1: the `api` tokens per model, for its price
 
     def add(self, other: Row) -> None:
@@ -180,6 +181,7 @@ class Row:
         self.engine = _merge(self.engine, other.engine)
         self.billing = _merge(self.billing, other.billing)
         self.characters += other.characters
+        self.blocked += other.blocked
         for model, (p, o) in other.by_model.items():
             mine = self.by_model.setdefault(model, [0, 0])
             mine[0] += p
@@ -207,6 +209,7 @@ def aggregate(records: list[dict], since: date | None = None,
         row.output += r.get("output_tokens") or 0
         row.total += r.get("total_tokens") or 0
         row.characters += r.get("characters") or 0
+        row.blocked += 1 if r.get("blocked") else 0  # v5.13
         if billing == "api":
             p, o = r.get("prompt_tokens") or 0, r.get("output_tokens") or 0
             row.priced_prompt += p

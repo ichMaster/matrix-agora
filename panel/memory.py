@@ -359,11 +359,12 @@ def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None
 
     out_rows, per_agent, per_day, agent_rows = [], {}, {}, {}
     total_row = Row()
-    total = {"calls": 0, "failed": 0, "input": 0, "output": 0, "total": 0, "characters": 0}
+    total = {"calls": 0, "failed": 0, "input": 0, "output": 0, "total": 0, "characters": 0, "blocked": 0}
     for (day, ag, kind), r in rows.items():
         out_rows.append({"day": day, "agent": ag, "kind": kind, "calls": r.calls, "failed": r.failed,
                          "input": r.prompt, "output": r.output, "total": r.total, "cost": money(r),
-                         "engine": r.engine or "gemini", "billing": r.billing or "api", "characters": r.characters})
+                         "engine": r.engine or "gemini", "billing": r.billing or "api", "characters": r.characters,
+                         "blocked": r.blocked})
         agent_rows.setdefault(ag, Row()).add(r)
         total_row.add(r)
         for acc in (per_agent.setdefault(ag, dict.fromkeys(total, 0)), total):
@@ -373,12 +374,17 @@ def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None
             acc["output"] += r.output
             acc["total"] += r.total
             acc["characters"] += r.characters  # v5.1: text to speech
+            acc["blocked"] += r.blocked  # v5.13: Gemini's safety blocks
         per_day.setdefault(day, {}).setdefault(ag, 0)
         per_day[day][ag] += r.total
 
+    blocked_today: dict[str, int] = {}  # v5.13: the card's «Blocks today», from the rows already read
+    for (day, ag, _), r in rows.items():
+        if day == today.isoformat():
+            blocked_today[ag] = blocked_today.get(ag, 0) + r.blocked
     for ag, t in per_agent.items():
         t.update(cost=money(agent_rows[ag]), engine=agent_rows[ag].engine or "gemini",
-                 billing=agent_rows[ag].billing or "api")
+                 billing=agent_rows[ag].billing or "api", blocked_today=blocked_today.get(ag, 0))
     total["cost"] = money(total_row)
     return {
         "available": True, "since": since.isoformat(), "until": today.isoformat(), "priced": priced,

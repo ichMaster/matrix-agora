@@ -408,6 +408,7 @@ function agentCardHtml(a) {
     ${a.engine === "claude-sdk" ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Subscription</div>${claudeLines(mem)}</div>` : ""}
     ${can(a, "digest") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Digests</div>${digestLine(mem)}</div>` : ""}
     ${a.capabilities && can(a, "recall") ? `<div class="muted" style="font-size:12px">${archiveLine(mem)}</div>` : ""}
+    ${blocksLine(a.name)}
     ${a.engine === "gemini" && mem.models ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Models</div>${modelLines(mem.models)}</div>` : ""}
     <div class="card-foot rule-t"><div class="meta">${tokens == null ? `${icon("database", 13)} Memory unavailable` : `7 days · ${esc(tokens)}`}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${actionButtons({kind: "agent", id: a.name, state: d.health.docker ? c.state : "unknown", big: true})}</div>
@@ -635,6 +636,13 @@ function voiceTabHtml(a, mem) {
 }
 
 // v5.8 — Кіра's archive: «archive: 1,820 lines · 1,790 embedded»
+function blocksLine(name) {
+  // v5.13: Gemini's safety blocks of this agent today, only when there are any
+  const u = S.data.usage, t = u && u.available ? u.per_agent[name] : null;
+  if (!t || !(t.blocked_today > 0)) return "";
+  return `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Blocks today</div><div class="muted" style="font-size:13px">${esc(fmtInt(t.blocked_today))} · ${esc(fmtInt(t.blocked))} in ${esc(fmtInt(u.per_day.length))} days</div></div>`;
+}
+
 function archiveLine(mem) {
   if (!mem.available) return "Memory unavailable";
   const g = mem.archive;
