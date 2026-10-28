@@ -115,3 +115,32 @@ def save_route(path: Path, route: Route) -> None:
         os.close(fd)
     os.chmod(tmp, 0o600)
     os.replace(tmp, path)
+
+
+PIN_NAMES = {"auto": "авто", "gemini": "Gemini", "backup": "резерв"}
+
+
+def _hhmm(ms: int, tz: str) -> str:
+    return datetime.fromtimestamp(ms / 1000, ZoneInfo(tz)).strftime("%H:%M")
+
+
+def status_text(route: Route, now_ms: int, tz: str, day: str, day_start_ms: int, day_max: int,
+                waiting: int, censored: int) -> str:
+    """`/status`: the route, auto or pinned and until when; the blocks in the last hour and today, out of the cap;
+    the lines of her private chat waiting for the judge and censored; today's answers by Gemini and by the backup.
+    One service line block, never a text of the talk."""
+    if route.pin != "auto":
+        since = f" (з {_hhmm(route.pinned_at_ms, tz)})" if route.pinned_at_ms else ""
+        where = f"закріплено: {PIN_NAMES[route.pin]}{since}, до /auto"
+    elif state(route, now_ms) == "window":
+        where = f"авто: резерв до {_hhmm(route.window_until_ms, tz)}"
+    elif state(route, now_ms) == "window_end":
+        where = "авто: вікно резерву скінчилось — наступне повідомлення вирішить"
+    else:
+        where = "авто: Gemini"
+    answers = route.answers if route.day == day else {"gemini": 0, "backup": 0}
+    return (f"⚙️ Маршрут — {where}\n"
+            f"Блоків: за годину {blocks_since(route, now_ms - HOUR_MS)}, сьогодні {blocks_since(route, day_start_ms)} "
+            f"з {day_max}\n"
+            f"Приватний чат: чекають на суддю {waiting}, цензуровані {censored}\n"
+            f"Сьогодні відповіла: через Gemini {answers.get('gemini', 0)}, через резерв {answers.get('backup', 0)}")

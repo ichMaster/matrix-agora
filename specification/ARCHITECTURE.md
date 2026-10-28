@@ -113,7 +113,16 @@ The invariants every reply path must honor:
    beside the sync (`agents/telegram.py`: `getUpdates` long polling from the offset in `state/<name>.telegram.json`,
    saved after every batch, so an update is never answered twice; outbound HTTPS only). Only the owner's numeric id
    (`TELEGRAM_OWNER_ID`) in a private chat is handled (`allowed`); a stranger, a group, an edit or another kind is
-   logged `ignored: <reason> (telegram <kind>)`, never an id or a word. **The first-sync rule holds there too:** what
+   logged `ignored: <reason> (telegram <kind>)`, never an id or a word. **The owner's commands (v5.14, pinned by
+   `tests/test_telegram_commands.py`):** a «/» text of his, sent after the start, is `telegram_command`'s and never a
+   line of her talk — `/status` (the route, auto or pinned and until when; the blocks in the last hour and today out of
+   `FALLBACK_DAY_MAX`; her private chat's lines waiting for the judge and censored; today's answers by Gemini and by
+   the backup — `status_text`, `agents/route.py`), `/auto`, `/gemini`, `/backup` (a pin, through `route_step`), and
+   any other the list (`COMMAND_HELP`); without the backup a pin says it is off. The answer is one ⚙️ service line,
+   text only, never voiced; a command and its answer never reach her history, the archive, the facts, the session or
+   a prompt, and never reset her writing-first timer; logged by the command's name only. A command from before the
+   start stays `ignored: command`. With `fallback` the list is registered at start for his chat only (`setMyCommands`,
+   `BotCommandScopeChat`). **The first-sync rule holds there too:** what
    the owner wrote before this start is read into the private history as context and never answered. A text, or a
    voice note heard by her own Deepgram client (capped download, in memory only, an `stt` usage line; not heard → a
    fixed short line, no model call), takes the same path as an Element private message (`private_line`): **one

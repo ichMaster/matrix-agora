@@ -212,6 +212,10 @@ class Archive:
             self._cache = None  # their vectors leave the matrix: read again at the next recall
         return cur.rowcount
 
+    def mark_counts(self, place: str) -> dict[str, int]:
+        """v5.14 — how many lines of a place carry each mark."""
+        return dict(self.db.execute("SELECT mark, COUNT(*) FROM lines WHERE place = ? GROUP BY mark", (place,)))
+
     def censor(self, keys: Iterable[str]) -> int:
         """v5.13 — mark these lines `censored`: Gemini never reads them again. How many."""
         return self.mark(keys, "censored")

@@ -214,7 +214,7 @@ from agents.reading import save_state as save_reading
 from agents.responder import Turn, responder_for, trim_to_sentence
 from agents.roster import Member, load_roster, speakers
 from agents.route import after as route_after
-from agents.route import day_bounds, load_route, save_route
+from agents.route import day_bounds, load_route, save_route, status_text
 from agents.route import state as route_state
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.settings import VOICE_ID_RE
@@ -223,11 +223,14 @@ from agents.sky import SKY_MAX_TOKENS, clean_sky, load_sky, save_sky, sky_query
 from agents.speech import speakers_month_chars, voice_due, voice_message, voiceable
 from agents.telegram import (
     ACTION_EVERY_S,
+    COMMAND_HELP,
+    COMMANDS,
     VOICE_MAX_BYTES,
     TelegramBot,
     Update,
     allowed,
     backoff_s,
+    command_of,
     load_telegram_state,
     next_offset,
     parse_update,
@@ -1400,6 +1403,10 @@ class Agent:
                 log.info("ignored: malformed (telegram)")
                 continue
             verdict = allowed(update, self.telegram_owner)
+            if verdict.reason == "command" and (self.started_ms is None
+                                                or update.date_ms >= self.started_ms // 1000 * 1000):
+                await self.telegram_command(update.text)  # v5.14: his, after the start — never a line of her talk
+                continue
             if not verdict.handle:
                 log.info("ignored: %s (telegram %s)", verdict.reason, update.kind)
                 continue
@@ -1420,6 +1427,39 @@ class Agent:
                 log.error("telegram: an update failed (%s) — skipped", type(exc).__name__)
         if backlog:
             log.info("telegram: %d messages from before the start read as context", backlog)
+
+    async def telegram_command(self, text: str) -> None:
+        """v5.14 — the owner's command: `/status`, or a pin (`/auto`, `/gemini`, `/backup`); anything else, the list.
+        One ⚙️ service line, sent as text, never voiced; never in her history, the archive, the facts, the session or a
+        prompt, and never a reset of her writing-first timer. Logged by the command's name only."""
+        name = command_of(text)
+        known = {n for n, _ in COMMANDS}
+        if name in ("auto", "gemini", "backup") and self.fallback_responder is None:
+            answer = "⚙️ Резерв вимкнено: її відповіді завжди через Gemini"
+        elif name in ("auto", "gemini", "backup"):
+            self.route_step(f"pin:{name}")
+            answer = self.status_answer()
+        elif name == "status":
+            answer = self.status_answer()
+        else:
+            answer = COMMAND_HELP
+        log.info("telegram: command %s", name if name in known else "unknown")
+        if not await self.telegram.send_message(self.telegram_owner, answer):
+            log.warning("telegram: the command's answer was not delivered")
+
+    def status_answer(self) -> str:
+        """The `/status` line: the route, the blocks, the marks of her private chat and today's answers."""
+        now_ms = self.clock()
+        day, start, _ = day_bounds(now_ms, self.tz)
+        counts: dict[str, int] = {}
+        if self.archive is not None:
+            try:
+                counts = self.archive.mark_counts("private")
+            except Exception as exc:  # noqa: BLE001
+                log.error("archive: the marks were not counted (%s)", type(exc).__name__)
+        text = status_text(load_route(self.route_file), now_ms, self.tz, day, start, self.fallback_day_max,
+                           counts.get("waiting", 0), counts.get("censored", 0))
+        return text if self.fallback_responder is not None else text + "\n(резерв вимкнено)"
 
     async def telegram_hear(self, update: Update) -> None:
         """The owner's voice note as words: the capped download (in memory only), Deepgram, a `stt` usage line —
@@ -2979,6 +3019,8 @@ class Agent:
         stop_task = asyncio.create_task(stop.wait())
         tasks = [sync_task, watcher, stop_task]
         if self.telegram is not None:  # v5.7: her bot, polled beside the sync
+            if self.cfg.can("fallback") and not await self.telegram.set_commands(self.telegram_owner):
+                log.warning("telegram: the command list was not set")  # v5.14: the owner's chat only
             log.info("telegram: polling")
             tasks.append(asyncio.create_task(self.telegram_poll()))
         await asyncio.wait({sync_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)

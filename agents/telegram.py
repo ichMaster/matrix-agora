@@ -83,6 +83,18 @@ def parse_update(raw: Any) -> Update | None:
     return Update(*base, "other")
 
 
+# v5.14 — the owner's commands in her chat (the route of her private answer): never a word of her talk
+COMMANDS = (("status", "Маршрут і блоки"), ("auto", "Правила вирішують"), ("gemini", "Закріпити Gemini"),
+            ("backup", "Закріпити резерв"))
+COMMAND_HELP = "⚙️ Команди: " + ", ".join(f"/{name} — {about.lower()}" for name, about in COMMANDS)
+
+
+def command_of(text: str) -> str:
+    """`/status@kira_bot extra` → `status`; the name lower-cased, its bot suffix and arguments dropped."""
+    head = text.strip().split(maxsplit=1)[0] if text.strip() else ""
+    return head.lstrip("/").split("@", 1)[0].lower()
+
+
 def allowed(update: Update, owner_id: int) -> Verdict:
     """Only the owner's private chat: a group or a channel is `not-private`, anyone else a `stranger`; then an edit
     is `edit`, anything but a text or a voice note `unsupported`, and a bot command (`/start`) `command`."""
@@ -210,6 +222,12 @@ class TelegramBot:
         """Plain text (no parse mode), cut to one message at a sentence."""
         return (await self._call("sendMessage", CALL_TIMEOUT_S,
                                  json_body={"chat_id": chat_id, "text": fit_text(text)})).ok
+
+    async def set_commands(self, chat_id: int) -> bool:
+        """v5.14 — the command list, shown in the owner's chat only (`BotCommandScopeChat`)."""
+        body = {"commands": [{"command": name, "description": about} for name, about in COMMANDS],
+                "scope": {"type": "chat", "chat_id": chat_id}}
+        return (await self._call("setMyCommands", CALL_TIMEOUT_S, json_body=body)).ok
 
     async def send_voice(self, chat_id: int, ogg: bytes, duration_s: int) -> bool:
         """A voice note: OGG/Opus as multipart, with its length in seconds."""
