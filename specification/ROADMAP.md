@@ -1618,6 +1618,8 @@ commands in Telegram.
   opens the next five minutes; a clean one gives the chat back to Gemini.
 - **Telegram commands** to see and pin the route: `/status`, `/auto`, `/gemini`, `/backup`.
 - **Agreed as proposed:**
+  - at a block the judge rates every line of the blocked prompt's history, not only the last message: a block at the
+    prompt stage may come from an older line;
   - at the window's end the judge rates the owner's new message too;
   - flagged lines never reach Gemini, neither in the history nor through recall;
   - the backup is started beside the judge, so a flagged message waits for nothing more;
@@ -1679,12 +1681,13 @@ its id. The Telegram command and the route say "backup", so nothing is renamed w
 
 | State | How an answer is made | Leaves when |
 |---|---|---|
-| Gemini | Gemini, as today, with the flagged lines left out. A block → the backup answers that message | a block → the window |
+| Gemini | Gemini, as today, with the flagged lines left out; nothing is rated. A block → the backup answers that message; after it is sent, the judge rates the blocked prompt's unrated history lines, the message and her answer | a block → the window |
 | the window (5 min) | The backup answers. After each exchange the judge rates the owner's line and her answer, in the background | the first message after 5 min (below) |
 | the window's end | The judge rates the new message, beside the backup already writing. Her last answer or the new message flagged → the backup's answer goes out and a new window opens. Both clean → Gemini answers, without the flagged lines; if Gemini blocks, the backup's ready answer goes out and a new window opens | — |
 
 - **What runs in parallel:**
-  - in Gemini's state nothing else is called;
+  - in Gemini's state nothing else is called until a block; after a block the judge runs once the backup's answer is
+    sent;
   - in the window the backup answers, and the judge runs after the answer is sent, so it never delays it;
   - at the window's end the judge and the backup start together. Gemini starts only after a clean rating, while the
     backup goes on writing, so its answer is ready if Gemini blocks too.
@@ -1753,8 +1756,9 @@ its id. The Telegram command and the route say "backup", so nothing is renamed w
   - `state/kira.route.json` (0600): load and save.
 - **The private answer** (`agents/agent.py`'s `_compose` for `private` and `private_nudge`, when `FALLBACK_MODEL` is
   set):
-  - **Gemini:** the prompt without the flagged lines; on a block, the backup with the full prompt, and the window
-    opens;
+  - **Gemini:** the prompt without the flagged lines; on a block, the backup with the full prompt, the window opens,
+    and after the answer is sent the judge rates, in one call, every history line of the blocked prompt not yet
+    rated, the owner's message and her answer;
   - **the window:** the backup with the full prompt; after the answer is sent, the judge rates the owner's line and
     her answer in the background;
   - **the window's end:** the judge on the new message and the backup start together; on clean ratings Gemini starts
@@ -1833,7 +1837,7 @@ its id. The Telegram command and the route say "backup", so nothing is renamed w
 - the judge's request (the model, `sort`, `data_collection`, the reasoning off, no canon in it) and
   `parse_verdicts`: `так`, `ні`, a missing line, a refusal, a timeout, all as specified;
 - the route with an injected clock:
-  - a block opens the window;
+  - a block opens the window and has the blocked prompt's unrated history rated, older lines included;
   - the window's end with a flagged answer, a flagged new message, and both clean;
   - a Gemini block at the window's end using the backup's ready answer;
   - the day cap and local midnight;
