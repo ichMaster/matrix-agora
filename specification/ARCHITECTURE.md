@@ -470,7 +470,7 @@ There is no database, and nothing the agents lived is ever deleted: all durable 
 | `state/<name>.plans/month-YYYY-MM.md` | the 1st of the month | month plan, ≤ `PLAN_MAX_WORDS`; hidden mutation tags; frozen after its month |
 | `state/<name>.plans/week-YYYY-MM-DD.md` | first build of a new week | week plan, ≤ `PLAN_MAX_WORDS` words; frozen after its week |
 | `state/<name>.plans/YYYY-MM-DD.md` | first build of a new day | day plan, ≤ `PLAN_MAX_WORDS` words; frozen after its day |
-| `state/<name>.today.md` | hourly; reset at midnight | the today block (+ the hour it was built for), ≤ `TODAY_MAX_WORDS` words |
+| `state/<name>.today.md` | hourly; reset at midnight | the today block (+ the hour it was built for, and from v5.11 the day's event count: `<!-- 2026-10-28T14 e2 -->`; every reader accepts both), ≤ `TODAY_MAX_WORDS` words |
 | `state/<name>.usage.jsonl` | every Gemini call (v4.4 every SDK call, v5.1 every text-to-speech call) | one JSON line: `ts`, `agent`, `kind`, `model`, token counts, `ok`, `engine`, `billing`, cache tokens, `reported_cost_usd`, v5.1 `characters`, v5.2 `audio_ms` — no texts |
 | `state/<name>.mood.log` | the day's first mood call (v4.2, an agent with `mood`) | the daily horoscope readings, `===== YYYY-MM-DD =====` blocks; append-only, 0600 |
 | `state/<name>.nudge.json` | every nudge attempt (v4.3, an agent with `nudge`) | `last_ms` (the last attempt), `day`, `count` (nudges sent that day), `sent_ms` (the last nudge sent, for the panel) — no texts; atomic, 0600 |

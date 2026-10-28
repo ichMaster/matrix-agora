@@ -27,7 +27,8 @@ _WARNED: set[str] = set()  # the malformed PRICE_MODELS entries already named in
 ITEM_RE = re.compile(r"^\s*(?:[-•*]|\d+[.)])\s+(.*\S)\s*$")
 TAG_RE = re.compile(r"\s*<!--.*?-->")
 MUTATION_RE = re.compile(r"<!--\s*mutation:")
-TODAY_TAG = re.compile(r"^<!--\s*(\d{4}-\d{2}-\d{2})T(\d{2})\s*-->\s*")
+# the hour it was built for; from v5.11 with the day's event count (` e2`) when events fell (review #1)
+TODAY_TAG = re.compile(r"^<!--\s*(\d{4}-\d{2}-\d{2})T(\d{2})(?:\s+e\d+)?\s*-->\s*")
 DATE_FILE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.md$")
 
 

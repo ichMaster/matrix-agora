@@ -378,3 +378,11 @@ def test_a_malformed_price_models_entry_is_named_once(state, monkeypatch, caplog
         u = usage_view(state, 3, TODAY)
     assert u["priced"] is True
     assert [r.getMessage() for r in caplog.records].count("PRICE_MODELS entry 'pro=twelve' is not model=in/out — ignored") == 1
+
+
+def test_the_today_block_with_the_days_event_count_still_shows(state):
+    """Review #1: from v5.11 the block's tag carries the day's event count; the card and the tab still read it."""
+    (state / "kira.today.md").write_text("<!-- 2026-10-04T14 e2 -->\nСьогодні вже: робота.\nЩе сьогодні: сеанс.\n",
+                                         encoding="utf-8")
+    assert memory_view(state, "kira", TODAY)["today"] == {
+        "hour": 14, "text": "Сьогодні вже: робота.\nЩе сьогодні: сеанс.", "first_line": "Сьогодні вже: робота."}
