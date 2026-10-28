@@ -36,8 +36,14 @@ def plain(text: str | None) -> str:
     return re.sub(r"\s+", " ", html.unescape(_TAG_RE.sub(" ", text or ""))).strip()
 
 
+def section_ok(section: str | None) -> bool:
+    """A section id as the API names them (`science`, `world`, `us-news`) — nothing else reaches the URL."""
+    return bool(section) and re.fullmatch(r"[a-z-]+", section.strip()) is not None
+
+
 def search_url(key: str, query: str, section: str | None, days: int, today: date, cap: int = MAX_RESULTS,
                base: str = BASE_URL) -> str:
+    """v5.12: an empty query asks for a section's newest items, so no `q` is sent."""
     params = {
         "q": query.strip(),
         "order-by": "newest",
@@ -46,7 +52,9 @@ def search_url(key: str, query: str, section: str | None, days: int, today: date
         "page-size": str(max(1, min(cap, MAX_RESULTS))),
         "api-key": key,
     }
-    if section and re.fullmatch(r"[a-z-]+", section.strip()):
+    if not params["q"]:
+        del params["q"]
+    if section_ok(section):
         params["section"] = section.strip()
     return f"{base}/search?" + urllib.parse.urlencode(params)
 
