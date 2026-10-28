@@ -1,6 +1,6 @@
 # Roadmap — matrix-agora
 
-Ten self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, and her reading and thoughts) → **v6** Лілі (the Lumi bridge: when named, then under the full rules) → **v7** Applications (the panel's System and Applications; Telegram as an application) → **v8** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation) → **v9** Theatre (plays on the Stage, recorded by Hermes). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Ten self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, a second model for her private chat when Gemini blocks, and her reading and thoughts) → **v6** Лілі (the Lumi bridge: when named, then under the full rules) → **v7** Applications (the panel's System and Applications; Telegram as an application) → **v8** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation) → **v9** Theatre (plays on the Stage, recorded by Hermes). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
 **Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v9→9), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
@@ -1371,7 +1371,7 @@ day, in Agora and alone with the owner.
 - **The mood is the cat's mechanism, for a person**: the horoscope (natal chart and the day's real sky) with the
   biorhythms laid over it.
 - **The real Lviv weather** goes into the reading.
-- **Кіра only, for now**: every part of v5.10–v5.12 and v8 is switched on for her alone, in her TOML; the other persons get
+- **Кіра only, for now**: every part of v5.10–v5.13 and v8 is switched on for her alone, in her TOML; the other persons get
   none of it until the owner decides otherwise.
 - The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life. Read it before
   generating the issues.
@@ -1440,8 +1440,8 @@ They reach «Сьогодні», her day memory and her next plans, and her open
     plan, the mood of the day, the last events, and the next chapter as a silent direction.
 - **Lviv's news.**
   - Once a day, the day's items from Zaxid.net's RSS (`zaxid.net/rss/all.xml`, Lviv's outlet), kept in
-    `state/kira.citynews.json`. It is the same local source as v5.12's reading (the owner, 2026-10-26), with real
-    items and real links instead of a grounded search. The fetcher is built here, and v5.12 adds the full text.
+    `state/kira.citynews.json`. It is the same local source as v5.13's reading (the owner, 2026-10-26), with real
+    items and real links instead of a grounded search. The fetcher is built here, and v5.13 adds the full text.
   - Each item is rolled into her life with a probability, at most two a day.
   - Each woven item gets one of these kinds: she was there, she heard it from her people, it touched her work, it
     touched one of her people, it changed her plans.
@@ -1468,9 +1468,184 @@ They reach «Сьогодні», her day memory and her next plans, and her open
 
 **Not in this phase:** the emotional state; feelings toward people.
 
-### v5.12 — Кіра reads the news and thinks: her thoughts on what she reads and on her talks
+### v5.12 — Кіра's private chat past a Gemini block: Hermes 3 405B on OpenRouter
 
 **Status:** ⏳ planned.
+
+**Goal:** when Gemini's safety filter blocks an answer in Кіра's private chat with the owner (Element and Telegram),
+she still answers: the same prompt goes to Nous Research's Hermes 3 405B on OpenRouter. After a block the chat runs
+in a careful mode for a while, so the same subject is not sent to Gemini again and again. The owner sees and pins the
+mode with commands in Telegram.
+
+**Owner decisions** (2026-10-28):
+- **Кіра only, the private chat only:** her answers to the owner and the lines she writes first (the kinds `private`
+  and `private_nudge`), in Element and in Telegram. Agora, the background calls (events, «Сьогодні», the day memory,
+  plans, the mood, the session summary, v5.13's thoughts) and every other agent stay as they are: a block there is
+  logged, and the agent stays silent.
+- **The model:** `nousresearch/hermes-3-llama-3.1-405b` on OpenRouter.
+- **Three modes:** normal, careful and Hermes-only, switched by blocks (below).
+- **In the careful mode Hermes answers first and marks the talk:** a mark says whether the latest lines hold content a
+  filter would block. Only a clean mark lets the prompt reach Gemini, and Gemini's answer then goes to the chat.
+- **Three blocks within 30 minutes → Hermes only** for the next 30 minutes.
+- **Telegram commands** to see and pin the mode: `/status`, `/auto`, `/gemini`, `/careful`, `/hermes`.
+- **Agreed as proposed:**
+  - the mark is the answer's first line, read from the stream;
+  - a missing mark counts as unsafe;
+  - an unsafe mark extends the careful window too;
+  - a day cap of 10 blocks;
+  - the block's category in the log;
+  - her own Gemini key;
+  - the language and persona checks on Hermes's answers.
+
+**Why** (checked 2026-10-28):
+- **A block is invisible today.** `finish_of` knows only `MAX_TOKENS`, so a block logs as an empty reply and she is
+  silent.
+- **Google watches runs of blocks.** The Gemini API usage policy keeps prompts and outputs for 55 days for abuse
+  monitoring. A project that "consistently exhibits suspicious activity" may be reviewed by people. The measures run
+  from an email through lower limits and a temporary pause to closing access.
+- **The modes keep such a run away from Gemini**, and her own key keeps it off the key every other agent shares.
+
+**The model** (OpenRouter, checked 2026-10-28):
+- $1 / $1 per million tokens, a 131,072-token context, at most 16,384 tokens out;
+- text only, served by one provider (DeepInfra);
+- text only is enough: a voice message reaches the prompt already as Deepgram's text.
+
+**Naming:** the model is unrelated to the member Hermes (v5.1). Code, logs and settings call it the fallback and name
+the model by its id; only the Telegram command says `/hermes`.
+
+**The modes:**
+
+| Mode | How an answer is made | Leaves when |
+|---|---|---|
+| normal | Gemini, as today. A block → the same prompt to Hermes, and its answer goes to the chat | a block → careful |
+| careful | Hermes first, with the mark. A clean mark → Gemini at once, while Hermes goes on writing; Gemini's answer goes to the chat, or Hermes's if Gemini blocks too. An unsafe or missing mark → Hermes's answer, and Gemini is not called | 3 blocks in 30 min → Hermes-only; 30 min with no block and no unsafe mark → normal |
+| Hermes-only | Hermes; Gemini is not called | after 30 min → careful |
+
+- The block that opens the careful mode counts toward the three.
+- **The day cap:** 10 blocks in her local day → Hermes-only to the day's end.
+- **A pin** from a command holds its mode until `/auto` and overrides the rules, the day cap included. Pinned normal
+  still sends a blocked answer to Hermes, but the mode does not change.
+- **The state** lives in `state/kira.route.json`: the pin, the block times, the last unsafe mark and the end of
+  Hermes-only. A restart or a deploy keeps the mode.
+
+**Tasks:**
+- **Name the block** (`agents/llm.py`, pure): `blocked_reason(resp)` → `(stage, reason, category)` or None.
+  - **The prompt stage:** `prompt_feedback.block_reason` is set (any reason).
+  - **The answer stage:** `finish_reason` is `SAFETY`, `PROHIBITED_CONTENT`, `BLOCKLIST` or `SPII`, with no text.
+  - **The category:** the blocked, or else the highest, entry of `safety_ratings`.
+  - **Not a block:** a network or API error, `MAX_TOKENS`, `RECITATION`, an empty answer with no reason. They stay
+    silent, as today.
+  - `complete` and `reply` log a block's stage, reason and category (never a text) for every agent. They let the
+    private answer tell a block from any other failure. Nothing else changes for the other agents.
+- **The OpenRouter seam** (`agents/fallback.py`; `aiohttp`, already a dependency, no new SDK).
+  - `POST https://openrouter.ai/api/v1/chat/completions` with:
+    - the system instruction as the `system` message and the transcript as the `user` message;
+    - the same `max_tokens`;
+    - `provider: {"data_collection": "deny"}`;
+    - `stream: true`.
+  - A 60 s timeout. Any failure, an empty answer, or no provider left by the data policy → None: silence, logged.
+  - The answer's `usage` (prompt and completion tokens) becomes a usage line with the model's id.
+- **The mark** (pure). In the careful mode only, a brief is added to her private prompt:
+  «Першим рядком напиши `#зміст: так` або `#зміст: ні` — чи є в останніх повідомленнях відверто сексуальний зміст,
+  опис насильства, небезпечні інструкції або ворожнеча. Далі — відповідь.»
+  - The brief never names a model, Gemini or a policy (the persona rule).
+  - `parse_mark(first_line)` → `safe` or `unsafe`. A missing or malformed mark is `unsafe`.
+  - The mark line is cut. It never reaches the chat, the history or the archive.
+- **The route** (`agents/route.py`, pure, with an injected clock).
+  - `mode(now, state)` and `after(state, now, outcome)`, over the block times, the last unsafe mark, the end of
+    Hermes-only, the day cap and the pin.
+  - `state/kira.route.json` (0600): load and save.
+- **The private answer** (`agents/agent.py`'s `_compose` for `private` and `private_nudge`, when `FALLBACK_MODEL` is
+  set):
+  - **normal:** Gemini; on a block, Hermes with the same prompt;
+  - **careful:** Hermes streamed with the mark.
+    - On `safe`, Gemini starts at once with the prompt without the mark's brief. Gemini's answer wins; Hermes's is
+      used if Gemini blocks.
+    - On `unsafe`, Hermes's answer.
+  - **Hermes-only:** Hermes with the plain prompt;
+  - every outcome is recorded in the route state.
+- **Checks on Hermes's answer** (pure). They run before the existing ones: the trim to a sentence, `PASS`, the audio
+  tags, the Telegram word cap and the «запам'ятай» marker. The answer is dropped when:
+  - it has ы, э, ъ or ё;
+  - Latin letters outnumber Cyrillic ones;
+  - she calls herself a model, an AI or a bot.
+
+  A dropped answer means silence, logged.
+- **Telegram commands** (`agents/telegram.py`, `agents/agent.py`). Today `allowed()` marks any text starting with «/»
+  as `command` and ignores it. From now on the owner's commands are handled:
+  - `/status`: the mode, auto or pinned, since and until when; the blocks in the last 30 minutes and today (out of
+    the cap); today's answers by Gemini and by Hermes;
+  - `/auto`: the rules decide (the default);
+  - `/gemini`, `/careful`, `/hermes`: pin normal, careful or Hermes-only;
+  - an unknown command: the list.
+
+  The answer is one service line starting with ⚙️: text, never voiced. A command and its answer never enter her
+  history, the archive, the facts or a prompt, and never reset the timer of her writing first. `setMyCommands`
+  registers the list for the owner's chat only. There are no commands in Element; the mode is shared, as the history
+  is.
+- **Settings** (her TOML, `kira.env` and the panel):
+  - `FALLBACK_MODEL` (empty: off; `kira.env` sets the id);
+  - `FALLBACK_CAREFUL_S` (1800), `FALLBACK_BLOCKS` (3), `FALLBACK_ONLY_S` (1800), `FALLBACK_DAY_MAX` (10);
+  - the price in `PRICE_MODELS`: `nousresearch/hermes-3-llama-3.1-405b=1/1`.
+- **Secrets** go in `kira.env`, which no other service reads; `kira.env.example` names them:
+  - `OPENROUTER_API_KEY`;
+  - her own `GEMINI_API_KEY`, from a separate Google Cloud project. Compose reads `kira.env` after `.env`, so it
+    overrides the shared key for her alone.
+- **The panel:** her card shows the mode (auto or pinned), today's blocks and Hermes's answers, read-only. The usage
+  tables show the model as its own row.
+- **ARCHITECTURE:**
+  - §The message flow: the private answer's route;
+  - §Token accounting: the OpenRouter usage line;
+  - §Configuration: the settings;
+  - §Security: what reaches OpenRouter, `data_collection: deny`, the keys;
+  - §Contracts: the route state file, the commands, `kira.env`.
+
+**Owner steps:**
+- an OpenRouter account with credits;
+- its training toggle off (Settings → Privacy). This also checks that DeepInfra passes the data policy: if Hermes then
+  finds no provider, the owner decides;
+- an OpenRouter API key, optionally with a credit limit, in `server/kira.env`;
+- a Google Cloud project of her own, and its Gemini key in `server/kira.env`.
+
+**DoD:**
+- (Manual, owner) `/hermes` in Telegram: her next answers come from Hermes, and the usage report names the model.
+  They are in Ukrainian, with none of ы, э, ъ, ё. `/status` shows the pin, and `/auto` lifts it. The commands appear
+  nowhere in her answers or her archive.
+- (Manual, owner) `/careful`: a plain line gets Gemini's answer after Hermes's clean mark, and the mark never shows in
+  the chat.
+- (Manual, owner) When a real block comes, the log names its stage, reason and category, she answers through Hermes,
+  and `/status` and her card show the careful mode.
+
+**Tests:**
+- `blocked_reason` over each prompt and answer reason, and over the non-blocks (`MAX_TOKENS`, `RECITATION`, an error,
+  an empty answer);
+- the OpenRouter request body (the messages, `max_tokens`, `data_collection`, the model), a canned streamed answer, a
+  timeout and an error, with no network;
+- `parse_mark`: `так`, `ні`, missing, malformed, and the line cut;
+- the route's modes and transitions with an injected clock:
+  - the first block;
+  - three blocks in 30 minutes;
+  - the careful window extended by an unsafe mark;
+  - Hermes-only ending in careful;
+  - the day cap and local midnight;
+  - a pin over the rules;
+  - a restart reading the state;
+- the careful answer: a clean mark → Gemini's answer; a clean mark and a Gemini block → Hermes's; an unsafe mark →
+  Gemini never called;
+- the Hermes checks: Russian letters, a Latin majority, a self-named model;
+- the commands from the owner and from another id: kept out of the history, the archive and the prompts, and not
+  resetting the writing-first timer;
+- Agora, the background kinds and the other agents unchanged;
+- no text or key in a log.
+
+**Not in this phase:**
+- Agora, the background calls and the other agents;
+- a separate classifier model before Gemini;
+- commands in Element, and switching the mode from the panel.
+
+### v5.13 — Кіра reads the news and thinks: her thoughts on what she reads and on her talks
+
+**Status:** ⏳ planned (numbered v5.12 until 2026-10-28, when the owner put the fallback model before it).
 
 **Goal:** Кіра reads the news and has thoughts of her own:
 - a thought on each item she reads;
@@ -1821,14 +1996,15 @@ the owner).
 **Status:** ⏳ planned.
 
 The owner, 2026-10-26: the last three phases of her emotional life become a version of their own, v8 (Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9).
-- v5.10–v5.12 give her a mood of the day, the events of her life, and her reading and thoughts.
+- v5.10–v5.13 give her a mood of the day, the events of her life, a second model for her private chat, and her reading
+  and thoughts.
 - v8 gives her:
   - a state that lasts between replies and moves her voice (v8.1);
   - feelings toward each person, open threads, and bounded effects on what she does (v8.2);
   - anticipation and strong memories (v8.3).
 
 For Кіра only, for now. The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life;
-read it before generating the issues. Depends on: v5.10–v5.12.
+read it before generating the issues. Depends on: v5.10–v5.13.
 
 ### v8.1 — The moment and the day: her state and her voice
 
@@ -1945,7 +2121,7 @@ day stays with her for months, not only seven days.
 - recall's ranking with the charge;
 - a past memory never rewritten.
 
-**Not in this phase:** the other persons; v5.10–v5.12 and v8 are Кіра's only, for now (the owner, 2026-10-26).
+**Not in this phase:** the other persons; v5.10–v5.13 and v8 are Кіра's only, for now (the owner, 2026-10-26).
 
 ## v9 — Theatre: plays on the Stage
 
