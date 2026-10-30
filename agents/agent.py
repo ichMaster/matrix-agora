@@ -1132,7 +1132,11 @@ class Agent:
         his = [Item("line", k, "Ich", t) for k, t in seen]
         backup = asyncio.create_task(self._backup_text(brief, kind))
         try:
-            verdicts = await self.judge_items([*his, *self._last_answer_items()], "window_end")
+            items = [*his, *self._last_answer_items()]
+            verdicts = await self.judge_items(items, "window_end")
+        except Exception as exc:  # noqa: BLE001 — v5.15 review #2: a failed rating is unrated, never a lost answer
+            log.error("judge: the window's end was not rated (%s) — the backup answers", type(exc).__name__)
+            verdicts = [None] * max(len(his), 1)
         except BaseException:
             backup.cancel()
             raise

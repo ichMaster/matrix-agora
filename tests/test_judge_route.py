@@ -244,3 +244,23 @@ def test_the_mark_goes_above_the_text_in_element_and_is_never_read_back(tmp_path
     agent.client = SimpleNamespace(room_send=AsyncMock(return_value=SimpleNamespace(event_id="$her")))
     asyncio.run(agent.send_line("!dm", "Привіт", "private:1", mark=BACKUP_MARK))
     assert agent.client.room_send.await_args.kwargs["content"]["body"] == f"{BACKUP_MARK}\nПривіт"
+
+
+def test_a_failed_rating_at_the_windows_end_is_unrated_never_a_lost_answer(tmp_path, monkeypatch, caplog):
+    """Review #2: the judge's bookkeeping (the archive's marks) raises at the window's end — the backup's answer goes out
+    and the next window opens, as for an unrated line."""
+    caplog.set_level(logging.INFO)
+    gemini = Gemini()
+    agent = judged(tmp_path, monkeypatch, gemini)
+    window_end(agent)
+    agent.private_line("Привіт", ms(18, 6), "telegram", "tg:2")
+
+    def broken(items):
+        raise OSError("the archive is locked")
+
+    monkeypatch.setattr(agent, "_marks_of", broken)
+    assert asyncio.run(agent.private_reply()) is True
+    assert gemini.transcripts == [] and agent.private_history[-1][1] == "[softly] Від резерву, сонце."
+    assert load_route(agent.route_file).window_until_ms == ms(18, 11)
+    assert "judge: the window's end was not rated (OSError) — the backup answers" in caplog.text
+    run_spawned(agent)
