@@ -454,3 +454,17 @@ def test_the_extraction_never_sees_a_closed_fact(tmp_path, monkeypatch):
     asyncio.run(agent.extract_facts([("Ich (наодинці)", "привіт")]))
     assert "Відкритий факт" in seen[0] and "Закритий факт" not in seen[0]
     assert "Закритий" not in (agent.facts_now() or "") and "Закритий" in agent.facts_now(gemini=False)
+
+
+# --- v5.15: a fact follows the judge's verdict ----------------------------------------------------------------------------
+def test_a_facts_mark_is_set_in_place_by_the_verdict(tmp_path):
+    from agents.facts import CLOSED_MARKS, FACT_MARKS, add_fact, load_facts, set_mark
+    assert FACT_MARKS == ("gemini", "waiting", "censored", "clean") and CLOSED_MARKS == ("waiting", "censored")
+    folder = tmp_path / "kira.facts"
+    waits = add_fact(folder, "Живе біля парку", 2, "asked", "2026-10-28", 50, 240, mark="waiting")
+    assert set_mark(folder, waits, "clean")
+    raw = (folder / f"{waits}.md").read_text(encoding="utf-8")
+    assert "mark: clean" in raw and "pin: 2" in raw and "added: 2026-10-28" in raw and "source: asked" in raw
+    assert [(f.text, f.mark) for f in load_facts(folder)] == [("Живе біля парку", "clean")]
+    assert not set_mark(folder, waits, "whatever") and not set_mark(folder, "../x", "clean")
+    assert not set_mark(folder, "f-missing", "clean")

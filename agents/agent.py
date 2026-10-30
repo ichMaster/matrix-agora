@@ -106,13 +106,16 @@ from agents.facts import (
     replace_fact,
     split_marker,
 )
+from agents.facts import (
+    set_mark as set_fact_mark,
+)
 from agents.fallback import TOKEN_VAR as FALLBACK_TOKEN_VAR
 from agents.fallback import FallbackClient, FallbackResponder
 from agents.guardian import KEY_VAR as GUARDIAN_KEY_VAR
 from agents.guardian import Guardian
+from agents.judge import CLEAN, FLAGGED, Item, Judge
 from agents.judge import KEY_VAR as JUDGE_KEY_VAR
 from agents.judge import MODEL as JUDGE_MODEL
-from agents.judge import Judge
 from agents.life import current_chapter, events_due, known_ahead, life_section, next_chapter
 from agents.llm import LAST_BLOCK, THINKING_MODELS, GeminiClient
 from agents.logic import (
@@ -303,6 +306,8 @@ ARCHIVE_AGORA_LINES = 1500     # v5.8: the archive's first fill — Agora's last
 ARCHIVE_PRIVATE_EVENTS = 5000  # … and the whole private room, bounded
 EMBED_BATCH = 100              # lines embedded per idle tick
 PURGE_CONFIRM_S = 120          # v5.14: `/purge yes` must follow `/purge` within this
+JUDGE_TICK_LINES = 100         # v5.15: the backup's talk still waiting, rated per idle tick (in chunks of 25)
+JUDGE_BACKOFF_S = (60, 3600)   # … a tick that rated nothing waits a minute, doubling, at most an hour
 
 
 def _drop_last(items: list, item) -> bool:
@@ -455,6 +460,8 @@ class Agent:
                                timeout_s=float(os.environ.get("CLASSIFIER_TIMEOUT_S", "30")))
         elif self.fallback_responder is not None:
             log.warning("judge off: %s is not set", JUDGE_KEY_VAR)
+        self._judge_lock = asyncio.Lock()
+        self._judge_retry_ms, self._judge_failures = 0, 0
         self._reading_lock, self._reflect_lock = asyncio.Lock(), asyncio.Lock()
         self._reading_retry_ms = self._reflect_retry_ms = self._reflect_ms = 0
         # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.
@@ -977,13 +984,13 @@ class Agent:
     def route_file(self) -> Path:
         return self.memory_file.parent / f"{self.cfg.localpart}.route.json"
 
-    def route_step(self, outcome: str):
-        """The route after an outcome (`block`, `gemini`, `backup`, `pin:<x>`), saved — read fresh each time, so a
-        Telegram command in between is never lost. The new route."""
+    def route_step(self, outcome: str, rated: int = 0, flagged: int = 0):
+        """The route after an outcome (`block`, `gemini`, `backup`, `rated`, `pin:<x>`), saved — read fresh each time,
+        so a Telegram command in between is never lost. The new route."""
         now_ms = self.clock()
         day, start, end = day_bounds(now_ms, self.tz)
         route = route_after(load_route(self.route_file), now_ms, outcome, self.fallback_window_s,
-                            self.fallback_day_max, day, start, end)
+                            self.fallback_day_max, day, start, end, rated, flagged)
         try:
             save_route(self.route_file, route)
         except OSError as exc:
@@ -1096,6 +1103,88 @@ class Agent:
         if text is not None:
             self.route_step("backup")
         return text, "backup"
+
+    # --- v5.15: the judge — the backup's talk rated; a clean line is Gemini's again, a flagged one censored ----------
+    def _still_unrated(self, items: list[Item]) -> list[Item]:
+        """Those of `items` no verdict has reached yet (a line or a fact rated meanwhile, or gone, is left out)."""
+        rated = ("clean", "censored")
+        keys = [i.key for i in items if i.kind == "line"]
+        lines = {line.key: line.mark for line in self.archive.by_keys(keys)} if self.archive is not None and keys else {}
+        facts = {f.id: f.mark for f in load_facts(self.facts_dir)} if self.facts_dir is not None else {}
+        return [i for i in items if (lines if i.kind == "line" else facts).get(i.key, "clean") not in rated]
+
+    async def judge_items(self, items: list[Item], why: str) -> int:
+        """The judge rates these lines and facts — only those still unrated — and its verdicts set their marks. How
+        many it rated (an unrated one keeps its mark)."""
+        if self.judge is None:
+            return 0
+        items = self._still_unrated(items)
+        if not items:
+            return 0
+        verdicts = await self.judge.rate([i.text for i in items])
+        return self.apply_verdicts(items, verdicts, why)
+
+    def apply_verdicts(self, items: list[Item], verdicts: list, why: str) -> int:
+        """v5.15 — the judge's verdicts: a clean line or fact is marked `clean` and is Gemini's again (her history's
+        `_closed` too, in its full and its cut form; embedded at the next tick); a flagged one is censored for good and
+        closed; an unrated one keeps its mark — a failure alone never censors. Today's counts go to the route; the log
+        holds counts only. How many were rated."""
+        clean = [i for i, v in zip(items, verdicts, strict=True) if v == CLEAN]
+        flagged = [i for i, v in zip(items, verdicts, strict=True) if v == FLAGGED]
+        facts_changed = False
+        for mark, group in (("clean", clean), ("censored", flagged)):
+            keys = [i.key for i in group if i.kind == "line"]
+            if keys and self.archive is not None:
+                try:
+                    self.archive.mark(keys, mark)
+                except Exception as exc:  # noqa: BLE001
+                    log.error("judge: the lines were not marked (%s)", type(exc).__name__)
+            for i in group:
+                if i.kind == "fact" and self.facts_dir is not None:
+                    facts_changed |= set_fact_mark(self.facts_dir, i.key, mark)
+        for i in clean:
+            if i.kind == "line":
+                self._closed.difference_update({(i.speaker, i.text), (i.speaker, history_entry(i.text))})
+        self.close_lines([(i.speaker, i.text) for i in flagged if i.kind == "line"])
+        if facts_changed:
+            self.facts_now()  # the archive's mirror of the facts follows
+        rated = len(clean) + len(flagged)
+        if rated:
+            self.route_step("rated", rated=rated, flagged=len(flagged))
+        log.info("judge: %d rated (%d flagged, %d unrated) — %s", rated, len(flagged), len(items) - rated, why)
+        return rated
+
+    def waiting_items(self, limit: int) -> list[Item]:
+        """The backup's talk still waiting for the judge, oldest first: her private lines, then the facts."""
+        items: list[Item] = []
+        if self.archive is not None:
+            items = [Item("line", line.key, line.speaker, line.text) for line in self.archive.unrated("private", limit)]
+        if self.facts_dir is not None and len(items) < limit:
+            items += [Item("fact", f.id, "факт", f.text) for f in load_facts(self.facts_dir)
+                      if f.mark == "waiting"][:limit - len(items)]
+        return items
+
+    def judge_is_due(self) -> bool:
+        return self.judge is not None and not self._judge_lock.locked() and self.clock() >= self._judge_retry_ms
+
+    async def ensure_judged(self) -> None:
+        """v5.15 — the idle watcher's share: what still waits (v5.14's backlog, a failed rating) rated, up to
+        `JUDGE_TICK_LINES` a tick, off the reply path. A tick that rated nothing backs off a minute, doubling."""
+        if not self.judge_is_due():
+            return
+        async with self._judge_lock:
+            try:
+                items = self.waiting_items(JUDGE_TICK_LINES)
+                rated = await self.judge_items(items, "waiting") if items else None
+            except Exception:
+                rated = 0
+                log.exception("judge: the tick failed (bot keeps running)")
+            if rated == 0:
+                self._judge_failures += 1
+                wait_s = min(JUDGE_BACKOFF_S[0] * 2 ** (self._judge_failures - 1), JUDGE_BACKOFF_S[1])
+                self._judge_retry_ms = self.clock() + wait_s * 1000
+            elif rated:
+                self._judge_failures = 0
 
     def gemini_history(self) -> list[tuple[str, str]]:
         """v5.14 — her private history as Gemini may read it: without the lines closed to it (conservatively: a same
@@ -3010,6 +3099,8 @@ class Agent:
                     await self.maybe_update_facts()
                 except Exception:
                     log.exception("facts: the update failed (bot keeps running)")
+            if self.judge_is_due():  # v5.15: the backup's talk still waiting, rated off the reply path
+                self._spawn(self.ensure_judged())
             if self.archive is not None:  # v5.8: the archive's meaning search, a batch at a time
                 try:
                     await self.embed_tick()

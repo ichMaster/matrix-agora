@@ -397,3 +397,18 @@ def test_a_facts_mark_reaches_the_archive_mirror(arc):
     assert dict(arc.db.execute("SELECT key, mark FROM lines WHERE place = 'facts'").fetchall()) == {
         "fact:f1": "gemini", "fact:f2": "waiting"}
     assert [arc.lines([i])[i].key for i in arc.search_words("живе парку", ("facts",))] == []
+
+
+# --- v5.15: the judge's marks ----------------------------------------------------------------------------------------------
+def test_the_marks_and_the_judges_readers(tmp_path):
+    from agents.archive import GEMINI_CLOSED, MARKS
+    assert MARKS == ("gemini", "waiting", "censored", "clean") and GEMINI_CLOSED == ("censored", "waiting")
+    a = Archive(tmp_path / "kira.archive.db")
+    for i, mark in enumerate(("waiting", "gemini", "waiting", "clean", "censored")):
+        a.append(f"k{i}", ms(17, i), "private", "telegram", "Ich", f"рядок номер {i}")
+        a.mark([f"k{i}"], mark)
+    assert [line.key for line in a.unrated("private", 10)] == ["k0", "k2"]      # the oldest waiting, for the judge
+    assert [line.key for line in a.unrated("private", 1)] == ["k0"]
+    assert {line.key for line in a.by_keys(["k1", "k4", "nope"])} == {"k1", "k4"}  # every mark, by key
+    assert {line.key for line in a.latest("private", 10)} == {"k1", "k3"}       # Gemini reads gemini and clean
+    assert {i for i, _ in a.unembedded(10)} == {line.id for line in a.by_keys(["k1", "k3"])}

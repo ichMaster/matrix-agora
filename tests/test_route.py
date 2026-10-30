@@ -81,7 +81,22 @@ def test_the_state_file_survives_a_restart_is_private_and_holds_no_text(tmp_path
     save_route(path, r)
     assert load_route(path) == r
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
-    assert set(json.loads(path.read_text())) == {"pin", "pinned_at_ms", "blocks", "window_until_ms", "day", "answers"}
+    assert set(json.loads(path.read_text())) == {"pin", "pinned_at_ms", "blocks", "window_until_ms", "day", "answers",
+                                                 "judged"}  # v5.15: today's ratings by the judge
+
+
+def test_the_judges_ratings_are_counted_for_the_day_and_reset_with_it(tmp_path):
+    """v5.15 — `rated` adds today's lines the judge rated and flagged; a new day starts at zero; the file keeps them."""
+    def judged(r, at, rated, flagged):
+        day, start, end = day_bounds(at, "Europe/Kyiv")
+        return after(r, at, "rated", 300, 10, day, start, end, rated=rated, flagged=flagged)
+
+    r = judged(judged(Route(), ms(28, 20), 25, 3), ms(28, 21), 4, 0)
+    assert r.judged == {"rated": 29, "flagged": 3} and r.window_until_ms is None and r.blocks == ()
+    path = tmp_path / "kira.route.json"
+    save_route(path, r)
+    assert load_route(path).judged == {"rated": 29, "flagged": 3}
+    assert judged(r, ms(29, 9), 1, 1).judged == {"rated": 1, "flagged": 1}  # the next day
 
 
 def test_a_missing_or_corrupt_file_is_auto_with_nothing_open(tmp_path):

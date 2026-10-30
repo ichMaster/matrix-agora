@@ -14,6 +14,7 @@ import asyncio
 import logging
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 
 import aiohttp
 
@@ -40,6 +41,18 @@ POLICY = (
     "Нічого більше не пиши."
 )
 VERDICT_RE = re.compile(r"^\s*(\d+)\s*[:.)]\s*(так|ні)\b", re.IGNORECASE)
+
+
+
+@dataclass(frozen=True)
+class Item:
+    """One thing to rate: an archive line (`line`, by its key) or a fact (`fact`, by its id), with its speaker and
+    text — the speaker never reaches the judge."""
+    kind: str
+    key: str
+    speaker: str
+    text: str
+
 
 UsageSink = Callable[[str, int | None, int | None, bool, float | None], None]  # (model, in, out, ok, cost)
 ClientSession = aiohttp.ClientSession  # the seam: a test passes its own (tests/conftest.py guards the network)

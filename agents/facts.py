@@ -84,8 +84,8 @@ def off_limits(text: str) -> str | None:
 
 
 # v5.14 — a fact's mark, as an archive line's: `gemini` (the default, never written), or `waiting` — kept from the
-# backup's «запам'ятай», closed to Gemini until v5.15's judge rates it — or `censored`
-FACT_MARKS = ("gemini", "waiting", "censored")
+# backup's «запам'ятай», closed to Gemini until v5.15's judge rates it — or `censored`; v5.15 `clean` (rated clean)
+FACT_MARKS = ("gemini", "waiting", "censored", "clean")
 CLOSED_MARKS = ("waiting", "censored")
 
 
@@ -206,6 +206,19 @@ def set_pin(folder: Path, fact_id: str, pin: int) -> bool:
     if old is None:
         return False
     _write(path, Fact(fact_id, pin, old.added, old.source, old.text, old.mark))
+    return True
+
+
+def set_mark(folder: Path, fact_id: str, mark: str) -> bool:
+    """v5.15 — a fact's mark after the judge's verdict (`clean` or `censored`), written in place: its text, pin, date
+    and source unchanged. Whether it was written."""
+    path = fact_path(folder, fact_id)
+    if path is None or mark not in FACT_MARKS:
+        return False
+    old = parse_fact(fact_id, path.read_text(encoding="utf-8"))
+    if old is None:
+        return False
+    _write(path, Fact(fact_id, old.pin, old.added, old.source, old.text, mark))
     return True
 
 

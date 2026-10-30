@@ -40,9 +40,10 @@ RECALL_TITLE_THOUGHTS = "Тобі згадується з давніших ро�
 AGORA_NOW_TITLE = "Що сьогодні говорять в Агорі:"
 # v5.13 — a line's mark: `gemini` (passed through Gemini, clean by default — every line before v5.13), v5.14
 # `waiting` (a line of the backup's talk, or one a block or a refusal answered: closed to Gemini until v5.15's judge
-# rates it) and `censored` (the judge's verdict, for good); v5.15 adds `clean`. Gemini's readers never return a line
-# whose mark is in `GEMINI_CLOSED`, and it is never embedded; the backup's readers (`gemini=False`) return every one.
-MARKS = ("gemini", "waiting", "censored")
+# rates it) and `censored` (the judge's verdict, for good); v5.15 adds `clean` (the judge rated it clean: Gemini's
+# again, embedded at the next tick). Gemini's readers never return a line whose mark is in `GEMINI_CLOSED`, and it is
+# never embedded; the backup's readers (`gemini=False`) return every one.
+MARKS = ("gemini", "waiting", "censored", "clean")
 GEMINI_CLOSED = ("censored", "waiting")
 _OPEN = f"mark NOT IN ({','.join(repr(m) for m in GEMINI_CLOSED)})"
 _COLS = "id, key, ts_ms, place, channel, speaker, text, mark"
@@ -211,6 +212,21 @@ class Archive:
         if closed:
             self._cache = None  # their vectors leave the matrix: read again at the next recall
         return cur.rowcount
+
+    def unrated(self, place: str, limit: int) -> list[Line]:
+        """v5.15 — the oldest `waiting` lines of a place, for the judge: the backup's talk not rated yet."""
+        rows = self.db.execute(f"SELECT {_COLS} FROM lines WHERE place = ? AND mark = 'waiting' ORDER BY ts_ms, id "
+                               "LIMIT ?", (place, max(int(limit), 0))).fetchall()
+        return [Line(*r) for r in rows]
+
+    def by_keys(self, keys: Iterable[str]) -> list[Line]:
+        """v5.15 — these lines by key, every mark (the judge reads a blocked prompt's lines by them)."""
+        keys = list(keys)
+        if not keys:
+            return []
+        rows = self.db.execute(f"SELECT {_COLS} FROM lines WHERE key IN ({','.join('?' * len(keys))})",
+                               keys).fetchall()
+        return [Line(*r) for r in rows]
 
     def mark_counts(self, place: str) -> dict[str, int]:
         """v5.14 — how many lines of a place carry each mark."""
