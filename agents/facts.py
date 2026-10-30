@@ -84,9 +84,11 @@ def off_limits(text: str) -> str | None:
 
 
 # v5.14 — a fact's mark, as an archive line's: `gemini` (the default, never written), or `waiting` — kept from the
-# backup's «запам'ятай», closed to Gemini until v5.15's judge rates it — or `censored`; v5.15 `clean` (rated clean)
-FACT_MARKS = ("gemini", "waiting", "censored", "clean")
+# backup's «запам'ятай», closed to Gemini until v5.15's judge rates it — or `censored`; v5.15 `clean` (rated clean) and
+# `reopened` (the backup's, rated clean: open until a Gemini block on a prompt that holds it)
+FACT_MARKS = ("gemini", "waiting", "censored", "clean", "reopened")
 CLOSED_MARKS = ("waiting", "censored")
+BACKUP_FACT_MARKS = ("waiting", "censored", "reopened")  # what `/purge` deletes
 
 
 @dataclass(frozen=True)
@@ -227,7 +229,7 @@ def purge_closed_facts(folder: Path) -> int:
     many."""
     gone = 0
     for fact in load_facts(folder):
-        if fact.mark in CLOSED_MARKS and remove_fact(folder, fact.id):
+        if fact.mark in BACKUP_FACT_MARKS and remove_fact(folder, fact.id):
             gone += 1
     return gone
 

@@ -41,10 +41,13 @@ AGORA_NOW_TITLE = "Що сьогодні говорять в Агорі:"
 # v5.13 — a line's mark: `gemini` (passed through Gemini, clean by default — every line before v5.13), v5.14
 # `waiting` (a line of the backup's talk, or one a block or a refusal answered: closed to Gemini until v5.15's judge
 # rates it) and `censored` (the judge's verdict, for good); v5.15 adds `clean` (the judge rated it clean: Gemini's
-# again, embedded at the next tick). Gemini's readers never return a line whose mark is in `GEMINI_CLOSED`, and it is
-# never embedded; the backup's readers (`gemini=False`) return every one.
-MARKS = ("gemini", "waiting", "censored", "clean")
+# again, embedded at the next tick) and `reopened` (the owner's live test, 2026-10-30: a line of the backup's talk the
+# judge rated clean — open to Gemini until a Gemini block on a prompt that holds it censors it; Gemma does not predict
+# Gemini's prohibited-content filter). Gemini's readers never return a line whose mark is in `GEMINI_CLOSED`, and it is
+# never embedded; the backup's readers (`gemini=False`) return every one. `/purge` deletes `BACKUP_MARKS`.
+MARKS = ("gemini", "waiting", "censored", "clean", "reopened")
 GEMINI_CLOSED = ("censored", "waiting")
+BACKUP_MARKS = ("waiting", "censored", "reopened")  # the backup's talk, whatever the judge said
 _OPEN = f"mark NOT IN ({','.join(repr(m) for m in GEMINI_CLOSED)})"
 _COLS = "id, key, ts_ms, place, channel, speaker, text, mark"
 SCHEMA_VERSION = 1  # v5.14: v5.13's `censored` lines (Gemini's verdict alone) became `waiting` once (review #3)
@@ -233,23 +236,24 @@ class Archive:
         return dict(self.db.execute("SELECT mark, COUNT(*) FROM lines WHERE place = ? GROUP BY mark", (place,)))
 
     def closed_count(self, place: str = "private") -> int:
-        """v5.14 — how many lines of a place are closed to Gemini (the backup's talk)."""
-        marks = ",".join("?" * len(GEMINI_CLOSED))
+        """v5.14 — how many lines of a place are the backup's talk (`BACKUP_MARKS`; v5.15 `reopened` too)."""
+        marks = ",".join("?" * len(BACKUP_MARKS))
         return self.db.execute(f"SELECT COUNT(*) FROM lines WHERE place = ? AND mark IN ({marks})",
-                               (place, *GEMINI_CLOSED)).fetchone()[0]
+                               (place, *BACKUP_MARKS)).fetchone()[0]
 
-    def purge_closed(self, place: str = "private") -> int:
-        """v5.14, the owner's `/purge` — delete every line of a place closed to Gemini (the backup's talk, and what
-        Gemini blocked or refused), with its word index: the one exception to «nothing lived is deleted». How many."""
-        marks = ",".join("?" * len(GEMINI_CLOSED))
+    def purge_closed(self, place: str = "private") -> list[tuple[str, str]]:
+        """v5.14, the owner's `/purge` — delete every line of a place that is the backup's talk (`BACKUP_MARKS`: what
+        Gemini blocked or refused, what went through the backup, rated or not), with its word index: the one exception
+        to «nothing lived is deleted». The (speaker, text) of the lines deleted, for her history."""
+        marks = ",".join("?" * len(BACKUP_MARKS))
         with self.db:
-            rows = self.db.execute(f"SELECT id, text FROM lines WHERE place = ? AND mark IN ({marks})",
-                                   (place, *GEMINI_CLOSED)).fetchall()
-            for row_id, text in rows:
+            rows = self.db.execute(f"SELECT id, speaker, text FROM lines WHERE place = ? AND mark IN ({marks})",
+                                   (place, *BACKUP_MARKS)).fetchall()
+            for row_id, _, text in rows:
                 self.db.execute("INSERT INTO fts(fts, rowid, text) VALUES ('delete', ?, ?)", (row_id, text))
-            self.db.execute(f"DELETE FROM lines WHERE place = ? AND mark IN ({marks})", (place, *GEMINI_CLOSED))
+            self.db.execute(f"DELETE FROM lines WHERE place = ? AND mark IN ({marks})", (place, *BACKUP_MARKS))
         self._cache = None
-        return len(rows)
+        return [(speaker, text) for _, speaker, text in rows]
 
     def censor(self, keys: Iterable[str]) -> int:
         """v5.13 — mark these lines `censored`: Gemini never reads them again. How many."""

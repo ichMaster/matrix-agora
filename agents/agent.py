@@ -94,6 +94,7 @@ from agents.events import (  # v5.11: events of her life
     rolled_marker,
 )
 from agents.facts import (
+    BACKUP_FACT_MARKS,
     CLOSED_MARKS,
     REMEMBER_SKILL,
     add_fact,
@@ -1088,6 +1089,8 @@ class Agent:
             self.route_step("block")
             to_backup(block[0])
             log.warning("private: route=gemini — a %s, the backup answers", block[0])
+            if self.judge is not None:
+                self.close_reopened(used, block[0])  # Gemini has the last word on what the judge reopened
             blocked = self._blocked_items(used) if self.judge is not None else []
             text = await self._backup_text(brief, kind)
             if text is not None:
@@ -1146,6 +1149,7 @@ class Agent:
                 return text, "gemini", None
             if block is not None:
                 self.route_step("block")
+                self.close_reopened(used, block[0])  # Gemini has the last word on what the judge reopened
             to_backup(block[0] if block is not None else "window_end")
             judge_after = ("block", his + self._blocked_items(used)) if block is not None else ("window_end", his)
         else:
@@ -1188,28 +1192,30 @@ class Agent:
         return list(items.values())
 
     # --- v5.15: the judge — the backup's talk rated; a clean line is Gemini's again, a flagged one censored ----------
-    def _known_verdicts(self, items: list[Item]) -> dict[tuple[str, str], str]:
-        """The verdicts already reached, by their marks: `clean` is clean, `censored` flagged; a line or a fact gone
-        (purged) counts as clean — nothing of it is left to rate."""
+    def _marks_of(self, items: list[Item]) -> dict[tuple[str, str], str]:
+        """The current mark of each item; a line or a fact gone (purged) is absent."""
         keys = [i.key for i in items if i.kind == "line"]
         lines = {line.key: line.mark for line in self.archive.by_keys(keys)} if self.archive is not None and keys else {}
         facts = {f.id: f.mark for f in load_facts(self.facts_dir)} if self.facts_dir is not None else {}
-        known = {}
+        marks = {}
         for i in items:
-            mark = (lines if i.kind == "line" else facts).get(i.key, "clean")
-            if mark in ("clean", "censored"):
-                known[(i.kind, i.key)] = CLEAN if mark == "clean" else FLAGGED
-        return known
+            mark = (lines if i.kind == "line" else facts).get(i.key)
+            if mark is not None:
+                marks[(i.kind, i.key)] = mark
+        return marks
 
     async def judge_items(self, items: list[Item], why: str) -> list[str | None]:
-        """The verdicts on these lines and facts, in order: one reached before, by its mark (never rated twice); the
+        """The verdicts on these lines and facts, in order: one reached before, by its mark (never rated twice:
+        `clean`, `reopened` clean, `censored` flagged; one gone counts as clean — nothing of it is left to rate); the
         rest rated now, the verdicts setting their marks (None: unrated — it keeps its mark)."""
-        known = self._known_verdicts(items)
+        marks = self._marks_of(items)
+        known = {(i.kind, i.key): FLAGGED if marks.get((i.kind, i.key)) == "censored" else CLEAN for i in items
+                 if marks.get((i.kind, i.key), "clean") in ("clean", "reopened", "censored")}
         todo = [i for i in items if (i.kind, i.key) not in known]
         fresh: list[str | None] = [None] * len(todo)
         if todo and self.judge is not None:
             fresh = await self.judge.rate([i.text for i in todo])
-            self.apply_verdicts(todo, fresh, why)
+            self.apply_verdicts(todo, fresh, why, marks)
         rated = iter(fresh)
         return [known[(i.kind, i.key)] if (i.kind, i.key) in known else next(rated) for i in items]
 
@@ -1222,15 +1228,19 @@ class Agent:
             except Exception:
                 log.exception("judge: the rating failed (the lines wait for the next tick)")
 
-    def apply_verdicts(self, items: list[Item], verdicts: list, why: str) -> int:
-        """v5.15 — the judge's verdicts: a clean line or fact is marked `clean` and is Gemini's again (her history's
-        `_closed` too, in its full and its cut form; embedded at the next tick); a flagged one is censored for good and
-        closed; an unrated one keeps its mark — a failure alone never censors. Today's counts go to the route; the log
-        holds counts only. How many were rated."""
+    def apply_verdicts(self, items: list[Item], verdicts: list, why: str, marks: dict | None = None) -> int:
+        """v5.15 — the judge's verdicts: a clean line or fact is Gemini's again (her history's `_closed` too, in its
+        full and its cut form; embedded at the next tick) — `clean` when it had passed through Gemini, `reopened` when it
+        was the backup's talk (`waiting`; a Gemini block on a prompt that holds it censors it, `close_reopened`); a
+        flagged one is censored for good and closed; an unrated one keeps its mark — a failure alone never censors.
+        Today's counts go to the route; the log holds counts only. How many were rated."""
+        was = marks if marks is not None else self._marks_of(items)
         clean = [i for i, v in zip(items, verdicts, strict=True) if v == CLEAN]
         flagged = [i for i, v in zip(items, verdicts, strict=True) if v == FLAGGED]
+        reopened = [i for i in clean if was.get((i.kind, i.key)) == "waiting"]
         facts_changed = False
-        for mark, group in (("clean", clean), ("censored", flagged)):
+        for mark, group in (("clean", [i for i in clean if i not in reopened]), ("reopened", reopened),
+                            ("censored", flagged)):
             keys = [i.key for i in group if i.kind == "line"]
             if keys and self.archive is not None:
                 try:
@@ -1251,6 +1261,40 @@ class Agent:
             self.route_step("rated", rated=rated, flagged=len(flagged))
         log.info("judge: %d rated (%d flagged, %d unrated) — %s", rated, len(flagged), len(items) - rated, why)
         return rated
+
+    def close_reopened(self, recalled: list, why: str) -> int:
+        """v5.15 (the owner's live test, 2026-10-30: Gemma rated clean what Gemini's prohibited-content filter blocks)
+        — Gemini has the last word: a block on a prompt that held lines of the backup's talk the judge had reopened
+        closes them for good (`censored`): her open history's, the recalled ones and her pinned facts. How many."""
+        items: dict[tuple[str, str], Item] = {}
+        if self.archive is not None:
+            history = self.archive.latest("private", max(len(self.gemini_history()), 1))
+            for line in [*history, *recalled]:
+                if line.mark == "reopened":
+                    item = (Item("fact", line.key.removeprefix("fact:"), "факт", line.text) if line.place == "facts"
+                            else Item("line", line.key, line.speaker, line.text))
+                    items.setdefault((item.kind, item.key), item)
+        if self.facts_dir is not None:
+            for f in load_facts(self.facts_dir):
+                if f.pin in (1, 2) and f.mark == "reopened":
+                    items.setdefault(("fact", f.id), Item("fact", f.id, "факт", f.text))
+        if not items:
+            return 0
+        lines = [i for i in items.values() if i.kind == "line"]
+        if lines and self.archive is not None:
+            try:
+                self.archive.mark([i.key for i in lines], "censored")
+            except Exception as exc:  # noqa: BLE001
+                log.error("judge: the reopened lines were not closed (%s)", type(exc).__name__)
+        facts_changed = False
+        for i in items.values():
+            if i.kind == "fact" and self.facts_dir is not None:
+                facts_changed |= set_fact_mark(self.facts_dir, i.key, "censored")
+        self.close_lines([(i.speaker, i.text) for i in lines])
+        if facts_changed:
+            self.facts_now()
+        log.warning("judge: %d reopened line(s) closed after a Gemini %s", len(items), why)
+        return len(items)
 
     def waiting_items(self, limit: int) -> list[Item]:
         """The backup's talk still waiting for the judge, oldest first: her private lines, then the facts."""
@@ -1671,7 +1715,7 @@ class Agent:
         lines = facts = 0
         try:
             lines = self.archive.closed_count() if self.archive is not None else 0
-            facts = sum(1 for f in load_facts(self.facts_dir) if f.mark in CLOSED_MARKS) if self.facts_dir else 0
+            facts = sum(1 for f in load_facts(self.facts_dir) if f.mark in BACKUP_FACT_MARKS) if self.facts_dir else 0
         except Exception as exc:  # noqa: BLE001
             log.error("purge: not counted (%s)", type(exc).__name__)
         return (f"⚙️ Видалити розмову через backup — {lines} рядків і {facts} фактів? Це не скасувати. "
@@ -1681,15 +1725,18 @@ class Agent:
         """v5.14 — delete the backup's talk: (lines, facts). The one exception to «nothing lived is deleted», at the
         owner's command; her usage lines and logs hold no text and stay."""
         lines = facts = 0
+        gone = set(self._closed)
         if self.archive is not None:
             try:
-                lines = self.archive.purge_closed()
+                deleted = self.archive.purge_closed()
+                lines = len(deleted)
+                gone |= {(sp, form) for sp, text in deleted for form in (text, history_entry(text))}  # v5.15: reopened
             except Exception as exc:  # noqa: BLE001
                 log.error("purge: the archive's lines were not deleted (%s)", type(exc).__name__)
         if self.facts_dir is not None:
             facts = purge_closed_facts(self.facts_dir)
             self.facts_now()  # the archive's mirror of the facts follows
-        self.private_history = [line for line in self.private_history if line not in self._closed]
+        self.private_history = [line for line in self.private_history if line not in gone]
         self._unanswered = [(k, t) for k, t in self._unanswered if ("Ich", t) not in self._closed]
         self._closed = set()
         log.warning("purge: the backup's talk deleted (%d lines, %d facts)", lines, facts)

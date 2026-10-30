@@ -2063,6 +2063,16 @@ All done on 2026-10-28:
     passed through Gemini are rated.
   - **At the window's end** the judge rates the owner's new message too.
   - **The backup starts beside the judge,** so a flagged message waits for nothing more.
+- **Gemini has the last word** (the owner's live test, 2026-10-30):
+  - **What happened:** after the deploy the judge rated v5.14's waiting lines and reopened 97 of them as clean. They
+    made 117 of the 150 lines Gemini read, and Gemini's very next call was blocked at the prompt stage
+    (`prohibited_content`). Gemma does not predict that filter.
+  - **The live fix:** the reopened lines since the backup went live (159) were closed again by their time, with no text
+    read, and Кіра was restarted. Her next line, written first, went through Gemini.
+  - **The rule:**
+    - a line of the backup's talk the judge rates clean is `reopened`, not `clean`;
+    - a Gemini block on a prompt that holds such lines or facts censors them for good;
+    - `/purge` deletes them with the rest of the backup's talk.
 
 **The judge** (OpenRouter, checked 2026-10-28):
 - **What it is:** Gemma 4 31B, Google's open model.

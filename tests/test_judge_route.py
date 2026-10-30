@@ -75,7 +75,7 @@ def test_a_block_has_the_exchange_and_the_blocked_prompts_unrated_lines_rated_af
     assert f"нове {SECRET}" in rated and "Від резерву" in " ".join(rated)      # the exchange
     assert "погане, що Gemini колись пропустив" in rated and "Любить каву зранку" in rated  # the blocked prompt's
     m = marks(agent)
-    assert m["tg:0"] == "censored" and m["tg:1"] == "clean"                    # v5.14 review #2: the older cause out
+    assert m["tg:0"] == "censored" and m["tg:1"] == "reopened"                 # v5.14 review #2: the older cause out
     assert ("Ich", "погане, що Gemini колись пропустив") not in agent.gemini_history()
     assert {f.id: f.mark for f in load_facts(agent.facts_dir)} == {fact: "clean"}
     assert SECRET not in caplog.text
@@ -89,7 +89,7 @@ def test_in_the_window_and_under_a_pin_each_exchange_is_rated_after_its_answer(t
     assert agent.judge.calls == [] and len(agent.spawned) == 1
     run_spawned(agent)
     assert agent.judge.calls == [["у вікні", "[softly] Від резерву, сонце."]]
-    assert set(marks(agent).values()) == {"clean"} and agent.gemini_history() != []  # clean: Gemini's again
+    assert set(marks(agent).values()) == {"reopened"} and agent.gemini_history() != []  # rated clean: Gemini's again
     save_route(agent.route_file, Route(pin="backup"))
     agent.private_line("під закріпленням", ms(18, 1), "telegram", "tg:2")
     assert asyncio.run(agent.private_reply()) is True
@@ -191,3 +191,15 @@ def test_at_the_windows_end_the_judge_and_the_backup_start_together(tmp_path, mo
     agent.private_line("Привіт", ms(18, 6), "telegram", "tg:2")
     assert asyncio.run(agent.private_reply()) is True
     assert seen_by_judge == [1]
+
+
+def test_a_block_in_geminis_state_closes_the_reopened_lines_of_its_prompt(tmp_path, monkeypatch):
+    """The owner's live test (2026-10-30): Gemini blocked a prompt full of lines the judge had reopened — they close."""
+    agent = judged(tmp_path, monkeypatch, Gemini(blocks=1))
+    agent.private_line("повернене суддею", ms(17, 50), "telegram", "tg:0")
+    agent._unanswered.clear()
+    agent.archive.mark(["tg:0"], "reopened")
+    agent.private_line("нове", ms(18), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    assert marks(agent)["tg:0"] == "censored" and ("Ich", "повернене суддею") not in agent.gemini_history()
+    run_spawned(agent)

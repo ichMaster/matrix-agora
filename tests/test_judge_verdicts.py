@@ -50,7 +50,7 @@ def test_a_clean_line_is_geminis_again_a_flagged_one_censored_an_unrated_one_wai
     waiting_line(agent, "tg:2", "Ich", f"збій {SECRET}")
     assert agent.gemini_history() == []
     asyncio.run(agent.ensure_judged())
-    assert marks(agent) == {"tg:1": "clean", "own:1": "censored", "tg:2": "waiting"}
+    assert marks(agent) == {"tg:1": "reopened", "own:1": "censored", "tg:2": "waiting"}  # the backup's, rated clean
     assert agent.gemini_history() == [("Ich", history_entry(long_clean))]          # the cut form reopened too
     assert agent.archive.search_words("гарний", ("private",)) != []                  # the recall reads it again
     assert agent.archive.search_words("погане", ("private",)) == []
@@ -68,7 +68,7 @@ def test_a_waiting_fact_follows_its_verdict(tmp_path, monkeypatch):
     assert facts_section(load_facts(agent.facts_dir), 10, 240) is None             # both closed to Gemini
     asyncio.run(agent.ensure_judged())
     by_text = {f.text: f.mark for f in load_facts(agent.facts_dir)}
-    assert by_text == {"Любить каву зранку": "clean", "погане про нього": "censored"}
+    assert by_text == {"Любить каву зранку": "reopened", "погане про нього": "censored"}
     section = agent.facts_now()
     assert "Любить каву зранку" in section and "погане" not in section
     mirrored = dict(agent.archive.db.execute("SELECT text, mark FROM lines WHERE place = 'facts'").fetchall())
@@ -105,7 +105,7 @@ def test_the_watcher_rates_the_backlog_in_bounded_ticks_and_backs_off_after_a_ti
     asyncio.run(agent.ensure_judged())
     assert agent.judge.calls == [["рядок 0", "рядок 1", "рядок 2"]]               # the oldest, bounded per tick
     asyncio.run(agent.ensure_judged())
-    assert agent.judge.calls[-1] == ["рядок 3", "рядок 4"] and set(marks(agent).values()) == {"clean"}
+    assert agent.judge.calls[-1] == ["рядок 3", "рядок 4"] and set(marks(agent).values()) == {"reopened"}
     waiting_line(agent, "tg:9", "Ich", "збій")
     asyncio.run(agent.ensure_judged())
     assert agent._judge_retry_ms == ms(18) + 60_000 and not agent.judge_is_due()   # rated nothing: a minute
@@ -122,12 +122,35 @@ def test_without_the_judge_nothing_is_rated_and_the_talk_waits(tmp_path, monkeyp
     assert marks(agent) == {"tg:1": "waiting"}
 
 
-def test_purge_keeps_a_line_the_judge_rated_clean(tmp_path, monkeypatch):
-    """v5.15 — `/purge` deletes what is still the backup's talk (`waiting`, `censored`); a clean line is Gemini's."""
+def test_purge_deletes_the_backups_talk_whatever_the_judge_said(tmp_path, monkeypatch):
+    """v5.15 (the owner's live test) — `/purge` deletes every line and fact of the backup's talk: waiting, censored and
+    reopened (rated clean); a line that passed through Gemini and was rated clean at a block stays."""
     agent = judged_agent(tmp_path, monkeypatch)
+    waiting_line(agent, "tg:0", "Ich", "з Gemini", mark="gemini")
     waiting_line(agent, "tg:1", "Ich", "привіт")
     waiting_line(agent, "tg:2", "Ich", "погане")
     waiting_line(agent, "tg:3", "Ich", "збій")
+    add_fact(agent.facts_dir, "Любить каву зранку", 1, "asked", "2026-10-30", 50, 240, mark="waiting")
     asyncio.run(agent.ensure_judged())
-    assert agent.purge_backup_talk() == (2, 0)
-    assert marks(agent) == {"tg:1": "clean"} and agent.private_history == [("Ich", "привіт")]
+    asyncio.run(agent.judge_items([Item("line", "tg:0", "Ich", "з Gemini")], "block"))
+    assert marks(agent)["tg:0"] == "clean" and marks(agent)["tg:1"] == "reopened"
+    assert agent.purge_backup_talk() == (3, 1)
+    assert marks(agent) == {"tg:0": "clean"} and agent.private_history == [("Ich", "з Gemini")]
+    assert load_facts(agent.facts_dir) == []
+
+
+def test_a_gemini_block_closes_the_lines_the_judge_reopened_in_its_prompt(tmp_path, monkeypatch, caplog):
+    """v5.15 (the owner's live test, 2026-10-30) — Gemini has the last word: a block on a prompt that held the backup's
+    lines the judge reopened censors them (lines and facts); a line that passed through Gemini keeps its mark."""
+    caplog.set_level(logging.INFO)
+    agent = judged_agent(tmp_path, monkeypatch)
+    waiting_line(agent, "tg:0", "Ich", "з Gemini", mark="gemini")
+    waiting_line(agent, "tg:1", "Ich", f"повернене суддею {SECRET}")
+    add_fact(agent.facts_dir, "Любить каву зранку", 1, "asked", "2026-10-30", 50, 240, mark="waiting")
+    asyncio.run(agent.ensure_judged())
+    assert marks(agent)["tg:1"] == "reopened" and ("Ich", f"повернене суддею {SECRET}") in agent.gemini_history()
+    assert agent.close_reopened([], "prompt") == 2
+    assert marks(agent) == {"tg:0": "gemini", "tg:1": "censored"}
+    assert [f.mark for f in load_facts(agent.facts_dir)] == ["censored"]
+    assert agent.gemini_history() == [("Ich", "з Gemini")]
+    assert "judge: 2 reopened line(s) closed after a Gemini prompt" in caplog.text and SECRET not in caplog.text

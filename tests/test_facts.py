@@ -459,7 +459,8 @@ def test_the_extraction_never_sees_a_closed_fact(tmp_path, monkeypatch):
 # --- v5.15: a fact follows the judge's verdict ----------------------------------------------------------------------------
 def test_a_facts_mark_is_set_in_place_by_the_verdict(tmp_path):
     from agents.facts import CLOSED_MARKS, FACT_MARKS, add_fact, load_facts, set_mark
-    assert FACT_MARKS == ("gemini", "waiting", "censored", "clean") and CLOSED_MARKS == ("waiting", "censored")
+    assert FACT_MARKS == ("gemini", "waiting", "censored", "clean", "reopened")
+    assert CLOSED_MARKS == ("waiting", "censored")
     folder = tmp_path / "kira.facts"
     waits = add_fact(folder, "Живе біля парку", 2, "asked", "2026-10-28", 50, 240, mark="waiting")
     assert set_mark(folder, waits, "clean")
