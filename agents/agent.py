@@ -307,6 +307,8 @@ ARCHIVE_AGORA_LINES = 1500     # v5.8: the archive's first fill — Agora's last
 ARCHIVE_PRIVATE_EVENTS = 5000  # … and the whole private room, bounded
 EMBED_BATCH = 100              # lines embedded per idle tick
 PURGE_CONFIRM_S = 120          # v5.14: `/purge yes` must follow `/purge` within this
+BACKUP_MARK = "⚙️ backup"      # v5.15 (the owner): her line through the backup, marked in the chat above the words —
+                               # never voiced, never in her history, the archive or a prompt
 JUDGE_TICK_LINES = 100         # v5.15: the backup's talk still waiting, rated per idle tick (in chunks of 25)
 JUDGE_BACKOFF_S = (60, 3600)   # … a tick that rated nothing waits a minute, doubling, at most an hour
 
@@ -852,11 +854,12 @@ class Agent:
         for e in reversed(resp.chunk):
             if isinstance(e, RoomMessageText) and not is_edit(e) and e.sender in (self.cfg.owner, self.cfg.user_id):
                 speaker = "Ich" if e.sender == self.cfg.owner else self.cfg.name
-                lines.append((speaker, e.body))
+                body = e.body.removeprefix(f"{BACKUP_MARK}\n") if speaker == self.cfg.name else e.body  # v5.15
+                lines.append((speaker, body))
                 last = int(getattr(e, "server_timestamp", 0) or 0) or last
                 # v5.8 review #1: a line sent while she was down is archived before the archive seeds her history
                 self._archive(str(getattr(e, "event_id", "")) or f"private:{last}", last or 0, "private", "matrix",
-                              speaker, e.body)
+                              speaker, body)
         self.private_history = lines[-max(self.history_n, 1):]
         self.last_private_ms = last
         log.info("private chat: %d lines of history", len(self.private_history))
@@ -951,9 +954,10 @@ class Agent:
             if text is None:
                 return False
             sent_id = None
+            mark = BACKUP_MARK if by == "backup" else None  # v5.15: the owner sees which network wrote it
             if door == "matrix":
-                sent_id = await self.send_line(room, text, f"private:{self.clock()}")
-            elif not await self.send_telegram(text):  # never said: not in the history, not counted (review #2)
+                sent_id = await self.send_line(room, text, f"private:{self.clock()}", mark=mark)
+            elif not await self.send_telegram(text, mark=mark):  # never said: not in the history, not counted
                 log.warning("private: not delivered (telegram)")
                 return False
             self.private_history = append_history(self.private_history, self.cfg.name, text, max(self.history_n, 1))
@@ -1809,10 +1813,10 @@ class Agent:
             await asyncio.sleep(ACTION_EVERY_S)
             await self.telegram.send_chat_action(self.telegram_owner, action)
 
-    async def send_telegram(self, text: str) -> bool:
+    async def send_telegram(self, text: str, mark: str | None = None) -> bool:
         """Every answer in Telegram is a voice note in her own voice, then the text (the owner, 2026-10-21) — the
         speakers' monthly budget and `voiceable` still hold; when the voice cannot be made, the text goes alone.
-        True when the text went out."""
+        `mark` (v5.15): a line above the text only, never voiced. True when the text went out."""
         text, speech = spoken(text)  # v5.9: her voice gets the tags, the message her words
         why = self.voice_off
         if self.tts is not None:
@@ -1832,13 +1836,15 @@ class Agent:
                 log.info("voice: sent (%d chars, telegram)", len(text))
             elif why != "not voiceable":
                 log.info("voice: text only (%s, telegram)", why)
-        return await self.telegram.send_message(self.telegram_owner, text)
+        return await self.telegram.send_message(self.telegram_owner, f"{mark}\n{text}" if mark else text)
 
-    async def send_line(self, room_id: str, text: str, event_key: str, answering: str | None = None) -> str | None:
+    async def send_line(self, room_id: str, text: str, event_key: str, answering: str | None = None,
+                        mark: str | None = None) -> str | None:
         """v5.3 — every line the agent says: a voice message under a plain label when it should and can (`voice_due`,
         a voice, a voiceable line, under the speakers' monthly budget), never a reply; then always the same text as
         `m.text` — the only form the iPhone's Element shows the words in (it renders no media caption; the owner,
-        2026-10-18). The other agents read the text. Never a word in a log."""
+        2026-10-18). The other agents read the text. `mark` (v5.15): a line above the text only, never voiced. Never a
+        word in a log."""
         voice_of = self._transcript_voice.get(answering or "") or None
         text, speech = spoken(text)  # v5.9: her voice gets the tags, the message her words
         why = self.voice_off
@@ -1864,7 +1870,7 @@ class Agent:
             elif why not in ("share", "not voiceable"):
                 log.info("voice: text only (%s)", why)
         resp = await self.client.room_send(room_id=room_id, message_type="m.room.message",
-                                           content={"msgtype": "m.text", "body": text})
+                                           content={"msgtype": "m.text", "body": f"{mark}\n{text}" if mark else text})
         event_id = getattr(resp, "event_id", None)  # v5.8 review #1: the text's own id, so a re-read deduplicates
         return event_id if isinstance(event_id, str) and event_id else None
 

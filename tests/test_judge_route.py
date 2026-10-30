@@ -203,3 +203,44 @@ def test_a_block_in_geminis_state_closes_the_reopened_lines_of_its_prompt(tmp_pa
     assert asyncio.run(agent.private_reply()) is True
     assert marks(agent)["tg:0"] == "censored" and ("Ich", "повернене суддею") not in agent.gemini_history()
     run_spawned(agent)
+
+
+def test_her_line_through_the_backup_is_marked_in_the_chat_never_voiced_never_in_her_history(tmp_path, monkeypatch):
+    """v5.15 (the owner, 2026-10-30) — «⚙️ backup» above the words of a backup's line, in the text message only: her
+    voice, her history and the archive get the words alone; a line from Gemini has no mark."""
+    from unittest.mock import AsyncMock
+
+    from agents.agent import BACKUP_MARK
+    from tests import test_telegram_runtime as rt
+    agent = judged(tmp_path, monkeypatch, Gemini(blocks=1))
+    agent.telegram, agent.telegram_owner, agent.telegram_open = rt.FakeBot(), rt.OWNER_TG, True
+    agent.tts, agent.voice_off, agent.voice_monthly_chars = rt.FakeTTS(), None, 1_000_000
+
+    async def encode(pcm, timeout_s=60.0):
+        return b"OggS-kira"
+
+    monkeypatch.setattr("agents.agent.encode_opus", encode)
+    agent.private_line("питання", ms(18), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply(channel="telegram")) is True
+    sent = agent.telegram.send_message.await_args.args[1]
+    assert sent == f"{BACKUP_MARK}\n[softly] Від резерву, сонце." and BACKUP_MARK == "⚙️ backup"
+    assert agent.tts.calls == ["[softly] Від резерву, сонце."]                    # the voice: never the mark
+    assert agent.private_history[-1] == ("Кіра", "[softly] Від резерву, сонце.")
+    assert "backup" not in str(agent.archive.latest("private", 5, gemini=False))
+    agent.telegram.send_message = AsyncMock(return_value=True)
+    agent.private_line("ще", ms(18, 1), "telegram", "tg:2")
+    save_route(agent.route_file, Route(pin="gemini"))
+    assert asyncio.run(agent.private_reply(channel="telegram")) is True
+    assert agent.telegram.send_message.await_args.args[1] == "Від Gemini."           # Gemini's: no mark
+    run_spawned(agent)
+
+
+def test_the_mark_goes_above_the_text_in_element_and_is_never_read_back(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from agents.agent import BACKUP_MARK
+    agent = judged(tmp_path, monkeypatch)
+    agent.client = SimpleNamespace(room_send=AsyncMock(return_value=SimpleNamespace(event_id="$her")))
+    asyncio.run(agent.send_line("!dm", "Привіт", "private:1", mark=BACKUP_MARK))
+    assert agent.client.room_send.await_args.kwargs["content"]["body"] == f"{BACKUP_MARK}\nПривіт"
