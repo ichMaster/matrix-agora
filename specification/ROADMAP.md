@@ -10,8 +10,8 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 ## Status
 
-v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 is complete through v5.14, released as `v5.14.0`
-(2026-10-30). Next comes v5.15, the judge for the backup's talk, then v6–v9 in order. Other further work (the
+v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 is complete, released through `v5.15.0`
+(2026-10-30). Next come v6–v9 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
 
 | Phase | Title | Status | Release |
@@ -50,7 +50,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.12 | Кіра reads the news and thinks | ✅ completed | `v5.12.0` (2026-10-28) |
 | v5.13 | Gemini's blocks named: the stage, the reason and the category | ✅ completed | `v5.13.0` (2026-10-28) |
 | v5.14 | Her private chat past a Gemini block: GLM-4.6 on NovelAI, the censored mark and the route | ✅ completed | `v5.14.0` (2026-10-30) |
-| v5.15 | The judge: Gemma 4 31B rates the backup's talk | ⏳ planned | — |
+| v5.15 | The judge: Gemma 4 31B rates the backup's talk | ✅ completed | `v5.15.0` (2026-10-30) |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
 | v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -2036,7 +2036,15 @@ All done on 2026-10-28:
 
 ### v5.15 — The judge: Gemma 4 31B rates the backup's talk
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.15.0` on 2026-10-30.
+- **Live from 20:18:** the v5.14 backlog was rated in four watcher ticks, leaving 0 waiting.
+- **Grown with the owner's live test:**
+  - Gemini has the last word on what the judge reopens (`reopened`);
+  - Gemini reads the last `HISTORY_N` lines open to it;
+  - the backup's line is marked «⚙️ backup» in the chat, never voiced.
+- **Not exercised live:** the window's end by the rating, since the route was pinned to Gemini. The phase was released
+  by the owner's word.
+- **The code review:** one fix (#2). #1, a `prohibited_content` message sent to OpenRouter, is the owner's call.
 
 **Goal:** a third model, Gemma 4 31B on OpenRouter, rates every line of the backup's talk, the owner's and hers.
 - **A clean line** reaches Gemini again: in the history, the recall, the facts and the embeddings.
