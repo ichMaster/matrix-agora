@@ -1,3 +1,22 @@
+Version 5.15.1 (2026-10-30)
+---------------------------
+- How Kira says it, at the owner's word: her words kept repeating, a
+  laugh opened every reply, her talk read like prose and every message
+  ended neatly
+- Her private brief ends with a line drawn anew for each answer
+  (agents/style.py, Gemini's and the backup's alike): a word or two of live
+  speech offered or none (about 40% none); maybe one turn of a real chat -
+  a thought broken off, a doubt aloud, a self-correction, something left
+  unsaid; maybe an open ending; where a voice tag may go (often none,
+  mid-reply, mid-sentence or at the end, the start rarely, a laugh never
+  from the first word); and the words in three of her last eight lines,
+  and an opening twice in her last four, named to be left out
+- Her private canon's speech passage (lively and spoken, images rarely,
+  broken thoughts and doubts, no need for a neat ending) and her voice
+  palette (a tag where the tone changes, not at the start) revised; not in
+  the repo, synced by the deploy
+- Live: deployed at the owner's word (sha-f9771a7)
+
 Version 5.15.0 (2026-10-30)
 ---------------------------
 - Phase v5.15 - the judge: Gemma 4 31B on OpenRouter rates the backup's
