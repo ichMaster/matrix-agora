@@ -1,3 +1,18 @@
+Version 5.15.3 (2026-10-31)
+---------------------------
+- Closes v5 with the owner's two open calls from the code reviews
+- A message Gemini blocks as prohibited_content (either stage, every
+  route) is marked censored at once, and so is the backup's answer to it
+  once it is sent; neither is sent to the judge on OpenRouter, which scans
+  its requests. Only the blocked prompt's older lines are rated. Any other
+  block waits for the judge as before (v5.15 review #1)
+- Blocks while the route is pinned never count toward the 10-a-day cap:
+  they are kept apart in the route file (pinned_blocks), so /auto after a
+  pinned evening opens a five-minute window, not the rest of the day;
+  /status names them as outside the cap (v5.14 review #5)
+- The ROADMAP marks v5 closed; only LOW findings stay in its reviews, as
+  backlog
+
 Version 5.15.2 (2026-10-31)
 ---------------------------
 - Kira's endings, at the owner's word: her messages broke off at the end
