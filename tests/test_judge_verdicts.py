@@ -88,8 +88,8 @@ def test_a_line_rated_meanwhile_is_never_rated_twice(tmp_path, monkeypatch):
     agent = judged_agent(tmp_path, monkeypatch)
     waiting_line(agent, "tg:1", "Ich", "привіт")
     item = Item("line", "tg:1", "Ich", "привіт")
-    assert asyncio.run(agent.judge_items([item], "window")) == 1
-    assert asyncio.run(agent.judge_items([item], "waiting")) == 0 and len(agent.judge.calls) == 1
+    assert asyncio.run(agent.judge_items([item], "window")) == [CLEAN]
+    assert asyncio.run(agent.judge_items([item], "waiting")) == [CLEAN] and len(agent.judge.calls) == 1  # by its mark
     assert load_route(agent.route_file).judged == {"rated": 1, "flagged": 0}
 
 

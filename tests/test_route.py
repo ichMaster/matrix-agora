@@ -108,3 +108,13 @@ def test_a_missing_or_corrupt_file_is_auto_with_nothing_open(tmp_path):
                                 "answers": {"gemini": "two", "backup": 3}}))
     r = load_route(path)
     assert (r.pin, r.blocks, r.window_until_ms, r.answers) == ("auto", (5,), None, {"gemini": 0, "backup": 3})
+
+
+def test_flagged_at_the_windows_end_opens_the_next_window_but_is_no_block():
+    """v5.15 — the judge kept the backup on: the next window from now, the block times and the day cap untouched; a
+    pin opens none."""
+    ended = Route(window_until_ms=ms(28, 20), blocks=(ms(28, 19, 55),))
+    r = step(ended, ms(28, 20, 6), "flagged")
+    assert r.window_until_ms == ms(28, 20, 11) and r.blocks == ended.blocks
+    assert state(r, ms(28, 20, 7)) == "window"
+    assert step(Route(pin="gemini"), ms(28, 20), "flagged").window_until_ms is None

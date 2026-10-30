@@ -946,7 +946,7 @@ class Agent:
             if self.facts_dir is not None and not nudge:  # v5.8: «запам'ятай» — a skill, never a keyword
                 brief = f"{brief}\n\n{REMEMBER_SKILL}"
             seen = list(self._unanswered)  # v5.13 review #2: the lines this call answers — never one that comes later
-            text, by = await self._private_text(brief, nudge, seen)
+            text, by, judge_after = await self._private_text(brief, nudge, seen)
             if text is None:
                 return False
             sent_id = None
@@ -970,6 +970,9 @@ class Agent:
                         self.archive.mark([key], "waiting")
                     except Exception as exc:  # noqa: BLE001
                         log.error("archive: her line was not marked (%s)", type(exc).__name__)
+                if self.judge is not None and judge_after is not None:  # v5.15: rated once it is sent, never before
+                    why, items = judge_after
+                    self._spawn(self.judge_later([*items, Item("line", key, self.cfg.name, str(text))], why))
             log.info("private: %s%s%s", "wrote first" if nudge else "answered", " (telegram)" if door == "telegram" else "",
                      " by the backup" if by == "backup" else "")
             return True
@@ -997,13 +1000,14 @@ class Agent:
             log.error("route: not saved (%s)", type(exc).__name__)
         return route
 
-    async def _gemini_private_prompt(self, brief: str) -> str:
-        """Her private instruction for Gemini: the history, the recall and the facts without a closed line (v5.14)."""
+    async def _gemini_private_prompt(self, brief: str, used: list | None = None) -> str:
+        """Her private instruction for Gemini: the history, the recall and the facts without a closed line (v5.14);
+        the recalled lines go to `used` (v5.15: rated if Gemini blocks this prompt)."""
         recalled = agora_now = None
         facts = self.facts_now()  # v5.8 review #6: mirrored before the recall, so a deleted fact is not recalled
         if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
             query = next((t for s, t in reversed(self.gemini_history()) if s == "Ich"), "")  # v5.14: open only
-            recalled = await self.recall_section(query, self.private_places, set(self.private_history))
+            recalled = await self.recall_section(query, self.private_places, set(self.private_history), used=used)
             agora_now = self.agora_now_section()
         return self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts)
 
@@ -1039,18 +1043,22 @@ class Agent:
         return await self._compose(prompt, lines=lines, kind=kind, responder=self.fallback_responder,
                                    fact_mark="waiting")
 
-    async def _gemini_text(self, brief: str, kind: str):
+    async def _gemini_text(self, brief: str, kind: str, used: list | None = None):
         """Gemini's line, and its block or refusal (v5.13's `LAST_BLOCK`, read in this task) when it gave none."""
         LAST_BLOCK.set(None)
-        text = await self._compose(await self._gemini_private_prompt(brief), lines=self.gemini_history(), kind=kind)
+        text = await self._compose(await self._gemini_private_prompt(brief, used), lines=self.gemini_history(),
+                                   kind=kind)
         return text, (LAST_BLOCK.get() if text is None else None)
 
     async def _private_text(self, brief: str, nudge: bool, seen: list):
-        """(her line or None, who wrote it: `gemini` | `backup`). Without the backup, v5.13: a block or a refusal marks
-        his lines and is silence. With it (v5.14), by the route: Gemini — a block sends the backup, which answers, and
-        opens the window; the window — the backup alone; the window's end — both start together, Gemini's line wins
-        and closes the window, a block takes the backup's ready line and opens the next."""
+        """(her line or None, who wrote it: `gemini` | `backup`, what the judge rates once it is sent: (why, items) or
+        None). Without the backup, v5.13: a block or a refusal marks his lines and is silence. With it (v5.14), by the
+        route: Gemini — a block sends the backup, which answers, and opens the window; the window — the backup alone;
+        the window's end — both start together, Gemini's line wins and closes the window, a block takes the backup's
+        ready line and opens the next. v5.15, with the judge: every exchange of the backup's talk is rated after it is
+        sent (at a block with the blocked prompt's unrated lines), and the window's end goes by the rating."""
         kind = "private_nudge" if nudge else "private"
+        his = [Item("line", k, "Ich", t) for k, t in seen]
 
         def to_backup(stage: str) -> None:  # his lines are the backup's talk from here, answered or not
             if not nudge:
@@ -1060,7 +1068,7 @@ class Agent:
             text, block = await self._gemini_text(brief, kind)
             if block is not None and not nudge:  # v5.13: what Gemini refused never reaches it again
                 self.mark_unanswered(block[0], seen)
-            return text, "gemini"
+            return text, "gemini", None
         where = route_state(load_route(self.route_file), self.clock())
         if where == "window":
             log.info("private: route=window — the backup answers")
@@ -1068,21 +1076,25 @@ class Agent:
             text = await self._backup_text(brief, kind)
             if text is not None:
                 self.route_step("backup")
-            return text, "backup"
+            return text, "backup", ("window", his)
         if where == "gemini":
-            text, block = await self._gemini_text(brief, kind)
+            used: list = []
+            text, block = await self._gemini_text(brief, kind, used)
             if text is not None:
                 self.route_step("gemini")
-                return text, "gemini"
+                return text, "gemini", None
             if block is None:
-                return None, "gemini"  # silence, as ever: not a block
+                return None, "gemini", None  # silence, as ever: not a block
             self.route_step("block")
             to_backup(block[0])
             log.warning("private: route=gemini — a %s, the backup answers", block[0])
+            blocked = self._blocked_items(used) if self.judge is not None else []
             text = await self._backup_text(brief, kind)
             if text is not None:
                 self.route_step("backup")
-            return text, "backup"
+            return text, "backup", ("block", his + blocked)
+        if self.judge is not None:
+            return await self._window_end_judged(brief, kind, nudge, seen, to_backup)
         # the window's end: both start together; Gemini never sees a closed line
         log.info("private: route=window_end — Gemini (without %d closed lines) and the backup together",
                  len(self.private_history) - len(self.gemini_history()))
@@ -1095,34 +1107,120 @@ class Agent:
         if text is not None:
             backup.cancel()
             self.route_step("gemini")
-            return text, "gemini"
+            return text, "gemini", None
         if block is not None:
             self.route_step("block")
         to_backup(block[0] if block is not None else "window_end")
         text = await backup
         if text is not None:
             self.route_step("backup")
-        return text, "backup"
+        return text, "backup", None
+
+    async def _window_end_judged(self, brief: str, kind: str, nudge: bool, seen: list, to_backup):
+        """v5.15 — the window's end by the rating. The judge (his new message, and her last answer if it still waits)
+        and the backup start together. A flagged or unrated line keeps the backup on and opens the next window, which is
+        no Gemini block; both clean, Gemini answers without the closed lines, and its block takes the backup's ready
+        line. A line she writes first has no new message: her last answer decides."""
+        his = [Item("line", k, "Ich", t) for k, t in seen]
+        backup = asyncio.create_task(self._backup_text(brief, kind))
+        try:
+            verdicts = await self.judge_items([*his, *self._last_answer_items()], "window_end")
+        except BaseException:
+            backup.cancel()
+            raise
+        decided = ("clean" if all(v == CLEAN for v in verdicts)
+                   else "flagged" if FLAGGED in verdicts else "unrated")
+        log.info("private: route=window_end — judged: %s", decided)
+        if decided == "clean":
+            log.info("private: route=window_end — Gemini (without %d closed lines), the backup ready",
+                     len(self.private_history) - len(self.gemini_history()))
+            used: list = []
+            try:
+                text, block = await self._gemini_text(brief, kind, used)
+            except BaseException:
+                backup.cancel()
+                raise
+            if text is not None:
+                backup.cancel()
+                self.route_step("gemini")
+                return text, "gemini", None
+            if block is not None:
+                self.route_step("block")
+            to_backup(block[0] if block is not None else "window_end")
+            judge_after = ("block", his + self._blocked_items(used)) if block is not None else ("window_end", his)
+        else:
+            self.route_step("flagged")
+            unrated = [line for line, v in zip(seen, verdicts, strict=False) if v is None]
+            if unrated and not nudge:  # rated clean or flagged, his line keeps its verdict; unrated, it waits
+                self.mark_unanswered("window_end", unrated)
+            judge_after = ("window_end", his)
+        text = await backup
+        if text is not None:
+            self.route_step("backup")
+        return text, "backup", judge_after
+
+    def _last_answer_items(self) -> list[Item]:
+        """Her last private answer for the window's end: when it still waits for the judge, or a censored one (its
+        mark is its verdict); one that passed through Gemini, or was rated clean, decides nothing."""
+        if self.archive is None:
+            return []
+        mine = [line for line in self.archive.latest("private", 20, gemini=False) if line.speaker == self.cfg.name]
+        if not mine or mine[-1].mark not in ("waiting", "censored"):
+            return []
+        return [Item("line", mine[-1].key, mine[-1].speaker, mine[-1].text)]
+
+    def _blocked_items(self, recalled: list) -> list[Item]:
+        """v5.15 — the blocked prompt's lines no verdict has reached (`gemini`): her open history, the lines she
+        recalled, her pinned facts — a prompt block may come from an older line (v5.14 review #2)."""
+        items: dict[tuple[str, str], Item] = {}
+        if self.archive is not None:
+            history = self.archive.latest("private", max(len(self.gemini_history()), 1))
+            for line in [*history, *recalled]:
+                if line.mark != "gemini":
+                    continue
+                item = (Item("fact", line.key.removeprefix("fact:"), "факт", line.text) if line.place == "facts"
+                        else Item("line", line.key, line.speaker, line.text))
+                items.setdefault((item.kind, item.key), item)
+        if self.facts_dir is not None:
+            for f in load_facts(self.facts_dir):
+                if f.pin in (1, 2) and f.mark == "gemini":
+                    items.setdefault(("fact", f.id), Item("fact", f.id, "факт", f.text))
+        return list(items.values())
 
     # --- v5.15: the judge — the backup's talk rated; a clean line is Gemini's again, a flagged one censored ----------
-    def _still_unrated(self, items: list[Item]) -> list[Item]:
-        """Those of `items` no verdict has reached yet (a line or a fact rated meanwhile, or gone, is left out)."""
-        rated = ("clean", "censored")
+    def _known_verdicts(self, items: list[Item]) -> dict[tuple[str, str], str]:
+        """The verdicts already reached, by their marks: `clean` is clean, `censored` flagged; a line or a fact gone
+        (purged) counts as clean — nothing of it is left to rate."""
         keys = [i.key for i in items if i.kind == "line"]
         lines = {line.key: line.mark for line in self.archive.by_keys(keys)} if self.archive is not None and keys else {}
         facts = {f.id: f.mark for f in load_facts(self.facts_dir)} if self.facts_dir is not None else {}
-        return [i for i in items if (lines if i.kind == "line" else facts).get(i.key, "clean") not in rated]
+        known = {}
+        for i in items:
+            mark = (lines if i.kind == "line" else facts).get(i.key, "clean")
+            if mark in ("clean", "censored"):
+                known[(i.kind, i.key)] = CLEAN if mark == "clean" else FLAGGED
+        return known
 
-    async def judge_items(self, items: list[Item], why: str) -> int:
-        """The judge rates these lines and facts — only those still unrated — and its verdicts set their marks. How
-        many it rated (an unrated one keeps its mark)."""
-        if self.judge is None:
-            return 0
-        items = self._still_unrated(items)
-        if not items:
-            return 0
-        verdicts = await self.judge.rate([i.text for i in items])
-        return self.apply_verdicts(items, verdicts, why)
+    async def judge_items(self, items: list[Item], why: str) -> list[str | None]:
+        """The verdicts on these lines and facts, in order: one reached before, by its mark (never rated twice); the
+        rest rated now, the verdicts setting their marks (None: unrated — it keeps its mark)."""
+        known = self._known_verdicts(items)
+        todo = [i for i in items if (i.kind, i.key) not in known]
+        fresh: list[str | None] = [None] * len(todo)
+        if todo and self.judge is not None:
+            fresh = await self.judge.rate([i.text for i in todo])
+            self.apply_verdicts(todo, fresh, why)
+        rated = iter(fresh)
+        return [known[(i.kind, i.key)] if (i.kind, i.key) in known else next(rated) for i in items]
+
+    async def judge_later(self, items: list[Item], why: str) -> None:
+        """v5.15 — an exchange of the backup's talk rated after it is sent, in the background (one rating at a time with
+        the watcher's); a failure leaves the lines waiting for the next tick."""
+        async with self._judge_lock:
+            try:
+                await self.judge_items(items, why)
+            except Exception:
+                log.exception("judge: the rating failed (the lines wait for the next tick)")
 
     def apply_verdicts(self, items: list[Item], verdicts: list, why: str) -> int:
         """v5.15 — the judge's verdicts: a clean line or fact is marked `clean` and is Gemini's again (her history's
@@ -1175,7 +1273,7 @@ class Agent:
         async with self._judge_lock:
             try:
                 items = self.waiting_items(JUDGE_TICK_LINES)
-                rated = await self.judge_items(items, "waiting") if items else None
+                rated = sum(v is not None for v in await self.judge_items(items, "waiting")) if items else None
             except Exception:
                 rated = 0
                 log.exception("judge: the tick failed (bot keeps running)")
@@ -1336,7 +1434,7 @@ class Agent:
         log.info("private chat: %d lines of history from the archive", len(lines))
 
     async def recall_section(self, query: str, places: tuple[str, ...], exclude: set,
-                             gemini: bool = True) -> str | None:
+                             gemini: bool = True, used: list | None = None) -> str | None:
         """What she recalls before an answer: the message she answers is the query — the word search and (when its
         embedding comes back) the meaning search within `places`, fused; the best `RECALL_N` lines not already in the
         prompt's window, each with its neighbours. A failure is no section, never a blocked answer."""
@@ -1365,6 +1463,8 @@ class Agent:
                          if n.id not in seen and (n.speaker, n.text) not in exclude]
                 seen.update(n.id for n in group)
                 groups.append(group)
+                if used is not None:  # v5.15: the lines this prompt recalled, for the judge at a block
+                    used.extend(group)
             if picked:
                 log.info("recall: %d lines (%s)", len(picked), "+".join(places))
             return render_recalled(groups, self.tz, local_now(self.clock(), self.tz))

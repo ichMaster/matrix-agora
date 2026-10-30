@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 
 PINS = ("auto", "gemini", "backup")
 STATES = ("gemini", "window", "window_end")
-OUTCOMES = ("block", "gemini", "backup", "rated")  # and `pin:<auto|gemini|backup>`
+OUTCOMES = ("block", "gemini", "backup", "rated", "flagged")  # and `pin:<auto|gemini|backup>`
 HOUR_MS = 3_600_000
 
 
@@ -63,7 +63,9 @@ def blocks_since(route: Route, since_ms: int) -> int:
 def after(route: Route, now_ms: int, outcome: str, window_s: int, day_max: int, day: str, day_start_ms: int,
           day_end_ms: int, rated: int = 0, flagged: int = 0) -> Route:
     """The route after an outcome: `block` (Gemini blocked or refused), `gemini` / `backup` (who answered), `rated`
-    (v5.15: the judge rated `rated` lines, `flagged` of them flagged), or `pin:<auto|gemini|backup>` (a command)."""
+    (v5.15: the judge rated `rated` lines, `flagged` of them flagged), `flagged` (v5.15: at the window's end the judge
+    kept the backup on — the next window, no block, not counted toward the day cap), or `pin:<auto|gemini|backup>`
+    (a command)."""
     answers = dict(route.answers) if route.day == day else {"gemini": 0, "backup": 0}
     judged = dict(route.judged) if route.day == day else {"rated": 0, "flagged": 0}
     keep_from = min(day_start_ms, now_ms - HOUR_MS)
@@ -78,6 +80,9 @@ def after(route: Route, now_ms: int, outcome: str, window_s: int, day_max: int, 
         r = replace(r, answers={**answers, outcome: answers.get(outcome, 0) + 1})
         if outcome == "gemini" and r.pin == "auto" and r.window_until_ms is not None and now_ms >= r.window_until_ms:
             r = replace(r, window_until_ms=None)  # the talk is Gemini's again
+    elif outcome == "flagged":
+        if r.pin == "auto":
+            r = replace(r, window_until_ms=max(r.window_until_ms or 0, now_ms + window_s * 1000))
     elif outcome == "rated":
         r = replace(r, judged={"rated": judged.get("rated", 0) + max(int(rated), 0),
                                "flagged": judged.get("flagged", 0) + max(int(flagged), 0)})
