@@ -125,6 +125,7 @@ from agents.logic import (
     build_transcript,
     clean_reply,
     fit_budget,
+    history_entry,
     is_edit,
     members_phrase,
     outs_a_persona,
@@ -1110,9 +1111,10 @@ class Agent:
 
     def close_lines(self, lines: list[tuple[str, str]]) -> None:
         """v5.14 — these (speaker, text) lines of her private chat are closed to Gemini: kept in her history for the
-        backup, out of the session (its summary, its facts and the day journal are Gemini's)."""
+        backup, out of the session (its summary, its facts and the day journal are Gemini's). Closed as the history
+        holds them too: a long line is cut there (v5.14 review #1)."""
         for speaker, text in lines:
-            self._closed.add((speaker, text))
+            self._closed.update({(speaker, text), (speaker, history_entry(text))})
             _drop_last(self.session, (private_label(speaker), text))
 
     async def maybe_private_nudge(self) -> bool:

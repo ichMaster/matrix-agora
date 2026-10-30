@@ -177,12 +177,15 @@ def should_join_invite(room_id: str, inviter: str, cfg: AgentConfig, private_roo
     return cfg.can("private") and (private_room is None or room_id == private_room)
 
 
+def history_entry(text: str) -> str:
+    """A message as the history holds it: cut at `ENTRY_MAX_CHARS`, with «…»."""
+    return text[:ENTRY_MAX_CHARS] + "…" if len(text) > ENTRY_MAX_CHARS else text
+
+
 def append_history(history: list[tuple[str, str]], name: str, text: str, cap: int) -> list[tuple[str, str]]:
     """The rolling context window: the last `cap` (name, text) pairs, own and
     the other agent's messages included. Pure: returns the new list."""
-    if len(text) > ENTRY_MAX_CHARS:
-        text = text[:ENTRY_MAX_CHARS] + "…"
-    out = [*history, (name, text)]
+    out = [*history, (name, history_entry(text))]
     return out[-cap:] if cap > 0 else out
 
 

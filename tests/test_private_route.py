@@ -89,6 +89,25 @@ def test_a_refusal_sends_the_backup_which_answers_opens_the_window_and_marks_the
     assert SECRET not in caplog.text and "Від резерву" not in caplog.text
 
 
+def test_a_long_line_the_history_cuts_is_closed_to_gemini_too(tmp_path, monkeypatch):
+    """Review #1: the history holds a line over `ENTRY_MAX_CHARS` cut, with «…» — closed in that form as well, or every
+    next Gemini call carries it (a block that comes back until a restart)."""
+    from agents.logic import ENTRY_MAX_CHARS
+    long_line = f"{ASKED} " + "довгий рядок " * (ENTRY_MAX_CHARS // 13)
+    long_answer = "[softly] " + "довга відповідь " * (ENTRY_MAX_CHARS // 15)
+    gemini = Gemini(blocks=1)
+    agent = her(tmp_path, monkeypatch, gemini, Backup(long_answer))
+    agent.private_line(long_line, ms(17), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    assert [len(t) for _, t in agent.private_history] == [ENTRY_MAX_CHARS + 1] * 2   # both cut in her history
+    assert agent.gemini_history() == []
+    at(agent, 18, 6)                                                       # after the window: Gemini's again
+    agent.private_line("А тепер про погоду", ms(18, 6), "telegram", "tg:2")
+    assert asyncio.run(agent.private_reply()) is True
+    assert "А тепер про погоду" in gemini.transcripts[-1]
+    assert ASKED not in gemini.transcripts[-1] and "довга відповідь" not in gemini.transcripts[-1]
+
+
 def test_in_the_window_the_backup_alone_answers_and_its_talk_never_reaches_gemini(tmp_path, monkeypatch):
     gemini = Gemini()
     agent = her(tmp_path, monkeypatch, gemini)
