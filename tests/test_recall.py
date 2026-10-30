@@ -64,6 +64,8 @@ def test_the_private_chat_recalls_both_places_and_sees_agora_today(tmp_path, mon
     agent.archive.append("$t1", ms(17, 30), "agora", "matrix", "Мія", "Сьогодні в архіві знайшла лист 1944 року")
     agent.archive.append("$y1", ms(17) - 86_400_000, "agora", "matrix", "Леон", "Учорашня репетиція")
     agent.private_history = [("Ich", "Підемо в гори?")]
+    agent.archive.append("$p3", ms(17, 59), "private", "matrix", "Ich", "Підемо в гори?")  # every line is archived
+    agent.history_n = 1  # the older private lines are out of her window: recalled, not read (v5.15: from the archive)
     agent.private_channel = "matrix"
     asyncio.run(agent.private_reply())
     system = agent.llm.calls[-1][1]

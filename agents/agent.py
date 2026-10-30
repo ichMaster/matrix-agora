@@ -1008,7 +1008,8 @@ class Agent:
         facts = self.facts_now()  # v5.8 review #6: mirrored before the recall, so a deleted fact is not recalled
         if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
             query = next((t for s, t in reversed(self.gemini_history()) if s == "Ich"), "")  # v5.14: open only
-            recalled = await self.recall_section(query, self.private_places, set(self.private_history), used=used)
+            recalled = await self.recall_section(query, self.private_places,
+                                                 set(self.private_history) | set(self.gemini_history()), used=used)
             agora_now = self.agora_now_section()
         return self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts)
 
@@ -1100,7 +1101,7 @@ class Agent:
             return await self._window_end_judged(brief, kind, nudge, seen, to_backup)
         # the window's end: both start together; Gemini never sees a closed line
         log.info("private: route=window_end — Gemini (without %d closed lines) and the backup together",
-                 len(self.private_history) - len(self.gemini_history()))
+                 self.closed_in_history())
         backup = asyncio.create_task(self._backup_text(brief, kind))
         try:
             text, block = await self._gemini_text(brief, kind)
@@ -1136,7 +1137,7 @@ class Agent:
         log.info("private: route=window_end — judged: %s", decided)
         if decided == "clean":
             log.info("private: route=window_end — Gemini (without %d closed lines), the backup ready",
-                     len(self.private_history) - len(self.gemini_history()))
+                     self.closed_in_history())
             used: list = []
             try:
                 text, block = await self._gemini_text(brief, kind, used)
@@ -1329,9 +1330,23 @@ class Agent:
                 self._judge_failures = 0
 
     def gemini_history(self) -> list[tuple[str, str]]:
-        """v5.14 — her private history as Gemini may read it: without the lines closed to it (conservatively: a same
-        text open elsewhere is left out too)."""
+        """v5.14 — her private history as Gemini may read it, never a closed line (conservatively: a same text open
+        elsewhere is left out too). v5.15 (the owner, 2026-10-30): the last `HISTORY_N` lines open to Gemini, read from
+        the archive — her history holds the last `HISTORY_N` of every line, the backup's view, so a long talk through
+        the backup left Gemini none; without the archive (or when it fails), her history without the closed lines."""
+        if self.archive is not None:
+            try:
+                lines = self.archive.latest("private", max(self.history_n, 1))
+                return [(line.speaker, history_entry(line.text)) for line in lines
+                        if (line.speaker, line.text) not in self._closed]
+            except Exception as exc:  # noqa: BLE001
+                log.error("archive: Gemini's history was not read (%s) — her own", type(exc).__name__)
         return [line for line in self.private_history if line not in self._closed]
+
+    def closed_in_history(self) -> int:
+        """How many lines of her history (the backup's view) Gemini's history leaves out — for the log only."""
+        open_lines = set(self.gemini_history())
+        return sum(1 for line in self.private_history if line not in open_lines)
 
     def mark_unanswered(self, stage: str, lines: list[tuple[str, str]] | None = None, mark: str = "waiting") -> int:
         """v5.13, v5.14 — Gemini blocked or refused her answer to the owner's `lines` ((key, text); all unanswered by

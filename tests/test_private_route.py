@@ -222,3 +222,18 @@ def test_the_backups_prompt_reads_every_line_and_fits_its_budget(tmp_path, monke
     assert 10 <= len(lines) < 60 and lines[-1] == agent.private_history[-1]   # the closed line too
     assert len(prompt) + sum(len(f"{s}: {t}") + 1 for s, t in lines) <= 4000 * 2 or len(lines) == 10
     assert "the prompt fitted" in caplog.text and "Канон." in prompt and SECRET not in caplog.text
+
+
+def test_geminis_history_is_the_last_lines_open_to_it_the_backups_every_line(tmp_path, monkeypatch):
+    """v5.15 (the owner, 2026-10-30) — after a long talk through the backup, Gemini still gets the last `HISTORY_N`
+    lines open to it (from the archive), never a closed one; the backup's history is the last lines of every mark."""
+    agent = her(tmp_path, monkeypatch)
+    agent.history_n = 4
+    for i in range(3):
+        agent.private_line(f"відкритий {i}", ms(16, i), "telegram", f"tg:o{i}")
+    for i in range(4):
+        agent.private_line(f"через backup {i}", ms(17, i), "telegram", f"tg:b{i}")
+        agent.mark_unanswered("window", [(f"tg:b{i}", f"через backup {i}")])
+    assert [t for _, t in agent.private_history] == [f"через backup {i}" for i in range(4)]  # the backup's view
+    assert [t for _, t in agent.gemini_history()] == ["відкритий 0", "відкритий 1", "відкритий 2"]
+    assert agent.closed_in_history() == 4
