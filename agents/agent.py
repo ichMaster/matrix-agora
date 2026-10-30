@@ -230,6 +230,7 @@ from agents.settings import VOICE_ID_RE
 from agents.settings import start as settings_start
 from agents.sky import SKY_MAX_TOKENS, clean_sky, load_sky, save_sky, sky_query
 from agents.speech import speakers_month_chars, voice_due, voice_message, voiceable
+from agents.style import style_line
 from agents.telegram import (
     ACTION_EVERY_S,
     COMMAND_HELP,
@@ -949,6 +950,10 @@ class Agent:
                 brief = f"{brief} {PRIVATE_NUDGE_THOUGHTS}"
             if self.facts_dir is not None and not nudge:  # v5.8: «запам'ятай» — a skill, never a keyword
                 brief = f"{brief}\n\n{REMEMBER_SKILL}"
+            # v5.15.1 (the owner): how she says it this time, drawn anew — live words or none, a turn of a real chat,
+            # an open ending, where a voice tag may go, and what she has been repeating
+            her_lines = [t for s, t in self.private_history if s == self.cfg.name]
+            brief = f"{brief}\n\n{style_line(self.rng, her_lines, self.cfg.can('emotion'))}"
             seen = list(self._unanswered)  # v5.13 review #2: the lines this call answers — never one that comes later
             text, by, judge_after = await self._private_text(brief, nudge, seen)
             if text is None:
