@@ -1,3 +1,16 @@
+Version 5.15.2 (2026-10-31)
+---------------------------
+- Kira's endings, at the owner's word: her messages broke off at the end
+  too often and too hard
+- An open ending is now drawn for one answer in five instead of more than
+  half, and it is soft (no summary, a question left hanging, a throwaway
+  close), never a cut; otherwise the line asks her to finish the thought
+  plainly
+- The turns that break a thought off or leave a pause now say mid-message
+- Her private canon's speech passage revised the same way (mostly she
+  finishes the thought; a cut or a trailing pause at the end is rare) and
+  two of its examples replaced; not in the repo, synced by the deploy
+
 Version 5.15.1 (2026-10-30)
 ---------------------------
 - How Kira says it, at the owner's word: her words kept repeating, a
