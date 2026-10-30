@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import sqlite3
+import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -242,9 +243,10 @@ def archive_view(state_dir: Path, name: str) -> dict | None:
             "waiting": int(marks.get("waiting", 0)), "censored": int(marks.get("censored", 0))}
 
 
-def route_view(state_dir: Path, name: str, today: date) -> dict | None:
-    """v5.14 — her private answer's route (`<name>.route.json`, `agents/route.py`): the pin, an open window's end
-    (ISO, or null), today's blocks and today's answers by Gemini and by the backup. No file yet → auto, nothing open;
+def route_view(state_dir: Path, name: str, today: date, now_ms: int | None = None) -> dict | None:
+    """v5.14 — her private answer's route (`<name>.route.json`, `agents/route.py`): the pin, the window's end (ISO, or
+    null) and whether it is still open at `now_ms` (the file keeps an ended one until Gemini answers again — review
+    #3), today's blocks and today's answers by Gemini and by the backup. No file yet → auto, nothing open;
     unreadable → None, never a 500. No text is in it."""
     from agents.route import load_route
 
@@ -259,8 +261,11 @@ def route_view(state_dir: Path, name: str, today: date) -> dict | None:
         return None
     window = (datetime.fromtimestamp(route.window_until_ms / 1000, tz).isoformat(timespec="minutes")
               if route.window_until_ms is not None else None)
+    now_ms = int(time.time() * 1000) if now_ms is None else now_ms
     answers = route.answers if route.day == today.isoformat() else {"gemini": 0, "backup": 0}
-    return {"pin": route.pin, "window_until": window, "blocks_today": sum(1 for t in route.blocks if t >= start),
+    return {"pin": route.pin, "window_until": window,
+            "window_open": route.window_until_ms is not None and now_ms < route.window_until_ms,
+            "blocks_today": sum(1 for t in route.blocks if t >= start),
             "answers": {"gemini": int(answers.get("gemini", 0)), "backup": int(answers.get("backup", 0))}}
 
 

@@ -650,7 +650,9 @@ function routeLine(mem) {
   const r = mem.route;
   if (!r) return "Route unreadable";
   const pin = r.pin === "auto" ? "auto" : `pinned ${r.pin}`;
-  const until = r.pin === "auto" && r.window_until ? ` · window until ${r.window_until.slice(11, 16)}` : "";
+  // an ended window stays in the file until Gemini answers again: shown as ended, never as open (v5.14 review #3)
+  const until = r.pin === "auto" && r.window_until
+    ? (r.window_open ? ` · window until ${r.window_until.slice(11, 16)}` : " · window ended") : "";
   const waiting = mem.archive ? ` · waiting ${fmtInt(mem.archive.waiting || 0)}` : "";
   return `${pin}${until} · blocks today ${fmtInt(r.blocks_today)} · backup answers today ${fmtInt(r.answers.backup)}${waiting}`;
 }

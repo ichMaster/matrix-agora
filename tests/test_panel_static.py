@@ -342,3 +342,5 @@ def test_her_card_shows_her_route_only_with_the_backup():
     fn = fn[:fn.index("\n}\n")]
     assert 'if (!r) return "Route unreadable";' in fn and "pinned ${r.pin}" in fn
     assert "window until ${r.window_until.slice(11, 16)}" in fn and "backup answers today" in fn and "waiting" in fn
+    # review #3: an ended window is never shown as open
+    assert '(r.window_open ? ` · window until ${r.window_until.slice(11, 16)}` : " · window ended")' in fn

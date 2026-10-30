@@ -456,14 +456,16 @@ def test_her_route_and_the_archives_marks_for_her_card(state, monkeypatch):
     from agents.route import Route, save_route
     from panel.memory import archive_view, route_view
     monkeypatch.setenv("TIMEZONE", "Europe/Kyiv")
-    assert route_view(state, "kira", TODAY) == {"pin": "auto", "window_until": None, "blocks_today": 0,
-                                                "answers": {"gemini": 0, "backup": 0}}
+    assert route_view(state, "kira", TODAY) == {"pin": "auto", "window_until": None, "window_open": False,
+                                                "blocks_today": 0, "answers": {"gemini": 0, "backup": 0}}
     day0 = int(datetime(2026, 10, 4, tzinfo=ZoneInfo("Europe/Kyiv")).timestamp() * 1000)
     save_route(state / "kira.route.json", Route(blocks=(day0 - 1000, day0 + 60_000), window_until_ms=day0 + 3_600_000,
                                                 day="2026-10-04", answers={"gemini": 3, "backup": 2}))
-    view = route_view(state, "kira", TODAY)
+    view = route_view(state, "kira", TODAY, now_ms=day0 + 1_800_000)
     assert view["window_until"] == "2026-10-04T01:00+03:00" and view["blocks_today"] == 1
-    assert view["answers"] == {"gemini": 3, "backup": 2}
+    assert view["window_open"] is True and view["answers"] == {"gemini": 3, "backup": 2}
+    # review #3: the file keeps an ended window until Gemini answers again — it is not open any more
+    assert route_view(state, "kira", TODAY, now_ms=day0 + 7_200_000)["window_open"] is False
     (state / "kira.route.json").write_text("{broken")
     assert route_view(state, "kira", TODAY) is None
     a = Archive(state / "kira.archive.db")
