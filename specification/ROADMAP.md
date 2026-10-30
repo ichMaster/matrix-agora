@@ -10,8 +10,8 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 ## Status
 
-v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 is complete through v5.13, released as `v5.13.0`
-(2026-10-28). Next come v5.14–v5.15, the rest of the backup for Кіра's private chat, then v6–v9 in order. Other further work (the
+v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 is complete through v5.14, released as `v5.14.0`
+(2026-10-30). Next comes v5.15, the judge for the backup's talk, then v6–v9 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
 
 | Phase | Title | Status | Release |
@@ -49,7 +49,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.11 | Events of her life: known, generated every hour, and Lviv's news | ✅ completed | `v5.11.0` (2026-10-28) |
 | v5.12 | Кіра reads the news and thinks | ✅ completed | `v5.12.0` (2026-10-28) |
 | v5.13 | Gemini's blocks named: the stage, the reason and the category | ✅ completed | `v5.13.0` (2026-10-28) |
-| v5.14 | Her private chat past a Gemini block: GLM-4.6 on NovelAI, the censored mark and the route | ⏳ planned | — |
+| v5.14 | Her private chat past a Gemini block: GLM-4.6 on NovelAI, the censored mark and the route | ✅ completed | `v5.14.0` (2026-10-30) |
 | v5.15 | The judge: Gemma 4 31B rates the backup's talk | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
@@ -1699,7 +1699,16 @@ built in three, and each is released and live before the next:
 
 ### v5.14 — Кіра's private chat past a Gemini block: GLM-4.6 on NovelAI, the censored mark and the route
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v5.14.0` on 2026-10-30.
+- **Live from 2026-10-28:** `/backup`, `/status` and `/auto` in the owner's use. On 2026-10-30 a block with no pin at
+  03:06 was answered by the backup, and at the window's end (03:36) Gemini answered without the closed lines. Both
+  were read from the log, and the phase was released by the owner's word.
+- **Grown at the owner's word:**
+  - `/status` in the commands' own English words, with the whole day's counts;
+  - `/purge`, which deletes the backup's talk after a confirmation (AGORA-150);
+  - the CLAUDE.md rule that Claude Code never reads the backup's talk.
+- **Two code-review fixes:** a long closed line is closed in its cut form too (#1), and an ended window reads «window
+  ended» on her card (#3). #2 (a prompt block from the open lines themselves) goes to v5.15.
 
 **Goal:** when Gemini's safety filter blocks an answer in Кіра's private chat with the owner (Element and Telegram),
 or Gemini answers with its own refusal (v5.13's stage `refusal`), she still answers. The same prompt goes to GLM-4.6
