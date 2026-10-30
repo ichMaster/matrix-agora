@@ -344,3 +344,5 @@ def test_her_card_shows_her_route_only_with_the_backup():
     assert "window until ${r.window_until.slice(11, 16)}" in fn and "backup answers today" in fn and "waiting" in fn
     # review #3: an ended window is never shown as open
     assert '(r.window_open ? ` · window until ${r.window_until.slice(11, 16)}` : " · window ended")' in fn
+    # v5.15: the judge's lines today, only when it has rated any
+    assert "` · judged ${fmtInt(r.judged.rated)} · flagged ${fmtInt(r.judged.flagged)}`" in fn and "${judged}" in fn

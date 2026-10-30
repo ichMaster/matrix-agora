@@ -82,6 +82,22 @@ def test_the_status_text():
     assert "чекають на суддю 3, цензуровані 1" in window and "через gemini 4, через backup 2" in window
     pinned = status_text(Route(pin="backup", pinned_at_ms=now), now, TZ, 10, 0, 0, {"gemini": 0, "backup": 0}, 0, 0)
     assert "Маршрут — backup (закріплено о" in pinned and "скасувати: /auto" in pinned and "резерв" not in pinned
+    assert pinned.endswith("Суддя: вимкнено")                                         # v5.15: no judge
+    judged = status_text(Route(), now, TZ, 10, 4, 1, {"gemini": 0, "backup": 0}, 0, 0, {"rated": 25, "flagged": 3})
+    assert judged.endswith("Суддя: оцінено сьогодні 25, позначено 3, чекають 4")
+
+
+def test_status_shows_the_judges_day(tmp_path, monkeypatch):
+    """v5.15 — `/status` with the judge on: today's ratings from the route file, the waiting lines from the archive."""
+    from agents.route import Route, day_bounds, save_route
+    from tests.test_judge_verdicts import FakeJudge
+    agent = with_talk(tmp_path, monkeypatch)
+    agent.judge = FakeJudge()
+    today = day_bounds(agent.clock(), agent.tz)[0]
+    save_route(agent.route_file, Route(day=today, judged={"rated": 7, "flagged": 2}))
+    assert agent.status_answer().endswith("Суддя: оцінено сьогодні 7, позначено 2, чекають 2")
+    agent.judge = None
+    assert "Суддя: вимкнено" in agent.status_answer()
 
 
 def test_the_days_counts_come_from_her_usage_lines_the_whole_day():

@@ -654,7 +654,10 @@ function routeLine(mem) {
   const until = r.pin === "auto" && r.window_until
     ? (r.window_open ? ` · window until ${r.window_until.slice(11, 16)}` : " · window ended") : "";
   const waiting = mem.archive ? ` · waiting ${fmtInt(mem.archive.waiting || 0)}` : "";
-  return `${pin}${until} · blocks today ${fmtInt(r.blocks_today)} · backup answers today ${fmtInt(r.answers.backup)}${waiting}`;
+  // v5.15: the judge's lines today, when it has rated any
+  const judged = r.judged && (r.judged.rated || r.judged.flagged)
+    ? ` · judged ${fmtInt(r.judged.rated)} · flagged ${fmtInt(r.judged.flagged)}` : "";
+  return `${pin}${until} · blocks today ${fmtInt(r.blocks_today)} · backup answers today ${fmtInt(r.answers.backup)}${judged}${waiting}`;
 }
 
 function archiveLine(mem) {

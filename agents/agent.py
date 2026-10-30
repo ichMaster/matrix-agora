@@ -1710,8 +1710,10 @@ class Agent:
         except OSError:
             records = []
         answers, hour, today = day_counts(records, day, now_ms)
-        text = status_text(load_route(self.route_file), now_ms, self.tz, self.fallback_day_max,
-                           counts.get("waiting", 0), counts.get("censored", 0), answers, hour, today)
+        route = load_route(self.route_file)
+        judged = None if self.judge is None else (route.judged if route.day == day else {"rated": 0, "flagged": 0})
+        text = status_text(route, now_ms, self.tz, self.fallback_day_max, counts.get("waiting", 0),
+                           counts.get("censored", 0), answers, hour, today, judged)
         return text if self.fallback_responder is not None else text + "\n(backup вимкнено)"
 
     async def telegram_hear(self, update: Update) -> None:

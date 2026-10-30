@@ -246,7 +246,8 @@ def archive_view(state_dir: Path, name: str) -> dict | None:
 def route_view(state_dir: Path, name: str, today: date, now_ms: int | None = None) -> dict | None:
     """v5.14 — her private answer's route (`<name>.route.json`, `agents/route.py`): the pin, the window's end (ISO, or
     null) and whether it is still open at `now_ms` (the file keeps an ended one until Gemini answers again — review
-    #3), today's blocks and today's answers by Gemini and by the backup. No file yet → auto, nothing open;
+    #3), today's blocks, today's answers by Gemini and by the backup, and (v5.15) today's lines the judge rated and
+    flagged. No file yet → auto, nothing open;
     unreadable → None, never a 500. No text is in it."""
     from agents.route import load_route
 
@@ -263,10 +264,12 @@ def route_view(state_dir: Path, name: str, today: date, now_ms: int | None = Non
               if route.window_until_ms is not None else None)
     now_ms = int(time.time() * 1000) if now_ms is None else now_ms
     answers = route.answers if route.day == today.isoformat() else {"gemini": 0, "backup": 0}
+    judged = route.judged if route.day == today.isoformat() else {"rated": 0, "flagged": 0}  # v5.15: the judge
     return {"pin": route.pin, "window_until": window,
             "window_open": route.window_until_ms is not None and now_ms < route.window_until_ms,
             "blocks_today": sum(1 for t in route.blocks if t >= start),
-            "answers": {"gemini": int(answers.get("gemini", 0)), "backup": int(answers.get("backup", 0))}}
+            "answers": {"gemini": int(answers.get("gemini", 0)), "backup": int(answers.get("backup", 0))},
+            "judged": {"rated": int(judged.get("rated", 0)), "flagged": int(judged.get("flagged", 0))}}
 
 
 def models_view(state_dir: Path, name: str, voice_spec: Path | None = None) -> dict | None:

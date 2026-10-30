@@ -139,11 +139,12 @@ def _hhmm(ms: int, tz: str) -> str:
 
 
 def status_text(route: Route, now_ms: int, tz: str, day_max: int, waiting: int, censored: int,
-                answers: dict, blocks_hour: int, blocks_today: int) -> str:
+                answers: dict, blocks_hour: int, blocks_today: int, judged: dict | None = None) -> str:
     """`/status`: the route, auto or pinned since when (lifted by `/auto`); the blocks in the last hour and today, out
     of the cap; the lines of her private chat waiting for the judge and censored; today's answers by Gemini and by the
     backup. The counts are the whole day's (the owner's live test: from her usage lines, not only since the route's
-    file began). One service line block, never a text of the talk."""
+    file began). v5.15: the judge's line — today's lines rated and flagged (`judged`, the route's counts of her day)
+    and those still waiting, or «вимкнено» (None). One service line block, never a text of the talk."""
     if route.pin != "auto":
         since = f"закріплено о {_hhmm(route.pinned_at_ms, tz)}; " if route.pinned_at_ms else "закріплено; "
         where = f"{PIN_NAMES[route.pin]} ({since}скасувати: /auto)"
@@ -156,7 +157,10 @@ def status_text(route: Route, now_ms: int, tz: str, day_max: int, waiting: int, 
     return (f"⚙️ Маршрут — {where}\n"
             f"Блоків: за годину {blocks_hour}, сьогодні {blocks_today} з {day_max}\n"
             f"Приватний чат: чекають на суддю {waiting}, цензуровані {censored}\n"
-            f"Сьогодні відповіла: через gemini {answers.get('gemini', 0)}, через backup {answers.get('backup', 0)}")
+            f"Сьогодні відповіла: через gemini {answers.get('gemini', 0)}, через backup {answers.get('backup', 0)}\n"
+            + ("Суддя: вимкнено" if judged is None else
+               f"Суддя: оцінено сьогодні {judged.get('rated', 0)}, позначено {judged.get('flagged', 0)}, "
+               f"чекають {waiting}"))
 
 
 def day_counts(records: list[dict], day: str, now_ms: int) -> tuple[dict, int, int]:
