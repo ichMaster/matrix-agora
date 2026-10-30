@@ -1,3 +1,47 @@
+Version 5.14.0 (2026-10-30)
+---------------------------
+- Phase v5.14 - the backup for Kira's private chat: when Gemini blocks or
+  refuses her answer, GLM-4.6 on NovelAI answers, and for five minutes
+  after; the backup's talk is marked `waiting` and never reaches Gemini
+  (AGORA-143..150)
+- The NovelAI seam (agents/fallback.py): the OpenAI-compatible chat
+  endpoint, streamed, with its own User-Agent; backup_check drops an answer
+  with Russian letters, a Latin majority, another script, a run of one
+  symbol, or her calling herself a model; a usage line of its own (engine
+  novelai, the subscription, never priced), named by the model in the
+  report: `private (glm-4-6)`; FALLBACK_* settings in the group "Резерв"
+  (AGORA-143)
+- The mark `waiting` (archive schema 1: v5.13's `censored` lines migrated
+  once): every Gemini reader of the archive and the facts skips a closed
+  line; her history keeps it for the backup, and gemini_history() leaves it
+  out (AGORA-144)
+- The route (agents/route.py, state/kira.route.json, no text): Gemini; a
+  block sends the backup and opens the window; the window; the window's end,
+  where Gemini and the backup start together and Gemini's line wins; ten
+  blocks in her day hold the window to the day's end; pins override the
+  rules (AGORA-145, AGORA-146)
+- The backup's prompt fitted to FALLBACK_CONTEXT (months, weeks, Agora
+  today, then the oldest lines, never below ten); its recall by words only
+  (AGORA-146)
+- Telegram commands from the owner's chat only: /status, /auto, /gemini,
+  /backup (AGORA-147); /status in the commands' own words with the whole
+  day's counts from the usage lines (the owner's live test); /purge deletes
+  the backup's talk after "/purge yes" within two minutes - the one
+  exception to "nothing lived is deleted" (AGORA-150, the owner's word)
+- The panel: "Route" on her card - auto or pinned, the window, today's
+  blocks and backup answers, the waiting lines (AGORA-148)
+- Live: FALLBACK_MODEL=glm-4-6, deployed at the owner's word (the phase's
+  tags, then sha-9e56a7c and sha-ac4ca97); the owner's /backup, /status and
+  /auto in use from 2026-10-28; a block with no pin at 03:06 on 2026-10-30
+  answered by the backup, and the window's end at 03:36 answered by Gemini
+  without 10 closed lines - read from the log, released by the owner's word
+  ("релізь", 2026-10-30) (AGORA-149)
+- CLAUDE.md: Claude Code never reads the backup's talk - counts, marks,
+  times and speakers only (the owner)
+- Code review fixes: a closed line over the history's 4000-character cut is
+  closed in its cut form too (#1); the card reads "window ended" for a
+  window that has ended (#3); #2 to v5.15 (the judge), #4-#6 to the backlog
+
 Version 5.13.0 (2026-10-28)
 ---------------------------
 - Phase v5.13 - Gemini's blocks named: a block by Gemini's safety filter
