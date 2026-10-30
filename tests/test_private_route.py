@@ -19,15 +19,15 @@ ASKED = f"те, на що Gemini відмовить {SECRET}"
 class Gemini(EmbedLLM):
     """Gemini: refuses the next `blocks` answers (`LAST_BLOCK` set, None), answers the rest."""
 
-    def __init__(self, blocks=0):
+    def __init__(self, blocks=0, block=("refusal", "виконати цей запит", None)):
         super().__init__()
-        self.text, self.blocks, self.transcripts = "Від Gemini.", blocks, []
+        self.text, self.blocks, self.block, self.transcripts = "Від Gemini.", blocks, block, []
 
     async def generate(self, transcript, system_instruction, max_output_tokens=400, kind="reply"):
         self.transcripts.append(transcript)
         if self.blocks:
             self.blocks -= 1
-            LAST_BLOCK.set(("refusal", "виконати цей запит", None))
+            LAST_BLOCK.set(self.block)
             return None
         return await super().generate(transcript, system_instruction, max_output_tokens, kind)
 

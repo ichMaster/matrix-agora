@@ -264,3 +264,47 @@ def test_a_failed_rating_at_the_windows_end_is_unrated_never_a_lost_answer(tmp_p
     assert load_route(agent.route_file).window_until_ms == ms(18, 11)
     assert "judge: the window's end was not rated (OSError) — the backup answers" in caplog.text
     run_spawned(agent)
+
+
+PROHIBITED_BLOCK = ("prompt", "prohibited_content", None)
+
+
+def test_a_prohibited_content_block_censors_the_exchange_at_once_and_never_sends_it_to_the_judge(tmp_path,
+                                                                                                 monkeypatch):
+    # v5.15.3 (the owner, v5.15 review #1): OpenRouter scans its requests — such a line never goes there
+    agent = judged(tmp_path, monkeypatch, Gemini(blocks=1, block=PROHIBITED_BLOCK))
+    agent.private_line("старе, що Gemini колись пропустив", ms(17, 50), "telegram", "tg:0")
+    agent._unanswered.clear()
+    agent.private_line(f"нове {SECRET}", ms(18), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    m = marks(agent)
+    assert m["tg:1"] == "censored"                                              # at once, never `waiting`
+    assert [v for k, v in m.items() if k not in ("tg:0", "tg:1")] == ["censored"]  # her answer too
+    run_spawned(agent)
+    rated = [t for call in agent.judge.calls for t in call]
+    assert rated == ["старе, що Gemini колись пропустив"]                       # only the blocked prompt's older line
+    assert all(SECRET not in t and "Від резерву" not in t for t in rated)
+    assert agent.waiting_items(100) == []                                       # nothing left for the watcher
+    assert load_route(agent.route_file).window_until_ms == ms(18, 5)            # a block as ever: the window opens
+
+
+def test_a_prohibited_content_block_at_the_windows_end_censors_the_exchange_too(tmp_path, monkeypatch):
+    agent = judged(tmp_path, monkeypatch, Gemini(blocks=1, block=("answer", "prohibited_content", None)))
+    window_end(agent)
+    agent.private_line("чисте, але Gemini блокує", ms(18, 6), "telegram", "tg:2")
+    assert asyncio.run(agent.private_reply()) is True
+    assert agent.private_history[-1][1] == "[softly] Від резерву, сонце."
+    m = marks(agent)
+    assert m["tg:2"] == "censored" and list(m.values()).count("censored") == 2
+    calls = len(agent.judge.calls)                                              # the window's end rated it, once
+    run_spawned(agent)
+    assert all("Від резерву" not in t for call in agent.judge.calls[calls:] for t in call)
+
+
+def test_another_block_still_waits_for_the_judge(tmp_path, monkeypatch):
+    agent = judged(tmp_path, monkeypatch, Gemini(blocks=1, block=("prompt", "other", None)))
+    agent.private_line("звичайне", ms(18), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    assert marks(agent)["tg:1"] == "waiting"
+    run_spawned(agent)
+    assert "звичайне" in agent.judge.calls[-1]

@@ -312,6 +312,12 @@ BACKUP_MARK = "⚙️ backup"      # v5.15 (the owner): her line through the bac
                                # never voiced, never in her history, the archive or a prompt
 JUDGE_TICK_LINES = 100         # v5.15: the backup's talk still waiting, rated per idle tick (in chunks of 25)
 JUDGE_BACKOFF_S = (60, 3600)   # … a tick that rated nothing waits a minute, doubling, at most an hour
+PROHIBITED = "prohibited_content"  # v5.15.3 (the owner, review #1): Gemini's narrowest block — the exchange is
+                                   # censored at once and never sent to the judge (OpenRouter scans its requests)
+
+
+def prohibited(block) -> bool:
+    return block is not None and block[1] == PROHIBITED
 
 
 def _drop_last(items: list, item) -> bool:
@@ -974,15 +980,19 @@ class Agent:
             if self.cfg.can("summary"):
                 self.session.append((private_label(self.cfg.name), text))
             if by == "backup":  # v5.14: the backup's talk waits for the judge — her line too, closed to Gemini
+                censor = judge_after is not None and judge_after[0] == PROHIBITED  # v5.15.3: never rated
                 self.close_lines([(self.cfg.name, str(text))])
                 if self.archive is not None:
                     try:
-                        self.archive.mark([key], "waiting")
+                        self.archive.mark([key], "censored" if censor else "waiting")
                     except Exception as exc:  # noqa: BLE001
                         log.error("archive: her line was not marked (%s)", type(exc).__name__)
                 if self.judge is not None and judge_after is not None:  # v5.15: rated once it is sent, never before
                     why, items = judge_after
-                    self._spawn(self.judge_later([*items, Item("line", key, self.cfg.name, str(text))], why))
+                    if not censor:
+                        items = [*items, Item("line", key, self.cfg.name, str(text))]
+                    if items:  # v5.15.3: after a prohibited block, only the blocked prompt's older lines
+                        self._spawn(self.judge_later(items, "block" if censor else why))
             log.info("private: %s%s%s", "wrote first" if nudge else "answered", " (telegram)" if door == "telegram" else "",
                      " by the backup" if by == "backup" else "")
             return True
@@ -1049,10 +1059,10 @@ class Agent:
                      len(history))
         return instruction(cuts), history[-n:]
 
-    async def _backup_text(self, brief: str, kind: str):
+    async def _backup_text(self, brief: str, kind: str, fact_mark: str = "waiting"):
         prompt, lines = await self._backup_private_prompt(brief)
         return await self._compose(prompt, lines=lines, kind=kind, responder=self.fallback_responder,
-                                   fact_mark="waiting")
+                                   fact_mark=fact_mark)
 
     async def _gemini_text(self, brief: str, kind: str, used: list | None = None):
         """Gemini's line, and its block or refusal (v5.13's `LAST_BLOCK`, read in this task) when it gave none."""
@@ -1067,18 +1077,20 @@ class Agent:
         route: Gemini — a block sends the backup, which answers, and opens the window; the window — the backup alone;
         the window's end — both start together, Gemini's line wins and closes the window, a block takes the backup's
         ready line and opens the next. v5.15, with the judge: every exchange of the backup's talk is rated after it is
-        sent (at a block with the blocked prompt's unrated lines), and the window's end goes by the rating."""
+        sent (at a block with the blocked prompt's unrated lines), and the window's end goes by the rating.
+        v5.15.3: a `prohibited_content` block censors his lines at once and her answer once it is sent (`PROHIBITED` as
+        the why), and never sends them to the judge."""
         kind = "private_nudge" if nudge else "private"
         his = [Item("line", k, "Ich", t) for k, t in seen]
 
-        def to_backup(stage: str) -> None:  # his lines are the backup's talk from here, answered or not
+        def to_backup(stage: str, block=None) -> None:  # his lines are the backup's talk from here, answered or not
             if not nudge:
-                self.mark_unanswered(stage, seen)
+                self.mark_unanswered(stage, seen, "censored" if prohibited(block) else "waiting")
 
         if self.fallback_responder is None:
             text, block = await self._gemini_text(brief, kind)
             if block is not None and not nudge:  # v5.13: what Gemini refused never reaches it again
-                self.mark_unanswered(block[0], seen)
+                self.mark_unanswered(block[0], seen, "censored" if prohibited(block) else "waiting")
             return text, "gemini", None
         where = route_state(load_route(self.route_file), self.clock())
         if where == "window":
@@ -1097,15 +1109,15 @@ class Agent:
             if block is None:
                 return None, "gemini", None  # silence, as ever: not a block
             self.route_step("block")
-            to_backup(block[0])
+            to_backup(block[0], block)
             log.warning("private: route=gemini — a %s, the backup answers", block[0])
             if self.judge is not None:
                 self.close_reopened(used, block[0])  # Gemini has the last word on what the judge reopened
             blocked = self._blocked_items(used) if self.judge is not None else []
-            text = await self._backup_text(brief, kind)
+            text = await self._backup_text(brief, kind, "censored" if prohibited(block) else "waiting")
             if text is not None:
                 self.route_step("backup")
-            return text, "backup", ("block", his + blocked)
+            return text, "backup", (PROHIBITED, blocked) if prohibited(block) else ("block", his + blocked)
         if self.judge is not None:
             return await self._window_end_judged(brief, kind, nudge, seen, to_backup)
         # the window's end: both start together; Gemini never sees a closed line
@@ -1123,11 +1135,11 @@ class Agent:
             return text, "gemini", None
         if block is not None:
             self.route_step("block")
-        to_backup(block[0] if block is not None else "window_end")
+        to_backup(block[0] if block is not None else "window_end", block)
         text = await backup
         if text is not None:
             self.route_step("backup")
-        return text, "backup", None
+        return text, "backup", (PROHIBITED, []) if prohibited(block) else None
 
     async def _window_end_judged(self, brief: str, kind: str, nudge: bool, seen: list, to_backup):
         """v5.15 — the window's end by the rating. The judge (his new message, and her last answer if it still waits)
@@ -1164,8 +1176,10 @@ class Agent:
             if block is not None:
                 self.route_step("block")
                 self.close_reopened(used, block[0])  # Gemini has the last word on what the judge reopened
-            to_backup(block[0] if block is not None else "window_end")
-            judge_after = ("block", his + self._blocked_items(used)) if block is not None else ("window_end", his)
+            to_backup(block[0] if block is not None else "window_end", block)
+            judge_after = ((PROHIBITED, self._blocked_items(used)) if prohibited(block)
+                           else ("block", his + self._blocked_items(used)) if block is not None
+                           else ("window_end", his))
         else:
             self.route_step("flagged")
             unrated = [line for line, v in zip(seen, verdicts, strict=False) if v is None]
