@@ -1,3 +1,35 @@
+Version 5.15.0 (2026-10-30)
+---------------------------
+- Phase v5.15 - the judge: Gemma 4 31B on OpenRouter rates the backup's
+  talk in Kira's private chat (AGORA-151..155)
+- The judge (agents/judge.py): the owner's tested policy and the numbered
+  lines only, the fastest provider that keeps no data, reasoning off;
+  chunks of 25 in parallel; a failure leaves a line unrated, only a verdict
+  or a refusal flags; its usage line (kind judge, engine openrouter, priced
+  by PRICE_MODELS); CLASSIFIER_MODEL, CLASSIFIER_TIMEOUT_S, the
+  OPENROUTER_API_KEY in kira.env (AGORA-151)
+- The verdicts: a flagged line or fact censored for good, a clean one
+  Gemini's again, an unrated one waits; the idle watcher rates the waiting
+  backlog, 100 a tick, backing off after a tick that rated nothing; the
+  route file counts today's ratings (AGORA-152)
+- The private answer: each exchange of the backup's talk rated once it is
+  sent, at a block with the blocked prompt's unrated history, recall and
+  facts; the window's end by the rating - the judge and the backup
+  together, a flagged or unrated line keeps the backup on (AGORA-153)
+- /status and her card: the judge's counts today (AGORA-154)
+- After the owner's live test (2026-10-30): Gemma reopened lines Gemini's
+  prohibited-content filter then blocked, so a backup line rated clean is
+  `reopened` and a Gemini block on a prompt holding it censors it; Gemini
+  reads the last HISTORY_N lines open to it from the archive; her line
+  through the backup is marked "⚙️ backup" in the chat, never voiced
+- Live: deployed at the owner's word (sha-812de19, then sha-9a01dc3); the
+  v5.14 backlog rated (0 waiting); the window's end by the rating not
+  exercised live (the route pinned to Gemini) - released by the owner's
+  word ("релізь", 2026-10-30) (AGORA-155)
+- Code review fix: a failed rating at the window's end is unrated, never a
+  lost answer (#2); #1 (a prohibited_content message sent to OpenRouter) is
+  the owner's call; #3-#5 to the backlog and the cleanup
+
 Version 5.14.0 (2026-10-30)
 ---------------------------
 - Phase v5.14 - the backup for Kira's private chat: when Gemini blocks or
