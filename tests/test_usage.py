@@ -53,7 +53,26 @@ def test_kind_list_is_the_contract():
                      "private", "private_nudge",           # v5.6: a person's private chat
                      "embed", "facts",                     # v5.8: the archive's embeddings, the facts
                      "event",                              # v5.11: an event of her life
-                     "reading", "thought", "reflection")   # v5.12: her reading and thoughts
+                     "reading", "thought", "reflection",   # v5.12: her reading and thoughts
+                     "judge")                              # v5.15: the judge of her backup's talk
+
+
+def test_the_judges_line_is_priced_by_its_model_and_holds_no_text():
+    """v5.15 — the judge's call: kind `judge`, engine `openrouter`, billing `api` — priced by `PRICE_MODELS` under the
+    model's id (a slash in it), OpenRouter's own cost kept beside it."""
+    from agents.usage import aggregate, cost, judge_usage_line, parse_lines, parse_model_prices
+    line = judge_usage_line("2026-10-30T14:00:00+02:00", "kira", "google/gemma-4-31b-it", 900, 40, True, 0.0001)
+    assert (line["kind"], line["engine"], line["billing"], line["total_tokens"]) == ("judge", "openrouter", "api", 940)
+    assert line["reported_cost_usd"] == 0.0001 and line["blocked"] is None
+    assert set(line) == set(usage_line("2026-10-30T14:00:00", "kira", "judge", "m", None, True))  # one line shape
+    records, bad = parse_lines([json.dumps(line)])
+    assert bad == 0 and len(records) == 1
+    prices, wrong = parse_model_prices("google/gemma-4-31b-it=0.13/0.38")
+    assert wrong == [] and prices == {"google/gemma-4-31b-it": (0.13, 0.38)}
+    row = aggregate(records)[("2026-10-30", "kira", "judge")]
+    assert abs(cost(row, 0.3, 2.5, prices) - (900 * 0.13 + 40 * 0.38) / 1e6) < 1e-12
+    failed = judge_usage_line("2026-10-30T14:00:00+02:00", "kira", "google/gemma-4-31b-it", None, None, False)
+    assert failed["total_tokens"] is None and failed["ok"] is False
 
 
 # --- the seam reports every call ---

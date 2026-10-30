@@ -68,5 +68,14 @@ def _no_network_fetchers(monkeypatch):
             raise RuntimeError("a test reached the network: patch agents.fallback.ClientSession")
 
     monkeypatch.setattr(fallback_module, "ClientSession", NoSession)
+
+    from agents import judge as judge_module
+
+    class NoJudge:  # v5.15: the judge's OpenRouter client — a test passes its own session
+        def __init__(self, *_a, **_k):
+            reached.append("openrouter")
+            raise RuntimeError("a test reached the network: patch agents.judge.ClientSession")
+
+    monkeypatch.setattr(judge_module, "ClientSession", NoJudge)
     yield
     assert not reached, f"a test reached the network through the default fetcher: {', '.join(reached)}"

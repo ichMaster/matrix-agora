@@ -18,7 +18,8 @@ KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
          "embed",                       # v5.8: the archive's embeddings (`recall`)
          "facts",                       # v5.8: the facts' extraction and the Noos import (`facts`)
          "event",                       # v5.11: an event of her life, written by one call (`events`)
-         "reading", "thought", "reflection")  # v5.12: her pick, a thought on what she read, a reflection (`thoughts`)
+         "reading", "thought", "reflection",  # v5.12: her pick, a thought on what she read, a reflection (`thoughts`)
+         "judge")                             # v5.15: the judge rating her backup's talk (OpenRouter)
 # v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan; v5.1 also the ElevenLabs
 # plan's credits), `external` (Lumi's own)
 BILLING = ("api", "subscription", "external")
@@ -84,6 +85,21 @@ def fallback_usage_line(ts_iso: str, agent: str, kind: str, model: str, ok: bool
         "prompt_tokens": None, "output_tokens": None, "total_tokens": None, "ok": bool(ok),
         "engine": "novelai", "billing": "subscription",
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
+        "characters": None, "audio_ms": None, "blocked": None,
+    }
+
+
+def judge_usage_line(ts_iso: str, agent: str, model: str, prompt_tokens: int | None, output_tokens: int | None,
+                     ok: bool, reported_cost: float | None = None) -> dict:
+    """v5.15 — one record per call of the judge (Gemma 4 31B on OpenRouter, `agents/judge.py`): the kind `judge`,
+    paid per token (`api`, priced by `PRICE_MODELS` under the model's id); OpenRouter's own cost of the call, when it
+    sends one, kept beside it. Never any text."""
+    total = prompt_tokens + output_tokens if prompt_tokens is not None and output_tokens is not None else None
+    return {
+        "ts": ts_iso, "agent": agent, "kind": "judge", "model": model,
+        "prompt_tokens": prompt_tokens, "output_tokens": output_tokens, "total_tokens": total, "ok": bool(ok),
+        "engine": "openrouter", "billing": "api",
+        "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": reported_cost,
         "characters": None, "audio_ms": None, "blocked": None,
     }
 

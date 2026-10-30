@@ -177,6 +177,12 @@ SCHEMA: tuple[Setting, ...] = (
        36000),
     _s("FALLBACK_HISTORY_N", "int", "60", "fallback", "cap:fallback", None, "Скільки рядків історії бачить резерв",
        "", 10, 300),
+    # v5.15 — the judge of the backup's talk (OpenRouter; on with `OPENROUTER_API_KEY` in her kira.env): its model and
+    # its timeout, longer than an answer's
+    _s("CLASSIFIER_MODEL", "choice", "google/gemma-4-31b-it", "fallback", "cap:fallback", None,
+       "Модель-суддя розмови через резерв", choices=("google/gemma-4-31b-it", "openai/gpt-oss-safeguard-20b",
+                                                     "openai/gpt-oss-120b")),
+    _s("CLASSIFIER_TIMEOUT_S", "int", "30", "fallback", "cap:fallback", None, "Скільки чекати на суддю", "s", 5, 120),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
        choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),

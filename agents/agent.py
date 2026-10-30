@@ -110,6 +110,9 @@ from agents.fallback import TOKEN_VAR as FALLBACK_TOKEN_VAR
 from agents.fallback import FallbackClient, FallbackResponder
 from agents.guardian import KEY_VAR as GUARDIAN_KEY_VAR
 from agents.guardian import Guardian
+from agents.judge import KEY_VAR as JUDGE_KEY_VAR
+from agents.judge import MODEL as JUDGE_MODEL
+from agents.judge import Judge
 from agents.life import current_chapter, events_due, known_ahead, life_section, next_chapter
 from agents.llm import LAST_BLOCK, THINKING_MODELS, GeminiClient
 from agents.logic import (
@@ -262,6 +265,7 @@ from agents.turns import (
 )
 from agents.usage import (
     fallback_usage_line,
+    judge_usage_line,
     parse_lines,
     sdk_usage_line,
     stt_usage_line,
@@ -324,7 +328,8 @@ class Agent:
         reading_key = os.environ.pop(GUARDIAN_KEY_VAR, "").strip() if cfg.can("thoughts") else ""
         # v5.14 — the backup's NovelAI token (server/kira.env): out of the environment for every agent, used by hers
         fallback_token = os.environ.pop(FALLBACK_TOKEN_VAR, "").strip()
-        os.environ.pop("OPENROUTER_API_KEY", None)  # v5.15's judge reads it then; until then it stays out of reach
+        # v5.15 — the judge's OpenRouter key (server/kira.env): out of the environment for every agent, used by hers
+        judge_key = os.environ.pop(JUDGE_KEY_VAR, "").strip()
         # the room's members come from the registry (v4.1): nothing in the code names them
         self.roster = roster if roster is not None else load_roster(cfg.simulation, strict_for=cfg.localpart)
         self.me = self.roster.get(cfg.localpart) or Member(cfg.localpart, cfg.user_id, cfg.name, (cfg.name.lower(),))
@@ -442,6 +447,14 @@ class Agent:
                 self.fallback_responder = FallbackResponder(self.fallback)
             elif model:
                 log.warning("backup off: %s is not set", FALLBACK_TOKEN_VAR)
+        # v5.15 — the judge of the backup's talk: on with the backup and the key; without it, v5.14's route stands
+        self.judge: Judge | None = None
+        if self.fallback_responder is not None and judge_key:
+            self.judge = Judge(judge_key, os.environ.get("CLASSIFIER_MODEL", "google/gemma-4-31b-it").strip() or JUDGE_MODEL,
+                               sink=self.record_judge_usage,
+                               timeout_s=float(os.environ.get("CLASSIFIER_TIMEOUT_S", "30")))
+        elif self.fallback_responder is not None:
+            log.warning("judge off: %s is not set", JUDGE_KEY_VAR)
         self._reading_lock, self._reflect_lock = asyncio.Lock(), asyncio.Lock()
         self._reading_retry_ms = self._reflect_retry_ms = self._reflect_ms = 0
         # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.
@@ -1936,6 +1949,11 @@ class Agent:
         """One JSON line per Gemini call (v3.1) — no texts; a write error never blocks. `blocked` (v5.13): the stage
         of a safety block."""
         self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked))
+
+    def record_judge_usage(self, model: str, prompt: int | None, output: int | None, ok: bool,
+                           cost: float | None) -> None:
+        """v5.15 — one line per call of the judge: `openrouter`, priced by `PRICE_MODELS`, no text."""
+        self._append_usage(lambda ts: judge_usage_line(ts, self.cfg.localpart, model, prompt, output, ok, cost))
 
     def record_fallback_usage(self, kind: str, model: str, ok: bool) -> None:
         """v5.14 — one line per call of her backup model: `novelai`, the subscription, never priced, no text."""
