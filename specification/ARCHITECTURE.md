@@ -120,7 +120,12 @@ The invariants every reply path must honor:
    her private chat's lines waiting for the judge and censored; today's answers by gemini and by backup — the day's
    counts from her usage lines (`day_counts`: the answer kinds, `blocked`, the engine), never only since the route's
    file began; `status_text`, `agents/route.py`), `/auto`, `/gemini`, `/backup` (a pin, through `route_step`), and
-   any other the list (`COMMAND_HELP`); without the backup a pin says it is off. The answer is one ⚙️ service line,
+   any other the list (`COMMAND_HELP`); without the backup a pin says it is off. **`/purge`** (the owner, 2026-10-30)
+   answers with how many lines and facts would go and waits for `/purge yes` within `PURGE_CONFIRM_S` (120 s); then
+   `purge_backup_talk` deletes the backup's talk — `Archive.purge_closed` (every private line `waiting` or
+   `censored`, with its FTS row), `purge_closed_facts` (the facts with such a mark; the archive's mirror follows),
+   and those lines in her history — the one exception to «nothing lived is deleted»; the log names the counts only;
+   her usage lines and logs (no text) stay, as do Telegram's own copy of the chat and the Element room. The answer is one ⚙️ service line,
    text only, never voiced; a command and its answer never reach her history, the archive, the facts, the session or
    a prompt, and never reset her writing-first timer; logged by the command's name only. A command from before the
    start stays `ignored: command`. With `fallback` the list is registered at start for his chat only (`setMyCommands`,

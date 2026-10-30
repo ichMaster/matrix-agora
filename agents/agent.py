@@ -102,6 +102,7 @@ from agents.facts import (
     load_facts,
     off_limits,
     parse_extraction,
+    purge_closed_facts,
     replace_fact,
     split_marker,
 )
@@ -230,6 +231,7 @@ from agents.telegram import (
     Update,
     allowed,
     backoff_s,
+    command_args,
     command_of,
     load_telegram_state,
     next_offset,
@@ -295,6 +297,7 @@ VOICES_KEPT = 200  # v5.2: the owner's recent voice event ids an agent remembers
 ARCHIVE_AGORA_LINES = 1500     # v5.8: the archive's first fill — Agora's last lines (the owner, 2026-10-25)
 ARCHIVE_PRIVATE_EVENTS = 5000  # … and the whole private room, bounded
 EMBED_BATCH = 100              # lines embedded per idle tick
+PURGE_CONFIRM_S = 120          # v5.14: `/purge yes` must follow `/purge` within this
 
 
 def _drop_last(items: list, item) -> bool:
@@ -528,6 +531,7 @@ class Agent:
         # v5.14: the (speaker, text) of her history's lines closed to Gemini — the backup's talk, waiting for the judge;
         # the backup reads them, Gemini never (`gemini_history`)
         self._closed: set[tuple[str, str]] = set()
+        self._purge_asked_ms: int | None = None  # v5.14: when the owner asked `/purge`, to confirm within PURGE_CONFIRM_S
         self.last_private_ms: int | None = None
         self._private_pending = self._private_again = False
         # v5.8 — the archive (`recall`): every line she sees, both rooms and both doors, searchable; filled from the
@@ -1441,11 +1445,51 @@ class Agent:
             answer = self.status_answer()
         elif name == "status":
             answer = self.status_answer()
+        elif name == "purge":
+            answer = self.purge_answer(command_args(text))
         else:
             answer = COMMAND_HELP
         log.info("telegram: command %s", name if name in known else "unknown")
         if not await self.telegram.send_message(self.telegram_owner, answer):
             log.warning("telegram: the command's answer was not delivered")
+
+    def purge_answer(self, args: list[str]) -> str:
+        """v5.14 — `/purge` asks first (how much would go; `/purge yes` within `PURGE_CONFIRM_S` confirms), then
+        deletes the backup's talk: her archive's closed lines, the closed facts, and those lines in her history. Counts
+        only, never a text."""
+        now_ms = self.clock()
+        asked = self._purge_asked_ms is not None and now_ms - self._purge_asked_ms <= PURGE_CONFIRM_S * 1000
+        if args[:1] == ["yes"] and asked:
+            self._purge_asked_ms = None
+            lines, facts = self.purge_backup_talk()
+            return f"⚙️ Видалено розмову через backup: {lines} рядків, {facts} фактів"
+        self._purge_asked_ms = now_ms
+        lines = facts = 0
+        try:
+            lines = self.archive.closed_count() if self.archive is not None else 0
+            facts = sum(1 for f in load_facts(self.facts_dir) if f.mark in CLOSED_MARKS) if self.facts_dir else 0
+        except Exception as exc:  # noqa: BLE001
+            log.error("purge: not counted (%s)", type(exc).__name__)
+        return (f"⚙️ Видалити розмову через backup — {lines} рядків і {facts} фактів? Це не скасувати. "
+                f"Надішли /purge yes протягом {PURGE_CONFIRM_S // 60} хв")
+
+    def purge_backup_talk(self) -> tuple[int, int]:
+        """v5.14 — delete the backup's talk: (lines, facts). The one exception to «nothing lived is deleted», at the
+        owner's command; her usage lines and logs hold no text and stay."""
+        lines = facts = 0
+        if self.archive is not None:
+            try:
+                lines = self.archive.purge_closed()
+            except Exception as exc:  # noqa: BLE001
+                log.error("purge: the archive's lines were not deleted (%s)", type(exc).__name__)
+        if self.facts_dir is not None:
+            facts = purge_closed_facts(self.facts_dir)
+            self.facts_now()  # the archive's mirror of the facts follows
+        self.private_history = [line for line in self.private_history if line not in self._closed]
+        self._unanswered = [(k, t) for k, t in self._unanswered if ("Ich", t) not in self._closed]
+        self._closed = set()
+        log.warning("purge: the backup's talk deleted (%d lines, %d facts)", lines, facts)
+        return lines, facts
 
     def status_answer(self) -> str:
         """The `/status` line: the route, the blocks, the marks of her private chat and today's answers."""

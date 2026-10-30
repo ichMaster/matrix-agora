@@ -216,6 +216,25 @@ class Archive:
         """v5.14 — how many lines of a place carry each mark."""
         return dict(self.db.execute("SELECT mark, COUNT(*) FROM lines WHERE place = ? GROUP BY mark", (place,)))
 
+    def closed_count(self, place: str = "private") -> int:
+        """v5.14 — how many lines of a place are closed to Gemini (the backup's talk)."""
+        marks = ",".join("?" * len(GEMINI_CLOSED))
+        return self.db.execute(f"SELECT COUNT(*) FROM lines WHERE place = ? AND mark IN ({marks})",
+                               (place, *GEMINI_CLOSED)).fetchone()[0]
+
+    def purge_closed(self, place: str = "private") -> int:
+        """v5.14, the owner's `/purge` — delete every line of a place closed to Gemini (the backup's talk, and what
+        Gemini blocked or refused), with its word index: the one exception to «nothing lived is deleted». How many."""
+        marks = ",".join("?" * len(GEMINI_CLOSED))
+        with self.db:
+            rows = self.db.execute(f"SELECT id, text FROM lines WHERE place = ? AND mark IN ({marks})",
+                                   (place, *GEMINI_CLOSED)).fetchall()
+            for row_id, text in rows:
+                self.db.execute("INSERT INTO fts(fts, rowid, text) VALUES ('delete', ?, ?)", (row_id, text))
+            self.db.execute(f"DELETE FROM lines WHERE place = ? AND mark IN ({marks})", (place, *GEMINI_CLOSED))
+        self._cache = None
+        return len(rows)
+
     def censor(self, keys: Iterable[str]) -> int:
         """v5.13 — mark these lines `censored`: Gemini never reads them again. How many."""
         return self.mark(keys, "censored")

@@ -85,8 +85,13 @@ def parse_update(raw: Any) -> Update | None:
 
 # v5.14 — the owner's commands in her chat (the route of her private answer): never a word of her talk
 COMMANDS = (("status", "Маршрут і блоки"), ("auto", "Правила вирішують"), ("gemini", "Закріпити gemini"),
-            ("backup", "Закріпити backup"))
+            ("backup", "Закріпити backup"), ("purge", "Видалити розмову через backup"))
 COMMAND_HELP = "⚙️ Команди: " + ", ".join(f"/{name} — {about.lower()}" for name, about in COMMANDS)
+
+
+def command_args(text: str) -> list[str]:
+    """`/purge yes` → `["yes"]`: the command's arguments, lower-cased."""
+    return [a.lower() for a in text.strip().split()[1:]]
 
 
 def command_of(text: str) -> str:

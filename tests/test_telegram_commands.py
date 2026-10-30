@@ -114,7 +114,7 @@ def test_the_command_list_is_set_for_the_owners_chat_only(monkeypatch):
     assert asyncio.run(bot.set_commands(OWNER_TG)) is True
     method, body = calls[0]
     assert method == "setMyCommands" and body["scope"] == {"type": "chat", "chat_id": OWNER_TG}
-    assert [c["command"] for c in body["commands"]] == ["status", "auto", "gemini", "backup"]
+    assert [c["command"] for c in body["commands"]] == ["status", "auto", "gemini", "backup", "purge"]
 
 
 def test_a_saved_window_shows_in_status(tmp_path, monkeypatch):
@@ -123,3 +123,49 @@ def test_a_saved_window_shows_in_status(tmp_path, monkeypatch):
     save_route(agent.route_file, Route(window_until_ms=ms(18, 5)))
     run_batch(agent, tg(1, "/status", at=ms(17, 30)))
     assert "auto: backup до 18:05" in texts_sent(agent)[-1]
+
+
+# --- /purge: the backup's talk deleted, at the owner's word, after a confirmation ----------------------------------------
+def with_talk(tmp_path, monkeypatch):
+    from agents.archive import Archive
+    from agents.facts import add_fact
+    agent = with_backup(kira(tmp_path, monkeypatch))
+    agent.archive = Archive(tmp_path / "kira.archive.db")
+    agent.facts_dir, agent.facts_in_prompt, agent.fact_max_chars = tmp_path / "kira.facts", 10, 240
+    for key, speaker, text, mark in (("tg:1", "Ich", "відкритий рядок", "gemini"), ("tg:2", "Ich", "закритий рядок", "waiting"),
+                                     ("own:1", "Кіра", "відповідь backup", "waiting"),
+                                     ("tg:3", "Ich", "давня відмова", "censored")):
+        agent.archive.append(key, ms(17), "private", "telegram", speaker, text)
+        agent.archive.mark([key], mark)
+        agent.private_history.append((speaker, text))
+        if mark != "gemini":
+            agent._closed.add((speaker, text))
+    add_fact(agent.facts_dir, "Відкритий факт", 1, "private", "2026-10-30", 50, 240)
+    add_fact(agent.facts_dir, "Факт від backup", 1, "asked", "2026-10-30", 50, 240, mark="waiting")
+    return agent
+
+
+def test_purge_asks_first_then_deletes_only_the_backups_talk(tmp_path, monkeypatch, caplog):
+    from agents.facts import load_facts
+    caplog.set_level(logging.INFO)
+    agent = with_talk(tmp_path, monkeypatch)
+    run_batch(agent, tg(1, "/purge", at=ms(17, 30)))
+    assert "3 рядків і 1 фактів" in texts_sent(agent)[-1] and "/purge yes" in texts_sent(agent)[-1]
+    assert agent.archive.closed_count() == 3                              # nothing gone yet
+    run_batch(agent, tg(2, "/purge yes", at=ms(17, 31)))
+    assert "Видалено розмову через backup: 3 рядків, 1 фактів" in texts_sent(agent)[-1]
+    assert agent.archive.closed_count() == 0 and agent.archive.counts()[0] == 2  # the open line and the open fact
+    assert [f.text for f in load_facts(agent.facts_dir)] == ["Відкритий факт"]
+    assert agent.private_history == [("Ich", "відкритий рядок")] and agent._closed == set()
+    assert agent.archive.search_words("закритий", ("private",), gemini=False) == []  # out of the word index too
+    assert "закритий" not in caplog.text and "purge: the backup's talk deleted (3 lines, 1 facts)" in caplog.text
+
+
+def test_purge_yes_without_asking_or_too_late_only_asks(tmp_path, monkeypatch):
+    agent = with_talk(tmp_path, monkeypatch)
+    run_batch(agent, tg(1, "/purge yes", at=ms(17, 30)))                  # never asked: it asks now
+    assert "Не скасувати" in texts_sent(agent)[-1] or "не скасувати" in texts_sent(agent)[-1]
+    assert agent.archive.closed_count() == 3
+    agent.clock = lambda: ms(18, 3)                                        # more than two minutes later
+    run_batch(agent, tg(2, "/purge yes", at=ms(18, 3)))
+    assert agent.archive.closed_count() == 3 and "/purge yes" in texts_sent(agent)[-1]

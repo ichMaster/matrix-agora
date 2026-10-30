@@ -209,6 +209,16 @@ def set_pin(folder: Path, fact_id: str, pin: int) -> bool:
     return True
 
 
+def purge_closed_facts(folder: Path) -> int:
+    """v5.14, the owner's `/purge` — delete every fact closed to Gemini (kept from the backup's «запам'ятай»). How
+    many."""
+    gone = 0
+    for fact in load_facts(folder):
+        if fact.mark in CLOSED_MARKS and remove_fact(folder, fact.id):
+            gone += 1
+    return gone
+
+
 def remove_fact(folder: Path, fact_id: str) -> bool:
     path = fact_path(folder, fact_id)
     if path is None:

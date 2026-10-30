@@ -1730,6 +1730,13 @@ on NovelAI, a service that does not filter text. A «block» below means either.
 
   v5.15 lets the judge's rating decide this instead.
 - **Telegram commands** to see and pin the route: `/status`, `/auto`, `/gemini`, `/backup`.
+- **`/purge`** (the owner, 2026-10-30, «на всякий випадок»): it deletes every message to and from the backup — her
+  archive's `waiting` and `censored` lines with their word index, the facts with such a mark, and those lines in her
+  history.
+  - It first answers with the counts and waits for `/purge yes` within 2 minutes.
+  - It is the one exception to «nothing lived is deleted».
+  - Her usage lines and logs hold no text and stay.
+  - So do the Telegram app's own copy of the chat and the Element room on the homeserver.
 - **What reaches Gemini:**
   - a message Gemini answered, and her answer from Gemini, are marked as passed through Gemini: clean by default;
   - the backup's talk is marked as waiting for the judge, and a line that waits goes into a prompt only when the model
