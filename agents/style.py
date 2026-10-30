@@ -4,7 +4,10 @@ so her talk stops sounding the same and stops reading like prose.
 The owner's four points: the same words came back again and again (a few words of live speech are offered, and not
 every time; the words she kept repeating are named, to be left out); a voice tag always opened the reply (where a tag
 may go is drawn too, and the start is rare); the language was literary (one turn of a real chat — a thought breaking
-off, a doubt, something left unsaid — is drawn); and every message ended neatly (an open ending is drawn, often).
+off, a doubt, something left unsaid — is drawn); and every message ended neatly (an open ending is drawn).
+v5.15.2 (the owner, 2026-10-31): the endings then broke off too often and too hard — an open ending is now rare and
+soft (no summary, a question left hanging), never a cut; otherwise she finishes the thought, plainly, and a turn that
+breaks a thought off happens mid-message.
 
 Pure: the randomness is a callable passed in (`random.random` in the agent), her lines are plain strings.
 """
@@ -23,22 +26,22 @@ FILLERS = ("ну", "типу", "короче", "слухай", "знаєш", "ч
            "ну ти зрозумів", "і от", "а взагалі", "коротше", "до речі", "уяви", "ой", "хм", "ага", "ну да")
 FILLERS_P = 0.6
 MANNERS = (
-    "одну думку обірви на півслові й не повертайся до неї",
+    "посеред повідомлення обірви одну думку й перейди до іншої",
     "засумнівайся вголос у тому, що сама щойно сказала",
     "почни з одного, перескоч на інше, а тоді ледь повернись",
-    "щось недоскажи — нехай лишиться пауза «…»",
+    "посередині щось недоскажи — пауза «…», і далі вже про інше",
     "переправ себе посеред речення («тобто… ні, не так»)",
     "скажи коротко і просто, без жодного образу",
     "плутано поясни те, що сама ще не до кінця зрозуміла",
 )
 MANNER_P = 0.7
 OPEN_ENDINGS = (
-    "не закругляй: закінчи на думці, яку не договорила",
     "лиши кінець відкритим — без висновку й без підсумку",
-    "обірви на півслові, ніби тебе відволікли",
     "закінчи питанням, яке лишиться висіти",
+    "закінчи ніби між іншим, коротко, без крапки над «і»",
 )
-OPEN_ENDING_P = 0.55
+OPEN_ENDING_P = 0.2
+FINISHED = "Думку договори до кінця — просто, без підсумку й без обриву."
 TAG_PLACES = ("посеред репліки, між реченнями", "посеред речення, там, де змінюється тон", "наприкінці")
 TAG_NONE_P = 0.35   # no tag this time
 TAG_START_P = 0.1   # … the very start, rarely
@@ -94,7 +97,7 @@ def style_line(rng: Callable[[], float], her_lines: Sequence[str], tags: bool) -
     if rng() < OPEN_ENDING_P:
         parts.append(_pick(rng, OPEN_ENDINGS).capitalize() + ".")
     else:
-        parts.append("Кінець можна й закруглити, якщо так виходить.")
+        parts.append(FINISHED)
     if tags:
         r = rng()
         if r < TAG_NONE_P:
