@@ -6,7 +6,7 @@ import stat
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from agents.route import Route, after, blocks_since, day_bounds, load_route, save_route, state
+from agents.route import Route, after, blocks_since, capped_since, day_bounds, load_route, save_route, state
 
 TZ = "Europe/Kyiv"
 
@@ -64,9 +64,28 @@ def test_a_pin_overrides_the_rules_the_day_cap_included_until_auto():
         g = step(g, ms(28, 20, minute), "block")
     assert state(g, ms(28, 20, 30)) == "gemini" and g.window_until_ms is None  # a block opens no window
     assert blocks_since(g, ms(28, 0)) == 12                                      # but is counted
+    assert capped_since(g, ms(28, 0)) == 0                                       # … never toward the day cap
     auto = step(g, ms(28, 21), "pin:auto")
     assert auto.pin == "auto" and auto.pinned_at_ms is None and state(auto, ms(28, 21)) == "gemini"
     assert step(Route(), ms(28, 20), "pin:nonsense") == step(Route(), ms(28, 20), "nothing")
+
+
+def test_blocks_under_a_pin_never_count_toward_the_day_cap_after_auto(tmp_path):
+    # v5.15.3 (the owner, v5.14 review #5): a pinned evening of blocks, then `/auto` — one block is a five-minute window
+    r = step(Route(), ms(28, 18), "pin:gemini")
+    for minute in range(12):
+        r = step(r, ms(28, 18, minute), "block")
+    r = step(r, ms(28, 19), "pin:auto")
+    r = step(r, ms(28, 19, 30), "block")
+    assert r.window_until_ms == ms(28, 19, 35) and capped_since(r, ms(28, 0)) == 1
+    for minute in range(9):                                                      # nine more under `auto`: the cap
+        r = step(r, ms(28, 20, minute * 6), "block")
+    assert r.window_until_ms == day_bounds(ms(28, 20), TZ)[2]
+    path = tmp_path / "kira.route.json"
+    save_route(path, r)
+    assert load_route(path).pinned_blocks == r.pinned_blocks and len(r.pinned_blocks) == 12
+    r = step(r, ms(29, 9), "backup")                                             # the next day: trimmed alike
+    assert r.pinned_blocks == () and r.blocks == ()
 
 
 def test_old_blocks_are_dropped_but_the_last_hour_and_her_day_stay():
@@ -82,7 +101,8 @@ def test_the_state_file_survives_a_restart_is_private_and_holds_no_text(tmp_path
     assert load_route(path) == r
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
     assert set(json.loads(path.read_text())) == {"pin", "pinned_at_ms", "blocks", "window_until_ms", "day", "answers",
-                                                 "judged"}  # v5.15: today's ratings by the judge
+                                                 "judged",          # v5.15: today's ratings by the judge
+                                                 "pinned_blocks"}   # v5.15.3: the blocks under a pin
 
 
 def test_the_judges_ratings_are_counted_for_the_day_and_reset_with_it(tmp_path):

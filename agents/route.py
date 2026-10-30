@@ -4,9 +4,11 @@
 or to her day's end once `FALLBACK_DAY_MAX` blocks fell in her local day); `window_end` (the first message after the
 window: Gemini and the backup start together — Gemini's answer wins and closes the window, a block opens the next).
 A pin from a Telegram command overrides the rules, the day cap included, until `/auto`: pinned `backup` is a window with
-no end, pinned `gemini` is Gemini's state where a block still goes to the backup but opens no window.
-`state/<name>.route.json` keeps the pin, the block times, the window's end, today's answers and (v5.15) today's
-ratings by the judge — never a text.
+no end, pinned `gemini` is Gemini's state where a block still goes to the backup but opens no window. v5.15.3 (the
+owner, v5.14 review #5): a block under a pin is kept apart and never counts toward the day cap, so `/auto` after a
+pinned evening does not send the rest of the day to the backup.
+`state/<name>.route.json` keeps the pin, the block times (those under a pin apart too), the window's end, today's
+answers and (v5.15) today's ratings by the judge — never a text.
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ class Route:
     day: str = ""                           # her local day the answers count
     answers: dict = field(default_factory=lambda: {"gemini": 0, "backup": 0})
     judged: dict = field(default_factory=lambda: {"rated": 0, "flagged": 0})  # v5.15: today's lines the judge rated
+    pinned_blocks: tuple[int, ...] = ()     # v5.15.3: the block times under a pin — in `blocks`, not in the day cap
 
 
 def day_bounds(now_ms: int, tz: str) -> tuple[str, int, int]:
@@ -60,6 +63,11 @@ def blocks_since(route: Route, since_ms: int) -> int:
     return sum(1 for t in route.blocks if t >= since_ms)
 
 
+def capped_since(route: Route, since_ms: int) -> int:
+    """The blocks that count toward the day cap: those under `auto` (v5.15.3)."""
+    return blocks_since(route, since_ms) - sum(1 for t in route.pinned_blocks if t >= since_ms)
+
+
 def after(route: Route, now_ms: int, outcome: str, window_s: int, day_max: int, day: str, day_start_ms: int,
           day_end_ms: int, rated: int = 0, flagged: int = 0) -> Route:
     """The route after an outcome: `block` (Gemini blocked or refused), `gemini` / `backup` (who answered), `rated`
@@ -70,11 +78,14 @@ def after(route: Route, now_ms: int, outcome: str, window_s: int, day_max: int, 
     judged = dict(route.judged) if route.day == day else {"rated": 0, "flagged": 0}
     keep_from = min(day_start_ms, now_ms - HOUR_MS)
     r = replace(route, day=day, answers=answers, judged=judged,
-                blocks=tuple(t for t in route.blocks if t >= keep_from))
+                blocks=tuple(t for t in route.blocks if t >= keep_from),
+                pinned_blocks=tuple(t for t in route.pinned_blocks if t >= keep_from))
     if outcome == "block":
         r = replace(r, blocks=(*r.blocks, now_ms))
+        if r.pin != "auto":  # never counted toward the day cap (v5.15.3)
+            r = replace(r, pinned_blocks=(*r.pinned_blocks, now_ms))
         if r.pin == "auto":  # pinned `gemini` opens no window; pinned `backup` never asks Gemini
-            until = day_end_ms if blocks_since(r, day_start_ms) >= day_max else now_ms + window_s * 1000
+            until = day_end_ms if capped_since(r, day_start_ms) >= day_max else now_ms + window_s * 1000
             r = replace(r, window_until_ms=max(r.window_until_ms or 0, until))
     elif outcome in ("gemini", "backup"):
         r = replace(r, answers={**answers, outcome: answers.get(outcome, 0) + 1})
@@ -107,13 +118,15 @@ def load_route(path: Path) -> Route:
     answers = data.get("answers") if isinstance(data.get("answers"), dict) else {}
     judged = data.get("judged") if isinstance(data.get("judged"), dict) else {}
     blocks = data.get("blocks") if isinstance(data.get("blocks"), list) else []
+    pinned = data.get("pinned_blocks") if isinstance(data.get("pinned_blocks"), list) else []
     return Route(pin=data.get("pin") if data.get("pin") in PINS else "auto",
                  pinned_at_ms=_int(data.get("pinned_at_ms")),
                  blocks=tuple(t for t in (_int(b) for b in blocks) if t is not None),
                  window_until_ms=_int(data.get("window_until_ms")),
                  day=str(data.get("day") or ""),
                  answers={k: _int(answers.get(k)) or 0 for k in ("gemini", "backup")},
-                 judged={k: _int(judged.get(k)) or 0 for k in ("rated", "flagged")})
+                 judged={k: _int(judged.get(k)) or 0 for k in ("rated", "flagged")},
+                 pinned_blocks=tuple(t for t in (_int(b) for b in pinned) if t is not None))
 
 
 def save_route(path: Path, route: Route) -> None:
@@ -124,7 +137,8 @@ def save_route(path: Path, route: Route) -> None:
     try:
         os.write(fd, json.dumps({"pin": route.pin, "pinned_at_ms": route.pinned_at_ms, "blocks": list(route.blocks),
                                  "window_until_ms": route.window_until_ms, "day": route.day,
-                                 "answers": route.answers, "judged": route.judged}).encode())
+                                 "answers": route.answers, "judged": route.judged,
+                                 "pinned_blocks": list(route.pinned_blocks)}).encode())
     finally:
         os.close(fd)
     os.chmod(tmp, 0o600)
@@ -144,7 +158,10 @@ def status_text(route: Route, now_ms: int, tz: str, day_max: int, waiting: int, 
     of the cap; the lines of her private chat waiting for the judge and censored; today's answers by Gemini and by the
     backup. The counts are the whole day's (the owner's live test: from her usage lines, not only since the route's
     file began). v5.15: the judge's line — today's lines rated and flagged (`judged`, the route's counts of her day)
-    and those still waiting, or «вимкнено» (None). One service line block, never a text of the talk."""
+    and those still waiting, or «вимкнено» (None). v5.15.3: today's blocks under a pin, named as outside the cap.
+    One service line block, never a text of the talk."""
+    start = day_bounds(now_ms, tz)[1]
+    pinned = sum(1 for t in route.pinned_blocks if t >= start)
     if route.pin != "auto":
         since = f"закріплено о {_hhmm(route.pinned_at_ms, tz)}; " if route.pinned_at_ms else "закріплено; "
         where = f"{PIN_NAMES[route.pin]} ({since}скасувати: /auto)"
@@ -155,7 +172,8 @@ def status_text(route: Route, now_ms: int, tz: str, day_max: int, waiting: int, 
     else:
         where = "auto: gemini"
     return (f"⚙️ Маршрут — {where}\n"
-            f"Блоків: за годину {blocks_hour}, сьогодні {blocks_today} з {day_max}\n"
+            f"Блоків: за годину {blocks_hour}, сьогодні {blocks_today} з {day_max}"
+            + (f" (під закріпленням {pinned} — не в ліміті)" if pinned else "") + "\n"
             f"Приватний чат: чекають на суддю {waiting}, цензуровані {censored}\n"
             f"Сьогодні відповіла: через gemini {answers.get('gemini', 0)}, через backup {answers.get('backup', 0)}\n"
             + ("Суддя: вимкнено" if judged is None else

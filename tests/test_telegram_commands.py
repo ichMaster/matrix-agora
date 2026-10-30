@@ -85,6 +85,11 @@ def test_the_status_text():
     assert pinned.endswith("Суддя: вимкнено")                                         # v5.15: no judge
     judged = status_text(Route(), now, TZ, 10, 4, 1, {"gemini": 0, "backup": 0}, 0, 0, {"rated": 25, "flagged": 3})
     assert judged.endswith("Суддя: оцінено сьогодні 25, позначено 3, чекають 4")
+    assert "не в ліміті" not in window                                                # v5.15.3: no pinned blocks
+    old = now - 2 * 86_400_000                                                       # … one of them on an older day
+    held = status_text(Route(pinned_blocks=(old, now - 60_000, now - 30_000)), now, TZ, 10, 0, 0,
+                       {"gemini": 0, "backup": 0}, 2, 3)
+    assert "сьогодні 3 з 10 (під закріпленням 2 — не в ліміті)" in held
 
 
 def test_status_shows_the_judges_day(tmp_path, monkeypatch):
