@@ -55,7 +55,8 @@ def test_kind_list_is_the_contract():
                      "event",                              # v5.11: an event of her life
                      "reading", "thought", "reflection",   # v5.12: her reading and thoughts
                      "judge",                              # v5.15: the judge of her backup's talk
-                     "probe")                              # v5.16: Gemini checks the parts of a blocked prompt
+                     "probe",                              # v5.16: Gemini checks the parts of a blocked prompt
+                     "photo")                              # v5.17: her photos in Telegram
 
 
 def test_the_judges_line_is_priced_by_its_model_and_holds_no_text():
