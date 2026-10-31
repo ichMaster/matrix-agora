@@ -3282,15 +3282,17 @@ class Agent:
             if not text:
                 log.info("silent: only a line to remember")
                 return None
-        text, shot = split_photo(text)  # v5.17: a photo's line is never sent — Gemini's private answer keeps its shot
-        if shot is not None:
-            if shots is not None:
-                shots.append(shot)
-            else:
-                log.info("photo: dropped (%s)", "backup" if responder is self.fallback_responder else kind)
-        if not text:
-            log.info("silent: only a photo's line")
-            return None
+        backup = responder is not None and responder is self.fallback_responder
+        if shots is not None or backup:  # v5.17: only her private answers — Agora's lines are never cut (review #1)
+            text, shot = split_photo(text)  # a photo's line is never sent — Gemini's private answer keeps its shot
+            if shot is not None:
+                if shots is not None:
+                    shots.append(shot)
+                else:
+                    log.info("photo: dropped (backup)")
+            if not text:
+                log.info("silent: only a photo's line")
+                return None
         if reply.finish == "max_tokens":  # the cap cut it: never send half a sentence
             text = trim_to_sentence(text)
             if text is None:

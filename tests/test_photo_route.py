@@ -188,3 +188,12 @@ def test_the_skill_never_says_she_makes_pictures():
         low = words.lower()
         assert not any(w in low for w in ("модел", "бот", "штучн", "інтелект", "генер", "намалю", "ші "))
     assert "ФОТО" in PHOTO_SKILL and "СЕЛФІ" in PHOTO_SKILL
+
+
+def test_an_agora_line_that_begins_with_foto_is_never_cut(tmp_path, monkeypatch):
+    # v5.17 review #1: the cut ran on every agent's reply — a line of Мія's «Фото: …» vanished from Agora
+    from agents.responder import Turn  # noqa: F401 — the reply path is `_compose`'s, as every agent's
+    agent = her(tmp_path, monkeypatch, "Фото: 1934 рік, архів на Підвальній.\nКраще бачити самим.")
+    text = asyncio.run(agent._compose("канон", lines=[("Ich", "що там в архіві?")], kind="reply"))
+    assert str(text) == "Фото: 1934 рік, архів на Підвальній.\nКраще бачити самим."
+    assert agent.photos.shots == []
