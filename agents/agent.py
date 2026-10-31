@@ -508,7 +508,10 @@ class Agent:
                 self.photos = photo_maker(os.environ.get("PHOTO_MODEL", "gemini-nano-banana-2.1").strip() or PHOTO_MODEL,
                                           os.environ.get("PHOTO_SIZE", "1K").strip() or "1K", faces,
                                           self.record_usage)
-            log.info("photos: %d faces", len(faces))
+            if faces:
+                log.info("photos: %d faces", len(faces))
+            else:  # review #3: the first deploy ran so, unnoticed — every selfie would quietly be redrawn without one
+                log.warning("photos: no faces — a selfie will not come out")
         self._reading_lock, self._reflect_lock = asyncio.Lock(), asyncio.Lock()
         self._reading_retry_ms = self._reflect_retry_ms = self._reflect_ms = 0
         # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.

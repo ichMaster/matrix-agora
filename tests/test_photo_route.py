@@ -192,8 +192,24 @@ def test_the_skill_never_says_she_makes_pictures():
 
 def test_an_agora_line_that_begins_with_foto_is_never_cut(tmp_path, monkeypatch):
     # v5.17 review #1: the cut ran on every agent's reply — a line of Мія's «Фото: …» vanished from Agora
-    from agents.responder import Turn  # noqa: F401 — the reply path is `_compose`'s, as every agent's
     agent = her(tmp_path, monkeypatch, "Фото: 1934 рік, архів на Підвальній.\nКраще бачити самим.")
     text = asyncio.run(agent._compose("канон", lines=[("Ich", "що там в архіві?")], kind="reply"))
     assert str(text) == "Фото: 1934 рік, архів на Підвальній.\nКраще бачити самим."
     assert agent.photos.shots == []
+
+
+def test_no_faces_at_start_is_a_warning(tmp_path, monkeypatch, caplog):
+    # v5.17 review #3: the first live deploy logged «photos: 0 faces» at INFO, and nothing stood out
+    from agents.llm import GeminiClient
+    monkeypatch.setattr(GeminiClient, "__init__", lambda self, sink=None: None)
+    monkeypatch.setattr(agent_mod, "photo_maker", lambda *a: object())
+    cfg = telegram_kira(tmp_path, monkeypatch).cfg
+    cfg = cfg.__class__(**{**cfg.__dict__, "capabilities": cfg.capabilities | {"photos"}})
+    caplog.set_level(logging.INFO)
+    monkeypatch.setattr(agent_mod, "load_faces", lambda folder: [])
+    agent_mod.Agent(cfg, llm=GeminiClient())
+    assert [r.levelname for r in caplog.records if "no faces" in r.getMessage()] == ["WARNING"]
+    caplog.clear()
+    monkeypatch.setattr(agent_mod, "load_faces", lambda folder: [("kira.png", b"x", "image/png")])
+    agent_mod.Agent(cfg, llm=GeminiClient())
+    assert "photos: 1 faces" in caplog.text and "no faces" not in caplog.text
