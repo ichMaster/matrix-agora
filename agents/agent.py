@@ -1051,15 +1051,16 @@ class Agent:
             return await self.llm.probe(transcript, system)
 
         found = await search(parts.item_ids(), parts.layer_names(), blocked, budget)
-        closed = self.close_probed(found.closed) if found.outcome in ("found", "cap") else (0, 0, 0)
+        # a set found stands whatever came after it — the cap, or a failed call (review #2)
+        closed = self.close_probed(found.closed) if found.closed else (0, 0, 0)
         self.route_step("probed", calls=found.calls, closed=sum(closed))
         if found.outcome == "not_reproduced":
             log.info("probe: not reproduced (%d calls)", found.calls)
         elif found.outcome == "base_blocks":
             log.warning("probe: the base blocks — layers %s (%d calls)", "+".join(found.layers), found.calls)
-        elif found.outcome in ("found", "cap") and sum(closed):
+        elif sum(closed):
             log.warning("probe: %d calls — closed %d lines, %d facts, %d thoughts%s", found.calls, *closed,
-                        " (the cap)" if found.outcome == "cap" else "")
+                        {"cap": " (the cap)", "error": " (then a call failed)"}.get(found.outcome, ""))
         else:
             log.info("probe: stopped — %s (%d calls)", found.outcome, found.calls)
         return found

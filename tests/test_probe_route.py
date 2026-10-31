@@ -225,3 +225,25 @@ def test_a_line_she_writes_first_is_probed_too(tmp_path, monkeypatch):
     run(agent, "probe_later")
     assert mark_of(agent, "tg:0") == "censored" and ("Ich", f"старе {MARK}") in agent._closed
     drop_rest(agent)
+
+
+def test_a_set_found_before_a_failed_call_is_closed_all_the_same(tmp_path, monkeypatch, caplog):
+    # v5.16 review #2: the search keeps what it found when a later call fails; the probe used to drop it
+    from agents import agent as agent_module
+    from agents.probe import Found
+
+    caplog.set_level(logging.INFO)
+    agent = probing(tmp_path, monkeypatch)
+    agent.archive.append("$a1", ms(10) - YESTERDAY, "agora", "matrix", "Бруно", f"Бачив телескоп {MARK}")
+    agent.private_line("Як там телескоп?", ms(17), "telegram", "tg:1")
+    asyncio.run(agent.private_reply())
+
+    async def failed_after_one(items, layers, blocked, cap):
+        assert "line:$a1" in items
+        return Found(7, closed=("line:$a1",), outcome="error")
+
+    monkeypatch.setattr(agent_module, "search", failed_after_one)
+    run(agent, "probe_later")
+    assert mark_of(agent, "$a1") == "censored"
+    assert "closed 1 lines, 0 facts, 0 thoughts (then a call failed)" in caplog.text
+    assert load_route(agent.route_file).probed == {"calls": 7, "closed": 1}
