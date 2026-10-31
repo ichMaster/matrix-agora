@@ -10,9 +10,10 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 ## Status
 
-v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 is complete and closed (the owner, 2026-10-31),
-released through `v5.15.4`: the owner's two open calls from its reviews (v5.15 #1, v5.14 #5) are fixed there, and
-only LOW findings are left in the v5 review docs, as backlog. Next come v6–v9 in order. Other further work (the
+v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 was closed (the owner, 2026-10-31), released through
+`v5.15.4`: the owner's two open calls from its reviews (v5.15 #1, v5.14 #5) are fixed there, and only LOW findings
+are left in the v5 review docs, as backlog. The same day the owner opened one more phase in it, v5.16: Gemini's
+blocks on her private prompt kept coming back from context the judge had rated clean. Then come v6–v9 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
 
 | Phase | Title | Status | Release |
@@ -52,6 +53,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.13 | Gemini's blocks named: the stage, the reason and the category | ✅ completed | `v5.13.0` (2026-10-28) |
 | v5.14 | Her private chat past a Gemini block: GLM-4.6 on NovelAI, the censored mark and the route | ✅ completed | `v5.14.0` (2026-10-30) |
 | v5.15 | The judge: Gemma 4 31B rates the backup's talk | ✅ completed | `v5.15.0` (2026-10-30) + `v5.15.1`–`v5.15.4` |
+| v5.16 | Gemini checks the parts of a blocked prompt | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
 | v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -2232,6 +2234,102 @@ All done on 2026-10-28:
 
 **Not in this phase:** a judge for Agora or the background calls; rating the archive's lines that passed through
 Gemini, other than a blocked prompt's.
+
+### v5.16 — Gemini checks the parts of a blocked prompt
+
+**Status:** ⏳ planned (the owner, 2026-10-31).
+
+**Why:** a Gemini block at the prompt stage means the prompt itself holds something Gemini's filter will not take. The
+judge cannot find it: Gemma rated clean the lines and facts Gemini kept blocking, and a `clean` item is never rated
+again.
+- **10-30:** after the owner pinned the route to Gemini, 66 lines of the evening were rated clean at blocks.
+- **10-31:**
+  - Gemini blocked even the line Кіра wrote first (10:50, `private_nudge`), a prompt with no message of his in it;
+  - the same context went through at 08:00–08:13 and at 11:22.
+- **What was found** (by marks and times, no text read):
+  - four of the backup's pinned facts, made `clean` by a test build without `reopened`;
+  - the 66 lines.
+- **Closed by hand** at the owner's word.
+- **v5.15.5** keeps a closed mark from ever becoming open again. It does not find what Gemini blocks.
+
+**Goal:** after a prompt-stage block on her private prompt, Gemini itself says which part of that prompt it blocks. The
+same model gets the prompt in parts, and the parts it blocks are closed to it for good (`censored`), so the same block
+does not come back at the next message.
+
+**Owner decision** (2026-10-31): Gemini checks the parts, since Gemma does not predict its filter. The rest is
+proposed and confirmed when the issues are generated.
+
+**Proposed:**
+- **When:** a block at the prompt stage on her private prompt (`private`, `private_nudge`), whatever its reason.
+  - **Not after** a block at the answer stage or a refusal: there the prompt passed, and the answer is what was
+    blocked.
+  - **When it runs:** after the backup's answer is sent, in the background, behind its own lock, never on the reply
+    path. The route and the window stay as they are.
+- **A probe:**
+  - the blocked call's model (`GEMINI_REPLY_MODEL`), one output token, the lowest thinking setting;
+  - only the prompt-stage verdict is read: a `block_reason` means blocked, anything else means it passed;
+  - an error stops the probe and closes nothing.
+- **The parts:**
+  - **closable:** the items the prompt held, each with its key — the open history lines, the recalled lines and
+    facts, the pinned facts, today's thoughts;
+  - **fixed:** the layers that have no mark (the canon, the life story, the plans, the day memories and digests, the
+    session note, the today block, the mood, the events, the news, «Agora today», the brief).
+- **The search:**
+  1. **The whole prompt again,** rebuilt from the captured parts. If it passes, the block is not reproduced: log it
+     and stop.
+  2. **The base:** the fixed layers alone, with no closable item. If it blocks, the cause is a fixed layer. The fixed
+     layers are left out one at a time to name it, the log names it, and nothing is closed: a day memory is never
+     rewritten, and the canon is the owner's.
+  3. **Otherwise the closable items are halved** (delta debugging), down to the smallest set whose items, added to the
+     base, are blocked. The set may hold one item or a few that block only together.
+  4. **At the cap:** if the per-block cap is reached first, the smallest blocked set found so far is closed whole.
+     Every probe that runs to the end closes something, and an over-closed line still reaches the backup.
+- **Closing:**
+  - an archive line (private, a thought) becomes `censored`, and its vector is dropped;
+  - a fact becomes `censored`;
+  - her history's `_closed` takes the line;
+  - `censored` is already what Gemini blocked (CLAUDE.md), so the backup reads it and `/purge` deletes it.
+  - The closing overrides a judge's `clean`. It only closes, so v5.15.5's rule holds.
+- **The judge at a prompt-stage block:** the probe replaces the judge's rating of the blocked prompt's lines, since
+  Gemini has the last word. The judge still rates the backup's talk (the owner's message and the backup's answer), as
+  in v5.15.
+- **The caps:**
+  - `PROBE_CALLS` (12) per block and `PROBE_DAY_CALLS` (60) per day; 0 turns the probe off;
+  - with her private prompt at a median of 18k tokens (max 27k) on 10-31, a probe costs some $0.2–0.4 at Gemini 3.1
+    Pro's price, and the day cap holds it under about $2 a day.
+- **Usage and logs:**
+  - each probe call writes a usage line of the kind `probe`;
+  - the log holds counts, kinds and layer names only, e.g. `probe: 9 calls — closed 2 lines, 1 fact` or
+    `probe: the base blocks — layer days`.
+- **Pure parts:** the search (the next set to try, from the outcomes so far) is a function over plain data. Tests
+  drive it with a fake Gemini that blocks a prompt holding given items.
+
+**DoD:**
+- (Manual, owner) After a live prompt-stage block, the log shows the probe's line: its calls and what it closed (or
+  the layer it named). His next message, or her next line written first, is not blocked by the same items.
+- (Manual, owner) The day's probe calls are in the token report under `probe`, within `PROBE_DAY_CALLS`.
+
+**Tests:**
+- **The search:**
+  - one blocking item among many: found within the cap;
+  - two items that block only together: both found;
+  - a cause in a fixed layer: the layer named, nothing closed;
+  - the block not reproduced: stopped, nothing closed;
+  - the cap reached: the smallest blocked set found so far closed whole;
+- **Closing:**
+  - a history line, a recalled line, a fact and a thought each become `censored`, leave Gemini's history, recall,
+    facts and today section, and stay in the backup's;
+  - a `clean` item closed;
+- **No probe** after an answer-stage block, a refusal, an Agora call or a background call;
+- **The caps** per block and per day; 0 = off;
+- **Errors:** a probe error closes nothing;
+- the probe runs after the backup's answer is sent, never before it;
+- the usage line `probe`; no text in a log.
+
+**Not in this phase:**
+- probes for Agora or the background calls;
+- rewriting a day memory or the session note when a fixed layer is named (the owner decides);
+- the window's end by the probe.
 
 ## v6 — Лілі: the Lumi bridge
 
