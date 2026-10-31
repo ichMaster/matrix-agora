@@ -12,8 +12,9 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 was closed (the owner, 2026-10-31), released through
 `v5.15.4`: the owner's two open calls from its reviews (v5.15 #1, v5.14 #5) are fixed there, and only LOW findings
-are left in the v5 review docs, as backlog. The same day the owner opened one more phase in it, v5.16: Gemini's
-blocks on her private prompt kept coming back from context the judge had rated clean. Then come v6–v9 in order. Other further work (the
+are left in the v5 review docs, as backlog. The same day the owner opened one more phase in it, v5.16, released as
+`v5.16.0`: Gemini's blocks on her private prompt kept coming back from context the judge had rated clean. Then come
+v6–v9 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
 
 | Phase | Title | Status | Release |
@@ -53,7 +54,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.13 | Gemini's blocks named: the stage, the reason and the category | ✅ completed | `v5.13.0` (2026-10-28) |
 | v5.14 | Her private chat past a Gemini block: GLM-4.6 on NovelAI, the censored mark and the route | ✅ completed | `v5.14.0` (2026-10-30) |
 | v5.15 | The judge: Gemma 4 31B rates the backup's talk | ✅ completed | `v5.15.0` (2026-10-30) + `v5.15.1`–`v5.15.4` |
-| v5.16 | Gemini checks the parts of a blocked prompt | ⏳ planned | — |
+| v5.16 | Gemini checks the parts of a blocked prompt | ✅ completed | `v5.16.0` (2026-10-31) |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
 | v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -2237,7 +2238,15 @@ Gemini, other than a blocked prompt's.
 
 ### v5.16 — Gemini checks the parts of a blocked prompt
 
-**Status:** ⏳ planned (the owner, 2026-10-31).
+**Status:** ✅ completed — released `v5.16.0` on 2026-10-31.
+- **Built:** AGORA-156…159.
+- **As built:**
+  - the search is QuickXplain;
+  - it goes on over what is left while it still blocks;
+  - it never closes all that is left.
+- **The code review:** four fixes (#1–#4); #5–#7 are deferred to the backlog.
+- **Not exercised live:** no prompt-stage block came while the test image ran (from 13:59), so the owner waived the two
+  manual checks. The first real block will show the `probe:` line.
 
 **Why:** a Gemini block at the prompt stage means the prompt itself holds something Gemini's filter will not take. The
 judge cannot find it: Gemma rated clean the lines and facts Gemini kept blocking, and a `clean` item is never rated
