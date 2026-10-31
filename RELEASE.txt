@@ -1,3 +1,26 @@
+Version 5.16.0 (2026-10-31)
+---------------------------
+- Phase v5.16 (AGORA-156..159), Gemini checks the parts of a blocked
+  prompt: after a prompt-stage block on Kira's private prompt, once her
+  backup line is sent, Gemini (the same model, 3.1 Pro) gets that prompt
+  in parts in the background, and what it blocks is closed "censored" -
+  a recalled or history line, a fact, a thought; a fixed layer it blocks
+  is only named in the log
+- The search: QuickXplain over the parts' ids, going on over what is left
+  while it still blocks, never closing all that is left
+- PROBE_CALLS 12 per block and PROBE_DAY_CALLS 60 per day (0 = off),
+  counted in the route file's "probed"; usage kind "probe"
+- At such a block the judge rates only his line and her backup answer
+- Code review v5.16: a failed probe names its type at WARNING (#1); a set
+  found before a failed call is closed all the same (#2); a spent day
+  hands the older lines back to the judge (#3); the window's-end paths
+  tested (#4); #5-#7 deferred to the backlog
+- Before the phase (7454afe, the owner): a closed mark never becomes an
+  open one - the judge's move is next_mark, from the marks read after the
+  rating; a "clean" fact whose text a summary replaces is rated again
+- The owner's manual checks were waived: no prompt-stage block came while
+  the test image ran, so the probe was not exercised live
+
 Version 5.15.4 (2026-10-31)
 ---------------------------
 - Blocks came back on neutral messages: her private reflection had written
