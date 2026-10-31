@@ -402,7 +402,7 @@ def test_a_facts_mark_reaches_the_archive_mirror(arc):
 # --- v5.15: the judge's marks ----------------------------------------------------------------------------------------------
 def test_the_marks_and_the_judges_readers(tmp_path):
     from agents.archive import GEMINI_CLOSED, MARKS
-    assert MARKS == ("gemini", "waiting", "censored", "clean", "reopened") and GEMINI_CLOSED == ("censored", "waiting")
+    assert MARKS == ("gemini", "waiting", "censored", "clean", "reopened") and GEMINI_CLOSED == ("censored", "waiting", "reopened")
     a = Archive(tmp_path / "kira.archive.db")
     for i, mark in enumerate(("waiting", "gemini", "waiting", "clean", "censored")):
         a.append(f"k{i}", ms(17, i), "private", "telegram", "Ich", f"рядок номер {i}")

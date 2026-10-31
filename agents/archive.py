@@ -41,12 +41,13 @@ AGORA_NOW_TITLE = "Що сьогодні говорять в Агорі:"
 # v5.13 — a line's mark: `gemini` (passed through Gemini, clean by default — every line before v5.13), v5.14
 # `waiting` (a line of the backup's talk, or one a block or a refusal answered: closed to Gemini until v5.15's judge
 # rates it) and `censored` (the judge's verdict, for good); v5.15 adds `clean` (the judge rated it clean: Gemini's
-# again, embedded at the next tick) and `reopened` (the owner's live test, 2026-10-30: a line of the backup's talk the
-# judge rated clean — open to Gemini until a Gemini block on a prompt that holds it censors it; Gemma does not predict
-# Gemini's prohibited-content filter). Gemini's readers never return a line whose mark is in `GEMINI_CLOSED`, and it is
-# never embedded; the backup's readers (`gemini=False`) return every one. `/purge` deletes `BACKUP_MARKS`.
+# again, embedded at the next tick) and `reopened` (a line of the backup's talk the judge rated clean; v5.15.4, the
+# owner, 2026-10-31: closed to Gemini for good, like `waiting` — Gemma twice rated clean what Gemini's prohibited-content
+# filter blocks, and the reflection wrote thoughts from such lines). Gemini's readers never return a line whose mark is
+# in `GEMINI_CLOSED`, and it is never embedded; the backup's readers (`gemini=False`) return every one. `/purge` deletes
+# `BACKUP_MARKS`.
 MARKS = ("gemini", "waiting", "censored", "clean", "reopened")
-GEMINI_CLOSED = ("censored", "waiting")
+GEMINI_CLOSED = ("censored", "waiting", "reopened")
 BACKUP_MARKS = ("waiting", "censored", "reopened")  # the backup's talk, whatever the judge said
 _OPEN = f"mark NOT IN ({','.join(repr(m) for m in GEMINI_CLOSED)})"
 _COLS = "id, key, ts_ms, place, channel, speaker, text, mark"

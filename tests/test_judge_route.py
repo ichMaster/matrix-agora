@@ -89,7 +89,7 @@ def test_in_the_window_and_under_a_pin_each_exchange_is_rated_after_its_answer(t
     assert agent.judge.calls == [] and len(agent.spawned) == 1
     run_spawned(agent)
     assert agent.judge.calls == [["у вікні", "[softly] Від резерву, сонце."]]
-    assert set(marks(agent).values()) == {"reopened"} and agent.gemini_history() != []  # rated clean: Gemini's again
+    assert set(marks(agent).values()) == {"reopened"} and agent.gemini_history() == []  # v5.15.4: still the backup's
     save_route(agent.route_file, Route(pin="backup"))
     agent.private_line("під закріпленням", ms(18, 1), "telegram", "tg:2")
     assert asyncio.run(agent.private_reply()) is True
@@ -107,9 +107,9 @@ def test_at_the_windows_end_both_clean_gemini_answers_and_the_backup_is_cancelle
     assert asyncio.run(agent.private_reply()) is True
     assert agent.judge.calls == [["А тепер про погоду", "моя відповідь у вікні"]]  # the new message and her last
     assert agent.private_history[-1] == ("Кіра", "Від Gemini.") and agent.spawned == []
-    assert "моя відповідь у вікні" in gemini.transcripts[-1]                    # rated clean: Gemini's again
+    assert "моя відповідь у вікні" not in gemini.transcripts[-1]                # v5.15.4: rated clean, still the backup's
     assert load_route(agent.route_file).window_until_ms is None
-    assert "route=window_end — judged: clean" in caplog.text and "Gemini (without 0 closed lines)" in caplog.text
+    assert "route=window_end — judged: clean" in caplog.text and "Gemini (without 1 closed lines)" in caplog.text
 
 
 def test_at_the_windows_end_a_flagged_last_answer_opens_the_next_window_not_a_block(tmp_path, monkeypatch):
@@ -193,16 +193,17 @@ def test_at_the_windows_end_the_judge_and_the_backup_start_together(tmp_path, mo
     assert seen_by_judge == [1]
 
 
-def test_a_block_in_geminis_state_closes_the_reopened_lines_of_its_prompt(tmp_path, monkeypatch):
-    """The owner's live test (2026-10-30): Gemini blocked a prompt full of lines the judge had reopened — they close."""
-    agent = judged(tmp_path, monkeypatch, Gemini(blocks=1))
+def test_the_backups_talk_rated_clean_never_reaches_geminis_prompt(tmp_path, monkeypatch):
+    """v5.15.4 (the owner, 2026-10-31): blocks came back on neutral messages — the backup's talk the judge rated clean
+    (`reopened`) stays out of Gemini's history, its recall and its prompt."""
+    agent = judged(tmp_path, monkeypatch)
     agent.private_line("повернене суддею", ms(17, 50), "telegram", "tg:0")
     agent._unanswered.clear()
     agent.archive.mark(["tg:0"], "reopened")
-    agent.private_line("нове", ms(18), "telegram", "tg:1")
+    agent.private_line("повернене ще раз?", ms(18), "telegram", "tg:1")
     assert asyncio.run(agent.private_reply()) is True
-    assert marks(agent)["tg:0"] == "censored" and ("Ich", "повернене суддею") not in agent.gemini_history()
-    run_spawned(agent)
+    assert agent.private_history[-1][1] == "Від Gemini."
+    assert "повернене суддею" not in agent.llm.transcripts[-1] and "повернене суддею" not in agent.llm.calls[-1][1]
 
 
 def test_her_line_through_the_backup_is_marked_in_the_chat_never_voiced_never_in_her_history(tmp_path, monkeypatch):
@@ -266,7 +267,7 @@ def test_a_failed_rating_at_the_windows_end_is_unrated_never_a_lost_answer(tmp_p
     run_spawned(agent)
 
 
-PROHIBITED_BLOCK = ("prompt", "prohibited_content", None)
+PROHIBITED_BLOCK = ("answer", "prohibited_content", None)
 
 
 def test_a_prohibited_content_block_censors_the_exchange_at_once_and_never_sends_it_to_the_judge(tmp_path,
@@ -299,6 +300,16 @@ def test_a_prohibited_content_block_at_the_windows_end_censors_the_exchange_too(
     calls = len(agent.judge.calls)                                              # the window's end rated it, once
     run_spawned(agent)
     assert all("Від резерву" not in t for call in agent.judge.calls[calls:] for t in call)
+
+
+def test_a_prompt_stage_prohibited_content_block_waits_for_the_judge(tmp_path, monkeypatch):
+    # v5.15.4 (the owner, 2026-10-31): two neutral messages were censored by a prompt block from older context
+    agent = judged(tmp_path, monkeypatch, Gemini(blocks=1, block=("prompt", "prohibited_content", None)))
+    agent.private_line("нейтральне", ms(18), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    assert marks(agent)["tg:1"] == "waiting"
+    run_spawned(agent)
+    assert "нейтральне" in agent.judge.calls[-1]
 
 
 def test_another_block_still_waits_for_the_judge(tmp_path, monkeypatch):

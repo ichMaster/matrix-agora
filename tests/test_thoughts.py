@@ -160,6 +160,22 @@ def test_a_kept_thought_is_in_the_day_file_and_the_archive(tmp_path, monkeypatch
         ("thought", "thought", "Кіра", NEWS.text), ("thought_private", "thought", "Кіра", PRIVATE.text)]
 
 
+def test_a_thought_closed_in_her_archive_leaves_every_prompt_and_the_next_one_keeps_its_own_key(tmp_path,
+                                                                                               monkeypatch):
+    # v5.15.4 (the owner, 2026-10-31): thoughts written from the backup's talk were closed by hand, by their time
+    agent = thinking_kira(tmp_path, monkeypatch)
+    day = at(2026, 10, 20).date()
+    agent.keep_thought(at(2026, 10, 20, 9, 15), NEWS)
+    agent.keep_thought(at(2026, 10, 20, 21, 40), PRIVATE)
+    agent.archive.mark([archive_key(day.isoformat(), PRIVATE, 1)], "censored")
+    assert agent.day_thoughts(day) == [NEWS]                                       # the day file is unchanged
+    assert PRIVATE.text not in "".join(agent._recent_thoughts(day, private=True))   # the reflection never reads it
+    later = Thought("22:10", "reflection", "thought_private", "private", "А потім ми ще говорили.")
+    agent.keep_thought(at(2026, 10, 20, 22, 10), later)
+    assert agent.day_thoughts(day) == [NEWS, later]
+    assert agent.archive.by_keys([archive_key(day.isoformat(), later, 2)])[0].text == later.text
+
+
 def test_the_private_recall_finds_her_thoughts_and_agora_never_a_private_one(tmp_path, monkeypatch):
     agent = thinking_kira(tmp_path, monkeypatch)
     agent.keep_thought(at(2026, 10, 19, 9), Thought("09:00", "news", "thought", "zaxid", "Телескоп — це масштаб."))

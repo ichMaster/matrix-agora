@@ -85,9 +85,9 @@ def off_limits(text: str) -> str | None:
 
 # v5.14 — a fact's mark, as an archive line's: `gemini` (the default, never written), or `waiting` — kept from the
 # backup's «запам'ятай», closed to Gemini until v5.15's judge rates it — or `censored`; v5.15 `clean` (rated clean) and
-# `reopened` (the backup's, rated clean: open until a Gemini block on a prompt that holds it)
+# `reopened` (the backup's, rated clean; v5.15.4: closed to Gemini for good, as an archive line's)
 FACT_MARKS = ("gemini", "waiting", "censored", "clean", "reopened")
-CLOSED_MARKS = ("waiting", "censored")
+CLOSED_MARKS = ("waiting", "censored", "reopened")
 BACKUP_FACT_MARKS = ("waiting", "censored", "reopened")  # what `/purge` deletes
 
 
