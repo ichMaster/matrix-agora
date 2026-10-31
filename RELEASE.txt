@@ -1,3 +1,22 @@
+Version 5.15.4 (2026-10-31)
+---------------------------
+- Blocks came back on neutral messages: her private reflection had written
+  thoughts from the backup's talk the judge rated clean ("reopened"), and
+  those thoughts stayed open after the lines were censored. At the
+  owner's call:
+- The backup's talk never returns to Gemini, whatever the judge says:
+  "reopened" lines and facts are closed like "waiting" (not in Gemini's
+  history, recall, facts or reflection); the judge still decides the
+  window's end and censors what it flags
+- A thought closed in her archive leaves every prompt (today's thoughts,
+  the reflection, the reading, the day memory); the day file is never
+  rewritten
+- A prohibited_content block censors the message at once only at the
+  answer stage; at the prompt stage it waits for the judge again
+- Live, at the owner's word: the 10 private thoughts of 2026-10-30
+  20:54-23:38 closed, and the two messages of 08:14 and 08:17 censored by
+  a prompt block back to waiting (by time and mark; no text read)
+
 Version 5.15.3 (2026-10-31)
 ---------------------------
 - Closes v5 with the owner's two open calls from the code reviews

@@ -11,7 +11,7 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 ## Status
 
 v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 is complete and closed (the owner, 2026-10-31),
-released through `v5.15.3`: the owner's two open calls from its reviews (v5.15 #1, v5.14 #5) are fixed there, and
+released through `v5.15.4`: the owner's two open calls from its reviews (v5.15 #1, v5.14 #5) are fixed there, and
 only LOW findings are left in the v5 review docs, as backlog. Next come v6–v9 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
 
@@ -51,7 +51,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.12 | Кіра reads the news and thinks | ✅ completed | `v5.12.0` (2026-10-28) |
 | v5.13 | Gemini's blocks named: the stage, the reason and the category | ✅ completed | `v5.13.0` (2026-10-28) |
 | v5.14 | Her private chat past a Gemini block: GLM-4.6 on NovelAI, the censored mark and the route | ✅ completed | `v5.14.0` (2026-10-30) |
-| v5.15 | The judge: Gemma 4 31B rates the backup's talk | ✅ completed | `v5.15.0` (2026-10-30) + `v5.15.1`–`v5.15.3` |
+| v5.15 | The judge: Gemma 4 31B rates the backup's talk | ✅ completed | `v5.15.0` (2026-10-30) + `v5.15.1`–`v5.15.4` |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
 | v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -2037,7 +2037,7 @@ All done on 2026-10-28:
 
 ### v5.15 — The judge: Gemma 4 31B rates the backup's talk
 
-**Status:** ✅ completed — released `v5.15.0` on 2026-10-30 · patches `v5.15.1`, `v5.15.2`, `v5.15.3`.
+**Status:** ✅ completed — released `v5.15.0` on 2026-10-30 · patches `v5.15.1`, `v5.15.2`, `v5.15.3`, `v5.15.4`.
 - **Live from 20:18:** the v5.14 backlog was rated in four watcher ticks, leaving 0 waiting.
 - **Grown with the owner's live test:**
   - Gemini has the last word on what the judge reopens (`reopened`);
@@ -2051,7 +2051,12 @@ All done on 2026-10-28:
   - `v5.15.2` (2026-10-31): her endings — an open ending rare and soft, never a cut;
   - `v5.15.3` (2026-10-31), closing v5 with the owner's two calls:
     - a `prohibited_content` block censors the exchange at once and never sends it to the judge (review #1);
-    - blocks under a pin never count toward the day cap (v5.14 review #5).
+    - blocks under a pin never count toward the day cap (v5.14 review #5);
+  - `v5.15.4` (2026-10-31), after blocks on neutral messages (her private thoughts had been written from the backup's
+    talk the judge reopened):
+    - the backup's talk never returns to Gemini (`reopened` is closed);
+    - a thought closed in her archive leaves every prompt;
+    - `prohibited_content` censors at once only at the answer stage.
 
 **Goal:** a third model, Gemma 4 31B on OpenRouter, rates every line of the backup's talk, the owner's and hers.
 - **A clean line** reaches Gemini again: in the history, the recall, the facts and the embeddings.
