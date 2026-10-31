@@ -263,3 +263,23 @@ def test_a_set_found_before_a_failed_call_is_closed_all_the_same(tmp_path, monke
     assert mark_of(agent, "$a1") == "censored"
     assert "closed 1 lines, 0 facts, 0 thoughts (then a call failed)" in caplog.text
     assert load_route(agent.route_file).probed == {"calls": 7, "closed": 1}
+
+
+@pytest.mark.parametrize("with_judge", [True, False])
+def test_a_prompt_stage_block_at_the_windows_end_is_probed_too(tmp_path, monkeypatch, with_judge):
+    # v5.16 review #4: the window's end — with the judge and without it — keeps the prompt in parts as the route does
+    agent = probing(tmp_path, monkeypatch)
+    if not with_judge:
+        agent.judge = None
+    save_route(agent.route_file, Route(window_until_ms=ms(17, 50)))                # the window just ended
+    agent.archive.append("$a1", ms(10) - YESTERDAY, "agora", "matrix", "Бруно", f"Бачив телескоп {MARK}")
+    agent.private_line("Як там телескоп?", ms(17, 55), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    assert agent.llm.events == ["blocked"]
+    assert ("probe_later", 1) in [(name, sent) for name, _, sent in agent.spawned]  # once her line was kept
+    run(agent, "judge_later")
+    if with_judge:                                                                 # his line and her answer only
+        assert agent.judge.calls and not any(MARK in t for call in agent.judge.calls for t in call)
+    run(agent, "probe_later")
+    assert mark_of(agent, "$a1") == "censored"
+    assert MARK not in asyncio.run(agent._gemini_private_prompt(PRIVATE_BRIEF))
