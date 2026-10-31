@@ -4,7 +4,7 @@
 "use strict";
 
 const POLL_MS = 10000;  // one tick for everything — the dashboard, an open log, an open agent's memory (owner)
-const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood", "sky", "digest_voice", "ask", "tts", "stt", "private", "private_nudge", "embed", "facts", "event", "reading", "thought", "reflection", "judge"];
+const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood", "sky", "digest_voice", "ask", "tts", "stt", "private", "private_nudge", "embed", "facts", "event", "reading", "thought", "reflection", "judge", "probe"];
 // review #11: a kind not listed above still shows, after the listed ones — a tab's rows always add up to its total
 function kindsOf(byKind) { return [...KIND_ORDER.filter((k) => byKind[k]), ...Object.keys(byKind).filter((k) => !KIND_ORDER.includes(k)).sort()]; }
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
