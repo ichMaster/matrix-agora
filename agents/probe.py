@@ -13,7 +13,10 @@ but never the whole set, which would close all she knows to Gemini.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from agents.logic import build_instruction
+from agents.responder import build_transcript
 
 Oracle = Callable[[frozenset, frozenset], Awaitable[bool | None]]
 OUTCOMES = ("not_reproduced", "base_blocks", "found", "cap", "error")
@@ -99,3 +102,45 @@ async def search(items: Sequence[str], layers: Sequence[str], blocked: Oracle, c
         return Found(calls, closed=best[0], outcome="cap")
     except _Failed:
         return Found(calls, outcome="error")
+
+
+# --- v5.16: her private prompt in parts — it holds texts, in memory only, until the probe ends; the search above sees
+# only the ids ------------------------------------------------------------------------------------------------------------
+CLOSABLE = ("recalled", "facts", "thoughts")  # the sections drawn from the items, never layers
+
+
+@dataclass
+class PromptParts:
+    """Her private prompt for Gemini as it was built: the fixed layers by name (`build_instruction`'s sections but the
+    closable ones; `name` is never a layer) and the closable items by id — her history's lines (`line:<key>`; None: a
+    line with no key, never closable), the recall's groups (each line by id: `line:<key>`, a fact `fact:<id>`, a
+    thought `thought:<key>`), the facts the section showed and today's thoughts — with the renderers that drew them.
+    `render` builds the instruction and the transcript again from what is kept."""
+    layers: dict = field(default_factory=dict)
+    history: list = field(default_factory=list)      # [(id | None, (speaker, entry))]
+    groups: list = field(default_factory=list)       # [[(id, Line)]]
+    facts: list = field(default_factory=list)        # [(id, Fact)]
+    thoughts: list = field(default_factory=list)     # [(id, Thought)]
+    draw_recalled: Callable = lambda groups: None
+    draw_facts: Callable = lambda facts: None
+    draw_thoughts: Callable = lambda thoughts: None
+
+    def item_ids(self) -> tuple[str, ...]:
+        ids = [i for i, _ in self.history if i] + [i for group in self.groups for i, _ in group]
+        return tuple(dict.fromkeys(ids + [i for i, _ in self.facts] + [i for i, _ in self.thoughts]))
+
+    def layer_names(self) -> tuple[str, ...]:
+        return tuple(k for k, v in self.layers.items() if k != "name" and v)
+
+    def render(self, keep_items=None, keep_layers=None) -> tuple[str, str]:
+        """(the system instruction, the transcript) from the kept items and layers (None: all of them)."""
+        items = set(self.item_ids() if keep_items is None else keep_items)
+        layers = set(self.layer_names() if keep_layers is None else keep_layers)
+        sections = {k: v if k == "name" or k in layers else ("" if k == "canon" else None)
+                    for k, v in self.layers.items()}
+        groups = [[line for i, line in group if i in items] for group in self.groups]
+        sections["recalled"] = self.draw_recalled([g for g in groups if g])
+        sections["facts"] = self.draw_facts([f for i, f in self.facts if i in items])
+        sections["thoughts"] = self.draw_thoughts([t for i, t in self.thoughts if i in items])
+        return (build_instruction(**sections),
+                build_transcript([entry for i, entry in self.history if i is None or i in items]))

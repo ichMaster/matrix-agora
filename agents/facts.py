@@ -243,11 +243,17 @@ def remove_fact(folder: Path, fact_id: str) -> bool:
     return True
 
 
-def facts_section(facts: list[Fact], in_prompt: int, max_chars: int, gemini: bool = True) -> str | None:
-    """Her private prompt's block: pin 1 first, then pin 2 while there is room, each newest first — past the limit a
-    fact just asked for still gets in (v5.8 review #7); pin 0 never; for Gemini never a closed fact (v5.14)."""
+def prompt_facts(facts: list[Fact], in_prompt: int, gemini: bool = True) -> list[Fact]:
+    """The facts her private prompt shows, in its order: pin 1 first, then pin 2 while there is room, each newest
+    first; pin 0 never; for Gemini never a closed fact (v5.14). v5.16: the probe's items are these."""
     pinned = [f for f in facts if f.pin in (1, 2) and not (gemini and f.mark in CLOSED_MARKS)]
-    chosen = sorted(sorted(pinned, key=lambda f: (f.added, f.id), reverse=True), key=lambda f: f.pin)[:max(in_prompt, 0)]
+    return sorted(sorted(pinned, key=lambda f: (f.added, f.id), reverse=True), key=lambda f: f.pin)[:max(in_prompt, 0)]
+
+
+def facts_section(facts: list[Fact], in_prompt: int, max_chars: int, gemini: bool = True) -> str | None:
+    """Her private prompt's block (`prompt_facts`) — past the limit a fact just asked for still gets in (v5.8 review
+    #7)."""
+    chosen = prompt_facts(facts, in_prompt, gemini)
     if not chosen:
         return None
     lines = [f"- {f.text if len(f.text) <= max_chars else f.text[:max_chars - 1].rstrip() + '…'}" for f in chosen]

@@ -103,6 +103,7 @@ from agents.facts import (
     load_facts,
     off_limits,
     parse_extraction,
+    prompt_facts,
     purge_closed_facts,
     replace_fact,
     split_marker,
@@ -199,6 +200,7 @@ from agents.private import (
     rediscover,
     save_private_state,
 )
+from agents.probe import PromptParts
 from agents.reading import (
     PICK_MAX_TOKENS,
     REFLECT_LINES,
@@ -1021,17 +1023,50 @@ class Agent:
             log.error("route: not saved (%s)", type(exc).__name__)
         return route
 
-    async def _gemini_private_prompt(self, brief: str, used: list | None = None) -> str:
+    async def _gemini_private_prompt(self, brief: str, used: list | None = None, parts: list | None = None) -> str:
         """Her private instruction for Gemini: the history, the recall and the facts without a closed line (v5.14);
-        the recalled lines go to `used` (v5.15: rated if Gemini blocks this prompt)."""
+        the recalled lines go to `used` (v5.15: rated if Gemini blocks this prompt). v5.16: with `parts`, the prompt
+        is kept in parts (`PromptParts`, appended) and the instruction is the one drawn from them whole."""
         recalled = agora_now = None
+        drawn: list = []
         facts = self.facts_now()  # v5.8 review #6: mirrored before the recall, so a deleted fact is not recalled
         if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
             query = next((t for s, t in reversed(self.gemini_history()) if s == "Ich"), "")  # v5.14: open only
             recalled = await self.recall_section(query, self.private_places,
-                                                 set(self.private_history) | set(self.gemini_history()), used=used)
+                                                 set(self.private_history) | set(self.gemini_history()), used=used,
+                                                 drawn=drawn)
             agora_now = self.agora_now_section()
-        return self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts)
+        if parts is None:
+            return self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts)
+        kept = self.prompt_parts(brief, agora_now, facts, drawn)
+        parts.append(kept)
+        return kept.render()[0]
+
+    def prompt_parts(self, brief: str, agora_now: str | None, facts: str | None, drawn: list) -> PromptParts:
+        """v5.16 — her private prompt in parts: the layers `prompt_layers` gives, and the closable items by id (her
+        history's open lines, the recall's groups as drawn, the facts the section shows, today's thoughts), with the
+        renderers that drew them — `render()` whole is the prompt she sends."""
+        now = local_now(self.clock(), self.tz)
+        layers = self.prompt_layers(private=brief, agora_now=agora_now, facts=facts)
+        for name in ("recalled", "facts", "thoughts"):
+            layers.pop(name, None)
+
+        def line_id(line) -> str:  # a fact's and a thought's archive key already names it
+            return line.key if line.place == "facts" or line.place in THOUGHT_PLACES else f"line:{line.key}"
+
+        shown = (prompt_facts(load_facts(self.facts_dir), self.facts_in_prompt)
+                 if self.facts_dir is not None and facts else [])
+        thoughts: list = []
+        if self.cfg.can("thoughts") and self.thoughts_in_prompt > 0:  # alone with him: the last n, every place
+            thoughts = self.day_thoughts_keyed(now.date())[-self.thoughts_in_prompt:]
+        can_recall = self.cfg.can("recall")
+        return PromptParts(
+            layers=layers, history=self.gemini_history_keyed(),
+            groups=[[(line_id(line), line) for line in group] for group in drawn] if can_recall else [],
+            facts=[(f"fact:{f.id}", f) for f in shown], thoughts=thoughts,
+            draw_recalled=lambda groups: render_recalled(groups, self.tz, now) if groups else None,
+            draw_facts=lambda kept: facts_section(kept, self.facts_in_prompt, self.fact_max_chars),
+            draw_thoughts=lambda kept: thoughts_section(kept, True, self.thoughts_in_prompt))
 
     async def _backup_private_prompt(self, brief: str) -> tuple[str, list[tuple[str, str]]]:
         """Her private instruction and history for the backup: every line and fact, the recall by words only (its
@@ -1065,10 +1100,11 @@ class Agent:
         return await self._compose(prompt, lines=lines, kind=kind, responder=self.fallback_responder,
                                    fact_mark=fact_mark)
 
-    async def _gemini_text(self, brief: str, kind: str, used: list | None = None):
-        """Gemini's line, and its block or refusal (v5.13's `LAST_BLOCK`, read in this task) when it gave none."""
+    async def _gemini_text(self, brief: str, kind: str, used: list | None = None, parts: list | None = None):
+        """Gemini's line, and its block or refusal (v5.13's `LAST_BLOCK`, read in this task) when it gave none.
+        v5.16: `parts` gets the prompt in parts, for the probe after a prompt-stage block."""
         LAST_BLOCK.set(None)
-        text = await self._compose(await self._gemini_private_prompt(brief, used), lines=self.gemini_history(),
+        text = await self._compose(await self._gemini_private_prompt(brief, used, parts), lines=self.gemini_history(),
                                    kind=kind)
         return text, (LAST_BLOCK.get() if text is None else None)
 
@@ -1330,14 +1366,19 @@ class Agent:
         elsewhere is left out too). v5.15 (the owner, 2026-10-30): the last `HISTORY_N` lines open to Gemini, read from
         the archive — her history holds the last `HISTORY_N` of every line, the backup's view, so a long talk through
         the backup left Gemini none; without the archive (or when it fails), her history without the closed lines."""
+        return [entry for _, entry in self.gemini_history_keyed()]
+
+    def gemini_history_keyed(self) -> list[tuple[str | None, tuple[str, str]]]:
+        """`gemini_history`, each line with its probe id (`line:<key>`; v5.16) — None for one without a key (her own
+        history, when the archive is missing or fails)."""
         if self.archive is not None:
             try:
                 lines = self.archive.latest("private", max(self.history_n, 1))
-                return [(line.speaker, history_entry(line.text)) for line in lines
+                return [(f"line:{line.key}", (line.speaker, history_entry(line.text))) for line in lines
                         if (line.speaker, line.text) not in self._closed]
             except Exception as exc:  # noqa: BLE001
                 log.error("archive: Gemini's history was not read (%s) — her own", type(exc).__name__)
-        return [line for line in self.private_history if line not in self._closed]
+        return [(None, line) for line in self.private_history if line not in self._closed]
 
     def closed_in_history(self) -> int:
         """How many lines of her history (the backup's view) Gemini's history leaves out — for the log only."""
@@ -1489,7 +1530,7 @@ class Agent:
         log.info("private chat: %d lines of history from the archive", len(lines))
 
     async def recall_section(self, query: str, places: tuple[str, ...], exclude: set,
-                             gemini: bool = True, used: list | None = None) -> str | None:
+                             gemini: bool = True, used: list | None = None, drawn: list | None = None) -> str | None:
         """What she recalls before an answer: the message she answers is the query — the word search and (when its
         embedding comes back) the meaning search within `places`, fused; the best `RECALL_N` lines not already in the
         prompt's window, each with its neighbours. A failure is no section, never a blocked answer."""
@@ -1520,6 +1561,8 @@ class Agent:
                 groups.append(group)
                 if used is not None:  # v5.15: the lines this prompt recalled, for the judge at a block
                     used.extend(group)
+                if drawn is not None:  # v5.16: its groups as drawn, for the probe
+                    drawn.append(group)
             if picked:
                 log.info("recall: %d lines (%s)", len(picked), "+".join(places))
             return render_recalled(groups, self.tz, local_now(self.clock(), self.tz))
@@ -2048,6 +2091,14 @@ class Agent:
         (v4.4, Claude) has no canon: its brief is the instruction."""
         if self.cfg.type == "assistant":
             return self.brief(CLAUDE_BRIEF_DIRECT)
+        return build_instruction(**self.prompt_layers(pastlife, nudge, move, private, recalled, agora_now, facts,
+                                                      skip_layers))
+
+    def prompt_layers(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None,
+                      private: str | None = None, recalled: str | None = None, agora_now: str | None = None,
+                      facts: str | None = None, skip_layers: frozenset = frozenset()) -> dict:
+        """v5.16 — the sections `build_prompt` hands to `build_instruction`, by name (a person's, never an
+        assistant's), so her private prompt can be kept in parts and built again from what is kept."""
         can = self.cfg.can
         now = local_now(self.clock(), self.tz)
         world = None
@@ -2056,30 +2107,30 @@ class Agent:
             if self.summary_ms is not None:
                 world += " " + last_talk_line(local_now(self.summary_ms, self.tz), now)
         life = life_section(self.cfg.life, now.date()) if can("life") and self.cfg.life else None
-        return build_instruction(
-            self.cfg.name, self.cfg.canon if can("canon") else "", self.summary if can("summary") else None,
-            life=life, world=world,
-            memories=self.memories_section(now, skip_layers) if can("chronicle") else None,
-            plans=self.plans_section(now) if can("plans") else None,
-            today=self.today_section(now) if can("today") else None,
-            mood=self.mood_section(now) if can("mood") else None,
+        return {
+            "name": self.cfg.name, "canon": self.cfg.canon if can("canon") else "",
+            "summary": self.summary if can("summary") else None, "life": life, "world": world,
+            "memories": self.memories_section(now, skip_layers) if can("chronicle") else None,
+            "plans": self.plans_section(now) if can("plans") else None,
+            "today": self.today_section(now) if can("today") else None,
+            "mood": self.mood_section(now) if can("mood") else None,
             # v5.12: today's thoughts — alone with him all of them, a news one with its link; in Agora not the private
-            thoughts=(thoughts_section(self.day_thoughts(now.date()), private is not None, self.thoughts_in_prompt)
-                      if can("thoughts") else None),
-            pastlife=pastlife if can("pastlife") else None,
-            nudge=nudge if can("nudge") else None,
-            rules_extra=CREATURE_RULES if self.cfg.type == "creature" else None,
-            move=move if self.cfg.type == "persona" else None,
+            "thoughts": (thoughts_section(self.day_thoughts(now.date()), private is not None, self.thoughts_in_prompt)
+                         if can("thoughts") else None),
+            "pastlife": pastlife if can("pastlife") else None,
+            "nudge": nudge if can("nudge") else None,
+            "rules_extra": CREATURE_RULES if self.cfg.type == "creature" else None,
+            "move": move if self.cfg.type == "persona" else None,
             # v5.3 (the owner): its own questions of this session outlast the context window — never asked twice
-            asked=asked_section(own_questions(self.session, self.cfg.name)) if self.cfg.type == "persona" else None,
-            private=private if can("private") else None,
-            discretion=PRIVATE_DISCRETION if can("private") and private is None else None,
+            "asked": asked_section(own_questions(self.session, self.cfg.name)) if self.cfg.type == "persona" else None,
+            "private": private if can("private") else None,
+            "discretion": PRIVATE_DISCRETION if can("private") and private is None else None,
             # v5.8: what she knows of the owner and Agora today reach only her private prompt
-            facts=facts if private is not None else None,
-            agora_now=agora_now if private is not None and can("recall") else None,
-            recalled=recalled if can("recall") else None,
-            voice=self.cfg.voice_spec if can("emotion") and self.cfg.voice_spec else None,  # v5.9: both her prompts
-        )
+            "facts": facts if private is not None else None,
+            "agora_now": agora_now if private is not None and can("recall") else None,
+            "recalled": recalled if can("recall") else None,
+            "voice": self.cfg.voice_spec if can("emotion") and self.cfg.voice_spec else None,  # v5.9: both her prompts
+        }
 
     def draw_move(self, event_id: str, now) -> str | None:
         """v4.6 — a persona's move for the event it answers: the kind is logged, the line goes into the prompt."""
@@ -2610,18 +2661,22 @@ class Agent:
         """Her thoughts of `day`, oldest first (none without `thoughts`). v5.15.4 (the owner, 2026-10-31): never one
         closed in her archive (`GEMINI_CLOSED`) — the day file is never rewritten, so its line's mark decides; an
         unreadable archive leaves them all."""
+        return [t for _, t in self.day_thoughts_keyed(day)]
+
+    def day_thoughts_keyed(self, day) -> list[tuple[str, Thought]]:
+        """`day_thoughts`, each with its archive key (v5.16: the probe closes a thought by it)."""
         if not self.cfg.can("thoughts"):
             return []
         thoughts = parse_thoughts(self._read_raw(self.thoughts_file(day)))
+        keyed = [(thought_key(day.isoformat(), t, n), t) for n, t in enumerate(thoughts)]
         if self.archive is None or not thoughts:
-            return thoughts
-        keys = [thought_key(day.isoformat(), t, n) for n, t in enumerate(thoughts)]
+            return keyed
         try:
-            closed = {line.key for line in self.archive.by_keys(keys) if line.mark in GEMINI_CLOSED}
+            closed = {line.key for line in self.archive.by_keys([k for k, _ in keyed]) if line.mark in GEMINI_CLOSED}
         except Exception as exc:  # noqa: BLE001
             log.error("archive: the thoughts' marks were not read (%s)", type(exc).__name__)
-            return thoughts
-        return [t for t, key in zip(thoughts, keys, strict=True) if key not in closed]
+            return keyed
+        return [(key, t) for key, t in keyed if key not in closed]
 
     def keep_thought(self, now, thought: Thought) -> None:
         """A thought into her day file (appended, 0600, the folder 0700) and her archive under its place."""
