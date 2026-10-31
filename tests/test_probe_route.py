@@ -180,17 +180,33 @@ def blocked_once(agent, spent=0):
     return agent
 
 
-@pytest.mark.parametrize(("calls", "day_calls", "spent", "probes"), [(3, 60, 0, 3), (12, 60, 58, 2), (12, 60, 60, 0)])
-def test_the_caps_per_block_and_per_day(tmp_path, monkeypatch, caplog, calls, day_calls, spent, probes):
-    caplog.set_level(logging.INFO)
+@pytest.mark.parametrize(("calls", "day_calls", "spent", "probes"), [(3, 60, 0, 3), (12, 60, 58, 2)])
+def test_the_caps_per_block_and_per_day(tmp_path, monkeypatch, calls, day_calls, spent, probes):
     agent = probing(tmp_path, monkeypatch)
     agent.probe_calls, agent.probe_day_calls = calls, day_calls
     blocked_once(agent, spent)
     run(agent, "probe_later")
     assert agent.llm.events.count("probe") == probes
     assert load_route(agent.route_file).probed["calls"] == spent + probes      # counted in the file, across a restart
-    if probes == 0:
-        assert "probe: off — the day's calls are spent" in caplog.text
+
+
+def test_with_the_days_calls_spent_no_probe_and_the_judge_rates_the_older_lines(tmp_path, monkeypatch):
+    # v5.16 review #3: the probe used to claim the older lines and then find no calls left — nobody rated them
+    agent = probing(tmp_path, monkeypatch)
+    blocked_once(agent, spent=60)
+    assert "probe_later" not in [name for name, _, _ in agent.spawned]
+    run(agent, "judge_later")
+    assert any(MARK in t for call in agent.judge.calls for t in call)
+
+
+def test_a_probe_finding_the_day_spent_meanwhile_stays_off(tmp_path, monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
+    agent = probing(tmp_path, monkeypatch)
+    blocked_once(agent)
+    day = local_now(agent.clock(), agent.tz).date().isoformat()
+    save_route(agent.route_file, Route(day=day, probed={"calls": 60, "closed": 0}))  # another probe spent it
+    run(agent, "probe_later")
+    assert agent.llm.events.count("probe") == 0 and "probe: off — the day's calls are spent" in caplog.text
 
 
 @pytest.mark.parametrize(("calls", "day_calls"), [(0, 60), (12, 0)])

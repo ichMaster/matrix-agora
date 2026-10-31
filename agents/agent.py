@@ -1015,11 +1015,21 @@ class Agent:
                 self._spawn(self.probe_later(parts))
 
     # --- v5.16: Gemini checks the parts of a blocked prompt -------------------------------------------------------------
+    def _probe_budget(self) -> int:
+        """The probe's calls for a block now: `PROBE_CALLS`, within what `PROBE_DAY_CALLS` leaves today (the route
+        file's `probed`); 0: off."""
+        if self.probe_calls <= 0 or self.probe_day_calls <= 0 or getattr(self.llm, "probe", None) is None:
+            return 0
+        day, _, _ = day_bounds(self.clock(), self.tz)
+        route = load_route(self.route_file)
+        spent = route.probed.get("calls", 0) if route.day == day else 0
+        return max(min(self.probe_calls, self.probe_day_calls - spent), 0)
+
     def _probe_after(self, block, parts: list) -> bool:
         """A prompt-stage block's prompt kept for the probe (spawned by `private_reply` once she has sent), when the
-        probe is on. Whether it will run — then the judge leaves the blocked prompt's older lines to it."""
-        if (block is None or block[0] != "prompt" or not parts or self.probe_calls <= 0 or self.probe_day_calls <= 0
-                or getattr(self.llm, "probe", None) is None):
+        probe has calls left today. Whether it will run — then the judge leaves the blocked prompt's older lines to it;
+        with none left, the judge rates them as in v5.15 (review #3)."""
+        if block is None or block[0] != "prompt" or not parts or self._probe_budget() <= 0:
             return False
         self._blocked_parts = parts[-1]
         return True
@@ -1037,11 +1047,7 @@ class Agent:
         `PROBE_CALLS` and what `PROBE_DAY_CALLS` leaves today), and what it blocks is closed `censored` — a line or a
         thought in her archive (its vector dropped, a private one out of her history for Gemini), a fact in her facts —
         overriding a judge's `clean`. A fixed layer it blocks is only named. The log holds counts and layer names."""
-        now_ms = self.clock()
-        day, _, _ = day_bounds(now_ms, self.tz)
-        route = load_route(self.route_file)
-        spent = route.probed.get("calls", 0) if route.day == day else 0
-        budget = min(self.probe_calls, self.probe_day_calls - spent)
+        budget = self._probe_budget()  # read again: another probe may have spent the day meanwhile
         if budget <= 0:
             log.info("probe: off — the day's calls are spent")
             return None
