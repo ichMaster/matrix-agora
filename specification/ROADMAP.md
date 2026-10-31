@@ -12,9 +12,12 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 was closed (the owner, 2026-10-31), released through
 `v5.15.4`: the owner's two open calls from its reviews (v5.15 #1, v5.14 #5) are fixed there, and only LOW findings
-are left in the v5 review docs, as backlog. The same day the owner opened one more phase in it, v5.16, released as
-`v5.16.0`: Gemini's blocks on her private prompt kept coming back from context the judge had rated clean. Then come
-v6–v9 in order. Other further work (the
+are left in the v5 review docs, as backlog. The same day the owner opened two more phases in it:
+- v5.16, released as `v5.16.0`: Gemini's blocks on her private prompt kept coming back from context the judge had rated
+  clean;
+- v5.17, Кіра's photos in Telegram (planned).
+
+Then come v6–v9 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
 
 | Phase | Title | Status | Release |
@@ -55,6 +58,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.14 | Her private chat past a Gemini block: GLM-4.6 on NovelAI, the censored mark and the route | ✅ completed | `v5.14.0` (2026-10-30) |
 | v5.15 | The judge: Gemma 4 31B rates the backup's talk | ✅ completed | `v5.15.0` (2026-10-30) + `v5.15.1`–`v5.15.4` |
 | v5.16 | Gemini checks the parts of a blocked prompt | ✅ completed | `v5.16.0` (2026-10-31) |
+| v5.17 | Кіра's photos in Telegram | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
 | v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -2339,6 +2343,120 @@ proposed and confirmed when the issues are generated.
 - probes for Agora or the background calls;
 - rewriting a day memory or the session note when a fixed layer is named (the owner decides);
 - the window's end by the probe.
+
+### v5.17 — Кіра's photos in Telegram
+
+**Status:** ⏳ planned (the owner, 2026-10-31).
+
+**Goal:** Кіра sends the owner photos in her Telegram chat, whenever she likes, on her own and in her answers:
+- her life: the observatory dome, the night sky, a cup mended with gold, the Tustan rocks, Lviv streets, food;
+- herself, with the same face every time.
+
+Google's image model makes each photo from what she describes. She believes she took it.
+
+**Owner decisions** (2026-10-31):
+- **VISION's «images» non-goal is narrowed:** her photos, in Telegram only.
+- **As many as she wants,** on her own and in her answers. A day cap only guards against a fault.
+- **The model is Google's specialised image model, `gemini-nano-banana-2.1` (Nano Banana 2.1)**, the one Google
+  recommends now.
+  - It takes up to 4 character reference images.
+  - It costs $0.034 per 1K image ($30 per million output tokens; with her four references a photo is about $0.05).
+  - `gemini-3-pro-image` stays a setting.
+- **Her face comes from the owner's reference photos** (`kira.png` and eight variants), kept with the private canon in
+  `agents/canon/kira.face/`: gitignored, never in an image, synced by `server/deploy.sh`, mounted read-only.
+- **The owner's live test, 18 photos through `generate_content`:**
+  - the same face in all ten with her, «ідеально»;
+  - 11–40 s a photo;
+  - one `503 UNAVAILABLE`, which went through on a retry;
+  - the model copies the reference photos' clothes unless the request names what she wears.
+
+**Proposed** (confirmed when the issues are generated):
+- **The skill.** Her private prompt for Gemini in Telegram offers it like «запам'ятай», a skill and never a keyword. A
+  last line names a photo and is never sent:
+  - `ФОТО: <what is in the shot>` — without her;
+  - `СЕЛФІ: <what is in the shot>` — with her: a selfie, or a photo someone took of her.
+
+  She writes one when he asks for a photo or when she wants to show him something. Nothing tells her how often. She may
+  refuse in her own words.
+- **Only Gemini's answers ask for a photo.** Such a line in the backup's answer is dropped. The backup's talk never
+  reaches the image model.
+- **The request** to the image model (`agents/photo.py`, built by a pure function, in English):
+  - her description;
+  - the moment: the part of the day, the Lviv weather of v5.10 and the season;
+  - what she wears, when her line does not say, from the weather and the occasion — never the references' clothes;
+  - «a casual smartphone photo sent in a chat»;
+  - no other identifiable person, no text;
+  - for `СЕЛФІ`, her reference photos as character references;
+  - 3:4, `PHOTO_SIZE` (1K).
+- **Errors and blocks:**
+  - one retry on a server error or a timeout;
+  - a block by the image model's filter, or a second failure, means her answer is drawn again once without the photo
+    (a line tells her the photo did not come out and not to mention it), so she never says «дивись» with nothing.
+- **Telegram:**
+  - «надсилає фото» shows while it is made;
+  - her voice note as now, then the photo with her text as the caption;
+  - a text over 1024 characters goes as the photo, then the text;
+  - `TelegramBot.send_photo` is multipart, as `send_voice` is.
+- **What is kept:**
+  - in her archive, her line with `[фото: <what is in the shot>]` or `[селфі: …]`, so she remembers what she sent;
+  - the file in `state/kira.photos/YYYY-MM-DD/HHMMSS.jpg` (0600);
+  - never the description or the request in a log.
+- **Writing first:** the line she writes first may carry a photo too.
+- **Settings:**
+  - `PHOTO_MODEL` (`gemini-nano-banana-2.1`; or `gemini-3-pro-image`, `gemini-3.1-flash-image`);
+  - `PHOTO_SIZE` (1K);
+  - `PHOTO_DAY_MAX` (40, a fault guard: about $2 a day at most).
+- **Capability:** `photos`, in her TOML; it needs `telegram`.
+- **Usage:**
+  - the kind `photo`, priced by its pair in `PRICE_MODELS` (`gemini-nano-banana-2.1=1.50/30`);
+  - the panel's kind order lists it.
+- **She believes she is human.** The skill says «сфотографуй», «скинь фото», never that a picture is made; she never
+  sees the request.
+- **ARCHITECTURE:**
+  - §Message flow: the photo in her Telegram answer;
+  - §Token accounting: `photo`;
+  - §Configuration: the settings;
+  - §Contracts: the capability, `state/kira.photos/` and `agents/canon/kira.face/`.
+
+**Owner steps:**
+- the `PRICE_MODELS` entry in `server/.env` (only that entry);
+- the deploy;
+- the live checks.
+
+**DoD:**
+- (Manual, owner) In Telegram he asks for a photo of her. She sends a selfie with her face from the references, her
+  words as the caption, and her voice note.
+- (Manual, owner) She sends a photo of her life on her own: in a line she writes first, or in an answer.
+- (Manual, owner) The token report shows `photo`, and her log `photo: sent` (no text).
+
+**Tests:**
+- **The markers:**
+  - `ФОТО` and `СЕЛФІ` as the last line, never sent;
+  - the backup's dropped;
+  - none offered in Element;
+- **The request:**
+  - the description, the moment and the clothes;
+  - the style line;
+  - the references only for `СЕЛФІ`;
+- **Errors:**
+  - the retry on 503;
+  - a block or a second failure drawing her answer again without the photo;
+- **Telegram:**
+  - `send_photo` multipart;
+  - the caption under 1024 and the long text after;
+  - the order voice → photo;
+- **The rest:**
+  - the archive line and the file (0600);
+  - the day cap;
+  - the usage line priced;
+  - no description or request in a log;
+  - no prompt of hers says she makes pictures.
+
+**Not in this phase:**
+- photos in Element or Agora, or from another agent;
+- photos of the owner or of any real person;
+- her seeing photos he sends;
+- editing a sent photo.
 
 ## v6 — Лілі: the Lumi bridge
 
