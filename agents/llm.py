@@ -205,8 +205,8 @@ class GeminiClient:
                     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                 ),
             )
-        except Exception as exc:  # noqa: BLE001 — a failed probe closes nothing
-            log.debug("probe: failed (%s)", type(exc).__name__)
+        except Exception as exc:  # noqa: BLE001 — a failed probe closes nothing; its type reaches the log (review #1)
+            log.warning("probe: failed (%s)", type(exc).__name__)
             self._report(kind, None, False, model)
             return None
         block = blocked_reason(resp)

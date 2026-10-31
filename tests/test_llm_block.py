@@ -263,11 +263,12 @@ def test_anything_but_a_prompt_stage_block_passes(monkeypatch, resp):
 
 
 def test_a_failed_probe_is_none_and_a_model_without_thinking_runs_with_none(monkeypatch, caplog):
-    caplog.set_level(logging.DEBUG, logger="agent.llm")
+    caplog.set_level(logging.INFO, logger="agent.llm")  # the agents log at INFO: the cause must reach it (review #1)
     llm, seen, _ = prober(monkeypatch, RuntimeError(SECRET))
     assert asyncio.run(llm.probe("Ich: привіт", "КАНОН")) is None
     assert seen == [("probe", "gemini-3.1-pro-preview", False, {})]
     assert "probe: failed (RuntimeError)" in caplog.text and SECRET not in caplog.text
+    assert [r.levelname for r in caplog.records if "probe" in r.getMessage()] == ["WARNING"]
     flash, _, models = prober(monkeypatch, answer_with("STOP", text="а"), reply_model="")
     assert asyncio.run(flash.probe("Ich: привіт", "КАНОН")) is False
     model, config = models.configs[0]
