@@ -183,6 +183,13 @@ SCHEMA: tuple[Setting, ...] = (
        "Модель-суддя розмови через резерв", choices=("google/gemma-4-31b-it", "openai/gpt-oss-safeguard-20b",
                                                      "openai/gpt-oss-120b")),
     _s("CLASSIFIER_TIMEOUT_S", "int", "30", "fallback", "cap:fallback", None, "Скільки чекати на суддю", "s", 5, 120),
+    # v5.17 — her photos in Telegram (`photos`): Google's image model, the size, and a day's cap that only guards
+    # against a fault (the owner: as many as she wants)
+    _s("PHOTO_MODEL", "choice", "gemini-nano-banana-2.1", "private", "cap:photos", None, "Модель її фото",
+       choices=("gemini-nano-banana-2.1", "gemini-3-pro-image", "gemini-3.1-flash-image")),
+    _s("PHOTO_SIZE", "choice", "1K", "private", "cap:photos", None, "Розмір її фото", choices=("1K", "2K")),
+    _s("PHOTO_DAY_MAX", "int", "40", "private", "cap:photos", None, "Скільки фото на день щонайбільше (запобіжник)",
+       "", 0, 200),
     # v5.16 — after a prompt-stage block Gemini is asked which parts of her prompt it blocks: calls per block and per
     # day (0 for either: off)
     _s("PROBE_CALLS", "int", "12", "fallback", "cap:fallback", None, "Скільки перевірок Gemini на один блок", "", 0, 50),

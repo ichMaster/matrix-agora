@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
 
@@ -48,6 +49,19 @@ STYLE = ("A casual photo taken on a smartphone and sent in a private chat: natur
 SELFIE = ("The young woman in the photo is the same person as in the reference photos: keep her face, hair and "
           "features exactly. She is 23, from Lviv, Ukraine. She wears what suits the weather and the scene described "
           "below — not the clothes of the reference photos.")
+
+
+# her private brief's skill (v5.17, the owner): understood from the talk, never a keyword — and never a word that a
+# picture is made: she takes it
+PHOTO_SKILL = (
+    "Ти можеш надсилати Ich фото зі свого життя і селфі — коли він просить або коли тобі самій хочеться щось йому "
+    "показати. Тоді в самому кінці додай окремий останній рядок: слово ФОТО великими літерами, двокрапка і що на "
+    "кадрі, одним реченням, як ти описала б свій знімок; коли ти сама в кадрі (селфі, або тебе хтось сфотографував) — "
+    "напиши СЕЛФІ замість ФОТО. Він побачить фото, а не цей рядок. Не хочеш чи не можеш зараз сфотографувати — просто "
+    "скажи це своїми словами."
+)
+PHOTO_FAILED = "Фото цього разу не вийшло надіслати — не згадуй його й не обіцяй."
+NOTES = {"photo": "фото", "selfie": "селфі"}
 
 
 @dataclass(frozen=True)
@@ -85,6 +99,12 @@ def split_photo(text: str) -> tuple[str, Shot | None]:
         if kept:
             lines.append(kept)
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip(), shot
+
+
+def photo_note(text: str, shot: Shot) -> str:
+    """Her line as she keeps it after a photo went out: the words, then `[селфі: …]` or `[фото: …]` — so her history
+    and her recall know what she sent."""
+    return f"{text}\n[{NOTES[shot.kind]}: {shot.description}]"
 
 
 def photo_request(shot: Shot, moment: Moment) -> str:
@@ -199,3 +219,8 @@ class PhotoMaker:
             self._report(usage, True)
             return Made(image[0], image[1], "ok")
         return Made(None, why="failed")  # never reached: the loop returns
+
+
+def photo_maker(model: str, size: str, faces: list, sink: Callable) -> PhotoMaker:
+    """Her photos on Google's image model, through a client of their own (the Gemini key from the environment)."""
+    return PhotoMaker(genai.Client(), model or MODEL, size, faces, sink)

@@ -176,6 +176,19 @@ from agents.nudge import (
     save_nudge_state,
 )
 from agents.pastlife import VERBATIM_WORDS, pastlife_section, pick_memory
+from agents.photo import MODEL as PHOTO_MODEL
+from agents.photo import (
+    PHOTO_FAILED,
+    PHOTO_SKILL,
+    Made,
+    Moment,
+    PhotoMaker,
+    Shot,
+    load_faces,
+    photo_maker,
+    photo_note,
+    split_photo,
+)
 from agents.plans import (
     HORIZONS,
     parse_items,
@@ -235,6 +248,7 @@ from agents.speech import speakers_month_chars, voice_due, voice_message, voicea
 from agents.style import style_line
 from agents.telegram import (
     ACTION_EVERY_S,
+    CAPTION_MAX,
     COMMAND_HELP,
     COMMANDS,
     VOICE_MAX_BYTES,
@@ -480,6 +494,21 @@ class Agent:
         self._judge_retry_ms, self._judge_failures = 0, 0
         self._probe_lock = asyncio.Lock()
         self._blocked_parts: PromptParts | None = None  # v5.16: a prompt-stage block's prompt, probed once she has sent
+        # v5.17 — her photos in Telegram: Google's image model, her face from the owner's reference photos (next to her
+        # private canon); offered to Gemini only, in Telegram, under the day's cap
+        self.photos: PhotoMaker | None = None
+        self.photo_day_max = 0
+        self.photo_sent = False
+        self._offer_photo = False
+        self._pending_shot: Shot | None = None
+        if cfg.can("photos"):
+            self.photo_day_max = int(os.environ.get("PHOTO_DAY_MAX", "40"))
+            faces = load_faces(Path("agents/canon") / f"{cfg.localpart}.face")
+            if isinstance(self.llm, GeminiClient):
+                self.photos = photo_maker(os.environ.get("PHOTO_MODEL", "gemini-nano-banana-2.1").strip() or PHOTO_MODEL,
+                                          os.environ.get("PHOTO_SIZE", "1K").strip() or "1K", faces,
+                                          self.record_usage)
+            log.info("photos: %d faces", len(faces))
         self._reading_lock, self._reflect_lock = asyncio.Lock(), asyncio.Lock()
         self._reading_retry_ms = self._reflect_retry_ms = self._reflect_ms = 0
         # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.
@@ -943,6 +972,9 @@ class Agent:
             return False
         action = None
         self._blocked_parts = None
+        self._pending_shot = None
+        self._offer_photo = self._photo_open(door)  # v5.17: her photo skill, for Gemini's prompt only
+        kind = "private_nudge" if nudge else "private"
         try:
             if door == "matrix":
                 await self.client.room_typing(room, True)
@@ -971,15 +1003,38 @@ class Agent:
             brief = f"{brief}\n\n{style_line(self.rng, her_lines, self.cfg.can('emotion'))}"
             seen = list(self._unanswered)  # v5.13 review #2: the lines this call answers — never one that comes later
             text, by, judge_after = await self._private_text(brief, nudge, seen)
+            shot, self._pending_shot = (self._pending_shot if by == "gemini" else None), None
+            self._offer_photo = False
+            made: Made | None = None
+            if text is not None and shot is not None:  # v5.17: her photo, made before anything is sent
+                if door != "telegram" or not self._photo_open(door):
+                    log.info("photo: dropped (%s)", "element" if door != "telegram" else "cap")
+                else:
+                    if action is not None:
+                        action.cancel()
+                    await self.telegram.send_chat_action(self.telegram_owner, "upload_photo")  # 11–40 s to make
+                    action = asyncio.create_task(self._telegram_action("upload_photo"))
+                    made = await self._make_photo(shot)
+                    if made.why != "ok":  # never «дивись» with nothing: her answer once more, without the photo
+                        log.warning("photo: %s — her answer without it", made.why)
+                        made = None
+                        again, _ = await self._gemini_text(f"{brief}\n\n{PHOTO_FAILED}", kind)
+                        self._pending_shot = None
+                        if again is not None:
+                            text = again
             if text is None:
                 return False
             sent_id = None
             mark = BACKUP_MARK if by == "backup" else None  # v5.15: the owner sees which network wrote it
             if door == "matrix":
                 sent_id = await self.send_line(room, text, f"private:{self.clock()}", mark=mark)
-            elif not await self.send_telegram(text, mark=mark):  # never said: not in the history, not counted
+            elif not await self.send_telegram(text, mark=mark, photo=made):  # never said: not in the history
                 log.warning("private: not delivered (telegram)")
                 return False
+            if made is not None and self.photo_sent:  # v5.17: kept as a file and named in her line
+                self.keep_photo(made)
+                log.info("photo: sent (%s, telegram)", shot.kind)
+                text = photo_note(str(text), shot)
             self.private_history = append_history(self.private_history, self.cfg.name, text, max(self.history_n, 1))
             self.last_private_ms = self.clock()
             self._unanswered = [u for u in self._unanswered if u not in seen]  # v5.13: answered (review #2)
@@ -1115,6 +1170,8 @@ class Agent:
         is kept in parts (`PromptParts`, appended) and the instruction is the one drawn from them whole."""
         recalled = agora_now = None
         drawn: list = []
+        if self._offer_photo:  # v5.17: her photo skill — Gemini's alone, never the backup's
+            brief = f"{brief}\n\n{PHOTO_SKILL}"
         facts = self.facts_now()  # v5.8 review #6: mirrored before the recall, so a deleted fact is not recalled
         if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
             query = next((t for s, t in reversed(self.gemini_history()) if s == "Ich"), "")  # v5.14: open only
@@ -1190,8 +1247,11 @@ class Agent:
         """Gemini's line, and its block or refusal (v5.13's `LAST_BLOCK`, read in this task) when it gave none.
         v5.16: `parts` gets the prompt in parts, for the probe after a prompt-stage block."""
         LAST_BLOCK.set(None)
+        shots: list = []
         text = await self._compose(await self._gemini_private_prompt(brief, used, parts), lines=self.gemini_history(),
-                                   kind=kind)
+                                   kind=kind, shots=shots)
+        if text is not None and shots:  # v5.17: the photo her line asked for, made once her answer is chosen
+            self._pending_shot = shots[-1]
         return text, (LAST_BLOCK.get() if text is None else None)
 
     async def _private_text(self, brief: str, nudge: bool, seen: list):
@@ -1942,10 +2002,63 @@ class Agent:
             await asyncio.sleep(ACTION_EVERY_S)
             await self.telegram.send_chat_action(self.telegram_owner, action)
 
-    async def send_telegram(self, text: str, mark: str | None = None) -> bool:
+    def photos_today(self) -> int:
+        """v5.17 — her photos kept today (`state/<name>.photos/<day>/`), for the day's cap."""
+        folder = self._dir("photos") / local_now(self.clock(), self.tz).date().isoformat()
+        try:
+            return sum(1 for p in folder.iterdir() if p.is_file())
+        except OSError:
+            return 0
+
+    def _photo_open(self, door: str | None) -> bool:
+        """v5.17 — may her answer carry a photo: the image model is on, the door is Telegram, the day's cap not reached."""
+        return (self.photos is not None and door == "telegram" and self.photo_day_max > 0
+                and self.photos_today() < self.photo_day_max)
+
+    async def _make_photo(self, shot: Shot) -> Made:
+        """v5.17 — her photo for this moment: her clock, the season and (with `mood`) her day's Lviv weather."""
+        now = local_now(self.clock(), self.tz)
+        weather = None
+        if self.cfg.can("mood"):
+            try:
+                weather = load_weather(self.weather_file, now.date().isoformat())
+            except Exception as exc:  # noqa: BLE001 — a photo without the weather, never none
+                log.error("photo: the weather was not read (%s)", type(exc).__name__)
+        try:
+            return await self.photos.make(shot, Moment(now, weather))
+        except Exception as exc:  # noqa: BLE001 — her answer without it, never a crash
+            log.warning("photo: failed (%s)", type(exc).__name__)
+            return Made(None, why="failed")
+
+    def keep_photo(self, made: Made) -> None:
+        """v5.17 — a photo she sent, kept as `state/<name>.photos/<day>/HHMMSS.jpg` (file 0600, folders 0700); a write
+        error is logged by its type."""
+        now = local_now(self.clock(), self.tz)
+        folder = self._dir("photos") / now.date().isoformat()
+        ext = ".png" if made.mime == "image/png" else ".jpg"
+        try:
+            folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+            os.chmod(folder.parent, 0o700)
+            os.chmod(folder, 0o700)
+            path, n = folder / f"{now:%H%M%S}{ext}", 1
+            while path.exists():
+                n += 1
+                path = folder / f"{now:%H%M%S}-{n}{ext}"
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            try:
+                os.write(fd, made.image or b"")
+            finally:
+                os.close(fd)
+        except OSError as exc:
+            log.error("photo: not kept (%s)", type(exc).__name__)
+
+    async def send_telegram(self, text: str, mark: str | None = None, photo: Made | None = None) -> bool:
         """Every answer in Telegram is a voice note in her own voice, then the text (the owner, 2026-10-21) — the
         speakers' monthly budget and `voiceable` still hold; when the voice cannot be made, the text goes alone.
-        `mark` (v5.15): a line above the text only, never voiced. True when the text went out."""
+        `mark` (v5.15): a line above the text only, never voiced. v5.17: with `photo`, after the voice note the photo
+        goes with her words as its caption (a text over Telegram's caption limit: the photo, then the text; a photo not
+        sent: the text alone) — `photo_sent` says whether it went. True when the text went out."""
+        self.photo_sent = False
         text, speech = spoken(text)  # v5.9: her voice gets the tags, the message her words
         why = self.voice_off
         if self.tts is not None:
@@ -1965,7 +2078,16 @@ class Agent:
                 log.info("voice: sent (%d chars, telegram)", len(text))
             elif why != "not voiceable":
                 log.info("voice: text only (%s, telegram)", why)
-        return await self.telegram.send_message(self.telegram_owner, f"{mark}\n{text}" if mark else text)
+        body = f"{mark}\n{text}" if mark else text
+        if photo is not None and photo.image:
+            caption = body if len(body) <= CAPTION_MAX else None
+            if await self.telegram.send_photo(self.telegram_owner, photo.image, caption, photo.mime):
+                self.photo_sent = True
+                if caption is not None:
+                    return True
+            else:
+                log.warning("photo: not sent (telegram) — the text alone")
+        return await self.telegram.send_message(self.telegram_owner, body)
 
     async def send_line(self, room_id: str, text: str, event_key: str, answering: str | None = None,
                         mark: str | None = None) -> str | None:
@@ -3145,7 +3267,7 @@ class Agent:
 
     async def _compose(self, prompt: str, max_words: int | None = None, lines: list | None = None,
                        effort: str | None = None, toolset: str | None = None, kind: str = "reply",
-                       responder=None, fact_mark: str = "gemini") -> str | None:
+                       responder=None, fact_mark: str = "gemini", shots: list | None = None) -> str | None:
         """One model call → the line as it would be sent, or None (logged): never half a sentence, never another's
         words, PASS honoured, the creature's word cap applied (`max_words` overrides it: a telegram's joke)."""
         reply = await (responder or self.responder).respond(Turn(list(self.history if lines is None else lines), prompt,
@@ -3160,6 +3282,15 @@ class Agent:
             if not text:
                 log.info("silent: only a line to remember")
                 return None
+        text, shot = split_photo(text)  # v5.17: a photo's line is never sent — Gemini's private answer keeps its shot
+        if shot is not None:
+            if shots is not None:
+                shots.append(shot)
+            else:
+                log.info("photo: dropped (%s)", "backup" if responder is self.fallback_responder else kind)
+        if not text:
+            log.info("silent: only a photo's line")
+            return None
         if reply.finish == "max_tokens":  # the cap cut it: never send half a sentence
             text = trim_to_sentence(text)
             if text is None:
