@@ -70,7 +70,9 @@ if [ -f "$KIRA_ENV" ]; then   # never printed: rsync -i lists the file name only
 fi
 if [ -f "$CANON_DIR/common.md" ]; then   # never printed: rsync -i lists the file names only; nothing on the host is ever removed
   CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$CANON_DIR/" "$TARGET:matrix-agora/canon/")"
-  [ "$DRY_RUN" = 1 ] || ssh "$TARGET" "chmod 700 ~/matrix-agora/canon && chmod 600 ~/matrix-agora/canon/*"
+  # private on the host: folders 700, files 600 — v5.17: a folder must stay searchable (`kira.face/`, her photos'
+  # references); a bare `chmod 600 canon/*` left it unreadable to her container
+  [ "$DRY_RUN" = 1 ] || ssh "$TARGET" "find ~/matrix-agora/canon -type d -exec chmod 700 {} + && find ~/matrix-agora/canon -type f -exec chmod 600 {} +"
 else
   say "deploy: no local agents/canon/ — leaving the host's canon untouched"
 fi

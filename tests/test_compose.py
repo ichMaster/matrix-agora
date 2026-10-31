@@ -66,7 +66,10 @@ def test_the_private_canon_is_mounted_never_committed_never_baked():
     assert mounted == sorted(["ada", "bruno", "leon", "mia", "irma", "kira", "kit", "hermes", "panel"])
     deploy = (ROOT / "server" / "deploy.sh").read_text()
     assert '"$CANON_DIR/" "$TARGET:matrix-agora/canon/"' in deploy and "--delete" not in deploy
-    assert "chmod 700 ~/matrix-agora/canon && chmod 600 ~/matrix-agora/canon/*" in deploy
+    # v5.17 (the live test): folders 700, files 600 — `kira.face/` stays searchable to her container
+    assert ("find ~/matrix-agora/canon -type d -exec chmod 700 {} + && "
+            "find ~/matrix-agora/canon -type f -exec chmod 600 {} +") in deploy
+    assert "chmod 600 ~/matrix-agora/canon/*" not in deploy
 
 
 def test_deploy_pulls_before_up_and_prepares_the_mounts():
