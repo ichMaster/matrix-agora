@@ -114,7 +114,7 @@ from agents.fallback import TOKEN_VAR as FALLBACK_TOKEN_VAR
 from agents.fallback import FallbackClient, FallbackResponder
 from agents.guardian import KEY_VAR as GUARDIAN_KEY_VAR
 from agents.guardian import Guardian
-from agents.judge import CLEAN, FLAGGED, Item, Judge
+from agents.judge import CLEAN, FLAGGED, Item, Judge, next_mark
 from agents.judge import KEY_VAR as JUDGE_KEY_VAR
 from agents.judge import MODEL as JUDGE_MODEL
 from agents.life import current_chapter, events_due, known_ahead, life_section, next_chapter
@@ -1241,7 +1241,7 @@ class Agent:
         fresh: list[str | None] = [None] * len(todo)
         if todo and self.judge is not None:
             fresh = await self.judge.rate([i.text for i in todo])
-            self.apply_verdicts(todo, fresh, why, marks)
+            self.apply_verdicts(todo, fresh, why)
         rated = iter(fresh)
         return [known[(i.kind, i.key)] if (i.kind, i.key) in known else next(rated) for i in items]
 
@@ -1254,19 +1254,24 @@ class Agent:
             except Exception:
                 log.exception("judge: the rating failed (the lines wait for the next tick)")
 
-    def apply_verdicts(self, items: list[Item], verdicts: list, why: str, marks: dict | None = None) -> int:
+    def apply_verdicts(self, items: list[Item], verdicts: list, why: str) -> int:
         """v5.15 — the judge's verdicts: a clean line or fact that had passed through Gemini is `clean`, Gemini's again
         (her history's `_closed` too, in its full and its cut form; embedded at the next tick); one of the backup's talk
         (`waiting`) is `reopened` — v5.15.4 (the owner, 2026-10-31): still closed to Gemini, for good; a flagged one is
-        censored for good and closed; an unrated one keeps its mark — a failure alone never censors.
-        Today's counts go to the route; the log holds counts only. How many were rated."""
-        was = marks if marks is not None else self._marks_of(items)
+        censored for good and closed; an unrated one keeps its mark — a failure alone never censors. v5.15.5: the marks
+        are read now, once the verdicts are in — a line closed while the judge rated stays closed — and `next_mark`
+        never turns a closed mark into an open one. Today's counts go to the route; the log holds counts only. How many
+        were rated."""
+        was = self._marks_of(items)
+        moves: dict[str, list[Item]] = {}
+        for i, v in zip(items, verdicts, strict=True):
+            new = next_mark(was.get((i.kind, i.key)), v)
+            if new is not None:
+                moves.setdefault(new, []).append(i)
         clean = [i for i, v in zip(items, verdicts, strict=True) if v == CLEAN]
         flagged = [i for i, v in zip(items, verdicts, strict=True) if v == FLAGGED]
-        reopened = [i for i in clean if was.get((i.kind, i.key)) == "waiting"]
         facts_changed = False
-        for mark, group in (("clean", [i for i in clean if i not in reopened]), ("reopened", reopened),
-                            ("censored", flagged)):
+        for mark, group in moves.items():
             keys = [i.key for i in group if i.kind == "line"]
             if keys and self.archive is not None:
                 try:
@@ -1276,8 +1281,8 @@ class Agent:
             for i in group:
                 if i.kind == "fact" and self.facts_dir is not None:
                     facts_changed |= set_fact_mark(self.facts_dir, i.key, mark)
-        for i in clean:
-            if i.kind == "line" and i not in reopened:
+        for i in moves.get("clean", []):
+            if i.kind == "line":
                 self._closed.difference_update({(i.speaker, i.text), (i.speaker, history_entry(i.text))})
         self.close_lines([(i.speaker, i.text) for i in flagged if i.kind == "line"])
         if facts_changed:

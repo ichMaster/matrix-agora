@@ -30,6 +30,19 @@ TIMEOUT_S = 30          # CLASSIFIER_TIMEOUT_S: longer than an answer's, the own
 CHUNK = 25              # lines per call; the chunks go in parallel
 TOKENS_PER_LINE = 16    # `25: так · сексуально відвертий зміст` fits
 FLAGGED, CLEAN = "flagged", "clean"
+BACKUPS = ("waiting", "reopened")  # the backup's talk: rated clean, it stays the backup's (v5.15.4)
+
+
+def next_mark(was: str | None, verdict: str | None) -> str | None:
+    """v5.15.5 — the mark a verdict sets on a line or a fact, from its mark when the verdict came (read after the
+    rating, never before it), or None for no change: flagged censors; clean gives back to Gemini only what Gemini wrote
+    (`gemini`, `clean`) — the backup's talk stays closed as `reopened`, a censored one stays censored; unrated, or an
+    item gone, changes nothing. A closed mark never becomes an open one (the owner, 2026-10-31: a build without
+    `reopened` had made four of the backup's facts `clean`, in every prompt of hers to Gemini)."""
+    if verdict not in (CLEAN, FLAGGED) or was is None or was == "censored":
+        return None
+    new = "censored" if verdict == FLAGGED else "reopened" if was in BACKUPS else "clean"
+    return None if new == was else new
 # the owner's test (2026-10-28): 18 lines, three runs, every verdict right — with the flirt sentence; without it a
 # kiss was flagged
 POLICY = (

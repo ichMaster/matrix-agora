@@ -469,3 +469,14 @@ def test_a_facts_mark_is_set_in_place_by_the_verdict(tmp_path):
     assert [(f.text, f.mark) for f in load_facts(folder)] == [("Живе біля парку", "clean")]
     assert not set_mark(folder, waits, "whatever") and not set_mark(folder, "../x", "clean")
     assert not set_mark(folder, "f-missing", "clean")
+
+
+def test_a_new_text_drops_the_judges_clean_and_a_closed_fact_stays_closed(tmp_path):
+    # v5.15.5: `clean` was the judge's word on the old text; the new one waits for a rating as Gemini's (`gemini`)
+    from agents.facts import add_fact, load_facts, replace_fact
+    for mark, after in (("gemini", "gemini"), ("clean", "gemini"), ("waiting", "waiting"), ("reopened", "reopened"),
+                        ("censored", "censored")):
+        folder = tmp_path / mark
+        fid = add_fact(folder, "Любить каву", 1, "private", "2026-10-30", 50, 240, mark=mark)
+        assert replace_fact(folder, fid, "Любить чай", "2026-10-31", 240)
+        assert [(f.text, f.mark) for f in load_facts(folder)] == [("Любить чай", after)], mark

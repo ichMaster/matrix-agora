@@ -5,8 +5,9 @@ waits, bounded, backing off after a tick that rated nothing (nio, Gemini and the
 import asyncio
 import logging
 
-from agents.facts import add_fact, facts_section, load_facts
-from agents.judge import CLEAN, FLAGGED, Item
+from agents.archive import GEMINI_CLOSED, MARKS
+from agents.facts import add_fact, facts_section, load_facts, replace_fact
+from agents.judge import CLEAN, FLAGGED, Item, next_mark
 from agents.logic import ENTRY_MAX_CHARS, history_entry
 from agents.route import load_route
 from tests.test_private_route import her, marks
@@ -152,3 +153,59 @@ def test_a_line_that_passed_through_gemini_and_was_rated_clean_is_geminis_again(
                                                                                   f"резервне {SECRET}")], "block"))
     assert marks(agent) == {"tg:0": "clean", "tg:1": "reopened"}
     assert agent.gemini_history() == [("Ich", "з Gemini")]
+
+
+# --- v5.15.5 (the owner, 2026-10-31): a build without `reopened` had made four of the backup's facts `clean` — pinned,
+# in every prompt of hers to Gemini, which blocked even the line she wrote first; never again, whatever comes after ---
+def test_a_closed_mark_never_becomes_an_open_one():
+    for was in (*MARKS, None):
+        for verdict in (CLEAN, FLAGGED, None, "whatever"):
+            new = next_mark(was, verdict)
+            assert new is None or new in MARKS
+            if was in GEMINI_CLOSED or was is None:
+                assert new is None or new in GEMINI_CLOSED, (was, verdict, new)
+    assert next_mark("waiting", CLEAN) == "reopened" and next_mark("reopened", CLEAN) is None
+    assert next_mark("gemini", CLEAN) == "clean" and next_mark("clean", CLEAN) is None
+    assert next_mark("clean", FLAGGED) == "censored" and next_mark("reopened", FLAGGED) == "censored"
+    assert next_mark("censored", CLEAN) is None and next_mark("gemini", None) is None
+
+
+def test_the_backups_fact_stays_closed_to_gemini_whatever_comes_after(tmp_path, monkeypatch):
+    agent = judged_agent(tmp_path, monkeypatch)
+    fid = add_fact(agent.facts_dir, f"Любить каву зранку {SECRET}", 1, "asked", "2026-10-30", 50, 240, mark="waiting")
+    item = Item("fact", fid, "факт", f"Любить каву зранку {SECRET}")
+    asyncio.run(agent.ensure_judged())                                             # rated clean: the backup's
+    asyncio.run(agent.judge_items([item], "block"))                               # in a blocked prompt: by its mark
+    agent.apply_verdicts([item], [CLEAN], "block")                                # rated again all the same
+    assert replace_fact(agent.facts_dir, fid, f"Любить каву ввечері {SECRET}", "2026-10-31", 240)  # a summary
+    assert [f.mark for f in load_facts(agent.facts_dir)] == ["reopened"]
+    assert agent.facts_now() is None and SECRET in agent.facts_now(gemini=False)
+    assert agent._blocked_items([]) == []                                          # never offered for a rating
+    mirrored = agent.archive.db.execute("SELECT mark FROM lines WHERE place = 'facts'").fetchall()
+    assert mirrored == [("reopened",)]                                             # … nor recalled for Gemini
+
+
+def test_a_line_closed_while_the_judge_rates_stays_closed(tmp_path, monkeypatch):
+    agent = judged_agent(tmp_path, monkeypatch)
+    waiting_line(agent, "tg:1", "Ich", "з Gemini", mark="gemini")
+    waiting_line(agent, "tg:2", "Ich", "резервне")
+
+    class Meanwhile(FakeJudge):  # a prohibited answer censors both while Gemma rates them clean
+        async def rate(self, texts):
+            agent.mark_unanswered("answer", [("tg:1", "з Gemini"), ("tg:2", "резервне")], "censored")
+            return await super().rate(texts)
+
+    agent.judge = Meanwhile()
+    items = [Item("line", "tg:1", "Ich", "з Gemini"), Item("line", "tg:2", "Ich", "резервне")]
+    assert asyncio.run(agent.judge_items(items, "window")) == [CLEAN, CLEAN]
+    assert marks(agent) == {"tg:1": "censored", "tg:2": "censored"} and agent.gemini_history() == []
+
+
+def test_a_clean_facts_new_text_is_rated_again(tmp_path, monkeypatch):
+    agent = judged_agent(tmp_path, monkeypatch)
+    fid = add_fact(agent.facts_dir, "Любить каву", 1, "private", "2026-10-30", 50, 240)
+    asyncio.run(agent.judge_items([Item("fact", fid, "факт", "Любить каву")], "block"))
+    assert [f.mark for f in load_facts(agent.facts_dir)] == ["clean"] and agent._blocked_items([]) == []
+    assert replace_fact(agent.facts_dir, fid, "Любить каву з кардамоном", "2026-10-31", 240)  # what Gemma never read
+    assert [f.mark for f in load_facts(agent.facts_dir)] == ["gemini"]
+    assert agent._blocked_items([]) == [Item("fact", fid, "факт", "Любить каву з кардамоном")]  # the next block

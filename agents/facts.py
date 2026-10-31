@@ -188,7 +188,8 @@ def add_fact(folder: Path, text: str, pin: int, source: str, today: str, max_fac
 
 
 def replace_fact(folder: Path, fact_id: str, text: str, today: str, max_chars: int) -> bool:
-    """A stale fact's new text, its pin and source kept."""
+    """A stale fact's new text, its pin and source kept. v5.15.5: a new text is not what the judge rated — a `clean`
+    fact is `gemini` again (rated at the next block); a closed one stays closed."""
     path = fact_path(folder, fact_id)
     text = _norm(text)
     if path is None or not text or len(text) > max_chars:
@@ -196,7 +197,7 @@ def replace_fact(folder: Path, fact_id: str, text: str, today: str, max_chars: i
     old = parse_fact(fact_id, path.read_text(encoding="utf-8"))
     if old is None:
         return False
-    _write(path, Fact(fact_id, old.pin, today, old.source, text, old.mark))
+    _write(path, Fact(fact_id, old.pin, today, old.source, text, "gemini" if old.mark == "clean" else old.mark))
     return True
 
 
