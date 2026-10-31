@@ -200,7 +200,7 @@ from agents.private import (
     rediscover,
     save_private_state,
 )
-from agents.probe import PromptParts
+from agents.probe import Found, PromptParts, search
 from agents.reading import (
     PICK_MAX_TOKENS,
     REFLECT_LINES,
@@ -454,8 +454,11 @@ class Agent:
         self.fallback_responder: FallbackResponder | None = None
         self.fallback_window_s, self.fallback_day_max = 300, 10
         self.fallback_context, self.fallback_history_n = 32000, 60
+        self.probe_calls, self.probe_day_calls = 0, 0  # v5.16: Gemini's check of a blocked prompt's parts
         if cfg.can("fallback"):
             model = os.environ.get("FALLBACK_MODEL", "").strip()
+            self.probe_calls = int(os.environ.get("PROBE_CALLS", "12"))
+            self.probe_day_calls = int(os.environ.get("PROBE_DAY_CALLS", "60"))
             self.fallback_window_s = int(float(os.environ.get("FALLBACK_WINDOW_S", "300")))
             self.fallback_day_max = int(os.environ.get("FALLBACK_DAY_MAX", "10"))
             self.fallback_context = int(os.environ.get("FALLBACK_CONTEXT", "32000"))
@@ -475,6 +478,8 @@ class Agent:
             log.warning("judge off: %s is not set", JUDGE_KEY_VAR)
         self._judge_lock = asyncio.Lock()
         self._judge_retry_ms, self._judge_failures = 0, 0
+        self._probe_lock = asyncio.Lock()
+        self._blocked_parts: PromptParts | None = None  # v5.16: a prompt-stage block's prompt, probed once she has sent
         self._reading_lock, self._reflect_lock = asyncio.Lock(), asyncio.Lock()
         self._reading_retry_ms = self._reflect_retry_ms = self._reflect_ms = 0
         # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.
@@ -937,6 +942,7 @@ class Agent:
         if door is None:
             return False
         action = None
+        self._blocked_parts = None
         try:
             if door == "matrix":
                 await self.client.room_typing(room, True)
@@ -1004,19 +1010,92 @@ class Agent:
                 action.cancel()
             if door == "matrix":
                 await self.client.room_typing(room, False)
+            parts, self._blocked_parts = self._blocked_parts, None
+            if parts is not None:  # v5.16: once her line is sent (or none came), never on the reply path
+                self._spawn(self.probe_later(parts))
+
+    # --- v5.16: Gemini checks the parts of a blocked prompt -------------------------------------------------------------
+    def _probe_after(self, block, parts: list) -> bool:
+        """A prompt-stage block's prompt kept for the probe (spawned by `private_reply` once she has sent), when the
+        probe is on. Whether it will run — then the judge leaves the blocked prompt's older lines to it."""
+        if (block is None or block[0] != "prompt" or not parts or self.probe_calls <= 0 or self.probe_day_calls <= 0
+                or getattr(self.llm, "probe", None) is None):
+            return False
+        self._blocked_parts = parts[-1]
+        return True
+
+    async def probe_later(self, parts: PromptParts) -> None:
+        """The probe in the background, one at a time; a failure closes nothing."""
+        async with self._probe_lock:
+            try:
+                await self.probe_blocked(parts)
+            except Exception:
+                log.exception("probe: failed (bot keeps running)")
+
+    async def probe_blocked(self, parts: PromptParts) -> Found | None:
+        """After a prompt-stage block: Gemini gets that prompt in parts (`agents/probe.py`'s search, within
+        `PROBE_CALLS` and what `PROBE_DAY_CALLS` leaves today), and what it blocks is closed `censored` — a line or a
+        thought in her archive (its vector dropped, a private one out of her history for Gemini), a fact in her facts —
+        overriding a judge's `clean`. A fixed layer it blocks is only named. The log holds counts and layer names."""
+        now_ms = self.clock()
+        day, _, _ = day_bounds(now_ms, self.tz)
+        route = load_route(self.route_file)
+        spent = route.probed.get("calls", 0) if route.day == day else 0
+        budget = min(self.probe_calls, self.probe_day_calls - spent)
+        if budget <= 0:
+            log.info("probe: off — the day's calls are spent")
+            return None
+
+        async def blocked(keep_items, keep_layers):
+            system, transcript = parts.render(keep_items, keep_layers)
+            return await self.llm.probe(transcript, system)
+
+        found = await search(parts.item_ids(), parts.layer_names(), blocked, budget)
+        closed = self.close_probed(found.closed) if found.outcome in ("found", "cap") else (0, 0, 0)
+        self.route_step("probed", calls=found.calls, closed=sum(closed))
+        if found.outcome == "not_reproduced":
+            log.info("probe: not reproduced (%d calls)", found.calls)
+        elif found.outcome == "base_blocks":
+            log.warning("probe: the base blocks — layers %s (%d calls)", "+".join(found.layers), found.calls)
+        elif found.outcome in ("found", "cap") and sum(closed):
+            log.warning("probe: %d calls — closed %d lines, %d facts, %d thoughts%s", found.calls, *closed,
+                        " (the cap)" if found.outcome == "cap" else "")
+        else:
+            log.info("probe: stopped — %s (%d calls)", found.outcome, found.calls)
+        return found
+
+    def close_probed(self, ids) -> tuple[int, int, int]:
+        """The probe's ids closed `censored`: (lines, facts, thoughts) closed."""
+        line_keys = [i.removeprefix("line:") for i in ids if i.startswith("line:")]
+        thought_keys = [i for i in ids if i.startswith("thought:")]
+        fact_ids = [i.removeprefix("fact:") for i in ids if i.startswith("fact:")]
+        lines = thoughts = facts = 0
+        if self.archive is not None and (line_keys or thought_keys):
+            try:
+                private = [(x.speaker, x.text) for x in self.archive.by_keys(line_keys) if x.place == "private"]
+                lines = self.archive.mark(line_keys, "censored") if line_keys else 0
+                thoughts = self.archive.mark(thought_keys, "censored") if thought_keys else 0
+                self.close_lines(private)
+            except Exception as exc:  # noqa: BLE001
+                log.error("probe: the lines were not closed (%s)", type(exc).__name__)
+        if self.facts_dir is not None and fact_ids:
+            facts = sum(set_fact_mark(self.facts_dir, f, "censored") for f in fact_ids)
+            if facts:
+                self.facts_now()  # the archive's mirror of the facts follows
+        return lines, facts, thoughts
 
     # --- v5.14: the route of her private answer — Gemini, or the backup's window after a block --------------------------
     @property
     def route_file(self) -> Path:
         return self.memory_file.parent / f"{self.cfg.localpart}.route.json"
 
-    def route_step(self, outcome: str, rated: int = 0, flagged: int = 0):
-        """The route after an outcome (`block`, `gemini`, `backup`, `rated`, `pin:<x>`), saved — read fresh each time,
-        so a Telegram command in between is never lost. The new route."""
+    def route_step(self, outcome: str, rated: int = 0, flagged: int = 0, calls: int = 0, closed: int = 0):
+        """The route after an outcome (`block`, `gemini`, `backup`, `rated`, `probed`, `pin:<x>`), saved — read fresh
+        each time, so a Telegram command in between is never lost. The new route."""
         now_ms = self.clock()
         day, start, end = day_bounds(now_ms, self.tz)
         route = route_after(load_route(self.route_file), now_ms, outcome, self.fallback_window_s,
-                            self.fallback_day_max, day, start, end, rated, flagged)
+                            self.fallback_day_max, day, start, end, rated, flagged, calls, closed)
         try:
             save_route(self.route_file, route)
         except OSError as exc:
@@ -1139,7 +1218,8 @@ class Agent:
             return text, "backup", ("window", his)
         if where == "gemini":
             used: list = []
-            text, block = await self._gemini_text(brief, kind, used)
+            parts: list = []
+            text, block = await self._gemini_text(brief, kind, used, parts)
             if text is not None:
                 self.route_step("gemini")
                 return text, "gemini", None
@@ -1148,7 +1228,8 @@ class Agent:
             self.route_step("block")
             to_backup(block[0], block)
             log.warning("private: route=gemini — a %s, the backup answers", block[0])
-            blocked = self._blocked_items(used) if self.judge is not None else []
+            probing = self._probe_after(block, parts)
+            blocked = self._blocked_items(used) if self.judge is not None and not probing else []
             text = await self._backup_text(brief, kind, "censored" if prohibited(block) else "waiting")
             if text is not None:
                 self.route_step("backup")
@@ -1159,8 +1240,9 @@ class Agent:
         log.info("private: route=window_end — Gemini (without %d closed lines) and the backup together",
                  self.closed_in_history())
         backup = asyncio.create_task(self._backup_text(brief, kind))
+        parts: list = []
         try:
-            text, block = await self._gemini_text(brief, kind)
+            text, block = await self._gemini_text(brief, kind, parts=parts)
         except BaseException:
             backup.cancel()
             raise
@@ -1170,6 +1252,7 @@ class Agent:
             return text, "gemini", None
         if block is not None:
             self.route_step("block")
+            self._probe_after(block, parts)
         to_backup(block[0] if block is not None else "window_end", block)
         text = await backup
         if text is not None:
@@ -1199,8 +1282,9 @@ class Agent:
             log.info("private: route=window_end — Gemini (without %d closed lines), the backup ready",
                      self.closed_in_history())
             used: list = []
+            parts: list = []
             try:
-                text, block = await self._gemini_text(brief, kind, used)
+                text, block = await self._gemini_text(brief, kind, used, parts)
             except BaseException:
                 backup.cancel()
                 raise
@@ -1208,11 +1292,14 @@ class Agent:
                 backup.cancel()
                 self.route_step("gemini")
                 return text, "gemini", None
+            probing = False
             if block is not None:
                 self.route_step("block")
+                probing = self._probe_after(block, parts)
             to_backup(block[0] if block is not None else "window_end", block)
-            judge_after = ((PROHIBITED, self._blocked_items(used)) if prohibited(block)
-                           else ("block", his + self._blocked_items(used)) if block is not None
+            older = [] if probing else self._blocked_items(used)  # v5.16: the probe has them, not the judge
+            judge_after = ((PROHIBITED, older) if prohibited(block)
+                           else ("block", his + older) if block is not None
                            else ("window_end", his))
         else:
             self.route_step("flagged")

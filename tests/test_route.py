@@ -102,7 +102,8 @@ def test_the_state_file_survives_a_restart_is_private_and_holds_no_text(tmp_path
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
     assert set(json.loads(path.read_text())) == {"pin", "pinned_at_ms", "blocks", "window_until_ms", "day", "answers",
                                                  "judged",          # v5.15: today's ratings by the judge
-                                                 "pinned_blocks"}   # v5.15.3: the blocks under a pin
+                                                 "pinned_blocks",   # v5.15.3: the blocks under a pin
+                                                 "probed"}          # v5.16: today's probe calls and closings
 
 
 def test_the_judges_ratings_are_counted_for_the_day_and_reset_with_it(tmp_path):
@@ -117,6 +118,23 @@ def test_the_judges_ratings_are_counted_for_the_day_and_reset_with_it(tmp_path):
     save_route(path, r)
     assert load_route(path).judged == {"rated": 29, "flagged": 3}
     assert judged(r, ms(29, 9), 1, 1).judged == {"rated": 1, "flagged": 1}  # the next day
+
+
+def test_todays_probe_calls_are_counted_for_the_day_and_reset_with_it(tmp_path):
+    """v5.16 — `probed` adds today's probe calls and the parts they closed; a new day starts at zero; the file keeps
+    them; nothing else of the route moves."""
+    def probed(r, at, calls, closed):
+        day, start, end = day_bounds(at, "Europe/Kyiv")
+        return after(r, at, "probed", 300, 10, day, start, end, calls=calls, closed=closed)
+
+    r = probed(probed(Route(), ms(28, 20), 12, 2), ms(28, 21), 5, 0)
+    assert r.probed == {"calls": 17, "closed": 2} and r.window_until_ms is None and r.blocks == ()
+    assert r.judged == {"rated": 0, "flagged": 0} and r.answers == {"gemini": 0, "backup": 0}
+    path = tmp_path / "kira.route.json"
+    save_route(path, r)
+    assert load_route(path).probed == {"calls": 17, "closed": 2}
+    assert probed(r, ms(29, 9), 1, 0).probed == {"calls": 1, "closed": 0}  # the next day
+    assert step(r, ms(29, 9), "gemini").probed == {"calls": 0, "closed": 0}
 
 
 def test_a_missing_or_corrupt_file_is_auto_with_nothing_open(tmp_path):

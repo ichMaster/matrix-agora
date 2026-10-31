@@ -36,6 +36,7 @@ class Route:
     answers: dict = field(default_factory=lambda: {"gemini": 0, "backup": 0})
     judged: dict = field(default_factory=lambda: {"rated": 0, "flagged": 0})  # v5.15: today's lines the judge rated
     pinned_blocks: tuple[int, ...] = ()     # v5.15.3: the block times under a pin — in `blocks`, not in the day cap
+    probed: dict = field(default_factory=lambda: {"calls": 0, "closed": 0})  # v5.16: today's probe calls, parts closed
 
 
 def day_bounds(now_ms: int, tz: str) -> tuple[str, int, int]:
@@ -69,15 +70,17 @@ def capped_since(route: Route, since_ms: int) -> int:
 
 
 def after(route: Route, now_ms: int, outcome: str, window_s: int, day_max: int, day: str, day_start_ms: int,
-          day_end_ms: int, rated: int = 0, flagged: int = 0) -> Route:
+          day_end_ms: int, rated: int = 0, flagged: int = 0, calls: int = 0, closed: int = 0) -> Route:
     """The route after an outcome: `block` (Gemini blocked or refused), `gemini` / `backup` (who answered), `rated`
     (v5.15: the judge rated `rated` lines, `flagged` of them flagged), `flagged` (v5.15: at the window's end the judge
-    kept the backup on — the next window, no block, not counted toward the day cap), or `pin:<auto|gemini|backup>`
-    (a command)."""
+    kept the backup on — the next window, no block, not counted toward the day cap), `probed` (v5.16: Gemini was asked
+    `calls` times about a blocked prompt's parts, `closed` of them closed), or `pin:<auto|gemini|backup>` (a
+    command)."""
     answers = dict(route.answers) if route.day == day else {"gemini": 0, "backup": 0}
     judged = dict(route.judged) if route.day == day else {"rated": 0, "flagged": 0}
+    probed = dict(route.probed) if route.day == day else {"calls": 0, "closed": 0}
     keep_from = min(day_start_ms, now_ms - HOUR_MS)
-    r = replace(route, day=day, answers=answers, judged=judged,
+    r = replace(route, day=day, answers=answers, judged=judged, probed=probed,
                 blocks=tuple(t for t in route.blocks if t >= keep_from),
                 pinned_blocks=tuple(t for t in route.pinned_blocks if t >= keep_from))
     if outcome == "block":
@@ -97,6 +100,9 @@ def after(route: Route, now_ms: int, outcome: str, window_s: int, day_max: int, 
     elif outcome == "rated":
         r = replace(r, judged={"rated": judged.get("rated", 0) + max(int(rated), 0),
                                "flagged": judged.get("flagged", 0) + max(int(flagged), 0)})
+    elif outcome == "probed":
+        r = replace(r, probed={"calls": probed.get("calls", 0) + max(int(calls), 0),
+                               "closed": probed.get("closed", 0) + max(int(closed), 0)})
     elif outcome.startswith("pin:") and outcome[4:] in PINS:
         pin = outcome[4:]
         r = replace(r, pin=pin, pinned_at_ms=None if pin == "auto" else now_ms)
@@ -119,6 +125,7 @@ def load_route(path: Path) -> Route:
     judged = data.get("judged") if isinstance(data.get("judged"), dict) else {}
     blocks = data.get("blocks") if isinstance(data.get("blocks"), list) else []
     pinned = data.get("pinned_blocks") if isinstance(data.get("pinned_blocks"), list) else []
+    probed = data.get("probed") if isinstance(data.get("probed"), dict) else {}
     return Route(pin=data.get("pin") if data.get("pin") in PINS else "auto",
                  pinned_at_ms=_int(data.get("pinned_at_ms")),
                  blocks=tuple(t for t in (_int(b) for b in blocks) if t is not None),
@@ -126,7 +133,8 @@ def load_route(path: Path) -> Route:
                  day=str(data.get("day") or ""),
                  answers={k: _int(answers.get(k)) or 0 for k in ("gemini", "backup")},
                  judged={k: _int(judged.get(k)) or 0 for k in ("rated", "flagged")},
-                 pinned_blocks=tuple(t for t in (_int(b) for b in pinned) if t is not None))
+                 pinned_blocks=tuple(t for t in (_int(b) for b in pinned) if t is not None),
+                 probed={k: _int(probed.get(k)) or 0 for k in ("calls", "closed")})
 
 
 def save_route(path: Path, route: Route) -> None:
@@ -138,7 +146,7 @@ def save_route(path: Path, route: Route) -> None:
         os.write(fd, json.dumps({"pin": route.pin, "pinned_at_ms": route.pinned_at_ms, "blocks": list(route.blocks),
                                  "window_until_ms": route.window_until_ms, "day": route.day,
                                  "answers": route.answers, "judged": route.judged,
-                                 "pinned_blocks": list(route.pinned_blocks)}).encode())
+                                 "pinned_blocks": list(route.pinned_blocks), "probed": route.probed}).encode())
     finally:
         os.close(fd)
     os.chmod(tmp, 0o600)

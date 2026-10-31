@@ -183,6 +183,10 @@ SCHEMA: tuple[Setting, ...] = (
        "Модель-суддя розмови через резерв", choices=("google/gemma-4-31b-it", "openai/gpt-oss-safeguard-20b",
                                                      "openai/gpt-oss-120b")),
     _s("CLASSIFIER_TIMEOUT_S", "int", "30", "fallback", "cap:fallback", None, "Скільки чекати на суддю", "s", 5, 120),
+    # v5.16 — after a prompt-stage block Gemini is asked which parts of her prompt it blocks: calls per block and per
+    # day (0 for either: off)
+    _s("PROBE_CALLS", "int", "12", "fallback", "cap:fallback", None, "Скільки перевірок Gemini на один блок", "", 0, 50),
+    _s("PROBE_DAY_CALLS", "int", "60", "fallback", "cap:fallback", None, "Скільки перевірок Gemini на день", "", 0, 500),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
        choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),

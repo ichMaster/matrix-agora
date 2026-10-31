@@ -48,6 +48,15 @@ def test_two_items_that_block_only_together_are_both_found():
     assert capped.outcome == "cap" and {"line:3", "line:30"} <= set(capped.closed) and len(capped.closed) <= 6
 
 
+def test_two_causes_each_enough_alone_are_both_found_in_one_probe():
+    oracle = Oracle({"line:4"}, {"line:27"})
+    found = run(oracle, cap=40)
+    assert found.outcome == "found" and set(found.closed) == {"line:4", "line:27"}
+    assert oracle.calls[-1] == (frozenset(ITEMS) - {"line:4", "line:27"}, frozenset(LAYERS))  # what is left passes
+    capped = run(Oracle({"line:4"}, {"line:27"}))                              # the default cap: the first, at least
+    assert capped.calls <= 12 and "line:4" in capped.closed or "line:27" in capped.closed
+
+
 def test_a_blocking_layer_is_named_and_nothing_is_closed():
     found = run(Oracle({"memories"}))
     assert found.outcome == "base_blocks" and found.layers == ("memories",) and found.closed == ()

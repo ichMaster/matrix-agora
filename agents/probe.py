@@ -5,9 +5,10 @@ which only says whether it blocks. The search here is over opaque ids — the cl
 recalled lines and facts, the pinned facts, today's thoughts) and the fixed layers (the canon, the memories, …) — and
 an injected oracle, `blocked(keep_items, keep_layers)`: no text ever enters it. First the whole prompt again (a block
 not reproduced closes nothing), then the base — every layer, no item (a block there is a fixed layer's, named, and
-nothing is closed), then the items by delta debugging (QuickXplain), down to a set every one of whose items is needed. Under
-the budget of calls, the smallest set seen to block is the answer: closing it always removes a blocked combination —
-but never the whole set, which would close all she knows to Gemini.
+nothing is closed), then the items by delta debugging (QuickXplain), down to a set every one of whose items is needed — and again over
+what is left, while it still blocks, so two causes are found in one probe. Under the budget of calls, the sets found
+and the smallest set seen to block are the answer: closing them always removes blocked combinations — but never all
+that is left, which would close all she knows to Gemini. A failed call stops it: what was found before it stands.
 """
 
 from __future__ import annotations
@@ -84,6 +85,8 @@ async def search(items: Sequence[str], layers: Sequence[str], blocked: Oracle, c
 
     best: list[tuple[str, ...]] = [all_items]
     in_layers = False
+    closed: tuple[str, ...] = ()
+    left = all_items
     try:
         if not await ask(all_items, all_layers):
             return Found(calls, outcome="not_reproduced")
@@ -92,16 +95,25 @@ async def search(items: Sequence[str], layers: Sequence[str], blocked: Oracle, c
             best = [all_layers]
             layers_found = await _minimal(all_layers, lambda s: ask((), s), best)
             return Found(calls, layers=layers_found, outcome="base_blocks")
-        closed = await _minimal(all_items, lambda s: ask(s, all_layers), best)
-        return Found(calls, closed=closed, outcome="found")
+        while True:  # one blocked set at a time, until what is left passes
+            found = await _minimal(left, lambda s: ask(s, all_layers), best)
+            closed += found
+            left = tuple(i for i in left if i not in found)
+            try:  # does what is left still block? With no call left for it, the sets found stand
+                again = bool(left) and await ask(left, all_layers)
+            except _Spent:
+                again = False
+            if not again:
+                return Found(calls, closed=closed, outcome="found")
+            best = [left]
     except _Spent:
         if in_layers:
             return Found(calls, layers=best[0], outcome="base_blocks")
-        if calls < 2 or best[0] == all_items:  # the base not reached, or no part narrowed: never all of them
-            return Found(calls, outcome="cap")
-        return Found(calls, closed=best[0], outcome="cap")
+        if calls >= 2 and best[0] != left:  # narrowed below what was left: never all of it
+            closed += tuple(i for i in best[0] if i not in closed)
+        return Found(calls, closed=closed, outcome="cap")
     except _Failed:
-        return Found(calls, outcome="error")
+        return Found(calls, closed=closed, outcome="error")
 
 
 # --- v5.16: her private prompt in parts — it holds texts, in memory only, until the probe ends; the search above sees
