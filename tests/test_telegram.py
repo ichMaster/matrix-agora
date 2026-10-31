@@ -244,6 +244,26 @@ def test_send_voice_is_a_multipart_ogg_voice_note(session):
     assert value == b"OggS-bytes" and headers["Content-Type"] == "audio/ogg"
 
 
+def test_send_photo_is_a_multipart_photo_with_her_words_under_it(session, caplog):
+    # v5.17: her photo in Telegram; a caption past Telegram's limit is the caller's to split
+    from agents.telegram import CAPTION_MAX
+    session.replies = [ok({"message_id": 3}), ok({"message_id": 4})]
+    bot = TelegramBot(TOKEN)
+    assert asyncio.run(bot.send_photo(OWNER, b"JPEG-bytes", "Ось купол уночі")) is True
+    call = session.calls[0]
+    assert call["url"].endswith("/sendPhoto")
+    fields = {opts["name"]: (headers, value) for opts, headers, value in call["data"]._fields}
+    assert fields["chat_id"][1] == str(OWNER) and fields["caption"][1] == "Ось купол уночі"
+    headers, value = fields["photo"]
+    assert value == b"JPEG-bytes" and headers["Content-Type"] == "image/jpeg"
+    assert asyncio.run(bot.send_photo(OWNER, b"PNG", None, mime="image/png")) is True
+    fields = {opts["name"]: (headers, value) for opts, headers, value in session.calls[1]["data"]._fields}
+    assert "caption" not in fields and fields["photo"][0]["Content-Type"] == "image/png"
+    assert asyncio.run(bot.send_photo(OWNER, b"JPEG", "а" * (CAPTION_MAX + 1))) is False
+    assert len(session.calls) == 2 and "caption over 1024" in caplog.text
+    no_secret_in(caplog)
+
+
 def test_a_chat_action_and_a_file_path(session):
     session.replies = [ok(True), ok({"file_id": "F", "file_path": "voice/file_7.oga"})]
     bot = TelegramBot(TOKEN)

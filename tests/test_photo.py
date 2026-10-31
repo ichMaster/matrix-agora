@@ -8,6 +8,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
+import pytest
 from google.genai import errors
 
 from agents.photo import (
@@ -23,6 +24,7 @@ from agents.photo import (
     pick_faces,
     split_photo,
 )
+from agents.roster import RosterError, parse_member
 
 SECRET = "опис-5170"
 EVENING = Moment(datetime(2026, 10, 31, 21, 15, tzinfo=ZoneInfo("Europe/Kyiv")), "хмарно, +8, дрібний дощ")
@@ -150,3 +152,15 @@ def test_a_block_or_no_image_is_blocked_and_counted_with_its_stage():
     assert seen[0][3] == {"blocked": "answer"}
     photos, models, _ = maker(image(), faces=[])                                     # no faces: no selfie at all
     assert asyncio.run(photos.make(Shot("selfie", "я"), EVENING)).why == "blocked" and models.calls == []
+
+
+def test_photos_are_a_persons_capability_that_needs_her_telegram_bot():
+    # v5.17: her photos go only through Telegram
+    base = {"name": "Кіра", "user_id": "@kira:agora.lan"}
+    assert parse_member("kira", {**base, "capabilities": {"private": True, "telegram": True, "photos": True}},
+                        "kira.toml").can("photos")
+    with pytest.raises(RosterError, match="'photos' needs 'telegram' on the same member"):
+        parse_member("kira", {**base, "capabilities": {"private": True, "photos": True}}, "kira.toml")
+    with pytest.raises(RosterError, match="'photos' belongs to the persona type only"):
+        parse_member("kit", {"name": "Кіт", "user_id": "@kit:agora.lan", "type": "creature",
+                             "capabilities": {"photos": True}}, "kit.toml")

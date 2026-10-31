@@ -20,6 +20,7 @@ mood = true             # v5.10: her mood of the day — her chart under the day
 events = true           # v5.11: events of her life — her story's dated ones, an hourly roll, Lviv's news
 thoughts = true         # v5.12: she reads the news and thinks — her thoughts in her archive, «я думала…»
 fallback = true         # v5.14: GLM-4.6 on NovelAI answers her private chat when Gemini blocks (FALLBACK_MODEL on)
+photos = true           # v5.17: her photos in Telegram — Google's image model, her face from agents/canon/kira.face/
 
 [turns]
 mode = "ranked"         # ranked | ambient | mention-only

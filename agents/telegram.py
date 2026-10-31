@@ -29,6 +29,7 @@ API = "https://api.telegram.org"
 POLL_TIMEOUT_S = 30   # long polling: the server holds the request this long when there is nothing new
 CALL_TIMEOUT_S = 60   # every other call — a voice note's upload included
 TEXT_MAX = 4096       # Telegram's limit for one message's text
+CAPTION_MAX = 1024    # v5.17: Telegram's limit for a photo's caption
 CHUNK = 65_536
 VOICE_MAX_BYTES = 20_000_000  # Hermes's cap (and the Bot API's own for a download): a voice note is far smaller
 ACTION_EVERY_S = 4.0  # a chat action shows about five seconds: repeated while she composes
@@ -242,8 +243,23 @@ class TelegramBot:
         form.add_field("voice", ogg, filename="voice.ogg", content_type="audio/ogg")
         return (await self._call("sendVoice", CALL_TIMEOUT_S, data=form)).ok
 
+    async def send_photo(self, chat_id: int, image: bytes, caption: str | None = None,
+                         mime: str = "image/jpeg") -> bool:
+        """v5.17 — a photo as multipart, with her words under it; a caption over `CAPTION_MAX` is the caller's to
+        split — refused here, never cut."""
+        if caption is not None and len(caption) > CAPTION_MAX:
+            log.warning("telegram: a photo caption over %d characters, not sent", CAPTION_MAX)
+            return False
+        form = aiohttp.FormData()
+        form.add_field("chat_id", str(chat_id))
+        if caption:
+            form.add_field("caption", caption)
+        name = "photo.png" if mime == "image/png" else "photo.jpg"
+        form.add_field("photo", image, filename=name, content_type=mime)
+        return (await self._call("sendPhoto", CALL_TIMEOUT_S, data=form)).ok
+
     async def send_chat_action(self, chat_id: int, action: str) -> bool:
-        """`typing` or `record_voice` — shown about five seconds, so the caller repeats it."""
+        """`typing`, `record_voice` or (v5.17) `upload_photo` — shown about five seconds, so the caller repeats it."""
         return (await self._call("sendChatAction", CALL_TIMEOUT_S,
                                  json_body={"chat_id": chat_id, "action": action})).ok
 
