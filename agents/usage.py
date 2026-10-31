@@ -19,7 +19,8 @@ KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
          "facts",                       # v5.8: the facts' extraction and the Noos import (`facts`)
          "event",                       # v5.11: an event of her life, written by one call (`events`)
          "reading", "thought", "reflection",  # v5.12: her pick, a thought on what she read, a reflection (`thoughts`)
-         "judge")                             # v5.15: the judge rating her backup's talk (OpenRouter)
+         "judge",                             # v5.15: the judge rating her backup's talk (OpenRouter)
+         "probe")                             # v5.16: Gemini asked whether it blocks a part of a blocked prompt
 # v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan; v5.1 also the ElevenLabs
 # plan's credits), `external` (Lumi's own)
 BILLING = ("api", "subscription", "external")

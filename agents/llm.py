@@ -186,6 +186,35 @@ class GeminiClient:
         self._report(kind, getattr(resp, "usage_metadata", None), True, model)
         return text, finish_of(resp)
 
+    async def probe(self, transcript: str, system_instruction: str | None, kind: str = "probe") -> bool | None:
+        """v5.16 — does Gemini block this prompt at the prompt stage? One call on `GEMINI_REPLY_MODEL` for the
+        verdict alone: one output token at the lowest thinking. True: blocked at the prompt stage; False: anything
+        else (an answer, a cut, an answer-stage block); None: the call failed. Never sets `LAST_BLOCK` — an answer
+        must not read a probe's block — and never logs a text; its usage line is the kind `probe`."""
+        model = self.reply_model
+        thinking = (types.ThinkingConfig(include_thoughts=False, thinking_level=types.ThinkingLevel.LOW)
+                    if model in THINKING_MODELS else types.ThinkingConfig(thinking_budget=0))
+        try:
+            resp = await self._client.aio.models.generate_content(
+                model=model,
+                contents=transcript,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    max_output_tokens=1,
+                    thinking_config=thinking,
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001 — a failed probe closes nothing
+            log.debug("probe: failed (%s)", type(exc).__name__)
+            self._report(kind, None, False, model)
+            return None
+        block = blocked_reason(resp)
+        blocked = block is not None and block[0] == "prompt"
+        self._report(kind, getattr(resp, "usage_metadata", None), not blocked, model, block if blocked else None)
+        log.debug("probe: %s", "blocked" if blocked else "passed")
+        return blocked
+
 
     async def embed(self, texts: list[str], task: str = "RETRIEVAL_DOCUMENT", kind: str = "embed") -> list | None:
         """v5.8 — the texts' embeddings (`EMBED_DIM` floats each), in one call: `RETRIEVAL_DOCUMENT` for the archive's

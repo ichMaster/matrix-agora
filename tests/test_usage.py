@@ -54,7 +54,8 @@ def test_kind_list_is_the_contract():
                      "embed", "facts",                     # v5.8: the archive's embeddings, the facts
                      "event",                              # v5.11: an event of her life
                      "reading", "thought", "reflection",   # v5.12: her reading and thoughts
-                     "judge")                              # v5.15: the judge of her backup's talk
+                     "judge",                              # v5.15: the judge of her backup's talk
+                     "probe")                              # v5.16: Gemini checks the parts of a blocked prompt
 
 
 def test_the_judges_line_is_priced_by_its_model_and_holds_no_text():

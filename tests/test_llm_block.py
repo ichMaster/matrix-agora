@@ -217,3 +217,58 @@ def test_her_own_lines_about_ai_or_a_request_are_not_a_refusal(text):
 def test_a_models_formula_still_is_one(text):
     from agents.llm import refusal_marker
     assert refusal_marker(text) is not None
+
+
+# --- v5.16: the probe — does Gemini block this prompt at the prompt stage? --------------------------------------------
+class Recording(Models):
+    def __init__(self, resp):
+        super().__init__(resp)
+        self.configs = []
+
+    async def generate_content(self, model, contents, config):
+        self.configs.append((model, config))
+        if isinstance(self.resp, Exception):
+            raise self.resp
+        return self.resp
+
+
+def prober(monkeypatch, resp, reply_model="gemini-3.1-pro-preview"):
+    models = Recording(resp)
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-flash")
+    monkeypatch.setenv("GEMINI_REPLY_MODEL", reply_model)
+    monkeypatch.setattr(llm_mod.genai, "Client", lambda: SimpleNamespace(aio=SimpleNamespace(models=models)))
+    seen = []
+    return GeminiClient(sink=lambda kind, model, meta, ok, **kw: seen.append((kind, model, ok, kw))), seen, models
+
+
+def test_a_probe_blocked_at_the_prompt_stage_is_true_and_counted_as_probe(monkeypatch, caplog):
+    caplog.set_level(logging.DEBUG, logger="agent.llm")
+    llm, seen, models = prober(monkeypatch, prompt_blocked("PROHIBITED_CONTENT"))
+    llm_mod.LAST_BLOCK.set(("answer", "safety", None))
+    assert asyncio.run(llm.probe(f"Ich: {SECRET}", f"КАНОН {SECRET}")) is True
+    assert seen == [("probe", "gemini-3.1-pro-preview", False, {"blocked": "prompt"})]
+    model, config = models.configs[0]
+    assert model == "gemini-3.1-pro-preview" and config.max_output_tokens == 1
+    assert config.thinking_config.thinking_level == types.ThinkingLevel.LOW
+    assert llm_mod.LAST_BLOCK.get() == ("answer", "safety", None)                  # a probe never sets it
+    assert "probe: blocked" in caplog.text and SECRET not in caplog.text and "gemini blocked" not in caplog.text
+
+
+@pytest.mark.parametrize("resp", [answer_with("STOP", text="а"), answer_with("MAX_TOKENS"),
+                                  answer_with("SAFETY"), answer_with("STOP", text="")])
+def test_anything_but_a_prompt_stage_block_passes(monkeypatch, resp):
+    llm, seen, _ = prober(monkeypatch, resp)
+    assert asyncio.run(llm.probe("Ich: привіт", "КАНОН")) is False
+    assert seen == [("probe", "gemini-3.1-pro-preview", True, {})]
+
+
+def test_a_failed_probe_is_none_and_a_model_without_thinking_runs_with_none(monkeypatch, caplog):
+    caplog.set_level(logging.DEBUG, logger="agent.llm")
+    llm, seen, _ = prober(monkeypatch, RuntimeError(SECRET))
+    assert asyncio.run(llm.probe("Ich: привіт", "КАНОН")) is None
+    assert seen == [("probe", "gemini-3.1-pro-preview", False, {})]
+    assert "probe: failed (RuntimeError)" in caplog.text and SECRET not in caplog.text
+    flash, _, models = prober(monkeypatch, answer_with("STOP", text="а"), reply_model="")
+    assert asyncio.run(flash.probe("Ich: привіт", "КАНОН")) is False
+    model, config = models.configs[0]
+    assert model == "gemini-2.5-flash" and config.thinking_config.thinking_budget == 0
