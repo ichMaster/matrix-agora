@@ -48,6 +48,13 @@ def test_the_marker_lines_are_cut_and_the_last_one_names_the_shot():
     assert split_photo("Фото з Единбурга в мене десь є") == ("Фото з Единбурга в мене десь є", None)  # no colon
 
 
+def test_her_kept_note_echoed_anywhere_in_any_case_is_cut_and_names_the_shot():
+    # v5.17 review #2: her line is kept as «…\n[селфі: …]»; Gemini may echo it inside a line, in lower case
+    assert split_photo("Ось я знову [селфі: я на балконі] 🙂") == ("Ось я знову 🙂", Shot("selfie", "я на балконі"))
+    assert split_photo("Дивись\n[Фото: чашка на підвіконні]") == ("Дивись", Shot("photo", "чашка на підвіконні"))
+    assert split_photo("ну [фото] і що") == ("ну [фото] і що", None)                  # no colon: not a note
+
+
 def test_the_request_holds_her_words_her_moment_and_the_look_and_the_face_only_for_a_selfie():
     selfie = photo_request(Shot("selfie", f"я на балконі з біноклем {SECRET}"), EVENING)
     photo = photo_request(Shot("photo", f"полиця склеєних чашок {SECRET}"), EVENING)

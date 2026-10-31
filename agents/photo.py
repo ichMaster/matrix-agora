@@ -41,6 +41,8 @@ KINDS = {"ФОТО": "photo", "СЕЛФІ": "selfie"}
 _MARK = r"(?P<kind>ФОТО|СЕЛФІ)[ \t*_»\"')\]]*[:—–-][ \t*_]*(?P<shot>[^\n]*)"
 MARK_LINE_RE = re.compile(r"^[ \t>*_\-–—•\d.)«\"'(\[]*" + _MARK, re.MULTILINE | re.IGNORECASE)
 MARK_ANY_RE = re.compile(r"[«\"'(\[]*[ \t]*" + _MARK)
+# v5.17 review #2: her kept note, `[селфі: …]` / `[фото: …]`, anywhere in a line and in any case — Gemini may echo it
+NOTE_RE = re.compile(r"\[[ \t]*(?P<kind>ФОТО|СЕЛФІ)[ \t]*[:—–-][ \t]*(?P<shot>[^\]\n]*)\]", re.IGNORECASE)
 PARTS = {"ранок": "morning", "день": "afternoon", "вечір": "evening", "ніч": "night"}
 SEASONS = {"зима": "winter", "весна": "spring", "літо": "summer", "осінь": "autumn"}
 STYLE = ("A casual photo taken on a smartphone and sent in a private chat: natural light, slightly imperfect framing, "
@@ -89,13 +91,16 @@ def split_photo(text: str) -> tuple[str, Shot | None]:
     lines, shot = [], None
     for line in (text or "").split("\n"):
         m = MARK_LINE_RE.match(line) or MARK_ANY_RE.search(line)
-        if m is None:
+        note = NOTE_RE.search(line) if m is None else None
+        if m is None and note is None:
             lines.append(line)
             continue
-        description = split_tags(m.group("shot"))[0].strip(" \t«»\"'*_()[]")  # no voice tag in a shot
+        found = m or note
+        description = split_tags(found.group("shot"))[0].strip(" \t«»\"'*_()[]")  # no voice tag in a shot
         if description:
-            shot = Shot(KINDS[m.group("kind").upper()], description)
-        kept = line[:m.start()].rstrip()
+            shot = Shot(KINDS[found.group("kind").upper()], description)
+        kept = (line[:m.start()] if m is not None
+                else re.sub(r"[ \t]{2,}", " ", line[:note.start()] + line[note.end():])).rstrip()
         if kept:
             lines.append(kept)
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip(), shot
