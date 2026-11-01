@@ -283,3 +283,19 @@ def test_a_prompt_stage_block_at_the_windows_end_is_probed_too(tmp_path, monkeyp
     run(agent, "probe_later")
     assert mark_of(agent, "$a1") == "censored"
     assert MARK not in asyncio.run(agent._gemini_private_prompt(PRIVATE_BRIEF))
+
+
+def test_a_probe_that_proves_nothing_hands_the_older_lines_to_the_judge(tmp_path, monkeypatch):
+    """Code review v5.19 #1: since a capped probe closes only what it proved, one that proved nothing used to leave
+    the cause to nobody — the judge had left the older lines to it — and every answer blocked again."""
+    agent = probing(tmp_path, monkeypatch)
+    agent.probe_calls = 2                                                          # the whole prompt, the base: no more
+    agent.archive.append("$a1", ms(10) - YESTERDAY, "agora", "matrix", "Бруно", f"Бачив телескоп {MARK}")
+    agent.private_line("Як там телескоп?", ms(17), "telegram", "tg:1")
+    asyncio.run(agent.private_reply())
+    run(agent, "judge_later")                                                      # his line and her answer only
+    assert not any(MARK in t for call in agent.judge.calls for t in call)
+    run(agent, "probe_later")
+    assert mark_of(agent, "$a1") == "gemini"                                       # nothing proven, nothing closed
+    run(agent, "judge_later")                                                      # now the older lines: the judge's
+    assert any(MARK in t for call in agent.judge.calls for t in call)

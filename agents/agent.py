@@ -1190,6 +1190,12 @@ class Agent:
                         {"cap": " (the cap)", "error": " (then a call failed)"}.get(found.outcome, ""))
         else:
             log.info("probe: stopped — %s (%d calls)", found.outcome, found.calls)
+        if not found.closed and found.outcome in ("cap", "error") and self.judge is not None:
+            # code review v5.19 #1: it proved nothing, so the judge rates the blocked prompt's older lines, as when no
+            # probe runs — else nobody closes the cause and every answer blocks again
+            items = self._blocked_items([line for group in parts.groups for _, line in group])
+            if items:
+                self._spawn(self.judge_later(items, "block"))
         return found
 
     def close_probed(self, ids) -> tuple[int, int, int]:
