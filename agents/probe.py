@@ -154,5 +154,7 @@ class PromptParts:
         sections["recalled"] = self.draw_recalled([g for g in groups if g])
         sections["facts"] = self.draw_facts([f for i, f in self.facts if i in items])
         sections["thoughts"] = self.draw_thoughts([t for i, t in self.thoughts if i in items])
-        return (build_instruction(**sections),
-                build_transcript([entry for i, entry in self.history if i is None or i in items]))
+        kept = [entry for i, entry in self.history if i is None or i in items]
+        # a time line (no name — `world.history_times`, 2026-11-01) stays only before a line it tells the time of
+        kept = [e for n, e in enumerate(kept) if e[0] or (n + 1 < len(kept) and kept[n + 1][0])]
+        return build_instruction(**sections), build_transcript(kept)

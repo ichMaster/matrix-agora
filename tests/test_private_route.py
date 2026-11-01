@@ -237,3 +237,21 @@ def test_geminis_history_is_the_last_lines_open_to_it_the_backups_every_line(tmp
     assert [t for _, t in agent.private_history] == [f"через backup {i}" for i in range(4)]  # the backup's view
     assert [t for _, t in agent.gemini_history()] == ["відкритий 0", "відкритий 1", "відкритий 2"]
     assert agent.closed_in_history() == 4
+
+
+def test_geminis_transcript_says_when_the_talk_was_and_how_long_the_pause_lasted(tmp_path, monkeypatch):
+    """The owner, 2026-11-01 — the days between were closed to Gemini, so Tuesday's «I'm off to Kyiv tomorrow» sat
+    right before Saturday's lines and read as tonight's: her transcript now says when, and how long the pause was;
+    the history's data (the probe's ids, the judge's items) stays lines only."""
+    gemini = Gemini()
+    agent = her(tmp_path, monkeypatch, gemini)
+    day = 86_400_000
+    agent.private_line("Я завтра їду до Києва", ms(22, 50), "telegram", "tg:w1")
+    agent.private_line("Я вже вдома", ms(22, 27) + 4 * day, "telegram", "tg:s1")   # Tuesday → Saturday
+    agent.clock = lambda: ms(22, 28) + 4 * day
+    assert asyncio.run(agent.private_reply()) is True
+    t = gemini.transcripts[-1]
+    assert (t.index("— цього тижня: —") < t.index("Ich: Я завтра їду до Києва")
+            < t.index("— через 3 дні, сьогодні ввечері: —") < t.index("Ich: Я вже вдома"))
+    assert [s for s, _ in agent.gemini_history()] == ["Ich", "Ich", "Кіра"]           # her answer joined it
+    assert [i for i, _ in agent.gemini_history_shown()][:4] == [None, "line:tg:w1", None, "line:tg:s1"]

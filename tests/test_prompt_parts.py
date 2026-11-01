@@ -6,6 +6,7 @@ import asyncio
 
 from agents.facts import add_fact
 from agents.private import PRIVATE_BRIEF
+from agents.probe import PromptParts
 from agents.thoughts import Thought, archive_key
 from agents.world import local_now
 from tests.test_archive import EmbedLLM
@@ -96,3 +97,12 @@ def test_without_her_archive_the_history_has_no_closable_line(tmp_path, monkeypa
     parts = capture(agent)
     assert all(i is None for i, _ in parts.history) and parts.groups == []
     assert parts.render(set(), set(parts.layer_names()))[1] == parts.render()[1]  # never left out
+
+
+def test_a_time_line_goes_with_the_lines_it_tells_the_time_of():
+    """2026-11-01: a part without a block's lines has no time line for them; one with them keeps it."""
+    parts = PromptParts(layers={"name": "Кіра", "canon": "Канон."}, history=[(None, ("", "— цього тижня: —")), ("line:a", ("Ich", "До Києва")),
+                                 (None, ("", "— через 3 дні, сьогодні ввечері: —")), ("line:b", ("Ich", "Я вдома"))])
+    assert parts.render()[1] == "— цього тижня: —\nIch: До Києва\n— через 3 дні, сьогодні ввечері: —\nIch: Я вдома"
+    assert parts.render({"line:b"})[1] == "— через 3 дні, сьогодні ввечері: —\nIch: Я вдома"
+    assert parts.render(set())[1] == ""

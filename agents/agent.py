@@ -328,6 +328,7 @@ from agents.weather import fetch_weather, load_weather, save_weather
 from agents.world import (
     MONTHS_NOM,
     day_label,
+    history_times,
     last_talk_line,
     local_now,
     month_label,
@@ -1271,7 +1272,7 @@ class Agent:
             thoughts = self.day_thoughts_keyed(now.date())[-self.thoughts_in_prompt:]
         can_recall = self.cfg.can("recall")
         return PromptParts(
-            layers=layers, history=self.gemini_history_keyed(),
+            layers=layers, history=self.gemini_history_shown(),
             groups=[[(line_id(line), line) for line in group] for group in drawn] if can_recall else [],
             facts=[(f"fact:{f.id}", f) for f in shown], thoughts=thoughts,
             draw_recalled=lambda groups: render_recalled(groups, self.tz, now) if groups else None,
@@ -1315,8 +1316,8 @@ class Agent:
         v5.16: `parts` gets the prompt in parts, for the probe after a prompt-stage block."""
         LAST_BLOCK.set(None)
         shots: list = []
-        text = await self._compose(await self._gemini_private_prompt(brief, used, parts), lines=self.gemini_history(),
-                                   kind=kind, shots=shots)
+        text = await self._compose(await self._gemini_private_prompt(brief, used, parts),
+                                   lines=[entry for _, entry in self.gemini_history_shown()], kind=kind, shots=shots)
         if text is not None and shots:  # v5.17: the photo her line asked for, made once her answer is chosen
             self._pending_shot = shots[-1]
         return text, (LAST_BLOCK.get() if text is None else None)
@@ -1592,14 +1593,36 @@ class Agent:
     def gemini_history_keyed(self) -> list[tuple[str | None, tuple[str, str]]]:
         """`gemini_history`, each line with its probe id (`line:<key>`; v5.16) — None for one without a key (her own
         history, when the archive is missing or fails)."""
-        if self.archive is not None:
-            try:
-                lines = self.archive.latest("private", max(self.history_n, 1))
-                return [(f"line:{line.key}", (line.speaker, history_entry(line.text))) for line in lines
-                        if (line.speaker, line.text) not in self._closed]
-            except Exception as exc:  # noqa: BLE001
-                log.error("archive: Gemini's history was not read (%s) — her own", type(exc).__name__)
-        return [(None, line) for line in self.private_history if line not in self._closed]
+        lines = self._gemini_lines()
+        if lines is None:
+            return [(None, line) for line in self.private_history if line not in self._closed]
+        return [(f"line:{line.key}", (line.speaker, history_entry(line.text))) for line in lines]
+
+    def _gemini_lines(self) -> list | None:
+        """The archive's last `HISTORY_N` private lines open to Gemini — None without the archive or when it fails."""
+        if self.archive is None:
+            return None
+        try:
+            lines = self.archive.latest("private", max(self.history_n, 1))
+        except Exception as exc:  # noqa: BLE001
+            log.error("archive: Gemini's history was not read (%s) — her own", type(exc).__name__)
+            return None
+        return [line for line in lines if (line.speaker, line.text) not in self._closed]
+
+    def gemini_history_shown(self) -> list[tuple[str | None, tuple[str, str]]]:
+        """`gemini_history_keyed` as her prompt shows it (the owner, 2026-11-01): a time line (`history_times`, no id,
+        no name) before the first line and after every long pause — the closed days leave a gap, and Wednesday's talk
+        right before Sunday's read as tonight's."""
+        lines = self._gemini_lines()
+        if lines is None:
+            return self.gemini_history_keyed()
+        times = history_times([line.ts_ms for line in lines], local_now(self.clock(), self.tz), self.tz)
+        out: list[tuple[str | None, tuple[str, str]]] = []
+        for i, line in enumerate(lines):
+            if i in times:
+                out.append((None, ("", times[i])))
+            out.append((f"line:{line.key}", (line.speaker, history_entry(line.text))))
+        return out
 
     def closed_in_history(self) -> int:
         """How many lines of her history (the backup's view) Gemini's history leaves out — for the log only."""

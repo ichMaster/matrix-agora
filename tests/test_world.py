@@ -6,6 +6,7 @@ import pytest
 from agents.world import (
     ago,
     day_label,
+    history_times,
     last_talk_line,
     local_now,
     month_label,
@@ -13,6 +14,7 @@ from agents.world import (
     part_of_day,
     relative_when,
     season,
+    span,
     week_label,
 )
 
@@ -82,6 +84,26 @@ def test_ago_across_the_years_turn_and_a_month_start():
     assert ago(k(2026, 12, 31, 10, 0), k(2027, 1, 2, 10, 0)) == "позавчора"
     assert ago(k(2026, 12, 29, 10, 0), k(2027, 1, 1, 10, 0)) == "цього тижня"   # Tuesday → Friday, one week
     assert ago(k(2026, 11, 28, 10, 0), k(2027, 1, 1, 10, 0)) == "якось"
+
+
+def ts(*a):
+    return int(k(*a).timestamp() * 1000)
+
+
+def test_her_history_gets_its_time_before_the_first_line_and_after_a_long_pause():
+    """The owner, 2026-11-01: Wednesday's talk sat right before Sunday's and «I'm off to Kyiv» read as tonight's."""
+    stamps = [ts(2026, 10, 28, 22, 50), ts(2026, 10, 28, 23, 11), ts(2026, 11, 1, 22, 27), ts(2026, 11, 1, 22, 40)]
+    assert history_times(stamps, k(2026, 11, 1, 23, 0), "Europe/Kyiv") == {
+        0: "— цього тижня: —", 2: "— через 3 дні, сьогодні ввечері: —"}
+    assert history_times([], k(2026, 11, 1, 23, 0), "Europe/Kyiv") == {}
+
+
+def test_a_pause_under_three_hours_gets_no_line_and_hours_are_said_rightly():
+    day = [ts(2026, 11, 1, 9, 0), ts(2026, 11, 1, 11, 59), ts(2026, 11, 1, 14, 59), ts(2026, 11, 2, 11, 59)]
+    assert history_times(day, k(2026, 11, 2, 12, 0), "Europe/Kyiv") == {
+        0: "— вчора: —", 2: "— через 3 години, вчора: —", 3: "— через 21 годину, сьогодні вранці: —"}
+    assert [span(h * 3_600_000) for h in (1, 4, 5, 11, 22, 24, 48, 120)] == [
+        "1 годину", "4 години", "5 годин", "11 годин", "22 години", "1 день", "2 дні", "5 днів"]
 
 
 def test_labels():

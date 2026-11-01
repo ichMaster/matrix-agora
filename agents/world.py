@@ -62,6 +62,41 @@ def relative_when(then: datetime, now: datetime) -> str:
     return f"{then.day} {MONTHS_GEN[then.month - 1]}"
 
 
+HISTORY_GAP_MS = 3 * 3600 * 1000   # a pause this long in her private history gets a time line (the owner, 2026-11-01)
+
+
+def _hours_word(n: int) -> str:
+    if n % 10 == 1 and n % 100 != 11:
+        return "годину"
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return "години"
+    return "годин"
+
+
+def span(pause_ms: int) -> str:
+    """How long a pause was, as a person says it: hours under a day, then days."""
+    hours = max(1, pause_ms // 3_600_000)
+    if hours < 24:
+        return f"{hours} {_hours_word(hours)}"
+    days = hours // 24
+    return f"{days} {_days_word(days)}"
+
+
+def history_times(stamps: list[int], now: datetime, tz: str, gap_ms: int = HISTORY_GAP_MS) -> dict[int, str]:
+    """Her private history's time lines (the owner, 2026-11-01: Gemini's history held Wednesday's talk right before
+    Sunday's, so «I'm off to Kyiv» read as tonight's): index → the line shown before that history line — the first
+    line's when, and after a pause of at least `gap_ms` how long it was and when the next line came («— через 3 дні,
+    сьогодні ввечері: —»). As a person remembers it (`ago`), never a date or an hour. Pure."""
+    out: dict[int, str] = {}
+    for i, ts in enumerate(stamps):
+        when = ago(local_now(ts, tz), now)
+        if i == 0:
+            out[i] = f"— {when}: —"
+        elif ts - stamps[i - 1] >= gap_ms:
+            out[i] = f"— через {span(ts - stamps[i - 1])}, {when}: —"
+    return out
+
+
 def ago(then: datetime, now: datetime) -> str:
     """When a remembered line was, as a person remembers it — never a date or an hour (the owner, 2026-10-26: «26
     жовтня» gives her away). The nearest band wins; the week starts on Monday."""

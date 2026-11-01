@@ -190,8 +190,12 @@ def append_history(history: list[tuple[str, str]], name: str, text: str, cap: in
 
 
 def build_transcript(history: list[tuple[str, str]]) -> str:
-    """One "Name: text" line per message — the literal contract."""
-    return "\n".join(f"{name}: {text}" for name, text in history)
+    """One "Name: text" line per message — the literal contract; an entry with no name (her private history's time
+    line, `world.history_times`) is its text alone."""
+    return "\n".join(f"{name}: {text}" if name else text for name, text in history)
+
+
+TIME_LINE_RE = re.compile(r"^— (?:через [^,\n]+, )?[^:\n—]+: —$")  # `history_times`' line, never hers to say
 
 
 LEAD_TAGS_RE = re.compile(rf"(?:{TAG_RE.pattern}\s*)+")  # the voice tags a line opens with (v5.9)
@@ -203,10 +207,11 @@ def clean_reply(text: str, own_name: str, other_names: list[str]) -> str | None:
     agent's own words: strip its prefix, stop at the first other speaker's line;
     if the reply opens with someone else's line, take the first own-prefixed block.
     Returns None when nothing of its own remains. A prefix is read past any voice tags before it (v5.9 review #1:
-    `[sighs] Ада: …` is still Ада's line); the tags of an own line stay for the voice."""
+    `[sighs] Ада: …` is still Ада's line); the tags of an own line stay for the voice. A time line her history showed
+    (`TIME_LINE_RE`, 2026-11-01) is never her words."""
     own = f"{own_name}:"
     others = tuple(f"{n}:" for n in other_names)
-    lines = [ln.strip() for ln in text.strip().splitlines()]
+    lines = [ln.strip() for ln in text.strip().splitlines() if not TIME_LINE_RE.match(ln.strip())]
     tags = [m.group() if (m := LEAD_TAGS_RE.match(ln)) else "" for ln in lines]
     bare = [ln[len(t):] for ln, t in zip(lines, tags, strict=True)]
     start = 0

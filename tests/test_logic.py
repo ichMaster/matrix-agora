@@ -68,6 +68,15 @@ def test_history_is_capped_and_keeps_everyone():
 def test_transcript_is_name_colon_text_lines():
     from agents.logic import build_transcript
     assert build_transcript([("Ich", "привіт"), ("Ада", "вітаю")]) == "Ich: привіт\nАда: вітаю"
+    # 2026-11-01: her private history's time line has no name and stands alone
+    assert build_transcript([("", "— цього тижня: —"), ("Ich", "привіт")]) == "— цього тижня: —\nIch: привіт"
+
+
+def test_a_time_line_is_never_her_words():
+    from agents.logic import clean_reply
+    assert clean_reply("— через 3 дні, сьогодні ввечері: —\nКіра: Ти вже повернувся?", "Кіра", ["Ich"]) == (
+        "Ти вже повернувся?")
+    assert clean_reply("— Ну так, — сказала я.", "Кіра", ["Ich"]) == "— Ну так, — сказала я."
 
 
 def test_instruction_order_canon_memory_rules():
