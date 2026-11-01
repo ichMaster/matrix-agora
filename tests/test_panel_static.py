@@ -73,7 +73,7 @@ def test_the_page_follows_capabilities():
     pronoun; with every capability on (Ada, Bruno) the page is unchanged."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert ('const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", '
-            'facts: "facts",\n                 voice: "voice", events: "events", thoughts: "thoughts"};') in js
+            'facts: "facts",\n                 voice: "voice", events: "events", thoughts: "thoughts", talk: "talk"};') in js
     # v5.8 Facts, v5.9 Voice, v5.11 Events, v5.12 Thoughts need their capability
     assert 'rel="noopener noreferrer"' in js and "eventsTabHtml(a, mem)" in js
     assert 'PRONOUN = {she: "She", he: "He", it: "It"}' in js
@@ -305,7 +305,7 @@ def test_the_thoughts_tab_and_the_card_line():
     a news thought's title and an https-only source link, every text escaped — and «Last thought» under «Last
     event» on her card."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert '["events", "Events"], ["thoughts", "Thoughts"], ["facts", "Facts"]' in js
+    assert '["events", "Events"], ["thoughts", "Thoughts"], ["talk", "Talk"], ["facts", "Facts"]' in js
     assert 'if (tab === "thoughts") return thoughtsTabHtml(a, mem);' in js
     tab = js[js.index("function thoughtsTabHtml(a, mem) {"):]
     tab = tab[:tab.index("\n}\n")]
@@ -440,3 +440,15 @@ def test_the_csv_header_and_its_escaping():
     assert """return /[",\\r\\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;""" in js
     assert "link.download = `agora-usage-${d.agent || \"all\"}-${d.since}-${d.until}.csv`;" in js
     assert js.count("fetch(") == 2                                        # the CSV is made from the data already here
+
+
+
+def test_the_talk_tab_shows_the_levels_and_the_closed_counts_escaped():
+    """v5.20: her private chat in layers, read-only — the hours, the four-hour blocks and the weeks, each period's
+    summary and, when it has any, its closed lines' count; never a closed line's text."""
+    js = js_text()
+    assert 'const TALK_LEVELS = [["hour", "Hours"], ["4h", "Four hours"], ["week", "Weeks"]];' in js
+    assert 'if (tab === "talk") return talkTabHtml(a, mem);' in js
+    assert '${r.text ? esc(r.text) : `<span class="muted">—</span>`}' in js
+    assert 'r.closed_lines ? `${r.closed_lines} closed` : ""' in js and "esc(notes.join(" in js
+    assert "esc(talkSpan(r))" in js

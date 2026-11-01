@@ -100,3 +100,52 @@ def test_her_prompt_shows_each_period_at_its_coarsest_level_before_the_window_ol
     assert talk_section(rows, before_ms=ms(2026, 10, 1), now=now, tz=TZ) is None
     budgeted = talk_section(rows, before_ms=ms(2026, 11, 2, 10, 30), now=now, tz=TZ, words_budget=9)
     assert budgeted.splitlines()[1:] == ["- вчора ввечері: Вечір.", "- сьогодні вранці: Кава."]  # the oldest go first
+
+
+def test_the_recheck_keeps_closed_only_what_blocks_alone_or_together_and_a_failed_call():
+    import asyncio
+
+    from agents.talk import sift
+    items = [(f"k{i}", f"Ich: рядок {i}") for i in range(45)]
+
+    async def gemini(text, pair=("рядок 30", "рядок 31"), failing="рядок 40"):
+        if failing in text:
+            return None
+        lines = text.split("\n")
+        return any(line.endswith("рядок 7") for line in lines) or all(any(line.endswith(p) for line in lines)
+                                                                        for p in pair)
+
+    closed, calls = asyncio.run(sift(items, gemini))
+    assert {"k7", "k30", "k31"} <= closed                                 # alone, and a pair only together
+    assert {"k40", "k41", "k42", "k43", "k44"} <= closed                  # their group's call failed: kept closed
+    assert not {"k0", "k8", "k29", "k32", "k39"} & closed
+    assert calls < 45                                                     # the groups that pass take one call
+
+
+def test_the_recheck_command_reopens_what_passes_and_prints_counts_only(tmp_path, monkeypatch, capsys):
+    import agents.llm as llm_mod
+    from agents.talk import main
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("TIMEZONE", TZ)
+    (tmp_path / "state").mkdir()
+    arc = Archive(tmp_path / "state" / "kira.archive.db")
+    for i, (text, mark) in enumerate([("чистий рядок", "censored"), ("погане слово", "censored"),
+                                      ("резервне", "reopened"), ("поза межами", "censored")]):
+        arc.append(f"tg:{i}", ms(2026, 11, 1 if i < 3 else 2, 10, i), "private", "telegram", "Ich", text)
+        arc.mark([f"tg:{i}"], mark)
+    arc.close()
+
+    class Client:
+        def __init__(self, sink=None):
+            pass
+
+        async def probe(self, transcript, system_instruction, kind="probe"):
+            return "погане" in transcript
+
+    monkeypatch.setattr(llm_mod, "GeminiClient", Client)
+    assert main(["recheck", "--since", "2026-11-01", "--until", "2026-11-01"]) == 0
+    out = capsys.readouterr().out
+    assert out.strip() == "recheck: 2 censored · reopened 1 · still closed 1 · calls 3"
+    arc = Archive(tmp_path / "state" / "kira.archive.db")
+    marks = dict(arc.db.execute("SELECT key, mark FROM lines").fetchall())
+    assert marks == {"tg:0": "clean", "tg:1": "censored", "tg:2": "reopened", "tg:3": "censored"}

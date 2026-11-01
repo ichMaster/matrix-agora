@@ -8,11 +8,11 @@ const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today",
 // review #11: a kind not listed above still shows, after the listed ones — a tab's rows always add up to its total
 function kindsOf(byKind) { return [...KIND_ORDER.filter((k) => byKind[k]), ...Object.keys(byKind).filter((k) => !KIND_ORDER.includes(k)).sort()]; }
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
-              ["today", "Today"], ["mood", "Mood"], ["events", "Events"], ["thoughts", "Thoughts"], ["facts", "Facts"], ["voice", "Voice"], ["tokens", "Tokens"],
+              ["today", "Today"], ["mood", "Mood"], ["events", "Events"], ["thoughts", "Thoughts"], ["talk", "Talk"], ["facts", "Facts"], ["voice", "Voice"], ["tokens", "Tokens"],
               ["files", "Files"], ["settings", "Settings"]];
 // v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
 const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", facts: "facts",
-                 voice: "voice", events: "events", thoughts: "thoughts"};
+                 voice: "voice", events: "events", thoughts: "thoughts", talk: "talk"};
 const SERIES = ["a", "b", "c", "d", "e"];  // stacked token bars: one tint of the accent per agent (v4.2: N agents)
 const PRONOUN = {she: "She", he: "He", it: "It"};
 function can(a, cap) { return !a.capabilities || a.capabilities.includes(cap); }
@@ -1095,6 +1095,31 @@ function thoughtsTabHtml(a, mem) {
   }).join("")).join("");
 }
 
+// v5.20 — her private chat in layers: the summaries by level, newest first, each with its closed lines' count only
+const TALK_LEVELS = [["hour", "Hours"], ["4h", "Four hours"], ["week", "Weeks"]];
+function talkSpan(r) {
+  const s = new Date(r.start), e = new Date(r.end);
+  const day = s.toLocaleDateString("en-US", {weekday: "short", month: "short", day: "numeric"});
+  const hm = (d) => d.toTimeString().slice(0, 5);
+  return r.level === "week" ? `week of ${day}` : `${day} · ${hm(s)}–${hm(e)}`;
+}
+function talkTabHtml(a, mem) {
+  const rows = mem.talk;
+  if (!rows) return `<p class="muted">Talk unreadable.</p>`;
+  if (!rows.length) return `<p class="muted">${esc(a.display)}'s private chat has no summaries yet — each hour is written once it is over.</p>`;
+  return TALK_LEVELS.map(([level, title]) => {
+    const mine = rows.filter((r) => r.level === level);
+    if (!mine.length) return "";
+    return `<div class="section-label" style="margin:14px 0 6px">${esc(title)}</div>` + mine.map((r) => {
+      const notes = [r.closed_lines ? `${r.closed_lines} closed` : "", r.left_out ? `${r.left_out} left out` : ""].filter(Boolean);
+      return `<div class="rule-b" style="padding:8px 0;display:flex;gap:12px;align-items:flex-start">
+      <span class="mono muted" style="font-size:12px;min-width:150px">${esc(talkSpan(r))}</span>
+      <div style="flex:1;min-width:0"><div lang="uk">${r.text ? esc(r.text) : `<span class="muted">—</span>`}</div>${
+        notes.length ? `<div class="muted" style="font-size:12px">${esc(notes.join(" · "))}</div>` : ""}</div></div>`;
+    }).join("");
+  }).join("");
+}
+
 function agentTabHtml(a, mem, tab) {
   if (tab === "files") return filesTabHtml(a);
   if (tab === "settings") return `<div class="muted" style="font-size:12.5px;margin-bottom:12px">${esc(a.display)}'s own settings, whatever the service · a save restarts ${esc(a.display)}</div>${settingsHtml()}`;
@@ -1102,6 +1127,7 @@ function agentTabHtml(a, mem, tab) {
   if (tab === "mood") return moodTabHtml(mem);
   if (tab === "events") return eventsTabHtml(a, mem);
   if (tab === "thoughts") return thoughtsTabHtml(a, mem);
+  if (tab === "talk") return talkTabHtml(a, mem);
   if (tab === "facts") return factsTabHtml(a, mem);
   if (tab === "voice") return voiceTabHtml(a, mem);
   if (tab === "session") {

@@ -141,6 +141,33 @@ def thoughts_view(state_dir: Path, name: str, today: date, days: int = 7) -> lis
     return out
 
 
+def talk_view(state_dir: Path, name: str) -> list[dict] | None:
+    """v5.20 — her private chat in layers from `<name>.archive.db` (opened read-only): the summaries newest first,
+    each its level, local start and end, text, and the period's open, closed and left-out counts — never a closed
+    line's text. No archive or no table yet is none; an unreadable one is None, never a 500."""
+    path = state_dir / f"{name}.archive.db"
+    if not path.exists():
+        return []
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            if not con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'talk'").fetchone():
+                return []
+            rows = con.execute("SELECT level, start_ms, end_ms, text, open_lines, closed_lines, left_out FROM talk "
+                               "ORDER BY start_ms DESC, level").fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    zone = ZoneInfo(os.environ.get("TIMEZONE", "Europe/Kyiv"))
+
+    def iso(ts_ms: int) -> str:
+        return datetime.fromtimestamp(ts_ms / 1000, zone).isoformat(timespec="minutes")
+
+    return [{"level": level, "start": iso(start), "end": iso(end), "text": text, "open_lines": opened,
+             "closed_lines": closed, "left_out": left} for level, start, end, text, opened, closed, left in rows]
+
+
 def pastlife_view(theses: Path | None) -> dict | None:
     """v4.3 — how many past-life theses the agent holds; None without the file or when it does not parse."""
     from agents.pastlife import ThesesError, parse_theses
@@ -316,7 +343,8 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
                 memories: Path | None = None, with_nudge: bool = False, with_ratelimit: bool = False,
                 with_news: bool = False, with_digest: bool = False, with_facts: bool = False,
                 with_archive: bool = False, with_models: bool = False, voice_spec: Path | None = None,
-                with_events: bool = False, with_thoughts: bool = False, with_route: bool = False) -> dict:
+                with_events: bool = False, with_thoughts: bool = False, with_route: bool = False,
+                with_talk: bool = False) -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -363,6 +391,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         # AGORA-116: «Update now» pressed and not yet done by her
         "facts_pending": (state_dir / f"{name}.facts.request").exists() if with_facts else None,
         "archive": archive_view(state_dir, name) if with_archive else None,              # v5.8: her archive
+        "talk": talk_view(state_dir, name) if with_talk else None,                       # v5.20: her chat in layers
         "models": models_view(state_dir, name, voice_spec) if with_models else None,     # v5.9: models, voice
         "events": events_view(state_dir, name, today) if with_events else None,          # v5.11: her events
         "thoughts": thoughts_view(state_dir, name, today) if with_thoughts else None,    # v5.12: her thoughts
