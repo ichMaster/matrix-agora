@@ -2464,7 +2464,8 @@ Google's image model makes each photo from what she describes. She believes she 
 
 ### v5.18 — Кіра's videos in Telegram: a кружечок in her voice and short clips
 
-**Status:** ⏳ planned (the owner, 2026-11-01).
+**Status:** ✅ completed — `v5.18.0` (2026-11-01; planned by the owner the same day; the owner's live checks
+confirmed 2026-11-01 — the live test moved her кружечок from Kling AI Avatar v2 to VEED Fabric 1.0).
 
 **Goal:** Кіра sends the owner two kinds of video in her Telegram chat, whenever she likes, on her own and in her
 answers:
