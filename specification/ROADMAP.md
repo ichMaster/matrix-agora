@@ -18,7 +18,8 @@ are left in the v5 review docs, as backlog. The same day the owner opened two mo
   clean;
 - v5.17, released as `v5.17.0`: Кіра's photos in Telegram;
 - v5.18, released as `v5.18.0`: Кіра's videos in Telegram, a кружечок in her voice and short clips;
-- v5.19, analytics: the spending by agent and by service, over a chosen period (planned).
+- v5.19, released as `v5.19.0`: analytics, the spending by agent and by service over a chosen period, with Кіра's
+  memory fixes of 2026-11-01/02;
 - v5.20, Кіра's layered memory of the private chat: by the hour, by four hours, by the week (planned).
 
 Then come v6–v9 in order. Other further work (the
@@ -64,7 +65,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.16 | Gemini checks the parts of a blocked prompt | ✅ completed | `v5.16.0` (2026-10-31) |
 | v5.17 | Кіра's photos in Telegram | ✅ completed | `v5.17.0` (2026-11-01) |
 | v5.18 | Кіра's videos in Telegram: a кружечок in her voice and short clips | ✅ completed | `v5.18.0` (2026-11-01) |
-| v5.19 | Analytics: the spending by agent and by service, over a chosen period | ⏳ planned | — |
+| v5.19 | Analytics: the spending by agent and by service, over a chosen period | ✅ completed | `v5.19.0` (2026-11-02) |
 | v5.20 | Кіра's layered memory of the private chat: by the hour, by four hours, by the week | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
@@ -2614,7 +2615,9 @@ She believes she recorded them.
 
 ### v5.19 — Analytics: the spending by agent and by service, over a chosen period
 
-**Status:** ⏳ planned (the owner, 2026-11-01).
+**Status:** ✅ completed — `v5.19.0` (2026-11-02); the owner's checks confirmed on 2026-11-02. With it shipped two
+fixes of Кіра's memory (time lines in her history for Gemini, a capped probe that closes only what it proved) and the
+review's (`v5.19-code-review.md`).
 
 **Goal:** the owner opens **Analytics** in the panel, picks a period and an agent (or all of them), and sees what was
 spent and on which services. The services are Gemini, OpenRouter, fal, ElevenLabs, Deepgram, NovelAI and Claude. For
