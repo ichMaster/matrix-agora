@@ -119,7 +119,7 @@ from agents.judge import CLEAN, FLAGGED, Item, Judge, next_mark
 from agents.judge import KEY_VAR as JUDGE_KEY_VAR
 from agents.judge import MODEL as JUDGE_MODEL
 from agents.life import current_chapter, events_due, known_ahead, life_section, next_chapter
-from agents.llm import LAST_BLOCK, THINKING_MODELS, GeminiClient
+from agents.llm import DIGEST_MODEL, LAST_BLOCK, THINKING_MODELS, GeminiClient
 from agents.logic import (
     BANNED_RE,
     CLAUDE_BRIEF_DIRECT,
@@ -246,6 +246,16 @@ from agents.settings import start as settings_start
 from agents.sky import SKY_MAX_TOKENS, clean_sky, load_sky, save_sky, sky_query
 from agents.speech import speakers_month_chars, voice_due, voice_message, voiceable
 from agents.style import style_line
+from agents.talk import (
+    FINER,
+    TALK_CALLS_MAX,
+    TALK_CHECK_MS,
+    TALK_SPLIT_MIN,
+    covered,
+    iso_hour,
+    periods_due,
+    talk_request,
+)
 from agents.telegram import (
     ACTION_EVERY_S,
     CAPTION_MAX,
@@ -490,6 +500,7 @@ class Agent:
         self.reading_sources = Sources(reading_key)
         # v5.20 — her layered memory of the private chat (`talk`): the hours' and blocks' bands, a summary's words
         self.talk_hour_days, self.talk_4h_days, self.talk_words = 0, 0, {}
+        self._talk_lock, self._talk_check_ms, self._talk_retry_ms = asyncio.Lock(), 0, 0
         if cfg.can("talk"):
             self.talk_hour_days = int(os.environ.get("TALK_HOUR_DAYS", "2"))
             self.talk_4h_days = int(os.environ.get("TALK_4H_DAYS", "14"))
@@ -3203,6 +3214,78 @@ class Agent:
         return self.clock() >= self._reflect_retry_ms and reflect_due(self.clock(), self._reflect_ms,
                                                                       self.reflect_every_ms)
 
+    # --- v5.20: her private chat in layers — each period due summarized once, by Gemini 3.1 Pro ------------------------
+    def talk_is_due(self) -> bool:
+        """Checked every `TALK_CHECK_MS` (the idle watcher's ticks are seconds apart), never under a running writer or
+        within a failure's back-off."""
+        if not self.cfg.can("talk") or self.archive is None or self._talk_lock.locked():
+            return False
+        now = self.clock()
+        return now >= self._talk_retry_ms and now - self._talk_check_ms >= TALK_CHECK_MS
+
+    async def ensure_talk(self) -> None:
+        """The oldest period due, summarized and kept (one a check, so the backfill fills a band in minutes); a failure
+        backs off for 10 minutes. Spawned by the idle watcher: no answer waits for it."""
+        async with self._talk_lock:
+            self._talk_check_ms = self.clock()
+            try:
+                await self._talk_tick()
+            except Exception:
+                self._talk_retry_ms = self.clock() + 600_000
+                log.exception("talk: the summary failed (bot keeps running)")
+
+    async def _talk_tick(self) -> None:
+        held = {(r.level, r.start_ms) for r in self.archive.talk_rows()}
+        due = periods_due(self.clock(), self.tz, self.archive.private_open_times(), held, self.talk_hour_days,
+                          self.talk_4h_days)
+        if not due:
+            return
+        level, start, end = due[0]
+        open_n, closed_n = self.archive.private_counts(start, end)
+        lines = self.archive.private_between(start, end)  # open to Gemini only: a closed line never reaches it
+        finer = [r for r in self.archive.talk_rows(FINER.get(level), start, end)] if level in FINER else []
+        from_summaries = covered([x.ts_ms for x in lines], finer)
+        items = ([(r.level, r.text) for r in finer if r.text] if from_summaries
+                 else [(x.speaker, history_entry(x.text)) for x in lines])
+        text, left_out = (await self._talk_text(level, items, from_summaries, [0])) if items else ("", 0)
+        if text is None:  # a failure, not a block: the period stays due
+            self._talk_retry_ms = self.clock() + 600_000
+            log.warning("talk: %s %s not written — the call failed (tried again later)", level, iso_hour(start, self.tz))
+            return
+        self.archive.talk_put(level, start, end, text, open_n, closed_n, left_out, self.clock())
+        log.info("talk: %s %s — %d open, %d closed, %d left out, %d words%s", level, iso_hour(start, self.tz), open_n,
+                 closed_n, left_out, len(text.split()), " (from the finer summaries)" if from_summaries else "")
+
+    async def _talk_text(self, level: str, items: list, from_summaries: bool, calls: list) -> tuple[str | None, int]:
+        """(the summary — "" when everything blocked —, how many items a block left out); None for a failure to try
+        again later. A prompt-stage block (`probe` says so after a failed call) halves the items; a part of at most
+        `TALK_SPLIT_MIN`, or past `TALK_CALLS_MAX` calls, is left out. A summary that calls her a model or a bot is
+        written again once, then left empty (the persona rule)."""
+        system, contents = talk_request(level, self.cfg.name, self.cfg.canon, items, self.talk_words[level],
+                                        from_summaries)
+        for _ in range(2):
+            calls[0] += 1
+            text = await self.llm.think(contents, system, model=getattr(self.llm, "reply_model", DIGEST_MODEL),
+                                        kind="talk_summary", level="low")
+            if text is None or not BANNED_RE.search(text):
+                break
+            log.warning("talk: a summary named what she is — written again")
+        else:
+            return "", 0
+        if text is not None:
+            return cap_words(text, self.talk_words[level]), 0
+        probe = getattr(self.llm, "probe", None)
+        if probe is None or await probe(contents, system) is not True:
+            return None, 0
+        if len(items) <= TALK_SPLIT_MIN or calls[0] >= TALK_CALLS_MAX:
+            return "", len(items)
+        half = len(items) // 2
+        first, first_out = await self._talk_text(level, items[:half], from_summaries, calls)
+        second, second_out = await self._talk_text(level, items[half:], from_summaries, calls)
+        if first is None or second is None:
+            return None, 0
+        return cap_words(" ".join(t for t in (first, second) if t), self.talk_words[level]), first_out + second_out
+
     async def ensure_reading(self, now) -> None:
         """v5.12: a reading — her time is saved before the calls, so a restart never reads twice; a failure backs off
         for 10 minutes. Spawned by the idle watcher: no answer waits for it."""
@@ -3800,6 +3883,8 @@ class Agent:
                     self._spawn(self.ensure_reading(now_local))
                 if self.reflection_is_due():
                     self._spawn(self.ensure_reflection(now_local))
+            if self.talk_is_due():  # v5.20: her private chat summarized by hour, block and week, off the reply path
+                self._spawn(self.ensure_talk())
             if self.cfg.can("nudge"):  # v4.3: the cat speaks first
                 try:
                     await self.maybe_nudge()
