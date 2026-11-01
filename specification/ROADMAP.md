@@ -2542,8 +2542,9 @@ She believes she recorded them.
 - **Writing first:** the line she writes first may carry either.
 - **Settings:**
   - `VIDEO_MODEL` (`gemini-omni-1.1-flash`) and `VIDEO_RESOLUTION` (`720p`);
-  - `VIDEO_NOTE_MODEL` (`veed/fabric-1.0`; or Kling's `fal-ai/kling-video/ai-avatar/v2/standard`, `…/pro`) and
-    `VIDEO_NOTE_MAX_S` (30);
+  - `VIDEO_NOTE_MODEL` (`veed/fabric-1.0`; or Kling's `fal-ai/kling-video/ai-avatar/v2/standard`, `…/pro`),
+    `VIDEO_NOTE_MAX_S` (30) and `VIDEO_NOTE_LEAD_MS` (1000: the silence before her voice — the live test, Telegram cut
+    her first sound and 0.3 s was too little);
   - `VIDEO_DAY_MAX` (40, both kinds together; 0 turns them off) — a safeguard only, as for her photos: the owner
     (2026-11-01, the live test) wants her to send videos when she wants, on her own too (it was 4);
   - `FAL_KEY` in `server/kira.env`, a secret: checked with `grep -q`, never printed.

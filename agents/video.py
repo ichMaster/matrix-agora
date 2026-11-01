@@ -52,7 +52,7 @@ NOTE_POLL_S = 3.0                  # a кружечок takes under a minute now
 TIMEOUT_S = 600.0                  # minutes are expected; neither service names a time
 NOTE_SIDE = 640                    # Telegram's round video message: a square, at most 640 px
 NOTE_MAX_S = 60                    # … and at most a minute
-NOTE_LEAD_MS = 300                 # the owner (live test): Telegram cut her first sound — a little silence before it
+NOTE_LEAD_MS = 1000                # the owner (live test): Telegram cut her first sound, 0.3 s of silence too little
 WORKING = ("queued", "in_progress")                    # the interaction's states before a final one
 FAL_WORKING = ("IN_QUEUE", "IN_PROGRESS")
 BLOCK_WORDS = ("safety", "policy", "prohibited", "blocked", "nsfw", "moderation")
@@ -93,10 +93,16 @@ def video_skill(kinds: tuple[str, ...]) -> str:
     """Her video skill for the kinds she may send now (pure): the кружечок, the clip, or both; empty for none."""
     parts = [NOTE_SKILL] * ("note" in kinds) + [CLIP_SKILL] * ("clip" in kinds)
     return " ".join([*parts, SKILL_TAIL]) if parts else ""
-# her voice for a кружечок starts after NOTE_LEAD_MS of silence, in the video fal makes from it too, so her lips keep time
-FFMPEG_MP3 = ("ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le", "-ar", str(RATE), "-ac", "1",
-              "-i", "pipe:0", "-af", f"adelay={NOTE_LEAD_MS}:all=1", "-c:a", "libmp3lame", "-b:a", "96k", "-f", "mp3",
-              "pipe:1")
+
+
+def ffmpeg_mp3(lead_ms: int = NOTE_LEAD_MS) -> tuple[str, ...]:
+    """The fixed argv of her voice for a кружечок: PCM → mp3, after `lead_ms` of silence (`VIDEO_NOTE_LEAD_MS`) — in
+    the video fal makes from it too, so her lips keep time; only the number varies."""
+    return ("ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le", "-ar", str(RATE), "-ac", "1",
+            "-i", "pipe:0", "-af", f"adelay={max(0, int(lead_ms))}:all=1", "-c:a", "libmp3lame", "-b:a", "96k",
+            "-f", "mp3", "pipe:1")
+
+
 NOTE_FILTER = f"crop='min(iw,ih)':'min(iw,ih)',scale={NOTE_SIDE}:{NOTE_SIDE},setsar=1"
 # the owner, 2026-11-01: a round video message needs no big picture — her frame goes to fal at 640×640, a small JPEG
 FFMPEG_FRAME = ("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", "pipe:0", "-vf", NOTE_FILTER, "-frames:v", "1",
@@ -424,9 +430,10 @@ async def shrink_frame(image: bytes, timeout_s: float = 30.0) -> bytes | None:
     return out or None
 
 
-async def pcm_to_mp3(pcm: bytes, timeout_s: float = 60.0) -> bytes | None:
-    """Her voice's PCM → mp3 for fal, through ffmpeg's fixed argv; None on any failure (logged by its code)."""
-    out = await _ffmpeg(FFMPEG_MP3, pcm, timeout_s, "mp3")
+async def pcm_to_mp3(pcm: bytes, lead_ms: int = NOTE_LEAD_MS, timeout_s: float = 60.0) -> bytes | None:
+    """Her voice's PCM → mp3 for fal, after `lead_ms` of silence, through ffmpeg's fixed argv; None on any failure
+    (logged by its code)."""
+    out = await _ffmpeg(ffmpeg_mp3(lead_ms), pcm, timeout_s, "mp3")
     return out or None
 
 

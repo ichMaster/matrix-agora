@@ -540,7 +540,7 @@ class Agent:
         # only in the maker) and her clips (Omni Flash, from a photo of what she sees); one at a time, after her answer
         self.notes: NoteMaker | None = None
         self.clips: ClipMaker | None = None
-        self.video_day_max, self.video_note_max_s = 0, 30
+        self.video_day_max, self.video_note_max_s, self.video_note_lead_ms = 0, 30, NOTE_LEAD_MS
         self._offer_video: tuple[str, ...] = ()
         self._video_busy = False
         self.voice_held: bytes | None = None
@@ -548,6 +548,7 @@ class Agent:
         if cfg.can("videos"):
             self.video_day_max = int(os.environ.get("VIDEO_DAY_MAX", "40"))
             self.video_note_max_s = int(os.environ.get("VIDEO_NOTE_MAX_S", "30"))
+            self.video_note_lead_ms = int(os.environ.get("VIDEO_NOTE_LEAD_MS", "1000"))  # Telegram cuts her first sound
             if isinstance(self.llm, GeminiClient):
                 self.clips = clip_maker(os.environ.get("VIDEO_MODEL", "gemini-omni-1.1-flash").strip() or VIDEO_MODEL,
                                         os.environ.get("VIDEO_RESOLUTION", "720p").strip() or "720p", self.record_usage)
@@ -2122,12 +2123,13 @@ class Agent:
             return Video(None, why=frame.why if frame.why != "ok" else "failed")
         if shot.kind == "clip":
             return await self.clips.make(shot, self._moment(), frame.image, frame.mime)
-        mp3 = await pcm_to_mp3(pcm or b"")
+        mp3 = await pcm_to_mp3(pcm or b"", self.video_note_lead_ms)
         if mp3 is None:
             return Video(None, why="failed")
         small = await shrink_frame(frame.image)  # the owner: a кружечок needs no big picture — 640×640 to fal
         image, mime = (small, "image/jpeg") if small else (frame.image, frame.mime)
-        raw = await self.notes.make(image, mime, mp3, (duration_ms(pcm or b"") + NOTE_LEAD_MS) / 1000)  # Fabric: none
+        raw = await self.notes.make(image, mime, mp3,  # Fabric names no length: her voice's, with its silence
+                                    (duration_ms(pcm or b"") + max(0, self.video_note_lead_ms)) / 1000)
         if raw.why != "ok":
             return raw
         square = await square_note(raw.data, mp3)  # review #3: her own voice is its sound

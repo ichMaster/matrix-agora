@@ -51,7 +51,7 @@ def media(monkeypatch):
     async def encode(pcm, timeout_s=60.0):
         return b"OggS-kira"
 
-    async def mp3(pcm, timeout_s=60.0):
+    async def mp3(pcm, lead_ms=1000, timeout_s=60.0):
         return b"MP3"
 
     async def square(mp4, mp3, timeout_s=120.0):

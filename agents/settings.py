@@ -198,6 +198,8 @@ SCHEMA: tuple[Setting, ...] = (
     _s("VIDEO_NOTE_MODEL", "choice", "veed/fabric-1.0", "private", "cap:videos", None, "Модель її кружечків",
        choices=("veed/fabric-1.0", "fal-ai/kling-video/ai-avatar/v2/standard", "fal-ai/kling-video/ai-avatar/v2/pro")),
     _s("VIDEO_NOTE_MAX_S", "int", "30", "private", "cap:videos", None, "Найдовший кружечок", "с", 5, 60),
+    _s("VIDEO_NOTE_LEAD_MS", "int", "1000", "private", "cap:videos", None, "Тиша перед її голосом у кружечку", "мс",
+       0, 3000),
     _s("VIDEO_DAY_MAX", "int", "40", "private", "cap:videos", None, "Скільки відео на день щонайбільше (запобіжник)",
        "", 0, 200),
     # v5.16 — after a prompt-stage block Gemini is asked which parts of her prompt it blocks: calls per block and per

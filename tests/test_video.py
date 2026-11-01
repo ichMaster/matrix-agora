@@ -20,7 +20,6 @@ from agents.photo import Shot, photo_note, photo_request, split_photo
 from agents.video import (
     CLIP_STYLE,
     FFMPEG_FRAME,
-    FFMPEG_MP3,
     FRAME_ASPECT,
     FRAME_LINES,
     NOTE_MODEL,
@@ -403,10 +402,15 @@ def test_the_mp3_runs_the_fixed_argv(monkeypatch):
 
     monkeypatch.setattr(vd.asyncio, "create_subprocess_exec", fake_exec)
     assert asyncio.run(pcm_to_mp3(b"\x00\x00" * 8)) == b"ID3..."
-    assert seen["argv"] == FFMPEG_MP3 and seen["proc"].input == b"\x00\x00" * 8
-    assert FFMPEG_MP3[FFMPEG_MP3.index("-c:a") + 1] == "libmp3lame"
-    # the owner (live test): Telegram cut her first sound — the voice fal and the кружечок get starts after a silence
-    assert FFMPEG_MP3[FFMPEG_MP3.index("-af") + 1] == f"adelay={vd.NOTE_LEAD_MS}:all=1" and vd.NOTE_LEAD_MS == 300
+    argv = seen["argv"]
+    assert argv == vd.ffmpeg_mp3() and seen["proc"].input == b"\x00\x00" * 8
+    assert argv[argv.index("-c:a") + 1] == "libmp3lame"
+    # the owner (live test): Telegram cut her first sound, 0.3 s too little — a second of silence before her voice, in
+    # what fal and the кружечок get; VIDEO_NOTE_LEAD_MS sets it, only the number varies
+    assert argv[argv.index("-af") + 1] == "adelay=1000:all=1" and vd.NOTE_LEAD_MS == 1000
+    asyncio.run(pcm_to_mp3(b"\x00\x00", 600))
+    assert seen["argv"][seen["argv"].index("-af") + 1] == "adelay=600:all=1"
+    assert vd.ffmpeg_mp3(-5)[argv.index("-af") + 1] == "adelay=0:all=1"
 
 
 def test_she_may_send_a_video_when_she_wants_as_a_photo():
