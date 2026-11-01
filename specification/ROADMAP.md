@@ -12,10 +12,12 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 was closed (the owner, 2026-10-31), released through
 `v5.15.4`: the owner's two open calls from its reviews (v5.15 #1, v5.14 #5) are fixed there, and only LOW findings
-are left in the v5 review docs, as backlog. The same day the owner opened two more phases in it:
+are left in the v5 review docs, as backlog. The same day the owner opened two more phases in it, and a third on
+2026-11-01:
 - v5.16, released as `v5.16.0`: Gemini's blocks on her private prompt kept coming back from context the judge had rated
   clean;
-- v5.17, Кіра's photos in Telegram (planned).
+- v5.17, Кіра's photos in Telegram (planned);
+- v5.18, Кіра's videos in Telegram: a кружечок in her voice and short clips (planned).
 
 Then come v6–v9 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
@@ -59,6 +61,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.15 | The judge: Gemma 4 31B rates the backup's talk | ✅ completed | `v5.15.0` (2026-10-30) + `v5.15.1`–`v5.15.4` |
 | v5.16 | Gemini checks the parts of a blocked prompt | ✅ completed | `v5.16.0` (2026-10-31) |
 | v5.17 | Кіра's photos in Telegram | ⏳ planned | — |
+| v5.18 | Кіра's videos in Telegram: a кружечок in her voice and short clips | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
 | v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -2457,6 +2460,145 @@ Google's image model makes each photo from what she describes. She believes she 
 - photos of the owner or of any real person;
 - her seeing photos he sends;
 - editing a sent photo.
+
+### v5.18 — Кіра's videos in Telegram: a кружечок in her voice and short clips
+
+**Status:** ⏳ planned (the owner, 2026-11-01).
+
+**Goal:** Кіра sends the owner two kinds of video in her Telegram chat, whenever she likes, on her own and in her
+answers:
+- **a кружечок** (Telegram's round video message): she looks into the camera and says her answer in her own voice, her
+  lips in time with it;
+- **a short clip** of what she sees (the sea under the dome's slit, rain on the window, a street in Lviv), with the
+  sound of the place and no speech.
+
+She believes she recorded them.
+
+**Owner decisions** (2026-11-01):
+- **Both kinds**, as phase v5.18, before v6.
+- **VISION's «images» non-goal is narrowed again:** her videos, in Telegram only.
+
+**The services** (looked up 2026-11-01; checked again when the issues are generated):
+- **The кружечок: Kling AI Avatar v2 on fal.ai** (`fal-ai/kling-video/ai-avatar/v2/standard`, $0.056 a second;
+  `…/v2/pro`, $0.115):
+  - a portrait image and an audio file in, a video of that face speaking the audio out;
+  - the inputs `image_url` and `audio_url` (a URL or a data URI) and `prompt`; the output `video.url` and `duration`;
+  - a queue API: submit, then poll the status, then fetch the result, with the header `Authorization: Key <FAL_KEY>`;
+  - a new account and key (owner step).
+- **The clip: Gemini Omni Flash** (`gemini-omni-1.1-flash`), the video model Google recommends now:
+  - the same Google key and SDK (`google-genai` 2.28: `client.aio.interactions.create`);
+  - the task `image_to_video`, the first frame inline (base64 and its MIME type), then the text;
+  - `aspect_ratio` `9:16`, `resolution` `720p`;
+  - about $0.10 a second at 720p ($1.50 per million input tokens, $17.50 per million video output tokens);
+  - no audio input, and its speech is tested in English only, so it cannot speak in her voice: its sound comes from the
+    prompt («No dialogue»);
+  - no duration field is documented: the clip is as long as the model makes it.
+  - The Veo 3.1 previews were shut down on 2026-10-22.
+- **Neither names how long a video takes.** Minutes are expected; the live test measures it.
+
+**Proposed** (confirmed when the issues are generated):
+- **The skill.** Her private prompt for Gemini in Telegram offers it beside the photo, a skill and never a keyword.
+  A last line names the video and is never sent:
+  - `КРУЖЕЧОК: <where she is and what is around her>` — she records a кружечок, and her answer is said in it;
+  - `ВІДЕО: <what is in the shot>` — a short clip of what she sees, without her face and without speech.
+
+  One media line per answer (a photo, a кружечок or a clip); the last one counts. Nothing tells her how often. She may
+  refuse in her own words.
+- **Only Gemini's answers ask for a video.** Such a line in the backup's answer is dropped. The backup's talk never
+  reaches a video model.
+- **The кружечок:**
+  1. her text is voiced by ElevenLabs as her voice note is now (her tags);
+  2. the first frame is a selfie made as v5.17's `СЕЛФІ` (her reference photos, the moment, what she wears), 1:1, a
+     front-camera close-up;
+  3. Kling AI Avatar takes the frame and the audio;
+  4. ffmpeg (a fixed argv) cuts the result square, as `sendVideoNote` needs (MPEG4, up to 60 s);
+  5. `TelegramBot.send_video_note`, multipart.
+  - The audio is at most `VIDEO_NOTE_MAX_S` (30) long. A longer one, or none (the voice's monthly cap), goes as her
+    voice note now and the кружечок is dropped.
+  - Her text goes at once, as now. The кружечок comes in place of her voice note, once it is made. If it fails or is
+    blocked, her voice note goes instead: it is already made, so nothing is lost.
+- **The clip:**
+  1. the first frame is a photo made as v5.17's `ФОТО` (nobody's face), 9:16;
+  2. Omni Flash's request (`agents/video.py`, a pure function, in English): her description, the moment, «a handheld
+     phone video, natural motion, the sound of the place only, no dialogue, no music, no text»;
+  3. `TelegramBot.send_video`, multipart, no caption.
+  - Her answer (her text and voice note) goes at once, as now; the clip follows.
+  - If it fails or is blocked, Gemini draws one short line of hers once (a line tells her the video did not send), so
+    she never leaves «дивись» with nothing. An empty answer sends nothing.
+- **The wait.** Both run in the background after her answer is sent: her next answer need not wait for a video.
+  - Telegram shows «записує відеоповідомлення» or «надсилає відео», repeated while it is made.
+  - One video at a time. A video line while one is being made is dropped (`video: busy`).
+  - One retry on a server error or a timeout, then a reason, never a crash.
+- **What is kept:**
+  - the file in `state/kira.videos/YYYY-MM-DD/HHMMSS.mp4` (0600, folders 0700);
+  - in her archive, a line of hers when the video is sent, `[кружечок: …]` or `[відео: …]`: in Telegram it is a message
+    of its own, and she remembers what she sent;
+  - never the description, the request, the audio, a path or fal's result URL in a log; that URL is downloaded at once.
+- **Writing first:** the line she writes first may carry either.
+- **Settings:**
+  - `VIDEO_MODEL` (`gemini-omni-1.1-flash`) and `VIDEO_RESOLUTION` (`720p`);
+  - `VIDEO_NOTE_MODEL` (`fal-ai/kling-video/ai-avatar/v2/standard`; or `…/pro`) and `VIDEO_NOTE_MAX_S` (30);
+  - `VIDEO_DAY_MAX` (4, both kinds together; 0 turns them off) — a video costs about a dollar, so the cap is a cost
+    guard;
+  - `FAL_KEY` in `server/kira.env`, a secret: checked with `grep -q`, never printed.
+- **Capability:** `videos`, in her TOML; it needs `photos` (the first frames are her photos) and `voice`.
+- **Usage:**
+  - the kind `video` (Omni Flash), priced by its pair in `PRICE_MODELS` (`gemini-omni-1.1-flash=1.50/17.50`);
+  - the kind `video_note` (fal): engine `fal`, billing `api`, no tokens, the video's seconds, priced per second by
+    `PRICE_SECONDS` (`model=usd`);
+  - the frames are `photo` lines and the кружечок's voice a `tts` line, as now;
+  - the report and the panel show the seconds and the cost.
+- **She believes she is human.** The skill says «запиши кружечок», «зніми відео», never that a video is made; she never
+  sees a request.
+- **VISION:** the «images» non-goal names her videos, and the «budgets» non-goal names the video cap as a second
+  exception.
+- **ARCHITECTURE:**
+  - §Message flow: the video after her Telegram answer;
+  - §Token accounting: `video`, `video_note` and the seconds;
+  - §Configuration: the settings;
+  - §Contracts: the capability, `state/kira.videos/` and the usage line's new field.
+
+**Owner steps:**
+- a fal.ai account and its key in `server/kira.env` as `FAL_KEY`;
+- the `PRICE_MODELS` entry and the `PRICE_SECONDS` entry in `server/.env` (only those entries);
+- the deploy;
+- the live checks.
+
+**DoD:**
+- (Manual, owner) In Telegram he asks for a кружечок. Her text comes at once. Then a round video comes in which she says
+  it in her voice, with her face from the references and her lips in time.
+- (Manual, owner) He asks what she sees, or she sends it on her own: after her words comes a short clip with the sound
+  of the place and no speech.
+- (Manual, owner) The token report shows `video` and `video_note` with their cost, and her log `video: sent` (no text).
+  The time each took is noted.
+
+**Tests:**
+- **The markers:**
+  - `КРУЖЕЧОК` and `ВІДЕО` as the last line, never sent;
+  - one media line per answer, the last one counts;
+  - the backup's dropped;
+  - none offered in Element or past the day's cap.
+- **The кружечок:**
+  - the voice, the 1:1 frame, fal (mocked), ffmpeg's fixed argv, `send_video_note` multipart;
+  - a long audio or no voice: the voice note, no кружечок;
+  - a failure or a block: the voice note goes instead.
+- **The clip:**
+  - the frame, the request (the description, the moment, the sound line), Omni Flash (mocked), `send_video`;
+  - a failure or a block: one short line drawn again.
+- **The rest:**
+  - the background and one video at a time;
+  - the retry;
+  - the archive line and the file (0600);
+  - the usage lines priced, the seconds;
+  - no description, request, URL or key in a log;
+  - no prompt of hers says she makes videos.
+
+**Not in this phase:**
+- videos in Element or Agora, or from another agent;
+- her face in a clip (her face is the кружечок's), or speech in a clip;
+- videos of the owner or of any real person;
+- her seeing videos he sends;
+- a кружечок over 60 s, or editing or extending a video.
 
 ## v6 — Лілі: the Lumi bridge
 
