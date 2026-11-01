@@ -2134,7 +2134,7 @@ class Agent:
         then sent and kept, her line naming it; a кружечок that did not come out is her voice note after all, a clip
         one short line of hers. Never a crash; one at a time."""
         name = "record_video_note" if shot.kind == "note" else "upload_video"
-        action = None
+        action, began = None, self.clock()
         try:
             try:
                 await self.telegram.send_chat_action(self.telegram_owner, name)
@@ -2156,18 +2156,19 @@ class Agent:
                     sent = await self.telegram.send_video(self.telegram_owner, made.data,
                                                           round(made.seconds) if made.seconds else None)
                 why = "ok" if sent else "not sent"
+            took = round((self.clock() - began) / 1000)  # review #4: the DoD notes how long a video takes
             if sent:
                 self.keep_video(made)
-                log.info("video: sent (%s, telegram)", shot.kind)
+                log.info("video: sent (%s, telegram, %d s)", shot.kind, took)
                 self._own_private_line(photo_note("", shot).strip())
             elif shot.kind == "note":
-                log.warning("video: %s — her voice note instead", why)
+                log.warning("video: %s after %d s — her voice note instead", why, took)
                 ogg = await encode_opus(pcm) if pcm else None
                 if ogg is None or not await self.telegram.send_voice(self.telegram_owner, ogg,
                                                                      round(duration_ms(pcm) / 1000)):
                     log.warning("voice: not sent (telegram)")
             else:
-                log.warning("video: %s — a line of hers instead", why)
+                log.warning("video: %s after %d s — a line of hers instead", why, took)
                 await self._video_failed_line(brief)
         except Exception as exc:  # noqa: BLE001
             log.error("video: failed after her answer (%s)", type(exc).__name__)

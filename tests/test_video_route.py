@@ -127,7 +127,7 @@ def test_a_kruzhechok_holds_her_voice_and_follows_her_words_in_her_voice(tmp_pat
     [kept] = list(videos_dir(agent).iterdir())
     assert kept.name == "180000.mp4" and kept.read_bytes() == b"SQUARE-RAW"
     assert stat.S_IMODE(os.stat(kept).st_mode) == 0o600 and stat.S_IMODE(os.stat(kept.parent).st_mode) == 0o700
-    assert "video: sent (note, telegram)" in caplog.text and not agent._video_busy
+    assert "video: sent (note, telegram, 0 s)" in caplog.text and not agent._video_busy
     assert SECRET not in caplog.text and str(kept) not in caplog.text
 
 
@@ -174,7 +174,7 @@ def test_a_clip_follows_her_answer_from_a_vertical_faceless_frame(tmp_path, monk
     assert [c[0] for c in agent.clips.calls] == [Shot("clip", f"дощ на вікні {SECRET}")]
     assert any(c.args[1] == "upload_video" for c in agent.telegram.send_chat_action.call_args_list)
     assert her_lines(agent)[-1] == f"[відео: дощ на вікні {SECRET}]"
-    assert "video: sent (clip, telegram)" in caplog.text and SECRET not in caplog.text
+    assert "video: sent (clip, telegram, 0 s)" in caplog.text and SECRET not in caplog.text
 
 
 def test_a_clip_that_does_not_come_out_draws_one_short_line_or_nothing(tmp_path, monkeypatch, media, caplog):
@@ -286,3 +286,16 @@ def test_a_video_paid_for_counts_toward_the_cap_even_when_it_did_not_go(tmp_path
     owner_says(agent, "запиши кружечок", ms(17), "telegram", "tg:1")
     assert asyncio.run(agent.private_reply()) is True
     assert NOTE_SKILL not in agent.llm.calls[0][0] and "video: dropped (cap)" in caplog.text
+
+
+
+def test_the_log_says_how_long_a_video_took(tmp_path, monkeypatch, media, caplog):
+    # v5.18 review #4: the DoD notes the time each video took — the log says it, and nothing of hers
+    caplog.set_level(logging.INFO)
+    agent = kira(tmp_path, monkeypatch, f"Глянь\nВІДЕО: море {SECRET}")
+    owner_says(agent, "що бачиш?", ms(17), "telegram", "tg:1")
+    asyncio.run(agent.private_reply())
+    times = iter([ms(18), ms(18) + 143_400])
+    agent.clock = lambda: next(times, ms(18) + 143_400)
+    after(agent)
+    assert "video: sent (clip, telegram, 143 s)" in caplog.text and SECRET not in caplog.text
