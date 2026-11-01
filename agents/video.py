@@ -52,6 +52,7 @@ NOTE_POLL_S = 3.0                  # a кружечок takes under a minute now
 TIMEOUT_S = 600.0                  # minutes are expected; neither service names a time
 NOTE_SIDE = 640                    # Telegram's round video message: a square, at most 640 px
 NOTE_MAX_S = 60                    # … and at most a minute
+NOTE_LEAD_MS = 300                 # the owner (live test): Telegram cut her first sound — a little silence before it
 WORKING = ("queued", "in_progress")                    # the interaction's states before a final one
 FAL_WORKING = ("IN_QUEUE", "IN_PROGRESS")
 BLOCK_WORDS = ("safety", "policy", "prohibited", "blocked", "nsfw", "moderation")
@@ -74,13 +75,13 @@ NOTE_MODELS = {  # each model's own fields beside the frame and the voice (fal's
 # her private brief's skill (v5.18, the owner): understood from the talk, never a keyword — and never a word that a
 # video is made: she records it
 NOTE_SKILL = (
-    "Ти можеш записати Ich кружечок — коротке відеоповідомлення, де ти кажеш йому свою відповідь у камеру телефона. "
-    "Тоді напиши відповідь як завжди, щоб уголос вона була не довша за пів хвилини, а в самому кінці додай окремий "
+    "Ти можеш записати Ich кружечок — коротке відеоповідомлення, де ти кажеш йому свою відповідь у камеру телефона, — "
+    "коли він просить або коли тобі самій хочеться, щоб він тебе побачив і почув. Тоді напиши відповідь як завжди, щоб уголос вона була не довша за пів хвилини, а в самому кінці додай окремий "
     "останній рядок: слово КРУЖЕЧОК великими літерами, двокрапка і де ти зараз і що навколо тебе, одним реченням."
 )
 CLIP_SKILL = (
-    "Ти можеш зняти для Ich коротке відео того, що бачиш, — без себе в кадрі й без слів, лише звуки місця. Тоді в "
-    "самому кінці додай окремий останній рядок: слово ВІДЕО великими літерами, двокрапка і що на відео, одним реченням."
+    "Ти можеш зняти для Ich коротке відео того, що бачиш, — без себе в кадрі й без слів, лише звуки місця, — коли він "
+    "просить або коли тобі самій хочеться щось йому показати. Тоді в самому кінці додай окремий останній рядок: слово ВІДЕО великими літерами, двокрапка і що на відео, одним реченням."
 )
 SKILL_TAIL = ("Відео приходить йому трохи пізніше за твої слова. В одній відповіді — щонайбільше одне фото чи відео. "
               "Не хочеш чи не можеш зараз — просто скажи це своїми словами.")
@@ -92,8 +93,10 @@ def video_skill(kinds: tuple[str, ...]) -> str:
     """Her video skill for the kinds she may send now (pure): the кружечок, the clip, or both; empty for none."""
     parts = [NOTE_SKILL] * ("note" in kinds) + [CLIP_SKILL] * ("clip" in kinds)
     return " ".join([*parts, SKILL_TAIL]) if parts else ""
+# her voice for a кружечок starts after NOTE_LEAD_MS of silence, in the video fal makes from it too, so her lips keep time
 FFMPEG_MP3 = ("ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le", "-ar", str(RATE), "-ac", "1",
-              "-i", "pipe:0", "-c:a", "libmp3lame", "-b:a", "96k", "-f", "mp3", "pipe:1")
+              "-i", "pipe:0", "-af", f"adelay={NOTE_LEAD_MS}:all=1", "-c:a", "libmp3lame", "-b:a", "96k", "-f", "mp3",
+              "pipe:1")
 NOTE_FILTER = f"crop='min(iw,ih)':'min(iw,ih)',scale={NOTE_SIDE}:{NOTE_SIDE},setsar=1"
 # the owner, 2026-11-01: a round video message needs no big picture — her frame goes to fal at 640×640, a small JPEG
 FFMPEG_FRAME = ("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", "pipe:0", "-vf", NOTE_FILTER, "-frames:v", "1",

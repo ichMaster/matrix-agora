@@ -2544,8 +2544,8 @@ She believes she recorded them.
   - `VIDEO_MODEL` (`gemini-omni-1.1-flash`) and `VIDEO_RESOLUTION` (`720p`);
   - `VIDEO_NOTE_MODEL` (`veed/fabric-1.0`; or Kling's `fal-ai/kling-video/ai-avatar/v2/standard`, `…/pro`) and
     `VIDEO_NOTE_MAX_S` (30);
-  - `VIDEO_DAY_MAX` (4, both kinds together; 0 turns them off) — a video costs about a dollar, so the cap is a cost
-    guard;
+  - `VIDEO_DAY_MAX` (40, both kinds together; 0 turns them off) — a safeguard only, as for her photos: the owner
+    (2026-11-01, the live test) wants her to send videos when she wants, on her own too (it was 4);
   - `FAL_KEY` in `server/kira.env`, a secret: checked with `grep -q`, never printed.
 - **Capability:** `videos`, in her TOML; it needs `photos` (the first frames are her photos) and `voice`.
 - **Usage:**

@@ -405,6 +405,14 @@ def test_the_mp3_runs_the_fixed_argv(monkeypatch):
     assert asyncio.run(pcm_to_mp3(b"\x00\x00" * 8)) == b"ID3..."
     assert seen["argv"] == FFMPEG_MP3 and seen["proc"].input == b"\x00\x00" * 8
     assert FFMPEG_MP3[FFMPEG_MP3.index("-c:a") + 1] == "libmp3lame"
+    # the owner (live test): Telegram cut her first sound — the voice fal and the кружечок get starts after a silence
+    assert FFMPEG_MP3[FFMPEG_MP3.index("-af") + 1] == f"adelay={vd.NOTE_LEAD_MS}:all=1" and vd.NOTE_LEAD_MS == 300
+
+
+def test_she_may_send_a_video_when_she_wants_as_a_photo():
+    # the owner, 2026-11-01: videos when she wants, on her own too — as her photos
+    for skill in (vd.NOTE_SKILL, vd.CLIP_SKILL):
+        assert "коли він просить або коли тобі самій хочеться" in skill
 
 
 def test_the_square_cut_runs_through_a_private_folder_removed_after(monkeypatch):

@@ -297,6 +297,7 @@ from agents.usage import (
 from agents.video import (
     FRAME_ASPECT,
     FRAME_LINES,
+    NOTE_LEAD_MS,
     NOTE_MODEL,
     NOTE_SIDE,
     VIDEO_FAILED,
@@ -545,7 +546,7 @@ class Agent:
         self.voice_held: bytes | None = None
         self.voice_hold_miss: str | None = None
         if cfg.can("videos"):
-            self.video_day_max = int(os.environ.get("VIDEO_DAY_MAX", "4"))
+            self.video_day_max = int(os.environ.get("VIDEO_DAY_MAX", "40"))
             self.video_note_max_s = int(os.environ.get("VIDEO_NOTE_MAX_S", "30"))
             if isinstance(self.llm, GeminiClient):
                 self.clips = clip_maker(os.environ.get("VIDEO_MODEL", "gemini-omni-1.1-flash").strip() or VIDEO_MODEL,
@@ -2126,7 +2127,7 @@ class Agent:
             return Video(None, why="failed")
         small = await shrink_frame(frame.image)  # the owner: a кружечок needs no big picture — 640×640 to fal
         image, mime = (small, "image/jpeg") if small else (frame.image, frame.mime)
-        raw = await self.notes.make(image, mime, mp3, duration_ms(pcm or b"") / 1000)  # Fabric names no length
+        raw = await self.notes.make(image, mime, mp3, (duration_ms(pcm or b"") + NOTE_LEAD_MS) / 1000)  # Fabric: none
         if raw.why != "ok":
             return raw
         square = await square_note(raw.data, mp3)  # review #3: her own voice is its sound
