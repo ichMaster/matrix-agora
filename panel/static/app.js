@@ -30,6 +30,9 @@ const S = {
   dialog: null,            // {action, kind: "agent"|"service", id, sim} awaiting confirmation
   settings: null,          // v4.7: {view, edits: {name: value}, reset: {name: true}, busy}
   files: {list: null, open: null, prefix: "", busy: false},  // v4.7: Claude's folder
+  view: "dashboard",       // v5.19: or "analytics", kept in the address
+  an: {range: "30d", since: "", until: "", agent: "all", metric: "calls", data: null, loading: false, error: null,
+       open: {}, req: 0, resize: 0},
 };
 
 // ── tiny helpers ─────────────────────────────────────────────────────────────
@@ -124,7 +127,7 @@ async function refresh(manual = false) {
       // …but the cards behind stay live: the dashboard alone is redrawn in place (the owner: uptimes froze after a
       // restart while the settings stayed open)
       const stack = $(".main .stack");
-      if (stack && S.drawer?.kind === "settings") stack.innerHTML = dashboardHtml();
+      if (stack && S.drawer?.kind === "settings" && S.view !== "analytics") stack.innerHTML = dashboardHtml();
       const st = S.settings;                                   // with nothing pending, follow the agents (review #8)
       if (st && st.view && !st.busy && !pendingSettings().names.length) {
         const view = await api(st.path).catch(() => null);
@@ -137,6 +140,11 @@ async function refresh(manual = false) {
       return;
     }
     if (same && !logMoved && !memMoved && !manual) return;  // nothing new: the "updated N s ago" ticker says so
+    if (S.view === "analytics") {  // v5.19: the view loads on its own choices, never under the owner's hand on a poll
+      if (!S.an.data && !S.an.loading && !S.an.error) loadAnalytics();
+      if (!manual && !S.drawer) return;
+      if (manual) loadAnalytics();
+    }
   } catch (err) {
     if (err instanceof Unauthorized) return signOut(true);
     if (S.data) showToast("err", `Refresh failed: ${err.message}`);
@@ -255,7 +263,7 @@ function render() {
   // the page re-renders on every poll: keep each scroll area where the reader left it
   const keep = [".main", ".drawer-body", ".table-scroll", "#log"].map((sel) => [sel, $(sel)?.scrollTop ?? 0]);
   root.innerHTML = topbarHtml() + `<div class="body">${railHtml()}<main class="main"><div class="stack">${
-    S.data ? dashboardHtml() : skeletonHtml()}</div></main></div>${drawerHtml()}${dialogHtml()}${toastHtml()}`;
+    S.data ? (S.view === "analytics" ? analyticsHtml() : dashboardHtml()) : skeletonHtml()}</div></main></div>${drawerHtml()}${dialogHtml()}${toastHtml()}`;
   keep.forEach(([sel, top]) => { const el = $(sel); if (el) el.scrollTop = top; });
   if (S.drawer) afterDrawerRender();
   S.drawerFresh = false;
@@ -315,12 +323,13 @@ function railHtml() {
   const sims = d ? d.sims : [];
   return `<nav class="rail wide-only" aria-label="Simulations">
     <div class="rail-group"><div class="section-label">Simulations</div>
-      ${sims.map((s) => `<button class="rail-item" aria-current="page" data-act="top">${icon("squares-four", 16)}<span style="flex:1">${esc(s.title)}</span><span class="dot ${simHealth(s).cls}"></span></button>
+      ${sims.map((s) => `<button class="rail-item" aria-current="${S.view === "dashboard" ? "page" : "false"}" data-act="top">${icon("squares-four", 16)}<span style="flex:1">${esc(s.title)}</span><span class="dot ${simHealth(s).cls}"></span></button>
         ${d.agents.filter((a) => a.simulation === s.id).map((a) => `<button class="rail-item sub" data-act="agent" data-id="${esc(a.name)}"><span style="flex:1">${esc(a.display)}</span><span class="dot ${agentStatus(a)[0]}"></span></button>`).join("")}`).join("")}
     </div>
     <div class="rail-group"><div class="section-label">System</div>
       <button class="rail-item" data-act="scroll" data-id="host-card">${icon("hard-drives", 16)}Server</button>
       <button class="rail-item" data-act="scroll" data-id="usage-card">${icon("coins", 16)}Tokens</button>
+      <button class="rail-item" data-act="view" data-id="analytics" aria-current="${S.view === "analytics" ? "page" : "false"}">${icon("chart-bar", 16)}Analytics</button>
     </div>
     <div class="rail-phase">v4.7 · settings</div>
   </nav>`;
@@ -435,7 +444,8 @@ function hostCardHtml() {
 
 function usageCardHtml() {
   const u = S.data.usage;
-  const head = (extra = "") => `<div class="usage-head"><h3 class="card-title">Tokens, last 7 days</h3>${extra}</div>`;
+  const open = `<button class="btn btn-ghost" data-act="view" data-id="analytics">Analytics${icon("arrow-right", 13)}</button>`;  // v5.19
+  const head = (extra = "") => `<div class="usage-head"><h3 class="card-title">Tokens, last 7 days</h3>${extra}${open}</div>`;
   if (!u.available) {
     return `<section class="card usage-card" id="usage-card">${head()}<div class="empty-box">${icon("database", 18)}<span>Memory unavailable</span></div></section>`;
   }
@@ -484,6 +494,314 @@ function usageCardHtml() {
       : `<div class="muted" style="font-size:12px">Prices are not configured — cost is not calculated.</div>`}
   </section>`;
 }
+
+// ── v5.19: Analytics — one period's spending by service, model, kind, day and agent, with charts and trends ─────
+// The colours follow the service, never its rank: one fixed slot each (`--viz-N` in panel.css, validated for both
+// themes); a legend always names them, and the tables carry every number a chart shows.
+const SERVICES = {gemini: ["Gemini", 1], fal: ["fal.ai", 2], openrouter: ["OpenRouter", 3], elevenlabs: ["ElevenLabs", 4],
+                  deepgram: ["Deepgram", 5], novelai: ["NovelAI", 6], "claude-sdk": ["Claude", 7]};
+const svcName = (s) => SERVICES[s]?.[0] || s;
+const svcColor = (s) => `var(--viz-${SERVICES[s]?.[1] || 8})`;
+const PRESETS = [["today", "Today"], ["yesterday", "Yesterday"], ["7d", "7 days"], ["30d", "30 days"],
+                 ["month", "This month"], ["lastmonth", "Last month"], ["custom", "Custom"]];
+const CSV_HEAD = ["day", "agent", "service", "model", "kind", "calls", "failed", "blocked", "input", "output", "tokens",
+                  "characters", "audio_s", "video_s", "billing", "cost"];
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const fmtCost = (c) => c == null ? "—" : c !== 0 && Math.abs(c) < 0.01 ? `$${c.toFixed(4)}` : `$${c.toFixed(2)}`;
+const isoShift = (iso, days) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
+// the panel's today is the server's local day once the dashboard has it — never only the browser's clock
+const panelToday = () => S.data?.usage?.until || new Date().toLocaleDateString("en-CA");
+
+function anPeriod(a = S.an) {
+  const t = panelToday(), first = `${t.slice(0, 8)}01`;
+  if (a.range === "today") return [t, t];
+  if (a.range === "yesterday") return [isoShift(t, -1), isoShift(t, -1)];
+  if (a.range === "7d") return [isoShift(t, -6), t];
+  if (a.range === "month") return [first, t];
+  if (a.range === "lastmonth") { const end = isoShift(first, -1); return [`${end.slice(0, 8)}01`, end]; }
+  if (a.range === "custom") return [a.since, a.until];
+  return [isoShift(t, -29), t];
+}
+// the choice lives in the address: a preset reopens as the same preset, a custom range as its days
+function anHash() {
+  const q = new URLSearchParams(S.an.range === "custom" ? {since: S.an.since, until: S.an.until} : {range: S.an.range});
+  if (S.an.agent !== "all") q.set("agent", S.an.agent);
+  return `#analytics?${q}`;
+}
+function readHash() {
+  if (!location.hash.startsWith("#analytics")) { S.view = "dashboard"; return; }
+  S.view = "analytics";
+  const q = new URLSearchParams(location.hash.split("?")[1] || "");
+  if (ISO_DAY.test(q.get("since") || "") && ISO_DAY.test(q.get("until") || "")) {
+    Object.assign(S.an, {range: "custom", since: q.get("since"), until: q.get("until")});
+  } else {
+    S.an.range = PRESETS.some(([k]) => k === q.get("range") && k !== "custom") ? q.get("range") : "30d";
+  }
+  S.an.agent = q.get("agent") || "all";
+}
+async function loadAnalytics() {
+  const [since, until] = anPeriod();
+  if (!ISO_DAY.test(since) || !ISO_DAY.test(until)) return;
+  const q = new URLSearchParams({since, until});
+  if (S.an.agent !== "all") q.set("agent", S.an.agent);
+  const req = ++S.an.req;
+  S.an.loading = true; S.an.error = null; render();
+  try {
+    const data = await api(`/api/analytics?${q}`);
+    if (req === S.an.req) S.an.data = data;          // a newer choice may be on its way: only the latest lands
+  } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    if (req === S.an.req) S.an.error = err.message;
+  }
+  if (req === S.an.req) { S.an.loading = false; render(); }
+}
+function anChoose(change) {
+  Object.assign(S.an, change);
+  history.replaceState(null, "", anHash());
+  loadAnalytics();
+}
+function openAnalytics() {
+  if (S.view !== "analytics") history.pushState(null, "", anHash());
+  S.view = "analytics";
+  loadAnalytics();
+}
+function leaveAnalytics() {
+  if (S.view !== "analytics") return;
+  S.view = "dashboard";
+  history.pushState(null, "", location.pathname + location.search);
+  render();
+}
+
+// a change from the previous period: an arrow, ± the amount and %, «—» when either side is unknown
+function change(now, before, money = false) {
+  if (now == null || before == null) return "—";
+  const diff = now - before, sign = diff > 0 ? "+" : diff < 0 ? "−" : "±";
+  const arrow = diff > 0 ? "↑" : diff < 0 ? "↓" : "→";
+  const pct = before ? ` (${sign}${Math.abs(diff / before * 100).toFixed(0)}%)` : "";
+  return `${arrow} ${sign}${money ? fmtCost(Math.abs(diff)) : fmtM(Math.abs(diff))}${pct}`;
+}
+const costCell = (x) => x.billing === "subscription" ? `<span class="muted">subscription</span>`
+  : x.cost == null ? "—" : `${x.complete ? "" : "≥"}${fmtCost(x.cost)}`;  // a subscription is never $0
+const nCell = (n, digits = 0) => `<td class="r">${n ? (digits ? n.toFixed(digits) : fmtInt(n)) : "—"}</td>`;
+
+// ── the charts: pure builders → inline SVG; marks carry a native tooltip (<title>), colours are CSS variables ──
+const PAD = {l: 56, r: 14, t: 10, b: 26};
+function niceMax(v) {
+  if (!(v > 0)) return 1;
+  const p = 10 ** Math.floor(Math.log10(v)), m = v / p;
+  return [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find((step) => m <= step) * p;  // a top close above the data
+}
+function axes(days, top, W, H, fmt) {
+  const y = (v) => PAD.t + (H - PAD.t - PAD.b) * (1 - v / top);
+  const grid = [0, 0.25, 0.5, 0.75, 1].map((f) => `<line class="an-grid${f ? "" : " base"}" x1="${PAD.l}" x2="${W - PAD.r}" y1="${y(top * f)}" y2="${y(top * f)}"/>` +
+    `<text class="an-tick" x="${PAD.l - 6}" y="${y(top * f) + 4}" text-anchor="end">${esc(fmt(top * f))}</text>`).join("");
+  const band = (W - PAD.l - PAD.r) / days.length, every = Math.max(1, Math.ceil(days.length / Math.max(2, Math.floor((W - PAD.l) / 64))));
+  const labels = days.map((d, i) => i % every ? "" : `<text class="an-tick" x="${PAD.l + band * (i + 0.5)}" y="${H - 8}" text-anchor="middle">${esc(shortDay(d))}</text>`).join("");
+  return {y, band, x: (i) => PAD.l + band * (i + 0.5), html: grid + labels};
+}
+// one column per day, as tall as the plot: the reader aims at a day, never at a 2px line
+const hits = (days, ax, H, tip) => days.map((d, i) => `<rect class="an-hit" x="${ax.x(i) - ax.band / 2}" y="${PAD.t}" width="${ax.band}" height="${H - PAD.t - PAD.b}"><title>${esc(tip(i))}</title></rect>`).join("");
+const topRounded = (x, y, w, h, r) => r <= 0 ? `M${x},${y + h}V${y}H${x + w}V${y + h}Z`
+  : `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+const pathOf = (pts) => pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join("");
+
+function svgStackedBars({days, keys, parts, line, tip, fmt, W, H = 220}) {
+  // bars stacked by key (a 2px surface gap between segments, 4px rounded tops), with `line` drawn over them
+  const max = Math.max(...days.map((_, i) => keys.reduce((s, k) => s + (parts[i][k] || 0), 0)), ...line);
+  const top = niceMax(max), ax = axes(days, top, W, H, fmt), bw = Math.max(2, Math.min(24, ax.band * 0.7));
+  let marks = "";
+  days.forEach((_, i) => {
+    let base = ax.y(0);
+    const present = keys.filter((k) => parts[i][k] > 0);
+    present.forEach((k, j) => {
+      const h = ax.y(0) - ax.y(parts[i][k]), gap = j ? 2 : 0, hh = Math.max(0, h - gap);
+      marks += `<path style="fill:${svcColor(k)}" d="${topRounded(ax.x(i) - bw / 2, base - h, bw, hh, j === present.length - 1 ? Math.min(4, hh) : 0)}"/>`;
+      base -= h;
+    });
+  });
+  const avg = `<path class="an-line ink" d="${pathOf(line.map((v, i) => [ax.x(i), ax.y(v)]))}"/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cost a day by service">${ax.html}${marks}${avg}${hits(days, ax, H, tip)}</svg>`;
+}
+function svgLines({days, series, tip, fmt, W, H = 200}) {
+  // one 2px line per series (`dashed` for a comparison); a single day draws markers
+  const top = niceMax(Math.max(0, ...series.flatMap((s) => s.values))), ax = axes(days, top, W, H, fmt);
+  const marks = series.map((s) => days.length === 1
+    ? `<circle class="an-dot" cx="${ax.x(0)}" cy="${ax.y(s.values[0])}" r="4" style="fill:${s.color}"/>`
+    : `<path class="an-line${s.dashed ? " dash" : ""}" style="stroke:${s.color}" d="${pathOf(s.values.map((v, i) => [ax.x(i), ax.y(v)]))}"/>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map((s) => s.label).join(", "))}">${ax.html}${marks}${hits(days, ax, H, tip)}</svg>`;
+}
+function svgShare({rows, W}) {
+  // 100 % bars, one per row: segments by service, a 2px surface gap between them
+  const lw = 64, bh = 16, step = 30, H = rows.length * step;
+  const out = rows.map((row, r) => {
+    const total = row.parts.reduce((s, p) => s + p.value, 0);
+    let x = lw;
+    const segs = total ? row.parts.filter((p) => p.value > 0).map((p) => {
+      const w = Math.max(0, (W - lw) * p.value / total - 2);
+      const seg = `<rect x="${x}" y="${r * step + 4}" width="${w}" height="${bh}" rx="2" style="fill:${svcColor(p.key)}"><title>${esc(`${svcName(p.key)} · ${row.fmt(p.value)} · ${(p.value / total * 100).toFixed(0)}%`)}</title></rect>`;
+      x += w + 2;
+      return seg;
+    }).join("") : `<text class="an-tick" x="${lw}" y="${r * step + 16}">none</text>`;
+    return `<text class="an-tick name" x="0" y="${r * step + 16}">${esc(row.label)}</text>${segs}`;
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Shares by service">${out}</svg>`;
+}
+function svgSparkline(values, color, w = 84, h = 22) {
+  const max = Math.max(0, ...values), n = values.length;
+  const pts = values.map((v, i) => [n > 1 ? 1 + (w - 2) * i / (n - 1) : w / 2, h - 2 - (max ? (h - 4) * v / max : 0)]);
+  return `<svg class="an-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path class="an-line thin" style="stroke:${color}" d="${pathOf(pts)}"/></svg>`;
+}
+function svgAgents({rows, W}) {
+  // the cost by agent: one bar each (a single series: no legend), the previous period's cost as a tick
+  const lw = 96, vw = 70, bh = 14, step = 26, H = rows.length * step + 4;
+  const max = niceMax(Math.max(0, ...rows.flatMap((r) => [r.value || 0, r.prev || 0])));
+  const x = (v) => lw + (W - lw - vw) * v / max;
+  const out = rows.map((r, i) => {
+    const y0 = i * step + 4;
+    const bar = r.value ? `<path class="an-bar" d="${topRounded(lw, y0, Math.max(1, x(r.value) - lw), bh, 0)}"/>` : "";
+    const tick = r.prev ? `<line class="an-prev" x1="${x(r.prev)}" x2="${x(r.prev)}" y1="${y0 - 3}" y2="${y0 + bh + 3}"/>` : "";
+    return `<g><title>${esc(`${r.label} · ${fmtCost(r.value)} · previous ${fmtCost(r.prev)}`)}</title>
+      <text class="an-tick name" x="0" y="${y0 + 11}">${esc(r.label)}</text>${bar}${tick}
+      <text class="an-tick" x="${(r.value ? x(r.value) : lw) + 6}" y="${y0 + 11}">${esc(r.value == null ? "subscription" : fmtCost(r.value))}</text></g>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cost by agent">${out}</svg>`;
+}
+const legend = (items) => `<div class="an-legend">${items.map(([label, color, kind]) =>
+  `<span><i class="${kind || ""}" style="${kind ? `border-color:${color}` : `background:${color}`}"></i>${esc(label)}</span>`).join("")}</div>`;
+const chartW = () => Math.max(300, Math.min(1300, (document.querySelector(".main")?.clientWidth || 900) - 90));
+
+// ── the view ─────────────────────────────────────────────────────────────────
+function analyticsHtml() {
+  const a = S.an, d = a.data, [since, until] = anPeriod();
+  const agents = S.data?.agents || [];
+  const presets = `<div class="seg" role="group" aria-label="Period">${PRESETS.map(([k, l]) =>
+    `<button data-act="an-range" data-id="${k}" aria-pressed="${a.range === k}">${l}</button>`).join("")}</div>`;
+  const dates = a.range !== "custom" ? "" : ["since", "until"].map((k) => `<label class="an-field">${k === "since" ? "From" : "To"}
+    <input class="input" type="date" data-an="${k}" value="${esc(a[k])}"></label>`).join("");
+  const who = `<label class="an-field">Agent <select class="input" data-an="agent"><option value="all"${a.agent === "all" ? " selected" : ""}>All</option>${
+    agents.map((x) => `<option value="${esc(x.name)}"${a.agent === x.name ? " selected" : ""}>${esc(x.display)}</option>`).join("")}</select></label>`;
+  const csv = `<button class="btn btn-secondary" data-act="an-csv" ${d?.available && d.rows?.length ? "" : "disabled"}>${icon("arrow-line-down", 14)}Download CSV</button>`;
+  const shown = ISO_DAY.test(since) && ISO_DAY.test(until) ? rangeLabel(since, until) : "choose the days";
+  const head = `<div class="an-head"><button class="btn btn-ghost" data-act="dashboard">← Dashboard</button>
+      <h1 class="an-title">Analytics</h1><span class="muted">${esc(shown)}${a.loading ? " · loading…" : ""}</span></div>
+    <div class="an-controls">${presets}${dates}${who}<span style="margin-left:auto">${csv}</span></div>`;
+  let body;
+  if (a.error) {
+    body = `<section class="card"><div class="empty-box">${icon("warning-circle", 18)}<span>Could not load the analytics: ${esc(a.error)}${
+      a.error.includes("400") ? " — check the days (at most 366)" : ""}</span><button class="btn btn-secondary" data-act="an-retry">Retry</button></div></section>`;
+  } else if (!d) {
+    body = `<section class="card"><div class="empty-box">${icon("circle-notch", 18, "spinning")}<span>Loading…</span></div></section>`;
+  } else if (!d.available) {
+    body = `<section class="card"><div class="empty-box">${icon("database", 18)}<span>Memory unavailable</span></div></section>`;
+  } else {
+    body = anTilesHtml(d) + (d.total.calls ? anChartsHtml(d) + anTablesHtml(d)
+      : `<section class="card"><div class="empty-box">${icon("coins", 18)}<span>No data for this period</span></div></section>`);
+  }
+  return `<section class="section an">${head}${body}</section>`;
+}
+function anTilesHtml(d) {
+  const t = d.total, p = d.previous, tr = d.trend;
+  const trendValue = tr.direction === "flat" ? "→ flat" : `${tr.direction === "rising" ? "↑" : "↓"} ${fmtCost(Math.abs(tr.slope_per_week))}`;
+  const tiles = [
+    ["Cost", t.cost == null ? "—" : `${t.complete ? "" : "≥"}${fmtCost(t.cost)}`, `${change(t.cost, p.cost, true)} vs previous`],
+    ["Calls", fmtInt(t.calls), `${fmtInt(t.failed)} failed · ${fmtInt(t.blocked)} blocked`],
+    ["Tokens", fmtM(t.tokens), `${change(t.tokens, p.tokens)} vs previous`],
+    ["Cost a day", fmtCost(t.cost_per_day), `over ${d.days} day${d.days === 1 ? "" : "s"}`],
+    ["Trend", trendValue, tr.direction === "flat" ? "the daily cost holds" : `a week · the daily cost is ${tr.direction}`],
+    ["Month at this rate", tr.month_at_rate == null ? "—" : `≈ ${fmtCost(tr.month_at_rate)}`, "the cost a day × 30"],
+  ];
+  return `<div class="an-tiles">${tiles.map(([l, v, sub]) => `<div class="card an-tile"><div class="an-tile-label">${esc(l)}</div>
+    <div class="an-tile-value">${esc(v)}</div><div class="muted an-tile-sub">${esc(sub)}</div></div>`).join("")}</div>`;
+}
+function anChartsHtml(d) {
+  const W = chartW(), days = d.day_series.map((x) => x.day), ds = d.day_series;
+  const priced = d.services.filter((s) => s.cost).map((s) => s.service);
+  const card = (title, sub, inner, extra = "") => `<section class="card an-chart"><div class="usage-head"><h3 class="card-title">${esc(title)}</h3>
+    <span class="muted" style="font-size:12px">${esc(sub)}</span>${extra}</div>${inner}</section>`;
+  const cost = priced.length ? card("Cost a day", "by service, with the 7-day moving average",
+    svgStackedBars({days, keys: priced, parts: ds.map((x) => x.cost_by_service), line: ds.map((x) => x.cost_avg7), fmt: fmtCost, W,
+                    tip: (i) => [`${ds[i].day} · ${fmtCost(ds[i].cost)}`, ...priced.filter((k) => ds[i].cost_by_service[k]).map((k) => `${svcName(k)} ${fmtCost(ds[i].cost_by_service[k])}`),
+                                 `7-day average ${fmtCost(ds[i].cost_avg7)}`].join("\n")}) +
+    legend([...priced.map((k) => [svcName(k), svcColor(k)]), ["7-day average", "var(--color-text)", "ln"]]))
+    : card("Cost a day", "nothing priced in this period", "");
+  const prevTotal = d.previous_cumulative.at(-1);
+  const running = card("Running total", "this period against the previous one, day by day",
+    svgLines({days, fmt: fmtCost, W, series: [
+      {label: "This period", color: "var(--color-accent)", values: ds.map((x) => x.cost_cumulative)},
+      {label: "Previous period", color: "var(--muted)", dashed: true, values: d.previous_cumulative}],
+    tip: (i) => `${ds[i].day} · this period ${fmtCost(ds[i].cost_cumulative)} · previous ${fmtCost(d.previous_cumulative[i])}`}) +
+    legend([[`This period · ${fmtCost(ds.at(-1).cost_cumulative)}`, "var(--color-accent)", "ln"],
+            [`Previous period · ${fmtCost(prevTotal)}`, "var(--muted)", "ln dash"]]));
+  const metric = S.an.metric, all = d.services.map((s) => s.service), field = metric === "tokens" ? "tokens_by_service" : "calls_by_service";
+  const toggle = `<div class="seg" role="group" aria-label="Activity" style="margin-left:auto">${[["calls", "Calls"], ["tokens", "Tokens"]].map(([k, l]) =>
+    `<button data-act="an-metric" data-id="${k}" aria-pressed="${metric === k}">${l}</button>`).join("")}</div>`;
+  const activity = card("Activity a day", `${metric} by service`, svgLines({days, fmt: (v) => fmtM(Math.round(v)), W,
+    series: all.map((k) => ({label: svcName(k), color: svcColor(k), values: ds.map((x) => x[field][k] || 0)})),
+    tip: (i) => [`${ds[i].day}`, ...all.filter((k) => ds[i][field][k]).map((k) => `${svcName(k)} ${fmtInt(ds[i][field][k])}`)].join("\n")}) +
+    legend(all.map((k) => [svcName(k), svcColor(k), "ln"])), toggle);
+  const shares = card("Shares", "of the cost (priced services) and of the calls (every service)", svgShare({W, rows: [
+    {label: "Cost", fmt: fmtCost, parts: d.services.filter((s) => s.cost).map((s) => ({key: s.service, value: s.cost}))},
+    {label: "Calls", fmt: fmtInt, parts: d.services.map((s) => ({key: s.service, value: s.calls}))}]}) +
+    legend(all.map((k) => [svcName(k), svcColor(k)])));
+  const agents = d.agents.length ? card("Agents", "the cost of each, the tick is the previous period's",
+    svgAgents({W, rows: d.agents.map((x) => ({label: S.data?.agents.find((g) => g.name === x.agent)?.display || x.agent, value: x.cost, prev: x.previous.cost}))})) : "";
+  return cost + running + activity + shares + agents;
+}
+function anTablesHtml(d) {
+  const svcRows = d.services.map((s) => {
+    const open = S.an.open[s.service], sub = s.billing === "subscription";
+    const delta = sub ? change(s.calls, s.previous.calls) : change(s.cost, s.previous.cost, true);
+    const cells = (x) => [x.calls, x.failed, x.input, x.output, x.characters].map((n) => nCell(n)).join("") + nCell(x.audio_s, 1) + nCell(x.video_s, 1);
+    const main = `<tr><td><button class="an-caret" data-act="an-open" data-id="${esc(s.service)}" aria-expanded="${Boolean(open)}" aria-label="Models of ${esc(svcName(s.service))}">${icon(open ? "caret-down" : "caret-right", 12)}</button><i class="an-key" style="background:${svcColor(s.service)}"></i>${esc(svcName(s.service))}</td>
+      <td class="muted">${esc(s.billing)}</td><td>${svgSparkline(sub ? s.series.calls : s.series.cost, svcColor(s.service))}</td>${cells(s)}<td class="r">${costCell(s)}</td><td class="r muted">${esc(delta)}</td></tr>`;
+    const models = open ? s.models.map((m) => `<tr class="an-sub"><td>${esc(m.model)}</td><td class="muted">${esc(m.billing)}</td><td></td>${cells(m)}<td class="r">${costCell(m)}</td>
+      <td class="r muted">${esc(m.billing === "subscription" ? change(m.calls, m.previous.calls) : change(m.cost, m.previous.cost, true))}</td></tr>`).join("") : "";
+    return main + models;
+  }).join("");
+  const services = `<section class="card"><h3 class="card-title">Services</h3><div class="table-scroll an-table"><table class="table"><thead><tr>
+    <th>service</th><th>billing</th><th>trend</th><th class="r">calls</th><th class="r">failed</th><th class="r">input</th><th class="r">output</th><th class="r">chars</th>
+    <th class="r">audio s</th><th class="r">video s</th><th class="r">cost</th><th class="r">vs previous</th></tr></thead><tbody>${svcRows}</tbody></table></div>
+    ${d.unpriced.length ? `<div class="muted" style="font-size:12px">No price for ${esc(d.unpriced.join(", "))} (PRICE_MODELS): a cost with them shows «≥».</div>` : ""}</section>`;
+  const kinds = `<section class="card"><h3 class="card-title">What it was for</h3><div class="table-scroll an-table"><table class="table"><thead><tr><th>kind</th>
+    <th class="r">calls</th><th class="r">tokens</th><th class="r">cost</th><th class="r">share</th><th class="r">vs previous</th></tr></thead><tbody>${d.kinds.map((k) =>
+    `<tr><td class="kind">${esc(k.kind)}</td>${nCell(k.calls)}${nCell(k.tokens)}<td class="r">${costCell(k)}</td><td class="r">${k.share == null ? "—" : `${(k.share * 100).toFixed(0)}%`}</td>
+      <td class="r muted">${esc(k.cost == null ? change(k.calls, k.previous.calls) : change(k.cost, k.previous.cost, true))}</td></tr>`).join("")}</tbody></table></div></section>`;
+  const agents = d.agents.length ? `<section class="card"><h3 class="card-title">Agents</h3><div class="table-scroll an-table"><table class="table"><thead><tr><th>agent</th>
+    <th class="r">calls</th><th class="r">tokens</th><th class="r">cost</th><th class="r">vs previous</th><th>services</th></tr></thead><tbody>${d.agents.map((x) =>
+    `<tr><td>${esc(S.data?.agents.find((g) => g.name === x.agent)?.display || x.agent)}</td>${nCell(x.calls)}${nCell(x.tokens)}<td class="r">${costCell(x)}</td>
+      <td class="r muted">${esc(change(x.cost, x.previous.cost, true))}</td><td class="muted">${esc(x.services.map(svcName).join(", "))}</td></tr>`).join("")}</tbody></table></div></section>` : "";
+  const fees = d.subscriptions.length ? `<section class="card"><h3 class="card-title">Subscriptions</h3><div class="table-scroll an-table"><table class="table"><thead><tr>
+    <th>service</th><th class="r">a month</th><th class="r">this period</th></tr></thead><tbody>${d.subscriptions.map((x) =>
+    `<tr><td>${esc(svcName(x.service))}</td><td class="r">${fmtCost(x.monthly)}</td><td class="r">${fmtCost(x.period_cost)}</td></tr>`).join("")}</tbody></table></div>
+    <div class="muted" style="font-size:12px">The monthly fees (PRICE_SUBSCRIPTIONS), prorated by day — shared by every agent, never split.</div></section>` : "";
+  return services + kinds + agents + fees;
+}
+
+// ── the CSV: the period's atomic rows, made in the browser from the data already here ───────────────────────────
+function csvField(v) {
+  let s = v == null ? "" : String(v);
+  if (/^[=+\-@]/.test(s)) s = `'${s}`;                       // a spreadsheet never runs a cell as a formula
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+const analyticsCsv = (d) => [CSV_HEAD, ...d.rows.map((r) => CSV_HEAD.map((k) => r[k]))].map((row) => row.map(csvField).join(",")).join("\r\n") + "\r\n";
+function downloadCsv() {
+  const d = S.an.data;
+  if (!d?.rows?.length) return;
+  const url = URL.createObjectURL(new Blob([analyticsCsv(d)], {type: "text/csv"}));
+  const link = document.createElement("a");
+  link.href = url; link.download = `agora-usage-${d.agent || "all"}-${d.since}-${d.until}.csv`;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+document.addEventListener("change", (e) => {
+  const k = e.target?.dataset?.an;
+  if (!k) return;
+  if (k === "agent") return anChoose({agent: e.target.value});
+  S.an[k] = e.target.value;
+  if (ISO_DAY.test(S.an.since) && ISO_DAY.test(S.an.until)) anChoose({});
+});
+["popstate", "hashchange"].forEach((ev) => window.addEventListener(ev, () => { readHash(); if (S.view === "analytics") loadAnalytics(); else render(); }));
+window.addEventListener("resize", () => { if (S.view === "analytics") { clearTimeout(S.an.resize); S.an.resize = setTimeout(render, 150); } });
 
 // ── the drawer: agent detail / service log ───────────────────────────────────
 function drawerHtml() {
@@ -1167,8 +1485,15 @@ document.addEventListener("click", (e) => {
   else if (act === "follow") { S.log.follow = !S.log.follow; render(); if (S.log.follow) loadLog(); }
   else if (act === "ufilter") { S.usageFilter = id; render(); }
   else if (act === "day") { S.expandedDays[id] = el.dataset.open !== "true"; render(); }
-  else if (act === "scroll") document.getElementById(id)?.scrollIntoView({behavior: "smooth", block: "start"});
-  else if (act === "top") $(".main")?.scrollTo({top: 0, behavior: "smooth"});
+  else if (act === "scroll") { leaveAnalytics(); document.getElementById(id)?.scrollIntoView({behavior: "smooth", block: "start"}); }
+  else if (act === "top") { leaveAnalytics(); $(".main")?.scrollTo({top: 0, behavior: "smooth"}); }
+  else if (act === "view") openAnalytics();                                   // v5.19: Analytics
+  else if (act === "dashboard") leaveAnalytics();
+  else if (act === "an-range") anChoose(id === "custom" ? {range: "custom", since: anPeriod()[0], until: anPeriod()[1]} : {range: id});
+  else if (act === "an-metric") { S.an.metric = id; render(); }
+  else if (act === "an-open") { S.an.open[id] = !S.an.open[id]; render(); }
+  else if (act === "an-retry") loadAnalytics();
+  else if (act === "an-csv") downloadCsv();
   else if (act === "toast-close") { S.toast = null; render(); }
   else if (act === "do" || act === "ask") {
     const {action, kind, sim} = el.dataset;
@@ -1192,6 +1517,7 @@ setInterval(() => { const el = $("#refreshed"); if (el && S.data) el.textContent
 setInterval(() => { if (S.token && !document.hidden) refresh(); }, POLL_MS);
 
 applyTheme(store(localStorage, "agora-theme") || "dark");
+readHash();  // v5.19: a report reopens from its address
 S.loading = Boolean(S.token);
 render();
 refresh();

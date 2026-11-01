@@ -225,7 +225,8 @@ def test_the_cards_stay_live_behind_the_settings_and_no_load_lands_in_the_wrong_
     """The owner, 2026-10-11: uptimes froze behind the open settings after a restart. AGORA-078 review #1–#3: a poll
     or a slow load could land in another drawer or over fresh typing; a failed load showed «Loading…» forever."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert 'if (stack && S.drawer?.kind === "settings") stack.innerHTML = dashboardHtml();' in js
+    assert ('if (stack && S.drawer?.kind === "settings" && S.view !== "analytics") stack.innerHTML = dashboardHtml();'
+            in js)  # v5.19: never the dashboard over the Analytics view
     assert "const untouched = S.settings === st && !st.busy" in js
     assert "if (settingsPath() !== path) return false;" in js
     assert 'data-act="settings-retry"' in js and "Settings unavailable: ${esc(st.error)}" in js
@@ -354,3 +355,78 @@ def test_the_usage_table_shows_her_kruzhechoks_seconds():
     assert "const video = u.rows.some((r) => r.video_ms);" in js and '<th class="r">video s</th>' in js
     order = js.split("const KIND_ORDER = [")[1].split("]")[0]
     assert order.index('"photo"') < order.index('"video"') < order.index('"video_note"')
+
+
+# --- v5.19: the Analytics view ----------------------------------------------------------------------------------------
+def js_text():
+    return (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+
+def test_the_rail_and_the_tokens_card_open_analytics_and_the_dashboard_is_one_click_back():
+    js = js_text()
+    assert 'data-act="view" data-id="analytics"' in js and "Analytics</button>" in js
+    assert '${icon("chart-bar", 16)}Analytics' in js and '"chart-bar":' in (STATIC_DIR / "icons.js").read_text("utf-8")
+    assert 'data-act="dashboard">← Dashboard</button>' in js
+    assert 'S.view === "analytics" ? analyticsHtml() : dashboardHtml()' in js
+    assert 'else if (act === "scroll") { leaveAnalytics();' in js and 'else if (act === "top") { leaveAnalytics();' in js
+
+
+def test_the_periods_the_agent_and_the_address():
+    js = js_text()
+    for label in ("Today", "Yesterday", "7 days", "30 days", "This month", "Last month", "Custom"):
+        assert f'"{label}"]' in js, label
+    assert "const panelToday = () => S.data?.usage?.until" in js   # the server's day, not only the browser's clock
+    assert 'if (a.range === "lastmonth") { const end = isoShift(first, -1); return [`${end.slice(0, 8)}01`, end]; }' in js
+    assert 'return `#analytics?${q}`;' in js and "readHash();  // v5.19" in js
+    assert 'data-an="agent"' in js and 'data-an="${k}"' in js and 'type="date"' in js
+    assert 'const data = await api(`/api/analytics?${q}`);' in js
+    assert "if (req === S.an.req) S.an.data = data;" in js       # only the latest choice lands
+
+
+def test_the_view_never_redraws_under_the_owner_on_a_poll():
+    js = js_text()
+    assert 'if (S.view === "analytics") {' in js and "if (!manual && !S.drawer) return;" in js
+
+
+def test_the_charts_are_inline_svg_with_tooltips_and_css_colours_only():
+    js = js_text()
+    for builder in ("function svgStackedBars(", "function svgLines(", "function svgShare(", "function svgSparkline(",
+                    "function svgAgents("):
+        assert builder in js, builder
+    assert js.count("<title>") >= 4 and "class=\"an-hit\"" in js        # a tooltip on every mark or day column
+    assert not re.search(r"#[0-9a-fA-F]{6}\b", js)                       # no colour in the script: CSS variables
+    assert "const svgColor" not in js and "var(--viz-${SERVICES[s]?.[1] || 8})" in js
+    for chart in ("Cost a day", "Running total", "Activity a day", "Shares", "Agents"):
+        assert f'card("{chart}"' in js, chart
+    assert "7-day average" in js and "Previous period" in js and 'data-act="an-metric"' in js
+
+
+def test_both_themes_carry_every_service_colour():
+    css = (STATIC_DIR / "panel.css").read_text(encoding="utf-8")
+    dark = css[css.index("[data-theme] { --viz-1"):]
+    light = css[css.index('[data-theme="light"] { --viz-1'):]
+    for n in range(1, 9):
+        assert f"--viz-{n}: #" in dark.split("}")[0] and f"--viz-{n}: #" in light.split("}")[0], n
+
+
+def test_the_tiles_show_the_change_the_trend_and_the_month_at_the_rate():
+    js = js_text()
+    for tile in ('["Cost",', '["Calls",', '["Tokens",', '["Cost a day",', '["Trend",', '["Month at this rate",'):
+        assert tile in js, tile
+    assert 'vs previous`]' in js and '"≥"' in js and "No data for this period" in js
+
+
+def test_a_subscription_is_never_zero_and_the_services_expand_to_their_models():
+    js = js_text()
+    assert 'x.billing === "subscription" ? `<span class="muted">subscription</span>`' in js
+    assert 'data-act="an-open"' in js and 'class="an-sub"' in js and "svgSparkline(sub ? s.series.calls : s.series.cost" in js
+
+
+def test_the_csv_header_and_its_escaping():
+    js = js_text()
+    assert ('const CSV_HEAD = ["day", "agent", "service", "model", "kind", "calls", "failed", "blocked", "input", '
+            '"output", "tokens",') in js
+    assert "if (/^[=+\\-@]/.test(s)) s = `'${s}`;" in js                   # never a formula in a spreadsheet
+    assert """return /[",\\r\\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;""" in js
+    assert "link.download = `agora-usage-${d.agent || \"all\"}-${d.since}-${d.until}.csv`;" in js
+    assert js.count("fetch(") == 2                                        # the CSV is made from the data already here
