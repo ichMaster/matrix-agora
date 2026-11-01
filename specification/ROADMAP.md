@@ -16,7 +16,7 @@ are left in the v5 review docs, as backlog. The same day the owner opened two mo
 2026-11-01:
 - v5.16, released as `v5.16.0`: Gemini's blocks on her private prompt kept coming back from context the judge had rated
   clean;
-- v5.17, Кіра's photos in Telegram (planned);
+- v5.17, released as `v5.17.0`: Кіра's photos in Telegram;
 - v5.18, Кіра's videos in Telegram: a кружечок in her voice and short clips (planned).
 
 Then come v6–v9 in order. Other further work (the
@@ -60,7 +60,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.14 | Her private chat past a Gemini block: GLM-4.6 on NovelAI, the censored mark and the route | ✅ completed | `v5.14.0` (2026-10-30) |
 | v5.15 | The judge: Gemma 4 31B rates the backup's talk | ✅ completed | `v5.15.0` (2026-10-30) + `v5.15.1`–`v5.15.4` |
 | v5.16 | Gemini checks the parts of a blocked prompt | ✅ completed | `v5.16.0` (2026-10-31) |
-| v5.17 | Кіра's photos in Telegram | ⏳ planned | — |
+| v5.17 | Кіра's photos in Telegram | ✅ completed | `v5.17.0` (2026-11-01) |
 | v5.18 | Кіра's videos in Telegram: a кружечок in her voice and short clips | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
@@ -2349,7 +2349,8 @@ proposed and confirmed when the issues are generated.
 
 ### v5.17 — Кіра's photos in Telegram
 
-**Status:** ⏳ planned (the owner, 2026-10-31).
+**Status:** ✅ completed — `v5.17.0` (2026-11-01; planned by the owner 2026-10-31; the owner's live checks
+confirmed 2026-11-01).
 
 **Goal:** Кіра sends the owner photos in her Telegram chat, whenever she likes, on her own and in her answers:
 - her life: the observatory dome, the night sky, a cup mended with gold, the Tustan rocks, Lviv streets, food;
