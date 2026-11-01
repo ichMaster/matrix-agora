@@ -312,6 +312,7 @@ from agents.video import (
 from agents.video import KEY_VAR as FAL_KEY_VAR
 from agents.video import KINDS as VIDEO_KINDS
 from agents.video import MODEL as VIDEO_MODEL
+from agents.video import USAGE_KINDS as VIDEO_USAGE
 from agents.voice import (
     STT_MODEL,
     TTS_MODEL,
@@ -2079,12 +2080,21 @@ class Agent:
                 and self.photos_today() < self.photo_day_max)
 
     def videos_today(self) -> int:
-        """v5.18 — her videos kept today (`state/<name>.videos/<day>/`), for the day's cap."""
-        folder = self._dir("videos") / local_now(self.clock(), self.tz).date().isoformat()
+        """v5.18 — her videos today, for the day's cap: the ones paid for (today's ok `video` / `video_note` lines in
+        her usage file — review #1: one paid for that then failed counts too) or the ones kept
+        (`state/<name>.videos/<day>/`), whichever is more."""
+        day = local_now(self.clock(), self.tz).date().isoformat()
         try:
-            return sum(1 for p in folder.iterdir() if p.is_file())
+            kept = sum(1 for p in (self._dir("videos") / day).iterdir() if p.is_file())
         except OSError:
-            return 0
+            kept = 0
+        try:
+            records = parse_lines(self.usage_file.read_text(encoding="utf-8").splitlines())[0]
+        except OSError:
+            records = []
+        paid = sum(1 for r in records
+                   if r.get("kind") in VIDEO_USAGE and r.get("ok") and str(r["ts"])[:10] == day)
+        return max(kept, paid)
 
     def _video_closed(self, door: str | None, kind: str) -> str | None:
         """v5.18 — why her answer may not carry this video now (None: it may): not Telegram, the maker off (a кружечок

@@ -36,6 +36,7 @@ from agents.voice import RATE
 log = logging.getLogger("agent.video")
 
 KINDS = ("note", "clip")
+USAGE_KINDS = ("video", "video_note")  # the usage lines a video is paid by (review #1: the day's cap counts them)
 KEY_VAR = "FAL_KEY"                # server/kira.env: fal.ai/dashboard/keys, preset API (docs/fal-ai.md)
 MODEL = "gemini-omni-1.1-flash"    # the owner, 2026-11-01: Google's video model for her clips
 RESOLUTIONS = ("720p", "1080p")

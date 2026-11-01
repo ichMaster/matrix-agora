@@ -264,3 +264,24 @@ def test_the_skill_never_says_a_video_is_made():
     assert "КРУЖЕЧОК" in NOTE_SKILL and "ВІДЕО" in CLIP_SKILL
     assert video_skill(("clip",)) == f"{CLIP_SKILL} {SKILL_TAIL}" and video_skill(()) == ""
     assert video_skill(("note", "clip")) == f"{NOTE_SKILL} {CLIP_SKILL} {SKILL_TAIL}"
+
+
+
+def test_a_video_paid_for_counts_toward_the_cap_even_when_it_did_not_go(tmp_path, monkeypatch, media, caplog):
+    # v5.18 review #1: fal billed, then the square cut failed — no file kept, yet the day's cap must see it
+    import json
+
+    from agents.usage import usage_line, video_note_usage_line
+    caplog.set_level(logging.INFO)
+    agent = kira(tmp_path, monkeypatch, "Привіт!\nКРУЖЕЧОК: я в бусі")
+    agent.video_day_max = 2
+    agent.usage_file.parent.mkdir(parents=True, exist_ok=True)
+    lines = [video_note_usage_line("2026-10-20T10:00:00+03:00", "kira", "fal-ai/x", 9000, True),
+             usage_line("2026-10-20T11:00:00+03:00", "kira", "video", "gemini-omni-1.1-flash", None, True),
+             video_note_usage_line("2026-10-20T12:00:00+03:00", "kira", "fal-ai/x", None, False),  # failed: unpaid
+             video_note_usage_line("2026-10-19T12:00:00+03:00", "kira", "fal-ai/x", 9000, True)]   # another day
+    agent.usage_file.write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+    assert agent.videos_today() == 2 and not videos_dir(agent).exists()
+    owner_says(agent, "запиши кружечок", ms(17), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    assert NOTE_SKILL not in agent.llm.calls[0][0] and "video: dropped (cap)" in caplog.text
