@@ -6,9 +6,10 @@ recalled lines and facts, the pinned facts, today's thoughts) and the fixed laye
 an injected oracle, `blocked(keep_items, keep_layers)`: no text ever enters it. First the whole prompt again (a block
 not reproduced closes nothing), then the base — every layer, no item (a block there is a fixed layer's, named, and
 nothing is closed), then the items by delta debugging (QuickXplain), down to a set every one of whose items is needed — and again over
-what is left, while it still blocks, so two causes are found in one probe. Under the budget of calls, the sets found
-and the smallest set seen to block are the answer: closing them always removes blocked combinations — but never all
-that is left, which would close all she knows to Gemini. A failed call stops it: what was found before it stands.
+what is left, while it still blocks, so two causes are found in one probe. Under the budget of calls only the sets
+found are the answer (2026-11-02: the smallest set seen to block was 135–148 of her 150 lines, and closing it closed
+all she knew to Gemini); a probe that proved nothing leaves the older lines to the judge (`agents/agent.py`). A failed
+call stops it: what was found before it stands.
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ OUTCOMES = ("not_reproduced", "base_blocks", "found", "cap", "error")
 @dataclass(frozen=True)
 class Found:
     calls: int
-    closed: tuple[str, ...] = ()   # the items to close: `found` and `cap` only
+    closed: tuple[str, ...] = ()   # the items to close: the sets proven (`found`, `cap`, `error`)
     layers: tuple[str, ...] = ()   # the fixed layers that block: `base_blocks` only — named, never closed
     outcome: str = "found"
 
@@ -83,7 +84,7 @@ async def search(items: Sequence[str], layers: Sequence[str], blocked: Oracle, c
             raise _Failed
         return bool(answer)
 
-    best: list[tuple[str, ...]] = [all_items]
+    best: list[tuple[str, ...]] = [all_layers]  # the smallest set of layers seen to block, for a spent budget
     in_layers = False
     closed: tuple[str, ...] = ()
     left = all_items
@@ -92,11 +93,10 @@ async def search(items: Sequence[str], layers: Sequence[str], blocked: Oracle, c
             return Found(calls, outcome="not_reproduced")
         if not all_items or await ask((), all_layers):  # the base: every layer, no item
             in_layers = True
-            best = [all_layers]
             layers_found = await _minimal(all_layers, lambda s: ask((), s), best)
             return Found(calls, layers=layers_found, outcome="base_blocks")
         while True:  # one blocked set at a time, until what is left passes
-            found = await _minimal(left, lambda s: ask(s, all_layers), best)
+            found = await _minimal(left, lambda s: ask(s, all_layers), [left])  # unproven sets never close
             closed += found
             left = tuple(i for i in left if i not in found)
             try:  # does what is left still block? With no call left for it, the sets found stand
@@ -105,7 +105,6 @@ async def search(items: Sequence[str], layers: Sequence[str], blocked: Oracle, c
                 again = False
             if not again:
                 return Found(calls, closed=closed, outcome="found")
-            best = [left]
     except _Spent:
         if in_layers:
             return Found(calls, layers=best[0], outcome="base_blocks")
