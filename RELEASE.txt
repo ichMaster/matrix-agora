@@ -1,3 +1,30 @@
+Version 5.19.0 (2026-11-02)
+---------------------------
+- Phase v5.19 (AGORA-167..170): analytics of the spending by agent and by
+  service over a chosen period
+- analyze() in agents/usage.py by service, model, kind, day and agent, with
+  the previous period of the same length, the daily cost by service with its
+  7-day moving average and running total, the least-squares trend as $ a
+  week and the month at the period's rate; a subscription is never $0 and an
+  unpriced api model is listed as unpriced; PRICE_SUBSCRIPTIONS fees
+  prorated by day for all agents
+- GET /api/analytics?since&until[&agent]: Bearer, the agent through the
+  registry, 400 with its reason, at most 366 days
+- The panel's Analytics view: Today, Yesterday, 7 days, 30 days, This month,
+  Last month or a custom range, an agent or All, kept in the address; tiles,
+  five inline-SVG charts, services with sparklines and models, kinds,
+  agents, subscriptions, a CSV
+- usage_report.py --until --agent --by service|model|kind|day|agent
+- Fixes at the owner's word on 2026-11-01/02 (Kira forgot four days): time
+  lines in her private history for Gemini, relative and never a date or an
+  hour (4bbb4e4); a capped probe closes only the sets it proved (e76ff2d)
+- Code review v5.19: a probe that proves nothing hands the blocked prompt's
+  older lines to the judge (#1), the cost a day, the month at the rate and
+  the trend leave out an unfinished today and the days before the first line
+  (#2), a typed custom date waits until the typing stops (#3), the probe's
+  docs (#8); #4-#7 and #9-#11 LOW deferred
+- The owner's manual checks confirmed on 2026-11-02
+
 Version 5.18.0 (2026-11-01)
 ---------------------------
 - Phase v5.18 (AGORA-163..166), Kira's videos in Telegram: she sends the
