@@ -383,6 +383,16 @@ def test_the_periods_the_agent_and_the_address():
     assert "if (req === S.an.req) S.an.data = data;" in js       # only the latest choice lands
 
 
+def test_a_typed_date_waits_until_the_typing_stops_and_never_asks_for_a_year_before_2000():
+    """Code review v5.19 #3: Chromium fires `change` at each keystroke that leaves a whole date (year «0002» after the
+    first «2»), and the re-render dropped the year being typed."""
+    js = js_text()
+    assert 'const wholeDay = (v) => ISO_DAY.test(v || "") && v >= "2000-01-01";' in js
+    assert "clearTimeout(S.an.typing);" in js
+    assert "if (wholeDay(S.an.since) && wholeDay(S.an.until)) S.an.typing = setTimeout(() => anChoose({}), 700);" in js
+    assert "if (ISO_DAY.test(S.an.since) && ISO_DAY.test(S.an.until)) anChoose({});" not in js
+
+
 def test_the_view_never_redraws_under_the_owner_on_a_poll():
     js = js_text()
     assert 'if (S.view === "analytics") {' in js and "if (!manual && !S.drawer) return;" in js

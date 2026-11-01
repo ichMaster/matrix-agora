@@ -793,12 +793,16 @@ function downloadCsv() {
   document.body.appendChild(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
+// review #3: Chromium fires `change` on a date field at each keystroke that leaves a whole date, and the re-render
+// dropped the year being typed — a date waits until the typing stops, and a year before 2000 is never asked for
+const wholeDay = (v) => ISO_DAY.test(v || "") && v >= "2000-01-01";
 document.addEventListener("change", (e) => {
   const k = e.target?.dataset?.an;
   if (!k) return;
   if (k === "agent") return anChoose({agent: e.target.value});
   S.an[k] = e.target.value;
-  if (ISO_DAY.test(S.an.since) && ISO_DAY.test(S.an.until)) anChoose({});
+  clearTimeout(S.an.typing);
+  if (wholeDay(S.an.since) && wholeDay(S.an.until)) S.an.typing = setTimeout(() => anChoose({}), 700);
 });
 ["popstate", "hashchange"].forEach((ev) => window.addEventListener(ev, () => { readHash(); if (S.view === "analytics") loadAnalytics(); else render(); }));
 window.addEventListener("resize", () => { if (S.view === "analytics") { clearTimeout(S.an.resize); S.an.resize = setTimeout(render, 150); } });
