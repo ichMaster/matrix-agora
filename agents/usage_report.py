@@ -1,5 +1,7 @@
 """Token report: uv run agents/usage_report.py [--days N] [--since YYYY-MM-DD] [--markdown]
                                             [--write [DIR]]
+                                            [--until YYYY-MM-DD] [--agent NAME]
+                                            [--by service|model|kind|day|agent]
 
 Reads every state/*.usage.jsonl and prints calls and tokens by day × agent ×
 kind, with an estimated cost when PRICE_INPUT_PER_1M / PRICE_OUTPUT_PER_1M are
@@ -9,6 +11,10 @@ set in .env (USD per 1M tokens) — a model listed in PRICE_MODELS (v5.1,
 --write writes the daily report (statistics for yesterday, the last 7 days,
 the month so far and today) to DIR/YYYY-MM-DD.md and DIR/latest.md
 (default DIR: reports/usage); scripts/usage-daily.sh runs it every morning.
+
+--by (v5.19) prints the analytics of the period (--since or --days, to --until, default today) for one agent
+(--agent) or all, grouped by service, model, kind, day or agent, with the cost of each — the same analysis as the
+panel's Analytics view; with all agents, --by service adds the subscriptions' fees (PRICE_SUBSCRIPTIONS).
 """
 
 from __future__ import annotations
@@ -24,7 +30,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
 
-from agents.usage import aggregate, daily_report, parse_lines, parse_model_prices, parse_second_prices, render
+from agents.usage import (
+    BY,
+    PriceBook,
+    aggregate,
+    analyze,
+    daily_report,
+    parse_lines,
+    parse_model_prices,
+    parse_second_prices,
+    parse_subscription_prices,
+    render,
+    render_analysis,
+)
 
 
 def _price(name: str) -> float | None:
@@ -51,6 +69,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--markdown", action="store_true", help="print a markdown table")
     ap.add_argument("--write", nargs="?", const="reports/usage", metavar="DIR",
                     help="write the daily report to DIR/YYYY-MM-DD.md and DIR/latest.md (default reports/usage)")
+    ap.add_argument("--until", type=date.fromisoformat, help="to this date (default today; with --by)")
+    ap.add_argument("--agent", help="one agent only (with --by)")
+    ap.add_argument("--by", choices=BY, help="the analytics, grouped by service, model, kind, day or agent")
     ap.add_argument("--state-dir", default="state", help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
     load_dotenv()
@@ -71,6 +92,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"warning: PRICE_SECONDS entry {entry!r} is not model=usd — ignored", file=sys.stderr)
     if args.write:
         print(write_daily(Path(args.write), daily_report(records, now, *prices, models, seconds), now.date()))
+        return 0
+    if args.by:  # v5.19: the analytics, as the panel's
+        fees, bad_fees = parse_subscription_prices(os.environ.get("PRICE_SUBSCRIPTIONS"))
+        for entry in bad_fees:
+            print(f"warning: PRICE_SUBSCRIPTIONS entry {entry!r} is not service=usd — ignored", file=sys.stderr)
+        until = args.until or now.date()
+        since = args.since or (until - timedelta(days=args.days - 1))  # --days counts back from --until
+        if since > until:
+            print("error: --since is after --until", file=sys.stderr)
+            return 2
+        report = analyze(records, since, until, args.agent, PriceBook(*prices, models, seconds, fees))
+        print(render_analysis(report, args.by, markdown=args.markdown))
         return 0
     print(render(aggregate(records, since), *prices, markdown=args.markdown, models=models, seconds=seconds))
     return 0

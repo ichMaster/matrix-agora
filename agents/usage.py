@@ -763,3 +763,47 @@ def analyze(records: list[dict], since: date, until: date, agent: str | None = N
             k: v for k, v in _Sum(r, costs[a] or 0.0, costs[a] is not None).totals().items() if k != "complete"}}
                  for a, r in sorted(now.items())],
     }
+
+
+BY = ("service", "model", "kind", "day", "agent")  # v5.19: `usage_report.py --by`
+
+
+def render_analysis(report: dict, by: str, markdown: bool = False) -> str:
+    """v5.19 — `analyze()`'s report as one table grouped `by` (pure): the atomic rows summed per service, model
+    (service / model), kind, day or agent, then the period's total, the unpriced models and, for all agents by service,
+    the subscriptions' fees. A cost is «—» with nothing priced and «≥» when an unpriced `api` part is left out."""
+    groups: dict[str, dict] = {}
+    for r in report["rows"]:
+        label = f"{r['service']} / {r['model']}" if by == "model" else str(r[by])
+        g = groups.setdefault(label, {"calls": 0, "failed": 0, "input": 0, "output": 0, "characters": 0, "audio_s": 0.0,
+                                      "video_s": 0.0, "billing": "", "cost": 0.0, "priced": False, "complete": True})
+        for k in ("calls", "failed", "input", "output", "characters", "audio_s", "video_s"):
+            g[k] += r[k]
+        g["billing"] = _merge(g["billing"], r["billing"])
+        if r["cost"] is not None:
+            g["cost"], g["priced"] = g["cost"] + r["cost"], True
+        elif r["billing"] != "subscription":
+            g["complete"] = False
+
+    def money(c, priced, complete) -> str:
+        return "—" if not priced or c is None else f"{'' if complete else '≥'}{c:.4f}"
+
+    def cells(label: str, g: dict) -> list[str]:
+        return [label, _n(g["calls"]), _n(g["failed"]), _n(g["input"]), _n(g["output"]), _n(g["characters"]),
+                f"{g['audio_s']:,.0f}", f"{g['video_s']:,.0f}", g["billing"] or "api",
+                money(g["cost"], g["priced"], g["complete"])]
+
+    order = sorted(groups.items()) if by == "day" else sorted(
+        groups.items(), key=lambda kv: (-(kv[1]["cost"] if kv[1]["priced"] else -1.0), -kv[1]["calls"], kv[0]))
+    t = report["total"]
+    total = cells("TOTAL", {**t, "priced": t["cost"] is not None})
+    who = report["agent"] or "all agents"
+    out = [f"{who} · {report['since']} … {report['until']} ({report['days']} days) — by {by}", "",
+           table([by, "calls", "failed", "input", "output", "chars", "audio s", "video s", "billing", "cost $"],
+                 [cells(k, g) for k, g in order] + [total], markdown)]
+    if report["unpriced"]:
+        out += ["", "No price (a cost with them is «≥»): " + ", ".join(report["unpriced"]) + "."]
+    if by == "service" and report["subscriptions"]:
+        out += ["", "Subscriptions for the period: " + "; ".join(
+            f"{x['service']} ${x['period_cost']:.2f} (${x['monthly']:g} a month)" for x in report["subscriptions"]) + "."]
+    return "\n".join(out)

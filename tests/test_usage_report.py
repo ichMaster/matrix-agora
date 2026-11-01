@@ -232,3 +232,81 @@ def test_the_report_command_reads_price_seconds_and_warns_on_a_bad_entry(tmp_pat
     out, err = capsys.readouterr()
     assert "PRICE_SECONDS entry 'broken'" in err
     assert "| 2026-10-02 | kira | video_note | 2 | 1 | 0 | 0 | 0 | 10 | api | 0.5620 |" in out
+
+
+# --- v5.19: the analytics on the command line --------------------------------------------------------------------
+def analytics_state(tmp_path):
+    from agents.usage import stt_usage_line, tts_usage_line, video_note_usage_line
+    lines = [rec("2026-10-30T10:00:00+02:00", "kira", "private"), rec("2026-11-01T10:00:00+02:00", "kira", "summary"),
+             rec("2026-11-01T11:00:00+02:00", "ada", "reply"),
+             video_note_usage_line("2026-11-01T12:00:00+02:00", "kira", "veed/fabric-1.0", 10_000, True),
+             tts_usage_line("2026-11-01T12:00:00+02:00", "kira", "eleven_v4_turbo", 250, True),
+             stt_usage_line("2026-11-01T12:00:00+02:00", "kira", "nova-2", 3_000, True)]
+    (tmp_path / "kira.usage.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+    return tmp_path
+
+
+def by(tmp_path, capsys, *extra):
+    assert usage_report.main(["--state-dir", str(tmp_path), "--since", "2026-10-31", "--until", "2026-11-01",
+                              *extra]) == 0
+    return capsys.readouterr().out
+
+
+@pytest.mark.parametrize("group, labels", [
+    ("service", ["gemini", "fal", "elevenlabs", "deepgram"]),
+    ("model", ["gemini / m", "fal / veed/fabric-1.0", "elevenlabs / eleven_v4_turbo", "deepgram / nova-2"]),
+    ("kind", ["summary", "reply", "video_note", "tts", "stt"]),
+    ("day", ["2026-11-01"]),
+    ("agent", ["kira", "ada"]),
+])
+def test_by_prints_each_grouping_and_a_total(analytics_env, tmp_path, capsys, group, labels):
+    out = by(analytics_state(tmp_path), capsys, "--by", group)
+    assert f"all agents · 2026-10-31 … 2026-11-01 (2 days) — by {group}" in out and "TOTAL" in out
+    for label in labels:
+        assert label in out, label
+    assert "2026-10-30" not in out                     # before --since
+
+
+def test_by_service_for_one_agent_prices_and_counts_her_units(analytics_env, tmp_path, capsys):
+    out = by(analytics_state(tmp_path), capsys, "--by", "service", "--agent", "kira", "--markdown")
+    assert out.startswith("kira · 2026-10-31") and "| service | calls |" in out and "ada" not in out
+    rows = {line.split("|")[1].strip(): line for line in out.splitlines() if line.startswith("| ")}
+    assert rows["fal"].rstrip(" |").endswith("0.8000") and "10" in rows["fal"]   # 10 s at $0.08
+    assert rows["elevenlabs"].rstrip(" |").endswith("—") and "250" in rows["elevenlabs"]  # a subscription, never $0
+    assert "3" in rows["deepgram"] and "Subscriptions" not in out                  # one agent: no fee
+
+
+def test_by_service_with_all_agents_adds_the_fees_and_names_the_unpriced(analytics_env, tmp_path, capsys,
+                                                                         monkeypatch):
+    monkeypatch.setenv("PRICE_SUBSCRIPTIONS", "elevenlabs=31,bad")
+    monkeypatch.setenv("PRICE_INPUT_PER_1M", "")
+    analytics_state(tmp_path)
+    assert usage_report.main(["--state-dir", str(tmp_path), "--since", "2026-10-31", "--until", "2026-11-01",
+                              "--by", "service"]) == 0
+    out, err = capsys.readouterr()
+    assert "Subscriptions for the period: elevenlabs $2.03 ($31 a month)." in out   # 31/31 + 31/30
+    assert "No price (a cost with them is «≥»): m." in out and "≥0.8000" in out
+    assert "PRICE_SUBSCRIPTIONS entry 'bad' is not service=usd — ignored" in err
+
+
+def test_until_with_days_counts_back_and_a_reversed_period_is_an_error(analytics_env, tmp_path, capsys):
+    analytics_state(tmp_path)
+    assert usage_report.main(["--state-dir", str(tmp_path), "--until", "2026-10-30", "--days", "1", "--by",
+                              "day"]) == 0
+    out = capsys.readouterr().out
+    assert "2026-10-30 … 2026-10-30" in out and "2026-11-01" not in out
+    assert usage_report.main(["--state-dir", str(tmp_path), "--since", "2026-11-02", "--until", "2026-11-01",
+                              "--by", "day"]) == 2
+
+
+def test_without_by_the_report_is_as_before(analytics_env, tmp_path, capsys):
+    out = by(analytics_state(tmp_path), capsys)
+    assert "by service" not in out and "kira" in out
+
+
+@pytest.fixture
+def analytics_env(monkeypatch):
+    monkeypatch.setattr(usage_report, "load_dotenv", lambda: None)
+    for name, value in (("PRICE_INPUT_PER_1M", "0.30"), ("PRICE_OUTPUT_PER_1M", "2.50"), ("PRICE_MODELS", ""),
+                        ("PRICE_SECONDS", "veed/fabric-1.0=0.08"), ("PRICE_SUBSCRIPTIONS", "")):
+        monkeypatch.setenv(name, value)

@@ -40,7 +40,7 @@ See ARCHITECTURE.md §Repository layout for the full tree. The essentials:
 - Dev mode on the Mac (one terminal per agent): `scripts/run-agent.sh ada` / `scripts/run-agent.sh bruno`; Ctrl+C stops. Since v3.2 the live agents run on the server — stop the server's container first (`docker compose stop ada` on the host), since the lock is per host; the Mac `state/` is an older copy
 - Production (from v3.2): everything runs on the Ubuntu server; deploy the stack with `server/deploy.sh` (`--dry-run` first; it syncs `server/docker-compose.yml` + the local, gitignored `server/.env`, pulls, `up -d`); never hand-edit files on the host. Each agent is its own container (`ada`, `bruno`, image `ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG}`) — stop with `docker compose stop -t 30 <name>` so the session summary runs; logs in `~/matrix-agora/state/logs/<name>.log`
 - Panel (from v3.3, actions from v3.4): `http://192.168.1.197:8090`, Bearer `PANEL_TOKEN`
-- Token report (from v3.1): `uv run agents/usage_report.py --days 7`
+- Token report (from v3.1): `uv run agents/usage_report.py --days 7`; by service (from v5.19): `--agent kira --days 30 --by service`
 - Daily token report: since v3.2 the compose service `usage-report` writes `~/matrix-agora/reports/usage/latest.md` on the server every day at 07:00 (v3.1.1's Mac launchd job, `scripts/install-usage-daily.sh`, is uninstalled); by hand on the Mac: `scripts/usage-daily.sh`
 - Server (on the Ubuntu host, from `server/`): `docker compose up -d`, then `docker compose logs -f homeserver`
 - Homeserver smoke test from the Mac: `curl http://192.168.1.197:8008/_matrix/client/versions`
