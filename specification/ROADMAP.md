@@ -2768,7 +2768,9 @@ Gemini's history (4bbb4e4) and a capped probe that closes only what it proved (e
 - the open talk is compressed by Gemini 3.1 Pro;
 - the closed talk (`waiting`, `censored`, `reopened`) never goes into her history or into a summary Gemini reads: it
   is archived and kept compressed apart, in case a line was closed by mistake;
-- a phase through the pipeline.
+- a phase through the pipeline;
+- (2026-11-02, during the test) her last private prompt to Gemini shown in the panel («в панелі просто
+  виводь останній промпт»).
 
 **Proposed** (confirmed when the issues are generated):
 - **The store:** a table `talk` in `state/<name>.archive.db` (0600): the level (`hour`, `4h`, `week`), the period's
@@ -2790,6 +2792,8 @@ Gemini's history (4bbb4e4) and a capped probe that closes only what it proved (e
 - **The panel:** her card gets a read-only **Talk** tab: the summaries by level, newest first, and for each period the
   count of its closed lines (never their text).
 - **Settings** (her agent settings): `TALK_HOUR_DAYS` (2), `TALK_4H_DAYS` (14) and the three word caps.
+- **The Prompt tab:** her last private prompt to Gemini, whole, with its outcome (answered, or the block's stage and
+  reason), kept in `state/<name>.prompt.json` and shown in her card.
 - **ARCHITECTURE:** §Memory (the layers), §Contracts (the archive's `talk` table and the private prompt's order),
   §Configuration (the settings).
 
