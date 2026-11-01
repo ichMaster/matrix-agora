@@ -8,11 +8,11 @@ const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today",
 // review #11: a kind not listed above still shows, after the listed ones — a tab's rows always add up to its total
 function kindsOf(byKind) { return [...KIND_ORDER.filter((k) => byKind[k]), ...Object.keys(byKind).filter((k) => !KIND_ORDER.includes(k)).sort()]; }
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
-              ["today", "Today"], ["mood", "Mood"], ["events", "Events"], ["thoughts", "Thoughts"], ["talk", "Talk"], ["facts", "Facts"], ["voice", "Voice"], ["tokens", "Tokens"],
+              ["today", "Today"], ["mood", "Mood"], ["events", "Events"], ["thoughts", "Thoughts"], ["talk", "Talk"], ["prompt", "Prompt"], ["facts", "Facts"], ["voice", "Voice"], ["tokens", "Tokens"],
               ["files", "Files"], ["settings", "Settings"]];
 // v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
 const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", facts: "facts",
-                 voice: "voice", events: "events", thoughts: "thoughts", talk: "talk"};
+                 voice: "voice", events: "events", thoughts: "thoughts", talk: "talk", prompt: "private"};
 const SERIES = ["a", "b", "c", "d", "e"];  // stacked token bars: one tint of the accent per agent (v4.2: N agents)
 const PRONOUN = {she: "She", he: "He", it: "It"};
 function can(a, cap) { return !a.capabilities || a.capabilities.includes(cap); }
@@ -30,6 +30,7 @@ const S = {
   dialog: null,            // {action, kind: "agent"|"service", id, sim} awaiting confirmation
   settings: null,          // v4.7: {view, edits: {name: value}, reset: {name: true}, busy}
   files: {list: null, open: null, prefix: "", busy: false},  // v4.7: Claude's folder
+  prompt: undefined,  // v5.20: her last private prompt, fetched when its tab opens
   view: "dashboard",       // v5.19: or "analytics", kept in the address
   an: {range: "30d", since: "", until: "", agent: "all", metric: "calls", data: null, loading: false, error: null,
        open: {}, req: 0, resize: 0},
@@ -1128,6 +1129,7 @@ function agentTabHtml(a, mem, tab) {
   if (tab === "events") return eventsTabHtml(a, mem);
   if (tab === "thoughts") return thoughtsTabHtml(a, mem);
   if (tab === "talk") return talkTabHtml(a, mem);
+  if (tab === "prompt") return promptTabHtml(a);
   if (tab === "facts") return factsTabHtml(a, mem);
   if (tab === "voice") return voiceTabHtml(a, mem);
   if (tab === "session") {
@@ -1325,6 +1327,28 @@ document.addEventListener("input", (e) => {
 // ── v4.7: Claude's files — his own folder: list, open, download, upload, delete ─────────────────────────────
 const filePath = (agent, path, q = "") => `/api/agents/${encodeURIComponent(agent)}/files/${path.split("/").map(encodeURIComponent).join("/")}${q}`;
 const fmtSize = (n) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`;
+// v5.20 (the owner, 2026-11-02) — her last private prompt to Gemini, read when the tab opens: long, so never polled
+async function loadPrompt(agent) {
+  S.prompt = undefined; render();
+  try { S.prompt = (await api(`/api/agents/${encodeURIComponent(agent)}/prompt`)).prompt; } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    S.prompt = null;
+  }
+  render();
+}
+function promptTabHtml(a) {
+  const P = S.prompt;
+  if (P === undefined) return `<div class="muted">Loading…</div>`;
+  if (P === null) return `<p class="muted">Prompt unreadable.</p>`;
+  if (!P.system) return `<p class="muted">No prompt yet — ${esc(a.display)}'s next private answer to Gemini is kept here.</p>`;
+  const words = (t) => (t || "").split(/\s+/).filter(Boolean).length;
+  const outcome = P.outcome === "blocked" && P.block ? `Blocked · ${P.block.slice(0, 2).filter(Boolean).join(" · ")}` : P.outcome === "answered" ? "Answered" : "No answer";
+  const block = (title, text) => `<div class="section-label" style="margin:14px 0 6px">${esc(title)} · ${words(text)} words</div>
+    <pre class="mono" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;margin:0;max-height:480px;overflow:auto">${esc(text || "")}</pre>`;
+  return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <span class="kind-tag">${esc(outcome)}</span><span class="muted" style="font-size:12.5px">${esc(new Date(P.at).toLocaleString("en-GB"))} · ${esc(P.model || "")}</span>
+      <button class="btn btn-ghost" data-act="prompt-reload">Reload</button></div>${block("System instruction", P.system)}${block("Transcript", P.transcript)}`;
+}
 async function loadFiles(agent) {
   try {
     S.files.list = (await api(`/api/agents/${encodeURIComponent(agent)}/files`)).files;
@@ -1503,7 +1527,8 @@ document.addEventListener("click", (e) => {
   else if (act === "set-undo") { delete S.settings.reset[id]; delete S.settings.edits[id]; render(); }
   else if (act === "set-save") { if (pendingSettings().names.length) { S.dialog = {action: "save", kind: "settings", fresh: true}; render(); } }
   else if (act === "close") { S.drawer = null; S.settings = null; render(); }
-  else if (act === "tab") { S.drawer.tab = id; S.log = {lines: [], available: true, follow: true, seen: 0}; render(); if (id === "log") loadLog(); if (id === "files") loadFiles(S.drawer.id); if (id === "settings") openAgentSettings(S.drawer.id); }
+  else if (act === "prompt-reload") loadPrompt(S.drawer.id);
+  else if (act === "tab") { S.drawer.tab = id; S.log = {lines: [], available: true, follow: true, seen: 0}; render(); if (id === "log") loadLog(); if (id === "files") loadFiles(S.drawer.id); if (id === "prompt") loadPrompt(S.drawer.id); if (id === "settings") openAgentSettings(S.drawer.id); }
   else if (act === "file-open") openFile(S.drawer.id, id);
   else if (act === "file-close") { S.files.open = null; render(); }
   else if (act === "file-download") downloadFile(S.drawer.id, id);

@@ -255,3 +255,26 @@ def test_geminis_transcript_says_when_the_talk_was_and_how_long_the_pause_lasted
             < t.index("— через 3 дні, сьогодні ввечері: —") < t.index("Ich: Я вже вдома"))
     assert [s for s, _ in agent.gemini_history()] == ["Ich", "Ich", "Кіра"]           # her answer joined it
     assert [i for i, _ in agent.gemini_history_shown()][:4] == [None, "line:tg:w1", None, "line:tg:s1"]
+
+
+def test_her_last_private_prompt_to_gemini_is_kept_whole_with_its_outcome(tmp_path, monkeypatch):
+    """v5.20 (the owner, 2026-11-02: «в панелі просто виводь останній промпт») — after an answer and after a block,
+    the prompt as sent and what came of it, replaced each time, 0600."""
+    import json
+    import os
+    import stat
+    gemini = Gemini()
+    agent = her(tmp_path, monkeypatch, gemini)
+    path = agent.memory_file.parent / "kira.prompt.json"
+    agent.private_line("Привіт", ms(17), "telegram", "tg:1")
+    asyncio.run(agent.private_reply())
+    kept = json.loads(path.read_text(encoding="utf-8"))
+    assert kept["outcome"] == "answered" and kept["block"] is None and kept["model"] == ""
+    assert kept["system"].startswith("Канон.") and kept["transcript"].endswith("Ich: Привіт")
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+    gemini.blocks, gemini.block = 1, ("prompt", "prohibited_content", None)
+    agent.private_line("Як ти?", ms(17, 5), "telegram", "tg:2")
+    asyncio.run(agent.private_reply())
+    kept = json.loads(path.read_text(encoding="utf-8"))
+    assert kept["outcome"] == "blocked" and kept["block"] == ["prompt", "prohibited_content", None]
+    assert "Ich: Як ти?" in kept["transcript"]                            # the test's clock stands at 18:00

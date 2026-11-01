@@ -168,6 +168,23 @@ def talk_view(state_dir: Path, name: str) -> list[dict] | None:
              "closed_lines": closed, "left_out": left} for level, start, end, text, opened, closed, left in rows]
 
 
+def prompt_view(state_dir: Path, name: str) -> dict | None:
+    """v5.20 (the owner, 2026-11-02) — her last private prompt to Gemini (`<name>.prompt.json`): when, the model, the
+    outcome and the block, the instruction and the transcript as sent. None yet is `{}`; unreadable is None, never a
+    500."""
+    path = state_dir / f"{name}.prompt.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    keys = ("at", "model", "outcome", "block", "system", "transcript")
+    return {k: data.get(k) for k in keys}
+
+
 def pastlife_view(theses: Path | None) -> dict | None:
     """v4.3 — how many past-life theses the agent holds; None without the file or when it does not parse."""
     from agents.pastlife import ThesesError, parse_theses

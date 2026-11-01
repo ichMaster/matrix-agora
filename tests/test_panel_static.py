@@ -73,7 +73,7 @@ def test_the_page_follows_capabilities():
     pronoun; with every capability on (Ada, Bruno) the page is unchanged."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert ('const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", '
-            'facts: "facts",\n                 voice: "voice", events: "events", thoughts: "thoughts", talk: "talk"};') in js
+            'facts: "facts",\n                 voice: "voice", events: "events", thoughts: "thoughts", talk: "talk", prompt: "private"};') in js
     # v5.8 Facts, v5.9 Voice, v5.11 Events, v5.12 Thoughts need their capability
     assert 'rel="noopener noreferrer"' in js and "eventsTabHtml(a, mem)" in js
     assert 'PRONOUN = {she: "She", he: "He", it: "It"}' in js
@@ -305,7 +305,7 @@ def test_the_thoughts_tab_and_the_card_line():
     a news thought's title and an https-only source link, every text escaped — and «Last thought» under «Last
     event» on her card."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert '["events", "Events"], ["thoughts", "Thoughts"], ["talk", "Talk"], ["facts", "Facts"]' in js
+    assert '["events", "Events"], ["thoughts", "Thoughts"], ["talk", "Talk"], ["prompt", "Prompt"], ["facts", "Facts"]' in js
     assert 'if (tab === "thoughts") return thoughtsTabHtml(a, mem);' in js
     tab = js[js.index("function thoughtsTabHtml(a, mem) {"):]
     tab = tab[:tab.index("\n}\n")]
@@ -452,3 +452,15 @@ def test_the_talk_tab_shows_the_levels_and_the_closed_counts_escaped():
     assert '${r.text ? esc(r.text) : `<span class="muted">—</span>`}' in js
     assert 'r.closed_lines ? `${r.closed_lines} closed` : ""' in js and "esc(notes.join(" in js
     assert "esc(talkSpan(r))" in js
+
+
+
+def test_the_prompt_tab_loads_when_opened_and_shows_the_outcome_and_both_texts_escaped():
+    """v5.20 (the owner, 2026-11-02: «в панелі просто виводь останній промпт»): her last private prompt to Gemini,
+    whole, read only when the tab opens."""
+    js = js_text()
+    assert 'if (id === "prompt") loadPrompt(S.drawer.id);' in js
+    assert "S.prompt = (await api(`/api/agents/${encodeURIComponent(agent)}/prompt`)).prompt;" in js
+    assert 'P.outcome === "blocked" && P.block ? `Blocked · ${P.block.slice(0, 2).filter(Boolean).join(" · ")}`' in js
+    assert '${esc(text || "")}</pre>' in js and 'block("System instruction", P.system)' in js
+    assert 'block("Transcript", P.transcript)' in js and 'if (tab === "prompt") return promptTabHtml(a);' in js

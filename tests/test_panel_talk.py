@@ -70,3 +70,20 @@ def test_no_archive_or_no_table_is_none_and_an_unreadable_one_is_null(tmp_path):
     assert talk_view(s, "kira") == []
     (s / "kira.archive.db").write_bytes(b"not a database")
     assert talk_view(s, "kira") is None
+
+
+def test_her_last_prompt_is_read_only_when_asked_and_only_for_a_person_with_a_private_chat(state):
+    import json
+    c = client(state)
+    assert c.get("/api/agents/kira/prompt", headers=AUTH).json() == {"prompt": {}}          # none yet
+    (state / "kira.prompt.json").write_text(json.dumps({
+        "at": "2026-11-02T01:50:05+02:00", "model": "gemini-3.1-pro-preview", "outcome": "blocked",
+        "block": ["prompt", "prohibited_content", None], "system": "Канон.", "transcript": "Ich: Привіт"}),
+        encoding="utf-8")
+    body = c.get("/api/agents/kira/prompt", headers=AUTH).json()["prompt"]
+    assert body["outcome"] == "blocked" and body["block"] == ["prompt", "prohibited_content", None]
+    assert set(body) == {"at", "model", "outcome", "block", "system", "transcript"}
+    assert c.get("/api/agents/ada/prompt", headers=AUTH).status_code == 404               # no private chat
+    assert c.get("/api/agents/kira/prompt").status_code == 401
+    (state / "kira.prompt.json").write_text("{torn", encoding="utf-8")
+    assert c.get("/api/agents/kira/prompt", headers=AUTH).json() == {"prompt": None}

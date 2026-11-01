@@ -1342,11 +1342,32 @@ class Agent:
         v5.16: `parts` gets the prompt in parts, for the probe after a prompt-stage block."""
         LAST_BLOCK.set(None)
         shots: list = []
-        text = await self._compose(await self._gemini_private_prompt(brief, used, parts),
-                                   lines=[entry for _, entry in self.gemini_history_shown()], kind=kind, shots=shots)
+        prompt = await self._gemini_private_prompt(brief, used, parts)
+        lines = [entry for _, entry in self.gemini_history_shown()]
+        text = await self._compose(prompt, lines=lines, kind=kind, shots=shots)
         if text is not None and shots:  # v5.17: the photo her line asked for, made once her answer is chosen
             self._pending_shot = shots[-1]
-        return text, (LAST_BLOCK.get() if text is None else None)
+        block = LAST_BLOCK.get() if text is None else None
+        self.keep_prompt(prompt, lines, block, text is not None)
+        return text, block
+
+    def keep_prompt(self, system: str, lines: list, block, answered: bool) -> None:
+        """v5.20 (the owner, 2026-11-02: «в панелі просто виводь останній промпт») — her last private prompt to Gemini,
+        whole, with what came of it, in `state/<name>.prompt.json` (0600, replaced each time) for the panel's Prompt
+        tab; never in a log, and a failed write never stops an answer."""
+        data = {"at": local_now(self.clock(), self.tz).isoformat(timespec="seconds"),
+                "model": getattr(self.llm, "reply_model", ""),
+                "outcome": "answered" if answered else "blocked" if block else "silent",
+                "block": list(block) if block else None, "system": system, "transcript": build_transcript(lines)}
+        path = self.memory_file.parent / f"{self.cfg.localpart}.prompt.json"
+        try:
+            tmp = path.with_suffix(".json.tmp")
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+            os.replace(tmp, path)
+        except OSError as exc:
+            log.error("private: the prompt was not kept (%s)", type(exc).__name__)
 
     async def _private_text(self, brief: str, nudge: bool, seen: list):
         """(her line or None, who wrote it: `gemini` | `backup`, what the judge rates once it is sent: (why, items) or

@@ -35,7 +35,7 @@ from panel.files import (
 )
 from panel.health import Prober
 from panel.host import host_metrics
-from panel.memory import analytics_period, analytics_view, local_today, memory_view, usage_view
+from panel.memory import analytics_period, analytics_view, local_today, memory_view, prompt_view, usage_view
 from panel.registry import Registry
 from panel.settings import SettingsError, save_settings, settings_view
 
@@ -215,6 +215,15 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
                            Path(found.voice_spec) if found.voice_spec and "emotion" in found.capabilities else None,
                            "events" in found.capabilities, "thoughts" in found.capabilities,
                            "fallback" in found.capabilities, "talk" in found.capabilities)
+
+    @app.get("/api/agents/{name}/prompt")
+    def agent_prompt(name: str) -> dict:
+        """v5.20 (the owner, 2026-11-02) — her last private prompt to Gemini, whole, with what came of it; read only
+        when her Prompt tab opens (it is long)."""
+        found = reg.agent(name)
+        if found is None or "private" not in found.capabilities:
+            raise HTTPException(404, "not found")
+        return {"prompt": prompt_view(state_dir, found.name)}
 
     # ── v5.8: a person's facts about the owner — re-pin or delete one; the id resolves only inside her own folder ──
     def facts_folder(name: str) -> Path:
