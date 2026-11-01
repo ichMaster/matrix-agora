@@ -7,6 +7,10 @@ in a selfie — never the reference photos' clothes — and a casual phone snaps
 reference photos of her face (`kira.face/`: `kira.png` always, three more drawn each time). The call retries once on a
 server error or a timeout; a block, or a second failure, is a reason, never a crash. The log holds outcomes and types
 only — never her description, the request or a path.
+
+v5.18: the same line may name a video instead — `КРУЖЕЧОК: …` (her round video message, her answer said in it) or
+`ВІДЕО: …` (a short clip of what she sees); one media line per answer, the last one counts. Its first frame is made
+here too (`make(..., aspect=, extra=)`); the video itself in `agents/video.py`.
 """
 
 from __future__ import annotations
@@ -35,14 +39,14 @@ MAIN_FACE = "kira.png"
 FACES_PER_SHOT = 4                 # the model takes up to 4 character references
 FACE_SUFFIXES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 TIMEOUT_S = 90                     # a photo took 11–40 s in the owner's test
-KINDS = {"ФОТО": "photo", "СЕЛФІ": "selfie"}
+KINDS = {"ФОТО": "photo", "СЕЛФІ": "selfie", "КРУЖЕЧОК": "note", "ВІДЕО": "clip"}  # v5.18: the videos
 # the marker, as «ЗАПАМ'ЯТАЙ»'s: a line of its own in any case — after a quote, a bullet or a number — or, in capitals,
 # anywhere in a line; a colon or a dash after it. Everything from the marker to the line's end is the shot.
-_MARK = r"(?P<kind>ФОТО|СЕЛФІ)[ \t*_»\"')\]]*[:—–-][ \t*_]*(?P<shot>[^\n]*)"
+_MARK = r"(?P<kind>КРУЖЕЧОК|СЕЛФІ|ФОТО|ВІДЕО)[ \t*_»\"')\]]*[:—–-][ \t*_]*(?P<shot>[^\n]*)"
 MARK_LINE_RE = re.compile(r"^[ \t>*_\-–—•\d.)«\"'(\[]*" + _MARK, re.MULTILINE | re.IGNORECASE)
 MARK_ANY_RE = re.compile(r"[«\"'(\[]*[ \t]*" + _MARK)
 # v5.17 review #2: her kept note, `[селфі: …]` / `[фото: …]`, anywhere in a line and in any case — Gemini may echo it
-NOTE_RE = re.compile(r"\[[ \t]*(?P<kind>ФОТО|СЕЛФІ)[ \t]*[:—–-][ \t]*(?P<shot>[^\]\n]*)\]", re.IGNORECASE)
+NOTE_RE = re.compile(r"\[[ \t]*(?P<kind>КРУЖЕЧОК|СЕЛФІ|ФОТО|ВІДЕО)[ \t]*[:—–-][ \t]*(?P<shot>[^\]\n]*)\]", re.IGNORECASE)
 PARTS = {"ранок": "morning", "день": "afternoon", "вечір": "evening", "ніч": "night"}
 SEASONS = {"зима": "winter", "весна": "spring", "літо": "summer", "осінь": "autumn"}
 STYLE = ("A casual photo taken on a smartphone and sent in a private chat: natural light, slightly imperfect framing, "
@@ -63,12 +67,12 @@ PHOTO_SKILL = (
     "скажи це своїми словами."
 )
 PHOTO_FAILED = "Фото цього разу не вийшло надіслати — не згадуй його й не обіцяй."
-NOTES = {"photo": "фото", "selfie": "селфі"}
+NOTES = {"photo": "фото", "selfie": "селфі", "note": "кружечок", "clip": "відео"}
 
 
 @dataclass(frozen=True)
 class Shot:
-    kind: str          # `photo` | `selfie`
+    kind: str          # `photo` | `selfie` | v5.18 `note` (her кружечок) | `clip` (a short video)
     description: str   # her words: what is in the shot
 
 
@@ -112,17 +116,24 @@ def photo_note(text: str, shot: Shot) -> str:
     return f"{text}\n[{NOTES[shot.kind]}: {shot.description}]"
 
 
-def photo_request(shot: Shot, moment: Moment) -> str:
-    """The image model's instruction (pure, English): who, if she is in it; the shot in her words; the moment; the
-    look of a phone snapshot."""
+def moment_line(moment: Moment) -> str:
+    """Her moment in English (pure): the part of the day, the season, the time, the city unless named, the weather."""
     when = moment.when
+    line = (f"It is {PARTS[part_of_day(when.hour)]} in {SEASONS[season(when.month)]}, around {when:%H:%M}, in "
+            f"{moment.city} unless the description names another place.")
+    if moment.weather:
+        line += f" Today's weather there (in Ukrainian): {moment.weather}"
+    return line
+
+
+def photo_request(shot: Shot, moment: Moment, extra: str | None = None) -> str:
+    """The image model's instruction (pure, English): who, if she is in it; the shot in her words; the moment; the
+    look of a phone snapshot; v5.18: a video's frame line (`extra`)."""
     parts = [SELFIE] if shot.kind == "selfie" else ["Nobody's face is in the shot unless the description says so."]
     parts.append(f"The shot, as she describes it (in Ukrainian): {shot.description}")
-    moment_line = (f"It is {PARTS[part_of_day(when.hour)]} in {SEASONS[season(when.month)]}, around {when:%H:%M}, in "
-                   f"{moment.city} unless the description names another place.")
-    if moment.weather:
-        moment_line += f" Today's weather there (in Ukrainian): {moment.weather}"
-    parts += [moment_line, STYLE]
+    parts += [moment_line(moment), STYLE]
+    if extra:
+        parts.append(extra)
     return "\n".join(parts)
 
 
@@ -185,17 +196,18 @@ class PhotoMaker:
         except Exception:
             log.exception("usage accounting failed")
 
-    async def make(self, shot: Shot, moment: Moment) -> Made:
-        """The photo, or why there is none: one retry on a server error or a timeout; a block is final."""
+    async def make(self, shot: Shot, moment: Moment, aspect: str = "3:4", extra: str | None = None) -> Made:
+        """The photo, or why there is none: one retry on a server error or a timeout; a block is final. v5.18: a
+        video's first frame takes its own `aspect` and a frame line (`extra`)."""
         refs = pick_faces(self.faces, self._rng) if shot.kind == "selfie" else []
         if shot.kind == "selfie" and not refs:
             log.warning("photo: no faces for a selfie")
             return Made(None, why="blocked")
         contents = [*(types.Part.from_bytes(data=data, mime_type=mime) for _, data, mime in refs),
-                    photo_request(shot, moment)]
+                    photo_request(shot, moment, extra)]
         config = types.GenerateContentConfig(
             response_modalities=["IMAGE"],
-            image_config=types.ImageConfig(aspect_ratio="3:4", image_size=self.size),
+            image_config=types.ImageConfig(aspect_ratio=aspect, image_size=self.size),
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
         for attempt in (1, 2):
             try:

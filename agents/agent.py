@@ -293,6 +293,7 @@ from agents.usage import (
     tts_usage_line,
     usage_line,
 )
+from agents.video import KINDS as VIDEO_KINDS
 from agents.voice import (
     STT_MODEL,
     TTS_MODEL,
@@ -1009,6 +1010,9 @@ class Agent:
             shot, self._pending_shot = (self._pending_shot if by == "gemini" else None), None
             self._offer_photo = False
             made: Made | None = None
+            if shot is not None and shot.kind in VIDEO_KINDS:  # v5.18: a video's line, never a photo
+                log.info("video: dropped (off)")
+                shot = None
             if text is not None and shot is not None:  # v5.17: her photo, made before anything is sent
                 if door != "telegram" or not self._photo_open(door):
                     log.info("photo: dropped (%s)", "element" if door != "telegram" else "cap")
