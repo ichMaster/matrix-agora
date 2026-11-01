@@ -161,3 +161,27 @@ def test_a_summary_naming_what_she_is_twice_is_left_empty(tmp_path, monkeypatch)
 def test_without_talk_nothing_is_due(tmp_path, monkeypatch):
     agent = kira(tmp_path, monkeypatch, Pro())
     assert agent.talk_is_due() is False
+
+
+def test_her_private_prompt_to_gemini_holds_the_summaries_before_the_window_and_the_backups_does_not(tmp_path,
+                                                                                                   monkeypatch):
+    from agents.fallback import FallbackResponder
+    from agents.private import PRIVATE_BRIEF
+    from agents.talk import TALK_TITLE
+    from tests.test_private_route import Backup
+    agent = talking(tmp_path, monkeypatch)
+    agent.history_n = 2
+    say(agent, "tg:old", ms(2026, 10, 31, 9, 10), "Ich", "Давній рядок")
+    say(agent, "tg:1", ms(2026, 11, 2, 11, 1), "Ich", "Новий рядок")
+    say(agent, "tg:2", ms(2026, 11, 2, 11, 2), "Кіра", "І мій")
+    agent.archive.talk_put("4h", ms(2026, 10, 31, 8), ms(2026, 10, 31, 12), "Ми говорили про поїзд.", 1, 0, 0, 1)
+    prompt = asyncio.run(agent._gemini_private_prompt(PRIVATE_BRIEF))
+    assert TALK_TITLE in prompt and "- позавчора вранці: Ми говорили про поїзд." in prompt
+    parts: list = []
+    asyncio.run(agent._gemini_private_prompt(PRIVATE_BRIEF, None, parts))
+    assert "talk" in parts[-1].layer_names() and TALK_TITLE in parts[-1].render()[0]   # a fixed layer for the probe
+    agent.fallback, agent.fallback_responder = Backup(), FallbackResponder(Backup())
+    agent.fallback_context, agent.fallback_history_n = 32000, 60
+    assert TALK_TITLE not in asyncio.run(agent._backup_private_prompt(PRIVATE_BRIEF))[0]
+    plain = kira(tmp_path / "plain", monkeypatch, Pro())
+    assert TALK_TITLE not in asyncio.run(plain._gemini_private_prompt(PRIVATE_BRIEF))

@@ -14,6 +14,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from agents.world import PART_ADVERB, ago, part_of_day
+
 LEVELS = ("hour", "4h", "week")
 DAY_MS = 86_400_000
 HOUR_MS = 3_600_000
@@ -92,3 +94,33 @@ def talk_request(level: str, name: str, canon: str, items: list[tuple[str, str]]
 def covered(times: list[int], rows: list) -> bool:
     """Whether every open line's time falls in one of the finer rows' periods (an empty row counts: it was blocked)."""
     return bool(rows) and all(any(r.start_ms <= t < r.end_ms for r in rows) for t in times)
+
+
+TALK_TITLE = "Що було між вами раніше (твоя пам'ять, а не те, що кажуть зараз):"
+TALK_PROMPT_WORDS = 4000  # her prompt's summaries at most: past it the oldest go first
+
+
+def _label(row, now: datetime, tz: str) -> str:
+    """When a period was, as a person remembers it (`ago`), with the part of the day for an hour or a block — never a
+    date or an hour."""
+    then = datetime.fromtimestamp(row.start_ms / 1000, ZoneInfo(tz))
+    when = ago(then, now)
+    if row.level == "week" or when.startswith("сьогодні"):
+        return when
+    part = PART_ADVERB[part_of_day(then.hour)]
+    return f"{when} {part}" if when in ("вчора", "позавчора") else f"{when}, {part}"
+
+
+def talk_section(rows: list, before_ms: int, now: datetime, tz: str, words_budget: int = TALK_PROMPT_WORDS) -> str | None:
+    """Her private prompt's summaries (pure): each period shown at the coarsest level written for it — a row is left
+    out when a coarser row covers its start — only those that began before `before_ms` (the first line of Gemini's
+    history window), oldest first, an empty one skipped, labelled as she remembers it; past `words_budget` words the
+    oldest go first. None when nothing is left."""
+    coarser = {"hour": ("4h", "week"), "4h": ("week",), "week": ()}
+    shown = [r for r in rows if r.text and r.start_ms < before_ms and not any(
+        o.level in coarser[r.level] and o.start_ms <= r.start_ms < o.end_ms for o in rows)]
+    shown.sort(key=lambda r: r.start_ms)
+    lines = [f"- {_label(r, now, tz)}: {r.text}" for r in shown]
+    while lines and sum(len(x.split()) for x in lines) > words_budget:
+        lines.pop(0)
+    return TALK_TITLE + "\n" + "\n".join(lines) if lines else None

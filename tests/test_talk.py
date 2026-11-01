@@ -72,3 +72,31 @@ def test_the_periods_readers_count_by_mark_and_gemini_never_reads_a_closed_line(
     assert [x.key for x in archive.private_between(start, end, gemini=False)] == ["tg:0", "tg:1", "tg:2"]
     assert archive.private_open_times() == [ms(2026, 11, 1, 10, 5), ms(2026, 11, 1, 10, 20)]
     assert archive.private_counts(end, end + 3_600_000) == (0, 0)
+
+
+def row(level, start, end, text):
+    from agents.archive import TalkRow
+    return TalkRow(level, start, end, text, 1, 0, 0, end)
+
+
+def test_her_prompt_shows_each_period_at_its_coarsest_level_before_the_window_oldest_first():
+    from agents.talk import TALK_TITLE, talk_section
+    now = datetime(2026, 11, 2, 12, 0, tzinfo=KYIV)                     # a Monday
+    rows = [row("hour", ms(2026, 11, 2, 11), ms(2026, 11, 2, 12), "Пізніше, у вікні."),
+            row("hour", ms(2026, 11, 2, 10), ms(2026, 11, 2, 11), "Кава."),
+            row("hour", ms(2026, 11, 1, 21), ms(2026, 11, 1, 22), "Вечір."),
+            row("hour", ms(2026, 11, 1, 22), ms(2026, 11, 1, 23), ""),   # all blocked: skipped
+            row("hour", ms(2026, 10, 31, 9), ms(2026, 10, 31, 10), "Деталь ранку."),
+            row("4h", ms(2026, 10, 31, 8), ms(2026, 10, 31, 12), "Ранок."),
+            row("4h", ms(2026, 10, 20, 12), ms(2026, 10, 20, 16), "Планетарій."),
+            row("week", ms(2026, 10, 12), ms(2026, 10, 19), "Гори.")]
+    section = talk_section(rows, before_ms=ms(2026, 11, 2, 10, 30), now=now, tz=TZ)
+    assert section == (f"{TALK_TITLE}\n"
+                       "- минулого місяця: Гори.\n"
+                       "- минулого місяця, вдень: Планетарій.\n"
+                       "- позавчора вранці: Ранок.\n"                   # its hour under it is not shown
+                       "- вчора ввечері: Вечір.\n"
+                       "- сьогодні вранці: Кава.")                      # the window's own hour is left to the window
+    assert talk_section(rows, before_ms=ms(2026, 10, 1), now=now, tz=TZ) is None
+    budgeted = talk_section(rows, before_ms=ms(2026, 11, 2, 10, 30), now=now, tz=TZ, words_budget=9)
+    assert budgeted.splitlines()[1:] == ["- вчора ввечері: Вечір.", "- сьогодні вранці: Кава."]  # the oldest go first

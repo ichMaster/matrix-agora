@@ -325,3 +325,11 @@ def test_the_asked_section_comes_after_the_move_and_before_the_rules():
     text = build_instruction("Ада", "КАНОН", "підсумок", move="Цього разу: ХІД", asked="Твої питання: ПИТАННЯ")
     assert text.index("ХІД") < text.index("ПИТАННЯ") < text.index("Ти — Ада.")
     assert "ПИТАННЯ" not in build_instruction("Ада", "КАНОН")
+
+
+def test_the_talk_section_sits_after_what_she_recalls_and_before_the_last_session():
+    from agents.logic import build_instruction
+    out = build_instruction("Кіра", "Канон.", "ми говорили про каву", recalled="Пригадує.", talk="Що було між вами.",
+                            private="Наодинці.")
+    assert out.index("Пригадує.") < out.index("Що було між вами.") < out.index("Що ти пам'ятаєш з минулої розмови")
+    assert out.index("Що ти пам'ятаєш з минулої розмови") < out.index("Наодинці.")

@@ -255,6 +255,7 @@ from agents.talk import (
     iso_hour,
     periods_due,
     talk_request,
+    talk_section,
 )
 from agents.telegram import (
     ACTION_EVERY_S,
@@ -1273,7 +1274,7 @@ class Agent:
                                                  drawn=drawn)
             agora_now = self.agora_now_section()
         if parts is None:
-            return self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts)
+            return self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts, talk=True)
         kept = self.prompt_parts(brief, agora_now, facts, drawn)
         parts.append(kept)
         return kept.render()[0]
@@ -1283,7 +1284,7 @@ class Agent:
         history's open lines, the recall's groups as drawn, the facts the section shows, today's thoughts), with the
         renderers that drew them — `render()` whole is the prompt she sends."""
         now = local_now(self.clock(), self.tz)
-        layers = self.prompt_layers(private=brief, agora_now=agora_now, facts=facts)
+        layers = self.prompt_layers(private=brief, agora_now=agora_now, facts=facts, talk=True)
         for name in ("recalled", "facts", "thoughts"):
             layers.pop(name, None)
 
@@ -1648,6 +1649,18 @@ class Agent:
                 out.append((None, ("", times[i])))
             out.append((f"line:{line.key}", (line.speaker, history_entry(line.text))))
         return out
+
+    def talk_now(self, now) -> str | None:
+        """v5.20 — the summaries of her private chat older than the first line of Gemini's history window (`talk_section`);
+        None without the archive or when it fails."""
+        if self.archive is None:
+            return None
+        try:
+            lines = self._gemini_lines() or []
+            return talk_section(self.archive.talk_rows(), lines[0].ts_ms if lines else self.clock(), now, self.tz)
+        except Exception as exc:  # noqa: BLE001
+            log.error("talk: the summaries were not read (%s)", type(exc).__name__)
+            return None
 
     def closed_in_history(self) -> int:
         """How many lines of her history (the backup's view) Gemini's history leaves out — for the log only."""
@@ -2568,7 +2581,7 @@ class Agent:
 
     def build_prompt(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None,
                      private: str | None = None, recalled: str | None = None, agora_now: str | None = None,
-                     facts: str | None = None, skip_layers: frozenset = frozenset()) -> str:
+                     facts: str | None = None, skip_layers: frozenset = frozenset(), talk: bool = False) -> str:
         """The full system instruction for a reply, in contract order; `pastlife` is a chosen thesis, `nudge` a
         nudge's material and rule (v4.3), `move` a persona's move line (v4.6), `private` the private chat's situation
         (v5.6; an Agora reply of a person with `private` closes its rules with the discretion line). An assistant
@@ -2576,13 +2589,14 @@ class Agent:
         if self.cfg.type == "assistant":
             return self.brief(CLAUDE_BRIEF_DIRECT)
         return build_instruction(**self.prompt_layers(pastlife, nudge, move, private, recalled, agora_now, facts,
-                                                      skip_layers))
+                                                      skip_layers, talk))
 
     def prompt_layers(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None,
                       private: str | None = None, recalled: str | None = None, agora_now: str | None = None,
-                      facts: str | None = None, skip_layers: frozenset = frozenset()) -> dict:
+                      facts: str | None = None, skip_layers: frozenset = frozenset(), talk: bool = False) -> dict:
         """v5.16 — the sections `build_prompt` hands to `build_instruction`, by name (a person's, never an
-        assistant's), so her private prompt can be kept in parts and built again from what is kept."""
+        assistant's), so her private prompt can be kept in parts and built again from what is kept. `talk` (v5.20):
+        her private prompt to Gemini gets the summaries of her private chat before its window."""
         can = self.cfg.can
         now = local_now(self.clock(), self.tz)
         world = None
@@ -2613,6 +2627,7 @@ class Agent:
             "facts": facts if private is not None else None,
             "agora_now": agora_now if private is not None and can("recall") else None,
             "recalled": recalled if can("recall") else None,
+            "talk": self.talk_now(now) if talk and private is not None and can("talk") else None,  # v5.20
             "voice": self.cfg.voice_spec if can("emotion") and self.cfg.voice_spec else None,  # v5.9: both her prompts
         }
 
