@@ -19,6 +19,7 @@ are left in the v5 review docs, as backlog. The same day the owner opened two mo
 - v5.17, released as `v5.17.0`: Кіра's photos in Telegram;
 - v5.18, released as `v5.18.0`: Кіра's videos in Telegram, a кружечок in her voice and short clips;
 - v5.19, analytics: the spending by agent and by service, over a chosen period (planned).
+- v5.20, Кіра's layered memory of the private chat: by the hour, by four hours, by the week (planned).
 
 Then come v6–v9 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
@@ -64,6 +65,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.17 | Кіра's photos in Telegram | ✅ completed | `v5.17.0` (2026-11-01) |
 | v5.18 | Кіра's videos in Telegram: a кружечок in her voice and short clips | ✅ completed | `v5.18.0` (2026-11-01) |
 | v5.19 | Analytics: the spending by agent and by service, over a chosen period | ⏳ planned | — |
+| v5.20 | Кіра's layered memory of the private chat: by the hour, by four hours, by the week | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
 | v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -2739,6 +2741,78 @@ numbers out.
 - a cost per message;
 - a chart library;
 - changes to the daily report.
+
+### v5.20 — Кіра's layered memory of the private chat: by the hour, by four hours, by the week
+
+**Status:** ⏳ planned (the owner, 2026-11-02).
+
+**Goal:** Кіра keeps her private chat in layers. On top, the last `HISTORY_N` (300) messages word for word, as now.
+Below them, summaries of the open talk older than that window: by the hour for the last 2 days, by four hours up to
+2 weeks, and by the week after that. Gemini 3.1 Pro writes each summary once, from the lines open to it. So she knows
+what happened days ago without those lines in her window, and an old talk never reads as tonight's.
+
+**Why** (2026-10-29 – 11-01): Gemini's history was the last open lines with no time on them. Gemini's blocks, the
+backup's windows and the capped probe closed whole days, so Wednesday's talk sat right before Sunday's: she thought he
+was still on his way to Kyiv, forgot four days, and took what he told her about them for illness. Her day memories
+hold 120 words a day, mostly her own life, and the session note at most 200. Fixed already: the time lines in
+Gemini's history (4bbb4e4) and a capped probe that closes only what it proved (e76ff2d).
+
+**Owner decisions** (2026-11-02):
+- several levels of detail: the last 2 days by the hour, then by four hours, then by the week («як варіант»); the
+  levels: 2 days, then up to 2 weeks, then the weeks;
+- on top, the last 300 messages word for word («вершина — останні 300 меседжів»);
+- the private chat only (both doors), not Agora;
+- the open talk is compressed by Gemini 3.1 Pro;
+- the closed talk (`waiting`, `censored`, `reopened`) never goes into her history or into a summary Gemini reads: it
+  is archived and kept compressed apart, in case a line was closed by mistake;
+- a phase through the pipeline.
+
+**Proposed** (confirmed when the issues are generated):
+- **The store:** a table `talk` in `state/<name>.archive.db` (0600): the level (`hour`, `4h`, `week`), the period's
+  start and end, the summary, how many open and closed lines the period had, when it was written. Nothing in it is
+  rewritten: a period past its band is folded into the next level, and its finer rows stay.
+- **What is due, a pure function** over plain data and an injected clock: each past hour of the last 2 days with open
+  private lines; each four-hour block older than 2 days, up to 2 weeks; each week older than that. A four-hour block is
+  written from its hours' summaries (or from its lines when it has no hours yet), a week from its blocks.
+- **The writer:** the idle watcher, one period at a time, on `GEMINI_REPLY_MODEL`, kind `talk_summary` in the usage
+  lines. The words are capped by level (`TALK_WORDS_HOUR`, `TALK_WORDS_4H`, `TALK_WORDS_WEEK`). The first start
+  backfills the bands from the archive's open lines. A period Gemini blocks is tried again in halves, and what still
+  blocks is left out and counted.
+- **The closed talk:** its lines stay in the archive as they are (`/purge` still deletes them); each period records
+  how many closed lines it had, and the panel shows those counts. A re-check (a CLI command, then a panel action)
+  sends a period's closed lines to Gemini in small groups, as on 2026-11-02, and reopens only what it does not block.
+- **Her private prompt:** a section of the summaries older than the window's first line, oldest first: the weeks,
+  then the four-hour blocks, then the hours. Each one is labelled as a person remembers it (`ago` and the part of the
+  day), never a date or an hour. Then the time lines and the last 300 messages.
+- **The panel:** her card gets a read-only **Talk** tab: the summaries by level, newest first, and for each period the
+  count of its closed lines (never their text).
+- **Settings** (her agent settings): `TALK_HOUR_DAYS` (2), `TALK_4H_DAYS` (14) and the three word caps.
+- **ARCHITECTURE:** §Memory (the layers), §Contracts (the archive's `talk` table and the private prompt's order),
+  §Configuration (the settings).
+
+**Owner steps:** the deploy; the live checks.
+
+**DoD:**
+- (Manual, owner) After the deploy and the backfill, he asks her about the last days (Thursday, Saturday, this
+  morning) and she knows what happened when, without taking an old talk for tonight's.
+- (Manual, owner) The **Talk** tab shows the hours of the last 2 days, the four-hour blocks before them and the weeks,
+  each with its count of closed lines.
+
+**Tests:**
+- **What is due:** the bands' edges in `TIMEZONE`, across midnight and a DST switch; an hour with no open line is never
+  summarized; a period past its band is folded, and its finer rows stay.
+- **The writer:** the backfill; the word caps; a blocked period halved, and what still blocks left out; never a closed
+  line in a summary's prompt.
+- **Her prompt:** only the periods older than the window, oldest first, labelled without a date or an hour; the window
+  and its time lines unchanged; the probe and the judge unchanged.
+- **The panel's tab:** the levels, the counts, 401 without the token, `null` without the capability.
+- **Never:** no text in a log; the closed lines' text never in a response.
+
+**Not in this phase:**
+- Agora's talk;
+- a summary of the closed talk that Gemini reads;
+- deleting or rewriting anything;
+- changes to the day memories, the digests or the session note.
 
 ## v6 — Лілі: the Lumi bridge
 
