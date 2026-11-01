@@ -12,12 +12,13 @@ Many DoD items need the live homeserver, Element or a real Gemini key — those 
 
 v0–v4 are complete, delivered through `v4.7.1` (2026-10-13). v5 was closed (the owner, 2026-10-31), released through
 `v5.15.4`: the owner's two open calls from its reviews (v5.15 #1, v5.14 #5) are fixed there, and only LOW findings
-are left in the v5 review docs, as backlog. The same day the owner opened two more phases in it, and a third on
+are left in the v5 review docs, as backlog. The same day the owner opened two more phases in it, and two more on
 2026-11-01:
 - v5.16, released as `v5.16.0`: Gemini's blocks on her private prompt kept coming back from context the judge had rated
   clean;
 - v5.17, released as `v5.17.0`: Кіра's photos in Telegram;
-- v5.18, Кіра's videos in Telegram: a кружечок in her voice and short clips (planned).
+- v5.18, released as `v5.18.0`: Кіра's videos in Telegram, a кружечок in her voice and short clips;
+- v5.19, analytics: the spending by agent and by service, over a chosen period (planned).
 
 Then come v6–v9 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
@@ -61,7 +62,8 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.15 | The judge: Gemma 4 31B rates the backup's talk | ✅ completed | `v5.15.0` (2026-10-30) + `v5.15.1`–`v5.15.4` |
 | v5.16 | Gemini checks the parts of a blocked prompt | ✅ completed | `v5.16.0` (2026-10-31) |
 | v5.17 | Кіра's photos in Telegram | ✅ completed | `v5.17.0` (2026-11-01) |
-| v5.18 | Кіра's videos in Telegram: a кружечок in her voice and short clips | ⏳ planned | — |
+| v5.18 | Кіра's videos in Telegram: a кружечок in her voice and short clips | ✅ completed | `v5.18.0` (2026-11-01) |
+| v5.19 | Analytics: the spending by agent and by service, over a chosen period | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
 | v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -2607,6 +2609,117 @@ She believes she recorded them.
 - videos of the owner or of any real person;
 - her seeing videos he sends;
 - a кружечок over 60 s, or editing or extending a video.
+
+### v5.19 — Analytics: the spending by agent and by service, over a chosen period
+
+**Status:** ⏳ planned (the owner, 2026-11-01).
+
+**Goal:** the owner opens **Analytics** in the panel, picks a period and an agent (or all of them), and sees what was
+spent and on which services. The services are Gemini, OpenRouter, fal, ElevenLabs, Deepgram, NovelAI and Claude. For
+each the view shows calls, tokens, characters, audio and video seconds and the cost: by service and its models, by
+what it was for, by day and, for all agents, by agent. Кіра uses the most services (seven), so her report is the
+reference case.
+
+**Why:** the panel's Tokens card shows only the last 7 days, grouped by kind. A kind mixes services (`private` is
+Gemini Pro and the backup's GLM, «mixed»). There is no per-service view, no other period, and no way to take the
+numbers out.
+
+**Owner decisions** (2026-11-01):
+- analytical reports by agent and by all its services, Кіра's above all;
+- periods the owner chooses;
+- phase v5.19, before v6.
+
+**What the usage lines already hold** (no new line or field; the lines carry no text):
+- `engine`: `gemini`, `openrouter`, `fal`, `elevenlabs`, `deepgram`, `novelai`, `claude-sdk`;
+- `billing`: `api` or `subscription`;
+- `model`, `kind`, `ok`, `blocked`;
+- the tokens, `characters` (TTS), `audio_ms` (STT), `video_ms` (fal) and, for the judge, OpenRouter's
+  `reported_cost_usd`.
+
+**Proposed** (confirmed when the issues are generated):
+- **The analysis, a pure function** in `agents/usage.py`: `analyze(records, since, until, agent, prices)` over plain
+  data, the days given (no clock inside). It returns:
+  - the totals: the cost of `api` calls, calls, failed, blocked, tokens in and out, characters, audio and video
+    seconds, and the average cost a day;
+  - the same totals for the previous period of the same length, right before it, for the change;
+  - **by service** (`engine`), each with its billing and its models. A model with `api` calls and no price is listed as
+    unpriced, and its cost is «—», never $0;
+  - **by kind** (what it was for), with the cost and its share;
+  - **by day**: the cost by service, and the calls;
+  - **by agent**, when no agent is chosen.
+
+  The prices come from `PRICE_MODELS`, `PRICE_SECONDS` and the default pair, as the report's are. Subscription calls
+  are never priced per call (v4.4).
+- **Subscriptions:** ElevenLabs, Deepgram, NovelAI and Claude are monthly fees, so their rows show their units:
+  calls, characters, audio seconds, tokens. An optional `PRICE_SUBSCRIPTIONS` (`service=usd_per_month`, e.g.
+  `elevenlabs=99,novelai=25`; empty means none) adds each fee for the period, prorated by days, as a «subscriptions»
+  line. It shows with all agents only: a fee is shared and is never split by agent. This is reporting, never a limit;
+  VISION's «no budgets or billing» holds.
+- **The route:** `GET /api/analytics?since=YYYY-MM-DD&until=YYYY-MM-DD[&agent=<name>]`.
+  - Bearer, as every route.
+  - The agent is resolved through the registry; an unknown one is 404.
+  - Dates are ISO days in `TIMEZONE`, `since` ≤ `until`, at most 366 days; anything else is 400.
+  - The usage files are read once a request. A year of every agent's lines is fine for the PoC, so there is no cache.
+- **The view:** «Analytics» in the rail (System, beside Tokens), a page of its own in the panel's design (English UI,
+  `specification/design/` tokens, no chart library).
+  - **The period:** Today, Yesterday, 7 days, 30 days, This month, Last month, or a custom From–To.
+  - **The agent:** All, or one.
+  - **Tiles:** the cost, the change from the previous period, calls, failed and blocked, tokens, the cost a day.
+  - **Services:** a table that expands to its models.
+  - **Kinds**, and the cost a day as stacked bars by service.
+  - **Agents**, when all are chosen.
+  - **Download CSV:** the period's rows (day, agent, service, model, kind, calls, failed, blocked, input, output,
+    characters, audio s, video s, billing, cost).
+  - The choice is kept in the page's address, so a report can be reopened.
+- **The CLI:** `agents/usage_report.py` gains `--since`, `--until`, `--agent` and `--by service|model|kind|day` over the
+  same `analyze`. The daily report is unchanged.
+- **Embeddings priced as their own model:** an owner step adds `gemini-embedding-001=0.15/0` to `PRICE_MODELS` (they
+  are priced at the default pair now).
+- **The dashboard's 7-day Tokens card stays** as it is.
+- **ARCHITECTURE:**
+  - §The panel: the view and its route;
+  - §Token accounting: the analysis and the services;
+  - §Configuration: `PRICE_SUBSCRIPTIONS`;
+  - §Contracts: the route and its response's shape, pinned by tests.
+
+**Owner steps:**
+- in `server/.env`: the embeddings' `PRICE_MODELS` entry and, if wanted, `PRICE_SUBSCRIPTIONS` (only those entries);
+- the deploy;
+- the live checks.
+
+**DoD:**
+- (Manual, owner) In the panel he opens Analytics, picks Кіра and «30 days», and sees:
+  - her cost by service: Gemini, OpenRouter and fal in dollars, and ElevenLabs, Deepgram and NovelAI by their units;
+  - each service's models, what it was for, and the cost a day.
+
+  The totals match the token report for the same days.
+- (Manual, owner) He picks a custom range and All, and sees:
+  - the agents' table;
+  - the whole stack's services;
+  - the subscriptions line, if it is set.
+- (Manual, owner) The downloaded CSV opens in a spreadsheet with the same numbers.
+
+**Tests:**
+- **`analyze`:**
+  - the period's bounds, inclusive, by the line's local day;
+  - the agent filter;
+  - services and models, and the billing kept;
+  - an unpriced model is «—»;
+  - the subscriptions' units, and the prorated fee for all agents only;
+  - the previous period;
+  - no data.
+- **The route:** 401 without the token, 400 on bad or reversed dates or a span over 366 days, 404 for an unknown agent,
+  and the response's shape pinned.
+- **The page:** the view, the presets, the CSV's header and its numbers' escaping.
+- **The CLI:** `--by service` over a made-up file.
+- **Never:** no text in a response, a CSV or a log.
+
+**Not in this phase:**
+- budgets, limits or alerts;
+- the providers' own billing APIs (fal's needs an admin key, ElevenLabs' and NovelAI's are their subscriptions);
+- a cost per message;
+- a chart library;
+- changes to the daily report.
 
 ## v6 — Лілі: the Lumi bridge
 
