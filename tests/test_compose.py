@@ -103,6 +103,7 @@ def test_the_panel_gets_only_its_own_settings_and_the_stack_at_its_host_path():
     assert "env_file" not in svc  # never the agents' keys or passwords in its environment
     assert set(svc["environment"]) == {"PANEL_TOKEN", "PRICE_INPUT_PER_1M", "PRICE_OUTPUT_PER_1M", "PRICE_MODELS",
                                        "PRICE_SECONDS",  # v5.18: her кружечки, per second
+                                       "PRICE_SUBSCRIPTIONS",  # v5.19: the monthly fees, for the Analytics view
                                        "TIMEZONE", "TZ", "STACK_DIR", "COMPOSE_PROJECT"}  # v5.1: PRICE_MODELS
     assert svc["environment"]["COMPOSE_PROJECT"] == "server"
     assert not svc.get("privileged") and "cap_add" not in svc and "network_mode" not in svc
@@ -263,6 +264,7 @@ def test_hermes_settings_are_in_both_env_examples_with_the_schema_defaults():
 def test_the_panel_gets_the_model_prices():
     assert SERVICES["panel"]["environment"]["PRICE_MODELS"] == "${PRICE_MODELS:-}"
     assert SERVICES["panel"]["environment"]["PRICE_SECONDS"] == "${PRICE_SECONDS:-}"  # v5.18
+    assert SERVICES["panel"]["environment"]["PRICE_SUBSCRIPTIONS"] == "${PRICE_SUBSCRIPTIONS:-}"  # v5.19
 
 
 def test_both_env_examples_price_her_kruzhechky_per_second():
@@ -344,3 +346,9 @@ def test_deploy_syncs_kiras_env_file_privately_and_it_is_never_committed_or_bake
         lines = (ROOT / ignore).read_text().splitlines()
         assert any(fnmatch("server/kira.env", p) for p in lines if p and not p.startswith(("#", "!"))), ignore
         assert not any(fnmatch("server/kira.env", p[1:]) for p in lines if p.startswith("!")), ignore
+
+
+def test_both_env_examples_name_the_subscriptions_fees_empty():
+    """v5.19: the monthly fees are the owner's to set; the examples carry the name, empty."""
+    for path in (ROOT / ".env.example", ROOT / "server" / ".env.example"):
+        assert "\nPRICE_SUBSCRIPTIONS=\n" in path.read_text(encoding="utf-8"), path

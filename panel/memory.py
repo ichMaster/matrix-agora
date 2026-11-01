@@ -21,13 +21,16 @@ from agents.emotion import TAG_MODELS
 from agents.emotion import TAG_RE as VOICE_TAG_RE
 from agents.facts import load_facts
 from agents.usage import (
+    PriceBook,
     Row,
     aggregate,
+    analyze,
     cost,
     month_chars,
     parse_lines,
     parse_model_prices,
     parse_second_prices,
+    parse_subscription_prices,
 )
 
 DAYS_SHOWN = 60
@@ -375,30 +378,67 @@ def _price(name: str) -> float | None:
         return None
 
 
-def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None) -> dict:
-    if not readable(state_dir):
-        return {"available": False}
+def _all_usage_records(state_dir: Path) -> tuple[list[dict], int]:
+    """Every `state/*.usage.jsonl`, read once: the parsed lines and how many were corrupt (skipped)."""
     lines: list[str] = []
     for path in sorted(state_dir.glob("*.usage.jsonl")):
         try:
             lines += path.read_text(encoding="utf-8").splitlines()
         except OSError:
             continue
-    records, bad = parse_lines(lines)
+    return parse_lines(lines)
+
+
+def _price_book() -> PriceBook:
+    """Every price from the environment; a malformed entry is named in the log once (review #12: a price spec, never
+    a secret) and ignored."""
+    models, bad_models = parse_model_prices(os.environ.get("PRICE_MODELS"))  # v5.1: Hermes's Pro calls priced as Pro
+    seconds, bad_seconds = parse_second_prices(os.environ.get("PRICE_SECONDS"))  # v5.18: her кружечки, per second
+    fees, bad_fees = parse_subscription_prices(os.environ.get("PRICE_SUBSCRIPTIONS"))  # v5.19: the monthly fees
+    for name, shape, bad in (("PRICE_MODELS", "model=in/out", bad_models), ("PRICE_SECONDS", "model=usd", bad_seconds),
+                             ("PRICE_SUBSCRIPTIONS", "service=usd", bad_fees)):
+        for entry in sorted(set(bad) - _WARNED):
+            log.warning("%s entry %r is not %s — ignored", name, entry, shape)
+            _WARNED.add(entry)
+    return PriceBook(_price("PRICE_INPUT_PER_1M"), _price("PRICE_OUTPUT_PER_1M"), models, seconds, fees)
+
+
+def analytics_period(since: str, until: str, max_days: int) -> tuple[date, date]:
+    """v5.19 — the Analytics view's period from the query (pure): two ISO days, `since` ≤ `until`, at most
+    `max_days` inclusive; anything else is a ValueError naming why (the route's 400)."""
+    try:
+        first, last = date.fromisoformat(since), date.fromisoformat(until)
+    except (TypeError, ValueError):
+        raise ValueError("bad date") from None
+    if first > last:
+        raise ValueError("since after until")
+    if (last - first).days + 1 > max_days:
+        raise ValueError(f"span over {max_days} days")
+    return first, last
+
+
+def analytics_view(state_dir: Path, since: date, until: date, agent: str | None = None) -> dict:
+    """v5.19 — the Analytics view: the usage files read once, the prices from the environment, and `analyze()`'s
+    report for the period and the agent (or all); an unreadable `state/` is unavailable, never a 500."""
+    if not readable(state_dir):
+        return {"available": False}
+    records, bad = _all_usage_records(state_dir)
+    prices = _price_book()
+    return {"available": True, "priced": prices.priced, "corrupt_lines": bad,
+            **analyze(records, since, until, agent, prices)}
+
+
+def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None) -> dict:
+    if not readable(state_dir):
+        return {"available": False}
+    records, bad = _all_usage_records(state_dir)
     if agent:
         records = [r for r in records if r.get("agent") == agent]
     since = today - timedelta(days=days - 1)
     rows = aggregate(records, since, today)
-    p_in, p_out = _price("PRICE_INPUT_PER_1M"), _price("PRICE_OUTPUT_PER_1M")
-    models, bad_prices = parse_model_prices(os.environ.get("PRICE_MODELS"))  # v5.1: Hermes's Pro calls priced as Pro
-    for entry in sorted(set(bad_prices) - _WARNED):  # review #12: named once per entry — a price spec, never a secret
-        log.warning("PRICE_MODELS entry %r is not model=in/out — ignored", entry)
-        _WARNED.add(entry)
-    seconds, bad_seconds = parse_second_prices(os.environ.get("PRICE_SECONDS"))  # v5.18: her кружечки, per second
-    for entry in sorted(set(bad_seconds) - _WARNED):
-        log.warning("PRICE_SECONDS entry %r is not model=usd — ignored", entry)
-        _WARNED.add(entry)
-    priced = p_in is not None and p_out is not None or bool(models) or bool(seconds)
+    book = _price_book()
+    p_in, p_out, models, seconds = book.price_in, book.price_out, book.models, book.seconds
+    priced = book.priced
 
     def money(r):  # v4.4: only `api` tokens are priced; a subscription row has no cost, never $0
         c = cost(r, p_in, p_out, models, seconds) if priced else None
