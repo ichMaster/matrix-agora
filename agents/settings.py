@@ -165,6 +165,13 @@ SCHEMA: tuple[Setting, ...] = (
        86400),
     _s("THOUGHTS_IN_PROMPT", "int", "3", "life", "cap:thoughts", None, "Скільки сьогоднішніх думок бачить у розмові",
        "", 0, 10),
+    # v5.20 — her layered memory of the private chat (`talk`): the hours' and the blocks' bands, a summary's words
+    _s("TALK_HOUR_DAYS", "int", "2", "memory", "cap:talk", None, "Скільки днів розмови пам'ятає погодинно", "days", 1, 7),
+    _s("TALK_4H_DAYS", "int", "14", "memory", "cap:talk", None, "До скількох днів пам'ятає по чотири години", "days",
+       3, 60),
+    _s("TALK_WORDS_HOUR", "int", "60", "memory", "cap:talk", None, "Слів на підсумок години", "words", 20, 400),
+    _s("TALK_WORDS_4H", "int", "100", "memory", "cap:talk", None, "Слів на підсумок чотирьох годин", "words", 20, 400),
+    _s("TALK_WORDS_WEEK", "int", "150", "memory", "cap:talk", None, "Слів на підсумок тижня", "words", 20, 400),
     # v5.14 — the backup for her private chat (`fallback`): GLM-4.6 on NovelAI when Gemini blocks or refuses; empty
     # model: off. The window after a block, the day cap of blocks, the backup's prompt budget and its history length
     _s("FALLBACK_MODEL", "choice", "", "fallback", "cap:fallback", None, "Резервна модель (порожньо — вимкнено)",

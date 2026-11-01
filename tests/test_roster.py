@@ -53,7 +53,8 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
                                                                               "digest", "transcribe", "private",
                                                                               "telegram", "recall", "facts",
                                                                               "emotion", "events", "thoughts",
-                                                                              "fallback", "photos", "videos"}
+                                                                              "fallback", "photos", "videos",
+                                                                              "talk"}
     assert ada.panel["name"] == "Ada"
 
 
@@ -73,7 +74,8 @@ def test_the_four_newcomers_are_people_like_ada_and_bruno(name, shown, forms):
     assert m.capabilities == TYPES["persona"] | ({"private", "telegram", "recall", "facts", "emotion", "mood", "events",
                                                   "thoughts", "fallback",  # v5.14: her backup
                                                   "photos",  # v5.17: her photos in Telegram
-                                                  "videos"}  # v5.18: her кружечок and clips
+                                                  "videos",  # v5.18: her кружечок and clips
+                                                  "talk"}  # v5.20: her private chat in layers
                                                  if name == "kira" else set())
     assert m.natal == ("agents/canon/kira.natal.md" if name == "kira" else "")
     assert m.panel["name"] == name.capitalize()
@@ -482,3 +484,13 @@ def test_the_shared_canon_and_hermes_name_the_newcomers():
         assert any(f in common for f in forms) and any(f in hermes for f in forms), forms
         assert any(f in ada for f in forms) and any(f in bruno for f in forms), forms
     assert "«Ліхтар»" in common and "планетарії" in common
+
+
+@pytest.mark.parametrize("caps", [("talk",), ("talk", "private"), ("talk", "recall")])
+def test_talk_needs_both_the_private_chat_and_the_archive(caps):
+    """v5.20: her layered memory summarizes her private chat from her archive — never without either."""
+    with pytest.raises(RosterError, match="'talk' needs"):
+        parse_member("x", {"name": "X", "user_id": "@x:a", "type": "persona",
+                           "capabilities": dict.fromkeys(caps, True)})
+    assert parse_member("x", {"name": "X", "user_id": "@x:a", "type": "persona",
+                              "capabilities": dict.fromkeys(("talk", "private", "recall"), True)}).can("talk")

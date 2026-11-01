@@ -64,7 +64,26 @@ CREATE TABLE IF NOT EXISTS lines (
     channel TEXT NOT NULL, speaker TEXT NOT NULL, text TEXT NOT NULL, emb BLOB);
 CREATE INDEX IF NOT EXISTS lines_place_ts ON lines (place, ts_ms);
 CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(text, content='lines', content_rowid='id', tokenize='unicode61');
+CREATE TABLE IF NOT EXISTS talk (
+    id INTEGER PRIMARY KEY, level TEXT NOT NULL, start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
+    text TEXT NOT NULL, open_lines INTEGER NOT NULL, closed_lines INTEGER NOT NULL, left_out INTEGER NOT NULL,
+    made_ms INTEGER NOT NULL, UNIQUE (level, start_ms));
 """
+TALK_COLS = "level, start_ms, end_ms, text, open_lines, closed_lines, left_out, made_ms"
+
+
+@dataclass(frozen=True)
+class TalkRow:
+    """v5.20 — one summary of her private chat: an hour, a four-hour block or a week (`agents/talk.py`), written once
+    from the lines open to Gemini; how many open and closed lines the period had, and how many a block kept out."""
+    level: str
+    start_ms: int
+    end_ms: int
+    text: str
+    open_lines: int
+    closed_lines: int
+    left_out: int
+    made_ms: int
 
 
 @dataclass(frozen=True)
@@ -359,6 +378,46 @@ class Archive:
                     "INSERT INTO lines(key, ts_ms, place, channel, speaker, text, mark) VALUES (?,?,?,?,?,?,?)",
                     (f"fact:{fact_id}", int(ts_ms), "facts", "", "факт", text, mark))
                 self.db.execute("INSERT INTO fts(rowid, text) VALUES (?,?)", (cur.lastrowid, text))
+
+    # --- v5.20: her layered memory of the private chat — the periods' lines, and the summaries written once ---------
+    def private_between(self, start_ms: int, end_ms: int, gemini: bool = True) -> list[Line]:
+        """The private lines of [start_ms, end_ms), oldest first; for Gemini never a closed one."""
+        rows = self.db.execute(f"SELECT {_COLS} FROM lines WHERE place = 'private' AND ts_ms >= ? AND ts_ms < ? "
+                               f"AND {_open_to(gemini)} ORDER BY ts_ms, id", (int(start_ms), int(end_ms))).fetchall()
+        return [Line(*r) for r in rows]
+
+    def private_counts(self, start_ms: int, end_ms: int) -> tuple[int, int]:
+        """(open, closed) private lines of [start_ms, end_ms), by `GEMINI_CLOSED`."""
+        closed = ",".join("?" * len(GEMINI_CLOSED))
+        row = self.db.execute(f"SELECT COUNT(*) - SUM(mark IN ({closed})), SUM(mark IN ({closed})) FROM lines "
+                              "WHERE place = 'private' AND ts_ms >= ? AND ts_ms < ?",
+                              (*GEMINI_CLOSED, *GEMINI_CLOSED, int(start_ms), int(end_ms))).fetchone()
+        return int(row[0] or 0), int(row[1] or 0)
+
+    def private_open_times(self, since_ms: int = 0) -> list[int]:
+        """The times of the private lines open to Gemini from `since_ms` on — what `talk.periods_due` buckets."""
+        return [r[0] for r in self.db.execute(f"SELECT ts_ms FROM lines WHERE place = 'private' AND ts_ms >= ? "
+                                              f"AND {_OPEN} ORDER BY ts_ms", (int(since_ms),))]
+
+    def talk_put(self, level: str, start_ms: int, end_ms: int, text: str, open_lines: int, closed_lines: int,
+                 left_out: int, made_ms: int) -> bool:
+        """A period's summary, once: False when the period is held already (a row is never rewritten)."""
+        try:
+            with self.db:
+                self.db.execute(f"INSERT INTO talk({TALK_COLS}) VALUES (?,?,?,?,?,?,?,?)",
+                                (level, int(start_ms), int(end_ms), text, int(open_lines), int(closed_lines),
+                                 int(left_out), int(made_ms)))
+        except sqlite3.IntegrityError:
+            return False
+        return True
+
+    def talk_rows(self, level: str | None = None, since_ms: int | None = None,
+                  until_ms: int | None = None) -> list[TalkRow]:
+        """The summaries (of one level, or all) starting in [since_ms, until_ms), oldest first."""
+        rows = self.db.execute(f"SELECT {TALK_COLS} FROM talk WHERE (? IS NULL OR level = ?) AND start_ms >= ? "
+                               "AND start_ms < ? ORDER BY start_ms, level",
+                               (level, level, since_ms or 0, until_ms if until_ms is not None else 2 ** 62)).fetchall()
+        return [TalkRow(*r) for r in rows]
 
     def latest(self, place: str, limit: int, since_ms: int | None = None, gemini: bool = True) -> list[Line]:
         """The last `limit` lines of a place (from `since_ms` on), oldest first; for Gemini never a closed one (v5.13),

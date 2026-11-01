@@ -488,6 +488,14 @@ class Agent:
             self.thoughts_in_prompt = int(os.environ.get("THOUGHTS_IN_PROMPT", "3"))
         # her own key (taken above), never Claude's state; the seam: tests pass canned fetches
         self.reading_sources = Sources(reading_key)
+        # v5.20 — her layered memory of the private chat (`talk`): the hours' and blocks' bands, a summary's words
+        self.talk_hour_days, self.talk_4h_days, self.talk_words = 0, 0, {}
+        if cfg.can("talk"):
+            self.talk_hour_days = int(os.environ.get("TALK_HOUR_DAYS", "2"))
+            self.talk_4h_days = int(os.environ.get("TALK_4H_DAYS", "14"))
+            self.talk_words = {"hour": int(os.environ.get("TALK_WORDS_HOUR", "60")),
+                               "4h": int(os.environ.get("TALK_WORDS_4H", "100")),
+                               "week": int(os.environ.get("TALK_WORDS_WEEK", "150"))}
         # v5.14 — the backup for her private chat: on with `fallback`, a model and the token; its settings
         self.fallback: FallbackClient | None = None
         self.fallback_responder: FallbackResponder | None = None
