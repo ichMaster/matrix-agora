@@ -2627,6 +2627,7 @@ numbers out.
 **Owner decisions** (2026-11-01):
 - analytical reports by agent and by all its services, Кіра's above all;
 - periods the owner chooses;
+- **charts and trends** («мають бути графіки і тренди»);
 - phase v5.19, before v6.
 
 **What the usage lines already hold** (no new line or field; the lines carry no text):
@@ -2645,8 +2646,12 @@ numbers out.
   - **by service** (`engine`), each with its billing and its models. A model with `api` calls and no price is listed as
     unpriced, and its cost is «—», never $0;
   - **by kind** (what it was for), with the cost and its share;
-  - **by day**: the cost by service, and the calls;
-  - **by agent**, when no agent is chosen.
+  - **by day**: the cost, calls and tokens by service, the cost's 7-day moving average and its running total;
+  - **by agent**, when no agent is chosen;
+  - **the trends**:
+    - each service, kind and agent beside its value for the previous period;
+    - the slope of the daily cost (least squares, as $ a week, rising, falling or flat);
+    - the month's cost at the period's rate.
 
   The prices come from `PRICE_MODELS`, `PRICE_SECONDS` and the default pair, as the report's are. Subscription calls
   are never priced per call (v4.4).
@@ -2664,9 +2669,17 @@ numbers out.
   `specification/design/` tokens, no chart library).
   - **The period:** Today, Yesterday, 7 days, 30 days, This month, Last month, or a custom From–To.
   - **The agent:** All, or one.
-  - **Tiles:** the cost, the change from the previous period, calls, failed and blocked, tokens, the cost a day.
-  - **Services:** a table that expands to its models.
-  - **Kinds**, and the cost a day as stacked bars by service.
+  - **Tiles:** the cost, the change from the previous period, calls, failed and blocked, tokens, the cost a day, the
+    trend (± $ a week) and the month at this rate.
+  - **Charts** (inline SVG drawn by the page, in the handoff's colours for both themes, a native tooltip on each mark):
+    - the cost a day, as bars stacked by service, with the 7-day moving average as a line;
+    - the running total of this period against the previous one's;
+    - the calls or tokens a day by service, as lines (a toggle);
+    - the services' shares of the cost, and of the calls for the subscriptions;
+    - the cost by agent, with the previous period's as a marker, when all are chosen.
+  - **Services:** a table with a sparkline of each service's daily cost or calls, and its change from the previous
+    period (an arrow, ± $ and %). A row expands to its models.
+  - **Kinds**, with the same change.
   - **Agents**, when all are chosen.
   - **Download CSV:** the period's rows (day, agent, service, model, kind, calls, failed, blocked, input, output,
     characters, audio s, video s, billing, cost).
@@ -2690,7 +2703,11 @@ numbers out.
 **DoD:**
 - (Manual, owner) In the panel he opens Analytics, picks Кіра and «30 days», and sees:
   - her cost by service: Gemini, OpenRouter and fal in dollars, and ElevenLabs, Deepgram and NovelAI by their units;
-  - each service's models, what it was for, and the cost a day.
+  - each service's models, what it was for, and the cost a day;
+  - the charts: the cost a day by service with its moving average, this period's running total against the previous
+    one's, the calls a day, the shares;
+  - the trends: each service's change from the previous period and its sparkline, the weekly slope, and the month at
+    this rate.
 
   The totals match the token report for the same days.
 - (Manual, owner) He picks a custom range and All, and sees:
@@ -2702,6 +2719,7 @@ numbers out.
 **Tests:**
 - **`analyze`:**
   - the period's bounds, inclusive, by the line's local day;
+  - the moving average, the running total, the slope and the month at the rate, on made-up days;
   - the agent filter;
   - services and models, and the billing kept;
   - an unpriced model is «—»;
@@ -2710,7 +2728,8 @@ numbers out.
   - no data.
 - **The route:** 401 without the token, 400 on bad or reversed dates or a span over 366 days, 404 for an unknown agent,
   and the response's shape pinned.
-- **The page:** the view, the presets, the CSV's header and its numbers' escaping.
+- **The page:** the view, the presets, the charts' SVG builders (pure functions in the page), the CSV's header and its
+  numbers' escaping.
 - **The CLI:** `--by service` over a made-up file.
 - **Never:** no text in a response, a CSV or a log.
 
