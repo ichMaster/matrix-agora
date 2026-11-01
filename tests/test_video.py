@@ -7,6 +7,7 @@ network; made-up descriptions)."""
 import asyncio
 import base64
 import logging
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -382,3 +383,36 @@ def test_a_video_line_is_never_made_a_photo(tmp_path, monkeypatch, ogg, caplog):
     assert asyncio.run(agent.private_reply()) is True
     assert agent.photos.shots == [] and agent.sent == ["voice", ("text", "Ось я")]
     assert "video: dropped (off)" in caplog.text
+
+
+# --- the capability and the key (AGORA-165) -------------------------------------------------------------------------
+def test_videos_are_a_persons_capability_that_needs_her_photos_and_her_voice():
+    from agents.roster import RosterError, parse_member
+    base = {"name": "Кіра", "user_id": "@kira:agora.lan"}
+    caps = {"private": True, "telegram": True, "photos": True, "voice": True, "videos": True}
+    assert parse_member("kira", {**base, "capabilities": caps}, "kira.toml").can("videos")
+    with pytest.raises(RosterError, match="'videos' needs 'photos' on the same member"):
+        parse_member("kira", {**base, "capabilities": {**caps, "photos": False}}, "kira.toml")
+    with pytest.raises(RosterError, match="'videos' belongs to the persona type only"):
+        parse_member("kit", {"name": "Кіт", "user_id": "@kit:agora.lan", "type": "creature",
+                             "capabilities": {"videos": True}}, "kit.toml")
+
+
+def test_fals_key_leaves_the_environment_and_its_absence_is_a_warning(tmp_path, monkeypatch, caplog):
+    from agents import agent as agent_mod
+    from agents.llm import GeminiClient
+    from tests.test_telegram_runtime import kira as telegram_kira
+    monkeypatch.setattr(GeminiClient, "__init__", lambda self, sink=None: None)
+    monkeypatch.setattr(agent_mod, "photo_maker", lambda *a: object())
+    monkeypatch.setattr(agent_mod, "load_faces", lambda folder: [("kira.png", b"x", "image/png")])
+    cfg = telegram_kira(tmp_path, monkeypatch).cfg
+    cfg = cfg.__class__(**{**cfg.__dict__, "capabilities": cfg.capabilities | {"photos", "videos", "voice"}})
+    caplog.set_level(logging.INFO)
+    monkeypatch.setenv("FAL_KEY", KEY)
+    agent = agent_mod.Agent(cfg, llm=GeminiClient())
+    assert "FAL_KEY" not in os.environ and agent.notes is not None and agent.notes.model == NOTE_MODEL
+    assert KEY not in caplog.text and KEY not in repr(agent.notes)
+    caplog.clear()
+    agent = agent_mod.Agent(cfg, llm=GeminiClient())
+    assert agent.notes is None
+    assert [r.levelname for r in caplog.records if "no FAL_KEY" in r.getMessage()] == ["WARNING"]

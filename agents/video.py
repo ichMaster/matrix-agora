@@ -36,6 +36,7 @@ from agents.voice import RATE
 log = logging.getLogger("agent.video")
 
 KINDS = ("note", "clip")
+KEY_VAR = "FAL_KEY"                # server/kira.env: fal.ai/dashboard/keys, preset API (docs/fal-ai.md)
 MODEL = "gemini-omni-1.1-flash"    # the owner, 2026-11-01: Google's video model for her clips
 RESOLUTIONS = ("720p", "1080p")
 NOTE_MODEL = "fal-ai/kling-video/ai-avatar/v2/standard"   # $0.0562 a second (fal's pricing API, 2026-11-01)

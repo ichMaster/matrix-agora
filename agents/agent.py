@@ -292,8 +292,11 @@ from agents.usage import (
     stt_usage_line,
     tts_usage_line,
     usage_line,
+    video_note_usage_line,
 )
+from agents.video import KEY_VAR as FAL_KEY_VAR
 from agents.video import KINDS as VIDEO_KINDS
+from agents.video import NOTE_MODEL, NoteMaker
 from agents.voice import (
     STT_MODEL,
     TTS_MODEL,
@@ -363,6 +366,8 @@ class Agent:
         fallback_token = os.environ.pop(FALLBACK_TOKEN_VAR, "").strip()
         # v5.15 — the judge's OpenRouter key (server/kira.env): out of the environment for every agent, used by hers
         judge_key = os.environ.pop(JUDGE_KEY_VAR, "").strip()
+        # v5.18 — fal's key for her кружечок (server/kira.env): out of the environment for every agent, used by hers
+        fal_key = os.environ.pop(FAL_KEY_VAR, "").strip()
         # the room's members come from the registry (v4.1): nothing in the code names them
         self.roster = roster if roster is not None else load_roster(cfg.simulation, strict_for=cfg.localpart)
         self.me = self.roster.get(cfg.localpart) or Member(cfg.localpart, cfg.user_id, cfg.name, (cfg.name.lower(),))
@@ -513,6 +518,14 @@ class Agent:
                 log.info("photos: %d faces", len(faces))
             else:  # review #3: the first deploy ran so, unnoticed — every selfie would quietly be redrawn without one
                 log.warning("photos: no faces — a selfie will not come out")
+        # v5.18 — her кружечок: Kling Avatar on fal, from her selfie and her voice (the key lives only in the maker)
+        self.notes: NoteMaker | None = None
+        if cfg.can("videos"):
+            if fal_key:
+                self.notes = NoteMaker(fal_key, os.environ.get("VIDEO_NOTE_MODEL", "fal-ai/kling-video/ai-avatar/v2/standard").strip()
+                                       or NOTE_MODEL, sink=self.record_video_note_usage)
+            else:
+                log.warning("videos: no FAL_KEY — no кружечок")
         self._reading_lock, self._reflect_lock = asyncio.Lock(), asyncio.Lock()
         self._reading_retry_ms = self._reflect_retry_ms = self._reflect_ms = 0
         # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.
@@ -2479,6 +2492,10 @@ class Agent:
                            cost: float | None) -> None:
         """v5.15 — one line per call of the judge: `openrouter`, priced by `PRICE_MODELS`, no text."""
         self._append_usage(lambda ts: judge_usage_line(ts, self.cfg.localpart, model, prompt, output, ok, cost))
+
+    def record_video_note_usage(self, model: str, video_ms: int | None, ok: bool, blocked: str | None = None) -> None:
+        """v5.18 — one line per call of Kling Avatar on fal: `fal`, priced per second by `PRICE_SECONDS`, no text."""
+        self._append_usage(lambda ts: video_note_usage_line(ts, self.cfg.localpart, model, video_ms, ok, blocked))
 
     def record_fallback_usage(self, kind: str, model: str, ok: bool) -> None:
         """v5.14 — one line per call of her backup model: `novelai`, the subscription, never priced, no text."""

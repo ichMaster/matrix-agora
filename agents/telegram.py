@@ -28,6 +28,7 @@ log = logging.getLogger("agent.telegram")
 API = "https://api.telegram.org"
 POLL_TIMEOUT_S = 30   # long polling: the server holds the request this long when there is nothing new
 CALL_TIMEOUT_S = 60   # every other call — a voice note's upload included
+VIDEO_TIMEOUT_S = 180  # v5.18: a video's upload (a clip may be some megabytes)
 TEXT_MAX = 4096       # Telegram's limit for one message's text
 CAPTION_MAX = 1024    # v5.17: Telegram's limit for a photo's caption
 CHUNK = 65_536
@@ -258,8 +259,30 @@ class TelegramBot:
         form.add_field("photo", image, filename=name, content_type=mime)
         return (await self._call("sendPhoto", CALL_TIMEOUT_S, data=form)).ok
 
+    async def send_video_note(self, chat_id: int, mp4: bytes, duration_s: int, length: int) -> bool:
+        """v5.18 — her кружечок: a round video message, a square MPEG4 as multipart, with its diameter and length."""
+        form = aiohttp.FormData()
+        form.add_field("chat_id", str(chat_id))
+        form.add_field("duration", str(max(int(duration_s), 1)))
+        form.add_field("length", str(int(length)))
+        form.add_field("video_note", mp4, filename="note.mp4", content_type="video/mp4")
+        return (await self._call("sendVideoNote", VIDEO_TIMEOUT_S, data=form)).ok
+
+    async def send_video(self, chat_id: int, mp4: bytes, duration_s: int | None = None, width: int | None = None,
+                         height: int | None = None) -> bool:
+        """v5.18 — her clip: a video as multipart, streamable, no caption (her words went before it)."""
+        form = aiohttp.FormData()
+        form.add_field("chat_id", str(chat_id))
+        form.add_field("supports_streaming", "true")
+        for name, value in (("duration", duration_s), ("width", width), ("height", height)):
+            if value:
+                form.add_field(name, str(int(value)))
+        form.add_field("video", mp4, filename="video.mp4", content_type="video/mp4")
+        return (await self._call("sendVideo", VIDEO_TIMEOUT_S, data=form)).ok
+
     async def send_chat_action(self, chat_id: int, action: str) -> bool:
-        """`typing`, `record_voice` or (v5.17) `upload_photo` — shown about five seconds, so the caller repeats it."""
+        """`typing`, `record_voice`, (v5.17) `upload_photo` or (v5.18) `record_video_note` / `upload_video` — shown
+        about five seconds, so the caller repeats it."""
         return (await self._call("sendChatAction", CALL_TIMEOUT_S,
                                  json_body={"chat_id": chat_id, "action": action})).ok
 

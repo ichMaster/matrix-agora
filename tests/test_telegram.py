@@ -316,3 +316,24 @@ def test_a_network_failure_is_named_by_its_type_only(session, caplog):
 def test_the_bot_never_shows_its_token():
     bot = TelegramBot(TOKEN)
     assert TOKEN not in repr(bot) and TOKEN not in str(bot)
+
+
+def test_send_video_note_and_send_video_are_multipart_mp4s(session, caplog):
+    # v5.18: her кружечок (a round video message, its diameter and length) and her clip (streamable, no caption)
+    session.replies = [ok({"message_id": 5}), ok({"message_id": 6}), (400, {"ok": False, "error_code": 400})]
+    bot = TelegramBot(TOKEN)
+    assert asyncio.run(bot.send_video_note(OWNER, b"MP4-note", 12, 640)) is True
+    call = session.calls[0]
+    assert call["url"].endswith("/sendVideoNote")
+    fields = {opts["name"]: (headers, value) for opts, headers, value in call["data"]._fields}
+    assert (fields["chat_id"][1], fields["duration"][1], fields["length"][1]) == (str(OWNER), "12", "640")
+    assert fields["video_note"][1] == b"MP4-note" and fields["video_note"][0]["Content-Type"] == "video/mp4"
+    assert asyncio.run(bot.send_video(OWNER, b"MP4-clip", 8, 720, 1280)) is True
+    call = session.calls[1]
+    assert call["url"].endswith("/sendVideo")
+    fields = {opts["name"]: (headers, value) for opts, headers, value in call["data"]._fields}
+    assert fields["supports_streaming"][1] == "true" and "caption" not in fields
+    assert (fields["duration"][1], fields["width"][1], fields["height"][1]) == ("8", "720", "1280")
+    assert fields["video"][1] == b"MP4-clip" and fields["video"][0]["Content-Type"] == "video/mp4"
+    assert asyncio.run(bot.send_video(OWNER, b"MP4")) is False                        # a refused call: False
+    no_secret_in(caplog)
