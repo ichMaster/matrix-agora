@@ -44,8 +44,8 @@ def test_two_items_that_block_only_together_are_both_found():
         found = run(Oracle({f"line:{a}", f"line:{b}"}), cap=20)
         assert found.outcome == "found" and found.closed == (f"line:{a}", f"line:{b}"), (a, b)
         assert run(Oracle({f"line:{a}"}), cap=20).closed == (f"line:{a}",)    # neither alone stands for both
-    capped = run(Oracle({"line:3", "line:30"}))                               # the default cap: a small set, both
-    assert capped.outcome == "cap" and {"line:3", "line:30"} <= set(capped.closed) and len(capped.closed) <= 6
+    capped = run(Oracle({"line:3", "line:30"}))                               # the default cap: nothing proven
+    assert capped.outcome == "cap" and capped.closed == ()
 
 
 def test_two_causes_each_enough_alone_are_both_found_in_one_probe():
@@ -73,9 +73,13 @@ def test_a_failed_call_closes_nothing():
         assert found.outcome == "error" and found.closed == () and found.layers == (), at
 
 
-def test_a_spent_budget_closes_the_smallest_set_seen_to_block_never_all():
-    found = run(Oracle({"line:5"}), cap=4)                                    # whole, base, two halvings
-    assert found.outcome == "cap" and "line:5" in found.closed and len(found.closed) == 10
+def test_a_spent_budget_closes_only_what_it_proved():
+    """The owner, 2026-11-02: at the cap the smallest set seen to block was 135-148 of her 150 lines, and seven
+    probes closed her whole history for Gemini — a spent budget now closes only the sets it proved."""
+    assert run(Oracle({"line:5"}), cap=4) == Found(4, outcome="cap")          # whole, base, two halvings: unproven
+    many = tuple(f"line:{i}" for i in range(150))
+    found = run(Oracle({"line:12", "line:40", "line:77", "line:130"}), items=many)  # four lines that block together
+    assert found.outcome == "cap" and found.closed == () and found.calls == 12
     assert run(Oracle({"line:5"}), cap=2) == Found(2, outcome="cap")          # nothing narrowed: nothing closed
     assert run(Oracle({"line:5"}), cap=1) == Found(1, outcome="cap")          # the base not reached
     assert run(Oracle({"line:5"}), cap=0) == Found(0, outcome="cap")

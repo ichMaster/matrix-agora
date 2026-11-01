@@ -109,8 +109,8 @@ async def search(items: Sequence[str], layers: Sequence[str], blocked: Oracle, c
     except _Spent:
         if in_layers:
             return Found(calls, layers=best[0], outcome="base_blocks")
-        if calls >= 2 and best[0] != left:  # narrowed below what was left: never all of it
-            closed += tuple(i for i in best[0] if i not in closed)
+        # only the sets proven: the smallest set seen to block was 135-148 lines of her 150 at the cap, and seven
+        # probes on 10-31 and 11-01 closed her whole history for Gemini (the owner, 2026-11-02)
         return Found(calls, closed=closed, outcome="cap")
     except _Failed:
         return Found(calls, closed=closed, outcome="error")
