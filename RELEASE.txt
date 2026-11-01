@@ -1,3 +1,36 @@
+Version 5.18.0 (2026-11-01)
+---------------------------
+- Phase v5.18 (AGORA-163..166), Kira's videos in Telegram: she sends the
+  owner videos in her Telegram chat, when he asks or when she wants, as her
+  photos - a кружечок (Telegram's round video message) in which she says
+  her answer in her own ElevenLabs voice, and short clips of what she sees
+  with the sound of the place and no speech
+- Her "КРУЖЕЧОК:" / "ВІДЕО:" line (cut, never sent) names it; the first
+  frame is her photo (a 1:1 front-camera selfie, or a 9:16 faceless shot)
+- Her кружечок on VEED Fabric 1.0 on fal.ai (veed/fabric-1.0, $0.08 a
+  second, ~40 s; the frame and her voice put on fal's storage first; Kling
+  AI Avatar v2 stays a choice in VIDEO_NOTE_MODEL), cut 640x640 by ffmpeg
+  with her own mp3 as its sound, after VIDEO_NOTE_LEAD_MS (1 s) of silence
+- Her clips on Gemini Omni Flash (gemini-omni-1.1-flash, 720p)
+- Her text goes at once and her voice is held for a кружечок; a failure
+  sends her held voice note, or one short line for a clip
+- Kept in state/kira.videos/ (0600) and named in her archive;
+  VIDEO_DAY_MAX 40 a day (a safeguard); capability videos (needs photos
+  and voice); FAL_KEY in server/kira.env
+- Usage kinds video and video_note, usage line v6 video_ms, PRICE_SECONDS
+  per-second prices, a "video s" column in the report, the daily report
+  and the panel
+- Code review v5.18: the day's cap counts the videos paid for (#1), a
+  server error while a video is made asks again and never resubmits (#2),
+  her own voice is her кружечок's sound (#3), the log says how long a
+  video took (#4); #5-#7 LOW deferred
+- Live test fixes: the small frame, fal's queue logged and a timed-out job
+  cancelled (673ea43); Kling AI Avatar v2 took ~10 minutes, so after six
+  models were compared the owner chose VEED Fabric 1.0 (31e0419); the
+  silence before her voice, and videos when she wants with VIDEO_DAY_MAX
+  40 (eb9452d); the silence 1 s, a setting VIDEO_NOTE_LEAD_MS (9d3a120)
+- The owner's manual checks confirmed on 2026-11-01
+
 Version 5.17.0 (2026-11-01)
 ---------------------------
 - Phase v5.17 (AGORA-160..162), Kira's photos in Telegram: she sends the
