@@ -306,6 +306,7 @@ from agents.video import (
     clip_maker,
     frame_shot,
     pcm_to_mp3,
+    shrink_frame,
     square_note,
     video_skill,
 )
@@ -2123,7 +2124,9 @@ class Agent:
         mp3 = await pcm_to_mp3(pcm or b"")
         if mp3 is None:
             return Video(None, why="failed")
-        raw = await self.notes.make(frame.image, frame.mime, mp3)
+        small = await shrink_frame(frame.image)  # the owner: a кружечок needs no big picture — 640×640 to fal
+        image, mime = (small, "image/jpeg") if small else (frame.image, frame.mime)
+        raw = await self.notes.make(image, mime, mp3)
         if raw.why != "ok":
             return raw
         square = await square_note(raw.data, mp3)  # review #3: her own voice is its sound

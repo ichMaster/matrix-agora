@@ -62,6 +62,11 @@ def media(monkeypatch):
     monkeypatch.setattr(agent_mod, "pcm_to_mp3", mp3)
     monkeypatch.setattr(agent_mod, "square_note", square)
 
+    async def shrink(image, timeout_s=30.0):
+        return b"SMALL-" + image
+
+    monkeypatch.setattr(agent_mod, "shrink_frame", shrink)
+
 
 def kira(tmp_path, monkeypatch, *answers, note=None, clip=None, made=None):
     agent = her(tmp_path, monkeypatch, *answers, made=made)
@@ -120,7 +125,7 @@ def test_a_kruzhechok_holds_her_voice_and_follows_her_words_in_her_voice(tmp_pat
     assert agent.sent[1:] == [("note", b"SQUARE-RAW", 12, 640)]
     assert agent.photos.shots == [Shot("selfie", f"я на балконі ввечері {SECRET}")]
     assert agent.photos.frames == [("1:1", FRAME_LINES["note"])]
-    assert agent.notes.calls == [(b"JPEG", "image/jpeg", b"MP3")]
+    assert agent.notes.calls == [(b"SMALL-JPEG", "image/jpeg", b"MP3")]               # 640×640 to fal
     assert any(c.args[1] == "record_video_note" for c in agent.telegram.send_chat_action.call_args_list)
     assert her_lines(agent) == ["Ось я тут", f"[кружечок: я на балконі ввечері {SECRET}]"]
     assert agent.private_history[-1] == ("Кіра", f"[кружечок: я на балконі ввечері {SECRET}]")
@@ -299,3 +304,16 @@ def test_the_log_says_how_long_a_video_took(tmp_path, monkeypatch, media, caplog
     agent.clock = lambda: next(times, ms(18) + 143_400)
     after(agent)
     assert "video: sent (clip, telegram, 143 s)" in caplog.text and SECRET not in caplog.text
+
+
+
+def test_a_frame_that_cannot_be_shrunk_goes_as_made(tmp_path, monkeypatch, media):
+    async def broken(image, timeout_s=30.0):
+        return None
+
+    monkeypatch.setattr(agent_mod, "shrink_frame", broken)
+    agent = kira(tmp_path, monkeypatch, "Ось\nКРУЖЕЧОК: я на кухні", made=Made(b"PNG", "image/png", "ok"))
+    owner_says(agent, "запиши кружечок", ms(17), "telegram", "tg:1")
+    asyncio.run(agent.private_reply())
+    after(agent)
+    assert agent.notes.calls == [(b"PNG", "image/png", b"MP3")] and agent.sent[-1][0] == "note"

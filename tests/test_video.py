@@ -17,6 +17,7 @@ from agents import video as vd
 from agents.photo import Shot, photo_note, photo_request, split_photo
 from agents.video import (
     CLIP_STYLE,
+    FFMPEG_FRAME,
     FFMPEG_MP3,
     FRAME_ASPECT,
     FRAME_LINES,
@@ -27,6 +28,7 @@ from agents.video import (
     clip_request,
     frame_shot,
     pcm_to_mp3,
+    shrink_frame,
     square_note,
 )
 from tests.test_photo import EVENING, image, maker
@@ -243,8 +245,11 @@ RESULT = "https://queue.fal.run/fal-ai/kling-video/requests/r1"
 CDN = "https://v3.fal.media/files/abc/note.mp4"
 
 
+CANCEL = "https://queue.fal.run/fal-ai/kling-video/requests/r1/cancel"
+
+
 def submitted():
-    return FakeResponse(200, {"request_id": "r1", "status_url": STATUS, "response_url": RESULT})
+    return FakeResponse(200, {"request_id": "r1", "status_url": STATUS, "response_url": RESULT, "cancel_url": CANCEL})
 
 
 def finished(duration=12.4):
@@ -444,12 +449,38 @@ def test_a_server_error_while_waiting_asks_again_and_never_resubmits(monkeypatch
     assert "asking again" in caplog.text
 
 
-def test_a_note_that_never_ends_is_never_resubmitted(monkeypatch):
-    note, posted, sinks = notes(monkeypatch, submitted(), *[FakeResponse(200, {"status": "IN_PROGRESS"})] * 500)
-    note._timeout_s = 0.01
+def test_a_note_that_never_ends_is_never_resubmitted_and_its_job_is_cancelled(monkeypatch, caplog):
+    # the live test (2026-11-01): fal kept the job past 10 minutes — the queue's state is logged, the job cancelled
+    caplog.set_level(logging.INFO)
+    waiting = [FakeResponse(200, {"status": "IN_QUEUE", "queue_position": 2})] * 3 \
+        + [FakeResponse(200, {"status": "IN_PROGRESS"})] * 500
+    note, posted, sinks = notes(monkeypatch, submitted(), *waiting)
+    note._timeout_s = 0.05
 
     async def slow(s):
-        await asyncio.sleep(0.005)
+        await asyncio.sleep(0.002)
     note._sleep = slow
+    queue = list(waiting)
+    monkeypatch.setattr(vd, "ClientSession", lambda **kw: FakeSession(
+        [submitted(), *queue] if not posted else [FakeResponse(202, {"status": "CANCELLATION_REQUESTED"})], posted))
     assert asyncio.run(note.make(b"F", "image/png", b"M")).why == "failed"
     assert [m for m, *_ in posted].count("POST") == 1 and sinks == [(NOTE_MODEL, None, False, None)]
+    assert posted[-1][:2] == ("PUT", CANCEL) and posted[-1][2]["Authorization"] == f"Key {KEY}"
+    assert "video: fal IN_QUEUE (queue 2)" in caplog.text and "video: fal IN_PROGRESS" in caplog.text
+    assert caplog.text.count("video: fal IN_QUEUE") == 1 and "fal job cancelled" in caplog.text
+    assert CANCEL not in caplog.text and STATUS not in caplog.text
+
+
+
+def test_the_frame_is_shrunk_to_a_small_square_jpeg_by_the_fixed_argv(monkeypatch):
+    # the owner, 2026-11-01: a кружечок needs no big picture — 640×640 to fal
+    seen = {}
+
+    async def fake_exec(*argv, **kw):
+        seen["argv"], seen["proc"] = argv, FakeProc(0, b"\xff\xd8small")
+        return seen["proc"]
+
+    monkeypatch.setattr(vd.asyncio, "create_subprocess_exec", fake_exec)
+    assert asyncio.run(shrink_frame(b"PNG-big")) == b"\xff\xd8small"
+    assert seen["argv"] == FFMPEG_FRAME and seen["proc"].input == b"PNG-big"
+    assert FFMPEG_FRAME[FFMPEG_FRAME.index("-vf") + 1] == vd.NOTE_FILTER and "mjpeg" in FFMPEG_FRAME

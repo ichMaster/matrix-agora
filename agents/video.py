@@ -86,6 +86,9 @@ def video_skill(kinds: tuple[str, ...]) -> str:
 FFMPEG_MP3 = ("ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le", "-ar", str(RATE), "-ac", "1",
               "-i", "pipe:0", "-c:a", "libmp3lame", "-b:a", "96k", "-f", "mp3", "pipe:1")
 NOTE_FILTER = f"crop='min(iw,ih)':'min(iw,ih)',scale={NOTE_SIDE}:{NOTE_SIDE},setsar=1"
+# the owner, 2026-11-01: a round video message needs no big picture — her frame goes to fal at 640×640, a small JPEG
+FFMPEG_FRAME = ("ffmpeg", "-hide_banner", "-loglevel", "error", "-i", "pipe:0", "-vf", NOTE_FILTER, "-frames:v", "1",
+                "-q:v", "3", "-c:v", "mjpeg", "-f", "image2", "pipe:1")
 
 
 def ffmpeg_square(src: str, voice: str, dst: str) -> tuple[str, ...]:
@@ -270,6 +273,8 @@ class NoteMaker:
                 return await asyncio.wait_for(self._run(body, submitted), self._timeout_s)
             except (_Retry, TimeoutError, aiohttp.ClientConnectionError) as exc:
                 self._report(None, False)
+                if submitted and isinstance(exc, TimeoutError):  # the live test: a job still queued is never paid for
+                    await self._cancel(submitted[0])
                 if attempt == 1 and not submitted:
                     log.info("video: %s — once more", type(exc).__name__)
                     continue
@@ -321,16 +326,33 @@ class NoteMaker:
                 raise RuntimeError(f"HTTP {resp.status}")
             return await resp.read()
 
+    async def _cancel(self, cancel_url: str | None) -> None:
+        """A job that ran out of time is cancelled, so fal never bills one still in its queue (one that already runs
+        cannot be); best effort, by outcome only."""
+        if not cancel_url:
+            return
+        try:
+            async with ClientSession() as session:
+                await asyncio.wait_for(self._queue(session, "PUT", cancel_url), 15)
+            log.info("video: fal job cancelled")
+        except Exception as exc:  # noqa: BLE001 — already running or done: nothing to undo
+            log.info("video: fal job not cancelled (%s)", type(exc).__name__)
+
     async def _run(self, body: dict, submitted: list) -> Video:
         async with ClientSession() as session:
             sent = await self._queue(session, "POST", f"{QUEUE_URL}/{self.model}", json=body)
             status_url, response_url = sent.get("status_url"), sent.get("response_url")
             if not status_url or not response_url:
                 raise RuntimeError("no request")
-            submitted.append(True)
+            submitted.append(sent.get("cancel_url"))
+            seen = None
             while True:
                 status = await self._again(lambda: self._queue(session, "GET", status_url))
-                if status.get("status") not in FAL_WORKING:
+                state, place = status.get("status"), status.get("queue_position")
+                if (state, place) != seen:  # the live test: where the minutes go — fal's state, never a URL
+                    seen = (state, place)
+                    log.info("video: fal %s%s", state, f" (queue {place})" if isinstance(place, int) else "")
+                if state not in FAL_WORKING:
                     break
                 await self._sleep(self._poll_s)
             result = await self._again(lambda: self._queue(session, "GET", response_url))
@@ -364,6 +386,13 @@ async def _ffmpeg(argv: tuple[str, ...], data: bytes | None, timeout_s: float, w
         log.error("%s failed: ffmpeg exit %s", what, proc.returncode)
         return None
     return out if out is not None else b""
+
+
+async def shrink_frame(image: bytes, timeout_s: float = 30.0) -> bytes | None:
+    """Her кружечок's frame as a 640×640 JPEG for fal (the owner: a кружечок needs no big picture), through ffmpeg's
+    fixed argv; None on any failure (logged by its code) — the caller then sends the frame as made."""
+    out = await _ffmpeg(FFMPEG_FRAME, image, timeout_s, "frame")
+    return out or None
 
 
 async def pcm_to_mp3(pcm: bytes, timeout_s: float = 60.0) -> bytes | None:
