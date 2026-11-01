@@ -218,6 +218,7 @@ class Row:
     characters: int = 0     # v5.1: text-to-speech characters (ElevenLabs)
     blocked: int = 0        # v5.13: calls Gemini's safety filter blocked
     video_ms: int = 0       # v5.18: the videos' length (fal's кружечки)
+    audio_ms: int = 0       # v5.19: the audio heard (Deepgram), for the analytics
     by_model: dict[str, list[int]] = field(default_factory=dict)  # v5.1: the `api` tokens per model, for its price
     ms_by_model: dict[str, int] = field(default_factory=dict)     # v5.18: the `api` video ms per model, for its price
 
@@ -234,6 +235,7 @@ class Row:
         self.characters += other.characters
         self.blocked += other.blocked
         self.video_ms += other.video_ms
+        self.audio_ms += other.audio_ms
         for model, ms in other.ms_by_model.items():
             self.ms_by_model[model] = self.ms_by_model.get(model, 0) + ms
         for model, (p, o) in other.by_model.items():
@@ -254,31 +256,40 @@ def aggregate(records: list[dict], since: date | None = None,
         day = str(r["ts"])[:10]
         if (since and date.fromisoformat(day) < since) or (until and date.fromisoformat(day) > until):
             continue
-        engine, billing = str(r.get("engine", "gemini")), str(r.get("billing", "api"))  # a v1 line is Gemini's
         kind = str(r.get("kind", "?"))
-        if engine == "novelai":  # v5.14: her backup's answers are a row of their own, named by the model
+        if _engine(r) == "novelai":  # v5.14: her backup's answers are a row of their own, named by the model
             kind = f"{kind} ({r.get('model') or 'backup'})"
-        row = rows[(day, str(r.get("agent", "?")), kind)]
-        row.engine, row.billing = _merge(row.engine, engine), _merge(row.billing, billing)
-        row.calls += 1
-        row.failed += 0 if r.get("ok") else 1
-        row.prompt += r.get("prompt_tokens") or 0
-        row.output += r.get("output_tokens") or 0
-        row.total += r.get("total_tokens") or 0
-        row.characters += r.get("characters") or 0
-        row.blocked += 1 if r.get("blocked") else 0  # v5.13
-        row.video_ms += r.get("video_ms") or 0       # v5.18
-        if billing == "api" and r.get("video_ms"):
-            model = str(r.get("model", ""))
-            row.ms_by_model[model] = row.ms_by_model.get(model, 0) + r["video_ms"]
-        if billing == "api":
-            p, o = r.get("prompt_tokens") or 0, r.get("output_tokens") or 0
-            row.priced_prompt += p
-            row.priced_output += o
-            mine = row.by_model.setdefault(str(r.get("model", "")), [0, 0])
-            mine[0] += p
-            mine[1] += o
+        _add_line(rows[(day, str(r.get("agent", "?")), kind)], r)
     return dict(sorted(rows.items()))
+
+
+def _engine(r: dict) -> str:
+    return str(r.get("engine", "gemini"))  # a v1 line is Gemini's
+
+
+def _add_line(row: Row, r: dict) -> None:
+    """One usage line into a row: its counts, and its `api` tokens and video ms by model, for the price."""
+    billing = str(r.get("billing", "api"))
+    row.engine, row.billing = _merge(row.engine, _engine(r)), _merge(row.billing, billing)
+    row.calls += 1
+    row.failed += 0 if r.get("ok") else 1
+    row.prompt += r.get("prompt_tokens") or 0
+    row.output += r.get("output_tokens") or 0
+    row.total += r.get("total_tokens") or 0
+    row.characters += r.get("characters") or 0
+    row.blocked += 1 if r.get("blocked") else 0  # v5.13
+    row.video_ms += r.get("video_ms") or 0       # v5.18
+    row.audio_ms += r.get("audio_ms") or 0       # v5.19
+    if billing == "api" and r.get("video_ms"):
+        model = str(r.get("model", ""))
+        row.ms_by_model[model] = row.ms_by_model.get(model, 0) + r["video_ms"]
+    if billing == "api":
+        p, o = r.get("prompt_tokens") or 0, r.get("output_tokens") or 0
+        row.priced_prompt += p
+        row.priced_output += o
+        mine = row.by_model.setdefault(str(r.get("model", "")), [0, 0])
+        mine[0] += p
+        mine[1] += o
 
 
 Prices = dict[str, tuple[float, float]]
@@ -564,3 +575,191 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
         out += [table(head, [stats_row(a, r) for a, r in rollup(t_rows, 1).items()]
                       + [stats_row("**all**", _total(t_rows))], markdown=True), "", f"Calls by kind: {kinds}."]
     return "\n".join(out) + "\n"
+
+
+# --- the analytics (v5.19): one period and one agent (or all), by service, model, kind, day and agent ---
+@dataclass(frozen=True)
+class PriceBook:
+    """Every price the analytics knows: the default pair, `PRICE_MODELS`, `PRICE_SECONDS` and, v5.19,
+    `PRICE_SUBSCRIPTIONS` (a service's monthly fee)."""
+    price_in: float | None = None
+    price_out: float | None = None
+    models: Prices = field(default_factory=dict)
+    seconds: SecondPrices = field(default_factory=dict)
+    subscriptions: dict[str, float] = field(default_factory=dict)
+
+    @property
+    def priced(self) -> bool:
+        return self.price_in is not None and self.price_out is not None or bool(self.models) or bool(self.seconds)
+
+
+def parse_subscription_prices(spec: str | None) -> tuple[dict[str, float], list[str]]:
+    """v5.19 — `PRICE_SUBSCRIPTIONS`: comma-separated `service=usd_per_month`, keyed by the usage line's `engine`
+    (`elevenlabs=99,novelai=25`); the same `name=usd` shape as `PRICE_SECONDS`. Returns the prices and the malformed
+    entries (to warn about, never fatal)."""
+    return parse_second_prices(spec)
+
+
+Atom = tuple[str, str, str, str, str]  # (day, agent, service, model, kind): one model, so one exact price
+
+
+def _atoms(records: list[dict], since: date, until: date) -> dict[Atom, Row]:
+    atoms: dict[Atom, Row] = defaultdict(Row)
+    for r in records:
+        day = str(r["ts"])[:10]
+        if not since.isoformat() <= day <= until.isoformat():
+            continue
+        _add_line(atoms[(day, str(r.get("agent", "?")), _engine(r), str(r.get("model") or "?"),
+                         str(r.get("kind", "?")))], r)
+    return atoms
+
+
+def _atom_cost(row: Row, prices: PriceBook) -> float | None:
+    """One atom's cost: a subscription's is None, never $0 (v4.4); an `api` atom with nothing billable (a failed
+    call without counts) is $0; an `api` model with no price is None — named in `unpriced`."""
+    if row.billing == "api" and not (row.priced_prompt or row.priced_output or row.ms_by_model):
+        return 0.0
+    return cost(row, prices.price_in, prices.price_out, prices.models, prices.seconds)
+
+
+@dataclass
+class _Sum:
+    """A sum of atoms: their counts, the cost of the priced ones, and whether an unpriced `api` atom is in it."""
+    row: Row = field(default_factory=Row)
+    cost: float = 0.0
+    priced: bool = False
+    complete: bool = True
+
+    def add(self, row: Row, c: float | None) -> None:
+        self.row.add(row)
+        if c is not None:
+            self.cost, self.priced = self.cost + c, True
+        elif row.billing != "subscription":
+            self.complete = False
+
+    def totals(self) -> dict:
+        r = self.row
+        return {"calls": r.calls, "failed": r.failed, "blocked": r.blocked, "input": r.prompt, "output": r.output,
+                "tokens": r.total, "characters": r.characters, "audio_s": round(r.audio_ms / 1000, 1),
+                "video_s": round(r.video_ms / 1000, 1), "billing": r.billing or "api",
+                "cost": round(self.cost, 6) if self.priced else None, "complete": self.complete}
+
+    def brief(self) -> dict:
+        return {"cost": round(self.cost, 6) if self.priced else None, "calls": self.row.calls,
+                "tokens": self.row.total}
+
+
+def _group(atoms: dict[Atom, Row], costs: dict[Atom, float | None], key) -> dict:
+    out: dict = defaultdict(_Sum)
+    for atom, row in atoms.items():
+        out[key(atom)].add(row, costs[atom])
+    return out
+
+
+def _days(since: date, until: date) -> list[str]:
+    return [(since + timedelta(days=i)).isoformat() for i in range((until - since).days + 1)]
+
+
+def _rank(item: tuple) -> tuple:
+    s = item[1]
+    return (-(s.cost if s.priced else -1.0), -s.row.calls, item[0])
+
+
+def trend(daily: list[float]) -> dict:
+    """The daily cost's least-squares slope (as $ a week) and its direction: flat under 5 % of the mean a day, or
+    with fewer than 3 days that cost anything (pure)."""
+    n = len(daily)
+    if n < 2:
+        return {"slope_per_week": 0.0, "direction": "flat"}
+    mean_x, mean_y = (n - 1) / 2, sum(daily) / n
+    sxx = sum((x - mean_x) ** 2 for x in range(n))
+    slope = sum((x - mean_x) * (y - mean_y) for x, y in enumerate(daily)) / sxx
+    flat = sum(1 for y in daily if y > 0) < 3 or not mean_y or abs(slope) < 0.05 * mean_y
+    return {"slope_per_week": round(slope * 7, 6),
+            "direction": "flat" if flat else "rising" if slope > 0 else "falling"}
+
+
+def analyze(records: list[dict], since: date, until: date, agent: str | None = None,
+            prices: PriceBook | None = None) -> dict:
+    """v5.19 — the analytics for [since, until] (local days, inclusive) and one agent, or all (None): the totals and
+    the previous period's of the same length, by service (`engine`) and its models, by kind, day by day (the cost by
+    service, its 7-day moving average and running total) with the trend, by agent, the subscriptions' fees prorated
+    by day, the unpriced models and the atomic rows. Pure, over plain data; the days are given, no clock inside."""
+    prices = prices or PriceBook()
+    n = (until - since).days + 1
+    p_until, p_since = since - timedelta(days=1), since - timedelta(days=n)
+    lines = [r for r in records if agent is None or r.get("agent") == agent]
+    first_line = min((str(r["ts"])[:10] for r in lines), default=None)
+    window = _atoms(lines, min(p_since, since - timedelta(days=6)), until)
+    costs = {a: _atom_cost(row, prices) for a, row in window.items()}
+    days, p_days = _days(since, until), _days(p_since, p_until)
+    now = {a: r for a, r in window.items() if since.isoformat() <= a[0]}
+    before = {a: r for a, r in window.items() if p_since.isoformat() <= a[0] <= p_until.isoformat()}
+
+    total, prev = _group(now, costs, lambda a: "")[""], _group(before, costs, lambda a: "")[""]
+    by_day_cost = {d: s.cost for d, s in _group(window, costs, lambda a: a[0]).items()}
+    prev_by = {name: _group(before, costs, key) for name, key in
+               (("service", lambda a: a[2]), ("kind", lambda a: a[4]), ("agent", lambda a: a[1]))}
+
+    services = []
+    for svc, s in sorted(_group(now, costs, lambda a: a[2]).items(), key=_rank):
+        mine = {a: r for a, r in now.items() if a[2] == svc}
+        per_day = {d: (x.cost, x.row.calls) for d, x in _group(mine, costs, lambda a: a[0]).items()}
+        models = [{"model": m, **x.totals(), "previous": _group({a: r for a, r in before.items() if a[2] == svc
+                                                                  and a[3] == m}, costs, lambda a: "")[""].brief()}
+                  for m, x in sorted(_group(mine, costs, lambda a: a[3]).items(), key=_rank)]
+        services.append({"service": svc, **s.totals(), "previous": prev_by["service"][svc].brief(),
+                         "series": {"cost": [round(per_day.get(d, (0.0, 0))[0], 6) for d in days],
+                                    "calls": [per_day.get(d, (0.0, 0))[1] for d in days]},
+                         "models": models})
+
+    t_cost = total.cost if total.priced else None
+    kinds = [{"kind": k, **s.totals(), "previous": prev_by["kind"][k].brief(),
+              "share": round(s.cost / t_cost, 4) if s.priced and t_cost else None}
+             for k, s in sorted(_group(now, costs, lambda a: a[4]).items(), key=_rank)]
+
+    day_groups = {name: _group(now, costs, key) for name, key in
+                  (("day", lambda a: a[0]), ("svc", lambda a: (a[0], a[2])))}
+    day_series, running = [], 0.0
+    for i, d in enumerate(days):
+        s = day_groups["day"][d]
+        running += s.cost
+        start = max(since - timedelta(days=6) + timedelta(days=i), date.fromisoformat(first_line or d))
+        window_days = _days(start, date.fromisoformat(d))
+        avg = sum(by_day_cost.get(w, 0.0) for w in window_days) / max(1, len(window_days))
+        mine = {svc: x for (day, svc), x in day_groups["svc"].items() if day == d}
+        day_series.append({"day": d, "cost": round(s.cost, 6), "calls": s.row.calls, "tokens": s.row.total,
+                           "cost_by_service": {svc: round(x.cost, 6) for svc, x in mine.items() if x.priced},
+                           "calls_by_service": {svc: x.row.calls for svc, x in mine.items()},
+                           "tokens_by_service": {svc: x.row.total for svc, x in mine.items()},
+                           "cost_avg7": round(avg, 6), "cost_cumulative": round(running, 6)})
+    p_running, previous_cumulative = 0.0, []
+    for d in p_days:
+        p_running += by_day_cost.get(d, 0.0)
+        previous_cumulative.append(round(p_running, 6))
+
+    agents = [] if agent is not None else [
+        {"agent": a, **s.totals(), "previous": prev_by["agent"][a].brief(),
+         "services": [svc for svc, _ in sorted(_group({k: r for k, r in now.items() if k[1] == a}, costs,
+                                                      lambda x: x[2]).items(), key=_rank)]}
+        for a, s in sorted(_group(now, costs, lambda a: a[1]).items(), key=_rank)]
+    subscriptions = [] if agent is not None else [
+        {"service": svc, "monthly": fee,
+         "period_cost": round(sum(fee / calendar.monthrange(int(d[:4]), int(d[5:7]))[1] for d in days), 6)}
+        for svc, fee in sorted(prices.subscriptions.items())]
+
+    per_day = t_cost / n if t_cost is not None else None
+    return {
+        "since": since.isoformat(), "until": until.isoformat(), "days": n, "agent": agent,
+        "total": {**total.totals(), "cost_per_day": round(per_day, 6) if per_day is not None else None},
+        "previous": {"since": p_since.isoformat(), "until": p_until.isoformat(), **prev.totals()},
+        "services": services, "kinds": kinds, "day_series": day_series,
+        "previous_cumulative": previous_cumulative,
+        "trend": {**trend([x["cost"] for x in day_series]),
+                  "month_at_rate": round(per_day * 30, 6) if per_day is not None else None},
+        "agents": agents, "subscriptions": subscriptions,
+        "unpriced": sorted({a[3] for a, r in now.items() if costs[a] is None and r.billing != "subscription"}),
+        "rows": [{"day": a[0], "agent": a[1], "service": a[2], "model": a[3], "kind": a[4], **{
+            k: v for k, v in _Sum(r, costs[a] or 0.0, costs[a] is not None).totals().items() if k != "complete"}}
+                 for a, r in sorted(now.items())],
+    }
