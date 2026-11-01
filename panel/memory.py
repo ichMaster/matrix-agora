@@ -20,7 +20,15 @@ from zoneinfo import ZoneInfo
 from agents.emotion import TAG_MODELS
 from agents.emotion import TAG_RE as VOICE_TAG_RE
 from agents.facts import load_facts
-from agents.usage import Row, aggregate, cost, month_chars, parse_lines, parse_model_prices
+from agents.usage import (
+    Row,
+    aggregate,
+    cost,
+    month_chars,
+    parse_lines,
+    parse_model_prices,
+    parse_second_prices,
+)
 
 DAYS_SHOWN = 60
 log = logging.getLogger("panel.memory")
@@ -386,20 +394,25 @@ def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None
     for entry in sorted(set(bad_prices) - _WARNED):  # review #12: named once per entry — a price spec, never a secret
         log.warning("PRICE_MODELS entry %r is not model=in/out — ignored", entry)
         _WARNED.add(entry)
-    priced = p_in is not None and p_out is not None or bool(models)
+    seconds, bad_seconds = parse_second_prices(os.environ.get("PRICE_SECONDS"))  # v5.18: her кружечки, per second
+    for entry in sorted(set(bad_seconds) - _WARNED):
+        log.warning("PRICE_SECONDS entry %r is not model=usd — ignored", entry)
+        _WARNED.add(entry)
+    priced = p_in is not None and p_out is not None or bool(models) or bool(seconds)
 
     def money(r):  # v4.4: only `api` tokens are priced; a subscription row has no cost, never $0
-        c = cost(r, p_in, p_out, models) if priced else None
+        c = cost(r, p_in, p_out, models, seconds) if priced else None
         return round(c, 6) if c is not None else None
 
     out_rows, per_agent, per_day, agent_rows = [], {}, {}, {}
     total_row = Row()
-    total = {"calls": 0, "failed": 0, "input": 0, "output": 0, "total": 0, "characters": 0, "blocked": 0}
+    total = {"calls": 0, "failed": 0, "input": 0, "output": 0, "total": 0, "characters": 0, "blocked": 0,
+             "video_ms": 0}
     for (day, ag, kind), r in rows.items():
         out_rows.append({"day": day, "agent": ag, "kind": kind, "calls": r.calls, "failed": r.failed,
                          "input": r.prompt, "output": r.output, "total": r.total, "cost": money(r),
                          "engine": r.engine or "gemini", "billing": r.billing or "api", "characters": r.characters,
-                         "blocked": r.blocked})
+                         "blocked": r.blocked, "video_ms": r.video_ms})
         agent_rows.setdefault(ag, Row()).add(r)
         total_row.add(r)
         for acc in (per_agent.setdefault(ag, dict.fromkeys(total, 0)), total):
@@ -410,6 +423,7 @@ def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None
             acc["total"] += r.total
             acc["characters"] += r.characters  # v5.1: text to speech
             acc["blocked"] += r.blocked  # v5.13: Gemini's safety blocks
+            acc["video_ms"] += r.video_ms  # v5.18: her кружечки
         per_day.setdefault(day, {}).setdefault(ag, 0)
         per_day[day][ag] += r.total
 

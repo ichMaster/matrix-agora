@@ -199,3 +199,36 @@ def test_with_only_a_models_pair_the_report_never_prints_a_made_up_zero():
     assert "$0.0000" not in md and "projected month —" in md and ", cost —." in md
     hermes_only = daily_report(hermes_lines(), datetime(2026, 10, 3, 7, 0, tzinfo=KYIV), None, None, models)
     assert "| hermes | 2 | 0 | 10,000 | 2,000 | 12,000 | 1,200 | 0.0440 |" in hermes_only  # his own rows priced
+
+
+FAL = "fal-ai/kling-video/ai-avatar/v2/standard"
+
+
+def kira_video_lines():
+    from agents.usage import video_note_usage_line
+    return [video_note_usage_line("2026-10-02T18:00:00+03:00", "kira", FAL, 10000, True),
+            video_note_usage_line("2026-10-02T18:30:00+03:00", "kira", FAL, None, False, "answer")]
+
+
+def test_the_daily_report_prices_a_kruzhechok_per_second_and_shows_the_seconds():
+    """v5.18: her кружечок is a `video_note` row — its seconds in a `video s` column, priced by PRICE_SECONDS."""
+    from datetime import datetime
+    md = daily_report(kira_video_lines(), datetime(2026, 10, 3, 7, 0, tzinfo=KYIV), None, None, {}, {FAL: 0.0562})
+    assert f"{FAL} $0.0562 per second" in md
+    y = md.split("## Yesterday — 2026-10-02")[1].split("## Last 7 days")[0]
+    assert "| **all** | 2 | 1 | 0 | 0 | 0 | 10 | 0.5620 |" in y
+    assert "| video s |" in y.split("### By agent × kind")[1]
+    unpriced = daily_report(kira_video_lines(), datetime(2026, 10, 3, 7, 0, tzinfo=KYIV), 0.3, 2.5, {})
+    assert "| **all** | 2 | 1 | 0 | 0 | 0 | 10 | — |" in unpriced                    # no price per second: «—»
+
+
+def test_the_report_command_reads_price_seconds_and_warns_on_a_bad_entry(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(usage_report, "load_dotenv", lambda: None)
+    for name in ("PRICE_INPUT_PER_1M", "PRICE_OUTPUT_PER_1M", "PRICE_MODELS"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("PRICE_SECONDS", f"{FAL}=0.0562, broken")
+    (tmp_path / "kira.usage.jsonl").write_text("\n".join(json.dumps(x) for x in kira_video_lines()), encoding="utf-8")
+    usage_report.main(["--state-dir", str(tmp_path), "--since", "2026-10-01", "--markdown"])
+    out, err = capsys.readouterr()
+    assert "PRICE_SECONDS entry 'broken'" in err
+    assert "| 2026-10-02 | kira | video_note | 2 | 1 | 0 | 0 | 0 | 10 | api | 0.5620 |" in out

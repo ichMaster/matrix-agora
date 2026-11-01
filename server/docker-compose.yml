@@ -270,6 +270,7 @@ services:
       PRICE_INPUT_PER_1M: ${PRICE_INPUT_PER_1M:-}
       PRICE_OUTPUT_PER_1M: ${PRICE_OUTPUT_PER_1M:-}
       PRICE_MODELS: ${PRICE_MODELS:-}            # v5.1: a model's own price pair (Hermes's Pro calls)
+      PRICE_SECONDS: ${PRICE_SECONDS:-}          # v5.18: a model's price per second of video (her кружечки)
       TIMEZONE: ${TIMEZONE:-Europe/Kyiv}
       TZ: ${TIMEZONE:-Europe/Kyiv}
       STACK_DIR: ${STACK_DIR:-/home/ich/matrix-agora}   # v3.4: compose for a start lives at $STACK_DIR/server

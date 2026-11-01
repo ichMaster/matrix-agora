@@ -102,6 +102,7 @@ def test_the_panel_gets_only_its_own_settings_and_the_stack_at_its_host_path():
                               f"{stack}:{stack}:ro"]                       # same path inside: compose resolves host paths
     assert "env_file" not in svc  # never the agents' keys or passwords in its environment
     assert set(svc["environment"]) == {"PANEL_TOKEN", "PRICE_INPUT_PER_1M", "PRICE_OUTPUT_PER_1M", "PRICE_MODELS",
+                                       "PRICE_SECONDS",  # v5.18: her кружечки, per second
                                        "TIMEZONE", "TZ", "STACK_DIR", "COMPOSE_PROJECT"}  # v5.1: PRICE_MODELS
     assert svc["environment"]["COMPOSE_PROJECT"] == "server"
     assert not svc.get("privileged") and "cap_add" not in svc and "network_mode" not in svc
@@ -261,6 +262,17 @@ def test_hermes_settings_are_in_both_env_examples_with_the_schema_defaults():
 
 def test_the_panel_gets_the_model_prices():
     assert SERVICES["panel"]["environment"]["PRICE_MODELS"] == "${PRICE_MODELS:-}"
+    assert SERVICES["panel"]["environment"]["PRICE_SECONDS"] == "${PRICE_SECONDS:-}"  # v5.18
+
+
+def test_both_env_examples_price_her_kruzhechky_per_second():
+    """v5.18: Kling Avatar on fal bills per second of video — priced by PRICE_SECONDS, never by tokens."""
+    from agents.usage import parse_second_prices
+    for path in (ROOT / ".env.example", ROOT / "server" / ".env.example"):
+        values = dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines()
+                      if line and not line.startswith("#") and "=" in line)
+        assert parse_second_prices(values["PRICE_SECONDS"]) == ({"fal-ai/kling-video/ai-avatar/v2/standard": 0.0562,
+                                                                 "fal-ai/kling-video/ai-avatar/v2/pro": 0.115}, []), path
 
 
 

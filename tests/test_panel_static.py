@@ -346,3 +346,11 @@ def test_her_card_shows_her_route_only_with_the_backup():
     assert '(r.window_open ? ` · window until ${r.window_until.slice(11, 16)}` : " · window ended")' in fn
     # v5.15: the judge's lines today, only when it has rated any
     assert "` · judged ${fmtInt(r.judged.rated)} · flagged ${fmtInt(r.judged.flagged)}`" in fn and "${judged}" in fn
+
+
+def test_the_usage_table_shows_her_kruzhechoks_seconds():
+    """v5.18: a `video s` column when a row has `video_ms`, and both video kinds in their order."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert "const video = u.rows.some((r) => r.video_ms);" in js and '<th class="r">video s</th>' in js
+    order = js.split("const KIND_ORDER = [")[1].split("]")[0]
+    assert order.index('"photo"') < order.index('"video"') < order.index('"video_note"')

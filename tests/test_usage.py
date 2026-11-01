@@ -23,8 +23,10 @@ def test_usage_line_shape_and_no_text():
     assert set(line) == {"ts", "agent", "kind", "model", "prompt_tokens", "output_tokens", "total_tokens", "ok",
                          "engine", "billing", "cache_read_tokens", "cache_write_tokens", "reported_cost_usd",
                          "characters", "audio_ms",  # v2; v3 (v5.1) `characters`; v4 (v5.2) `audio_ms`
-                         "blocked"}  # v5 (v5.13): a safety block's stage
+                         "blocked",  # v5 (v5.13): a safety block's stage
+                         "video_ms"}  # v6 (v5.18): a video's length
     assert line["characters"] is None and line["audio_ms"] is None and line["blocked"] is None
+    assert line["video_ms"] is None
     assert (line["engine"], line["billing"]) == ("gemini", "api")
     assert (line["prompt_tokens"], line["output_tokens"], line["total_tokens"], line["ok"]) == (1200, 80, 1280, True)
     assert usage_line("2026-10-28T14:00:00", "kira", "private", "m", None, False, "prompt")["blocked"] == "prompt"
@@ -56,7 +58,8 @@ def test_kind_list_is_the_contract():
                      "reading", "thought", "reflection",   # v5.12: her reading and thoughts
                      "judge",                              # v5.15: the judge of her backup's talk
                      "probe",                              # v5.16: Gemini checks the parts of a blocked prompt
-                     "photo")                              # v5.17: her photos in Telegram
+                     "photo",                              # v5.17: her photos in Telegram
+                     "video", "video_note")                # v5.18: her clips and her кружечки
 
 
 def test_the_judges_line_is_priced_by_its_model_and_holds_no_text():
@@ -330,3 +333,68 @@ def test_the_stt_line_counts_the_audio_and_carries_no_text_and_no_price():
     assert (len(records), bad) == (1, 1)
     row = next(iter(aggregate(records).values()))
     assert cost(row, 0.3, 2.5) is None
+
+
+# --- v5.18: her videos ---
+def test_the_video_note_line_counts_seconds_and_carries_no_text():
+    """v5.18 (usage line v6): Kling Avatar on fal bills by the video's length — `video_ms`, `api`, no tokens."""
+    from agents.usage import (
+        fallback_usage_line,
+        judge_usage_line,
+        parse_lines,
+        sdk_usage_line,
+        stt_usage_line,
+        tts_usage_line,
+        video_note_usage_line,
+    )
+    line = video_note_usage_line("2026-11-01T18:00:00", "kira", "fal-ai/kling-video/ai-avatar/v2/standard", 12400,
+                                 True)
+    assert set(line) == set(usage_line("t", "a", "reply", "m", META, True))
+    assert (line["kind"], line["engine"], line["billing"], line["video_ms"]) == ("video_note", "fal", "api", 12400)
+    assert line["prompt_tokens"] is None and line["blocked"] is None
+    assert video_note_usage_line("t", "kira", "m", None, False, "answer")["blocked"] == "answer"
+    assert video_note_usage_line("t", "kira", "m", True, False)["video_ms"] is None
+    for other in (tts_usage_line("t", "a", "m", 3, True), stt_usage_line("t", "a", "m", 5, True),
+                  fallback_usage_line("t", "a", "private", "m", True), judge_usage_line("t", "a", "m", 1, 1, True),
+                  sdk_usage_line("t", "a", "reply", "m", None, True)):
+        assert other["video_ms"] is None
+    records, bad = parse_lines([json.dumps(line), json.dumps({**line, "video_ms": "long"}),
+                                json.dumps({k: v for k, v in line.items() if k != "video_ms"})])
+    assert len(records) == 2 and bad == 1                                            # an older line still parses
+
+
+@pytest.mark.parametrize("spec,prices,bad", [
+    ("fal-ai/kling-video/ai-avatar/v2/standard=0.0562", {"fal-ai/kling-video/ai-avatar/v2/standard": 0.0562}, []),
+    (" a=0.1 , b=0.2 ", {"a": 0.1, "b": 0.2}, []),
+    ("a=x,b=-1,=3,c=inf,d=0.5", {"d": 0.5}, ["a=x", "b=-1", "=3", "c=inf"]),
+    ("", {}, []),
+])
+def test_price_seconds_parsing(spec, prices, bad):
+    from agents.usage import parse_second_prices
+    assert parse_second_prices(spec) == (prices, bad)
+
+
+def test_a_video_note_is_priced_per_second_and_unpriced_is_none():
+    from agents.usage import aggregate, cost, render, video_note_usage_line
+    fal = "fal-ai/kling-video/ai-avatar/v2/standard"
+    recs = [video_note_usage_line("2026-11-01T18:00:00", "kira", fal, 10000, True),
+            video_note_usage_line("2026-11-01T18:10:00", "kira", fal, 5000, True),
+            video_note_usage_line("2026-11-01T18:20:00", "kira", fal, None, False),
+            usage_line("2026-11-01T18:00:00", "kira", "video", "gemini-omni-1.1-flash",
+                       SimpleNamespace(prompt_token_count=1_000_000, candidates_token_count=100_000,
+                                       total_token_count=1_100_000), True)]
+    rows = aggregate(recs)
+    note, clip = rows[("2026-11-01", "kira", "video_note")], rows[("2026-11-01", "kira", "video")]
+    assert (note.calls, note.failed, note.video_ms, note.ms_by_model) == (3, 1, 15000, {fal: 15000})
+    assert cost(note, None, None, {}, {fal: 0.0562}) == pytest.approx(15 * 0.0562)
+    assert cost(note, None, None, {}, {}) is None                                     # no price: «—», never $0
+    models = {"gemini-omni-1.1-flash": (1.5, 17.5)}
+    assert cost(clip, None, None, models, {fal: 0.0562}) == pytest.approx(1.5 + 1.75)
+    both = Row()
+    both.add(note)
+    both.add(clip)
+    assert cost(both, None, None, models, {fal: 0.0562}) == pytest.approx(15 * 0.0562 + 3.25)
+    assert cost(both, None, None, models, {}) is None
+    report = render(rows, None, None, models=models, seconds={fal: 0.0562})
+    assert "video s" in report and "0.8430" in report
+    assert "video s" not in render(aggregate(recs[3:]), None, None, models=models)

@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv
 
-from agents.usage import aggregate, daily_report, parse_lines, parse_model_prices, render
+from agents.usage import aggregate, daily_report, parse_lines, parse_model_prices, parse_second_prices, render
 
 
 def _price(name: str) -> float | None:
@@ -66,10 +66,13 @@ def main(argv: list[str] | None = None) -> int:
     models, bad_models = parse_model_prices(os.environ.get("PRICE_MODELS"))
     for entry in bad_models:
         print(f"warning: PRICE_MODELS entry {entry!r} is not model=in/out — ignored", file=sys.stderr)
+    seconds, bad_seconds = parse_second_prices(os.environ.get("PRICE_SECONDS"))  # v5.18: her кружечки, per second
+    for entry in bad_seconds:
+        print(f"warning: PRICE_SECONDS entry {entry!r} is not model=usd — ignored", file=sys.stderr)
     if args.write:
-        print(write_daily(Path(args.write), daily_report(records, now, *prices, models), now.date()))
+        print(write_daily(Path(args.write), daily_report(records, now, *prices, models, seconds), now.date()))
         return 0
-    print(render(aggregate(records, since), *prices, markdown=args.markdown, models=models))
+    print(render(aggregate(records, since), *prices, markdown=args.markdown, models=models, seconds=seconds))
     return 0
 
 

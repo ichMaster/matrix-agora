@@ -4,7 +4,7 @@
 "use strict";
 
 const POLL_MS = 10000;  // one tick for everything — the dashboard, an open log, an open agent's memory (owner)
-const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood", "sky", "digest_voice", "ask", "tts", "stt", "private", "private_nudge", "embed", "facts", "event", "reading", "thought", "reflection", "judge", "probe", "photo"];
+const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood", "sky", "digest_voice", "ask", "tts", "stt", "private", "private_nudge", "embed", "facts", "event", "reading", "thought", "reflection", "judge", "probe", "photo", "video", "video_note"];
 // review #11: a kind not listed above still shows, after the listed ones — a tab's rows always add up to its total
 function kindsOf(byKind) { return [...KIND_ORDER.filter((k) => byKind[k]), ...Object.keys(byKind).filter((k) => !KIND_ORDER.includes(k)).sort()]; }
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
@@ -463,20 +463,22 @@ function usageCardHtml() {
     KIND_ORDER.indexOf(x.kind) - KIND_ORDER.indexOf(y.kind));
   let prevDay = "";
   const chars = u.rows.some((r) => r.characters);  // v5.1: Hermes's voice is counted in characters
+  const video = u.rows.some((r) => r.video_ms);  // v5.18: her кружечки are counted in seconds
   const charCell = (n) => chars ? `<td class="r">${n ? fmtInt(n) : "—"}</td>` : "";
+  const secCell = (ms) => video ? `<td class="r">${ms ? fmtInt(Math.round(ms / 1000)) : "—"}</td>` : "";
   const body = sorted.map((r) => {
     const day = r.day === prevDay ? "" : r.day; prevDay = r.day;
     return `<tr><td class="day">${esc(day)}</td><td>${esc(r.agent)}</td><td class="kind">${esc(r.kind)}</td><td class="r">${fmtInt(r.calls)}</td>
-      <td class="r">${fmtInt(r.input)}</td><td class="r">${fmtInt(r.output)}</td>${charCell(r.characters)}<td class="muted">${esc(r.billing || "api")}</td>${u.priced ? `<td class="r">${r.cost == null ? "—" : r.cost.toFixed(4)}</td>` : ""}</tr>`;
+      <td class="r">${fmtInt(r.input)}</td><td class="r">${fmtInt(r.output)}</td>${charCell(r.characters)}${secCell(r.video_ms)}<td class="muted">${esc(r.billing || "api")}</td>${u.priced ? `<td class="r">${r.cost == null ? "—" : r.cost.toFixed(4)}</td>` : ""}</tr>`;
   }).join("");
   const foot = [...(filter === "all" ? names : [filter]).filter((n) => u.per_agent[n]).map((n) => [`total · ${n}`, u.per_agent[n], ""]), ["total", tot, "grand"]]
     .map(([lbl, t, cls]) => `<tr class="${cls}"><td colspan="3">${esc(lbl)}</td><td class="r">${fmtInt(t.calls)}</td><td class="r">${fmtInt(t.input)}</td>
-      <td class="r">${fmtInt(t.output)}</td>${charCell(t.characters)}<td class="muted">${esc(t.billing || "")}</td>${u.priced ? `<td class="r">${t.cost == null ? "—" : fmtUsd(t.cost)}</td>` : ""}</tr>`).join("");
+      <td class="r">${fmtInt(t.output)}</td>${charCell(t.characters)}${secCell(t.video_ms)}<td class="muted">${esc(t.billing || "")}</td>${u.priced ? `<td class="r">${t.cost == null ? "—" : fmtUsd(t.cost)}</td>` : ""}</tr>`).join("");
   return `<section class="card usage-card" id="usage-card">${headHtml}
     <div class="usage-sum"><div><div class="big-num">${fmtM(tot.total)} tokens</div>
       <div class="muted num" style="font-size:12px">${fmtInt(tot.calls)} calls · ${fmtInt(tot.input)} in · ${fmtInt(tot.output)} out${u.priced ? costSuffix(tot.cost) : ""}</div></div>
       <div style="display:flex;gap:14px;align-items:flex-end"><div>${bars}</div>${filter === "all" ? legend : ""}</div></div>
-    <div class="table-scroll"><table class="table"><thead><tr><th>day</th><th>agent</th><th>kind</th><th class="r">calls</th><th class="r">input</th><th class="r">output</th>${chars ? `<th class="r">chars</th>` : ""}<th>billing</th>${u.priced ? `<th class="r">cost $</th>` : ""}</tr></thead>
+    <div class="table-scroll"><table class="table"><thead><tr><th>day</th><th>agent</th><th>kind</th><th class="r">calls</th><th class="r">input</th><th class="r">output</th>${chars ? `<th class="r">chars</th>` : ""}${video ? `<th class="r">video s</th>` : ""}<th>billing</th>${u.priced ? `<th class="r">cost $</th>` : ""}</tr></thead>
       <tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
     ${u.priced ? (u.default_priced === false ? `<div class="muted" style="font-size:12px">Only some models have prices (PRICE_MODELS) — a cost that includes the others shows —.</div>` : "")
       : `<div class="muted" style="font-size:12px">Prices are not configured — cost is not calculated.</div>`}

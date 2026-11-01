@@ -483,3 +483,20 @@ def test_her_route_and_the_archives_marks_for_her_card(state, monkeypatch):
     old.close()
     assert archive_view(state, "ada") == {"lines": 0, "embedded": 0, "waiting": 0, "censored": 0}
     assert memory_view(state, "kira", TODAY, with_route=False)["route"] is None
+
+
+def test_the_usage_view_counts_a_kruzhechoks_seconds_and_prices_them_per_second(state, monkeypatch):
+    """v5.18: her кружечок's row carries `video_ms` (per row, per agent, in total), priced by PRICE_SECONDS."""
+    from agents.usage import video_note_usage_line
+    fal = "fal-ai/kling-video/ai-avatar/v2/standard"
+    (state / "kira.usage.jsonl").write_text(json.dumps(
+        video_note_usage_line("2026-10-04T18:00:00+03:00", "kira", fal, 20000, True)) + "\n", encoding="utf-8")
+    for name in ("PRICE_INPUT_PER_1M", "PRICE_OUTPUT_PER_1M", "PRICE_MODELS"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("PRICE_SECONDS", f"{fal}=0.0562")
+    u = usage_view(state, 3, TODAY, "kira")
+    [row] = u["rows"]
+    assert (row["kind"], row["video_ms"], row["cost"], row["engine"]) == ("video_note", 20000, 1.124, "fal")
+    assert u["priced"] is True and u["per_agent"]["kira"]["video_ms"] == 20000 and u["total"]["video_ms"] == 20000
+    monkeypatch.delenv("PRICE_SECONDS")
+    assert usage_view(state, 3, TODAY, "kira")["rows"][0]["cost"] is None
