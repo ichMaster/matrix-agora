@@ -680,11 +680,13 @@ def trend(daily: list[float]) -> dict:
 
 
 def analyze(records: list[dict], since: date, until: date, agent: str | None = None,
-            prices: PriceBook | None = None) -> dict:
+            prices: PriceBook | None = None, today: date | None = None) -> dict:
     """v5.19 — the analytics for [since, until] (local days, inclusive) and one agent, or all (None): the totals and
     the previous period's of the same length, by service (`engine`) and its models, by kind, day by day (the cost by
     service, its 7-day moving average and running total) with the trend, by agent, the subscriptions' fees prorated
-    by day, the unpriced models and the atomic rows. Pure, over plain data; the days are given, no clock inside."""
+    by day, the unpriced models and the atomic rows. Pure, over plain data; the days are given, no clock inside.
+    `today` (code review v5.19 #2): a day not over yet is left out of the cost a day, the month at this rate and the
+    trend, unless it is the period's only day; and those three start at the agent's first line, as the average does."""
     prices = prices or PriceBook()
     n = (until - since).days + 1
     p_until, p_since = since - timedelta(days=1), since - timedelta(days=n)
@@ -748,14 +750,16 @@ def analyze(records: list[dict], since: date, until: date, agent: str | None = N
          "period_cost": round(sum(fee / calendar.monthrange(int(d[:4]), int(d[5:7]))[1] for d in days), 6)}
         for svc, fee in sorted(prices.subscriptions.items())]
 
-    per_day = t_cost / n if t_cost is not None else None
+    done = [x for x in day_series if today is None or x["day"] < today.isoformat()] or day_series
+    lived = [x for x in done if first_line is None or x["day"] >= first_line] or done
+    per_day = sum(x["cost"] for x in lived) / len(lived) if t_cost is not None else None
     return {
         "since": since.isoformat(), "until": until.isoformat(), "days": n, "agent": agent,
         "total": {**total.totals(), "cost_per_day": round(per_day, 6) if per_day is not None else None},
         "previous": {"since": p_since.isoformat(), "until": p_until.isoformat(), **prev.totals()},
         "services": services, "kinds": kinds, "day_series": day_series,
         "previous_cumulative": previous_cumulative,
-        "trend": {**trend([x["cost"] for x in day_series]),
+        "trend": {**trend([x["cost"] for x in lived]),
                   "month_at_rate": round(per_day * 30, 6) if per_day is not None else None},
         "agents": agents, "subscriptions": subscriptions,
         "unpriced": sorted({a[3] for a, r in now.items() if costs[a] is None and r.billing != "subscription"}),

@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         if since > until:
             print("error: --since is after --until", file=sys.stderr)
             return 2
-        report = analyze(records, since, until, args.agent, PriceBook(*prices, models, seconds, fees))
+        report = analyze(records, since, until, args.agent, PriceBook(*prices, models, seconds, fees), now.date())
         print(render_analysis(report, args.by, markdown=args.markdown))
         return 0
     print(render(aggregate(records, since), *prices, markdown=args.markdown, models=models, seconds=seconds))

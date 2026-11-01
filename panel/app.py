@@ -273,7 +273,7 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
             first, last = analytics_period(since, until, ANALYTICS_DAYS_MAX)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
-        return analytics_view(state_dir, first, last, agent)
+        return analytics_view(state_dir, first, last, agent, local_today())  # review #2: today is not over
 
     @app.get("/api/agents/{name}/logs")
     def agent_logs(name: str, tail: int = 200) -> dict:

@@ -417,7 +417,8 @@ def analytics_period(since: str, until: str, max_days: int) -> tuple[date, date]
     return first, last
 
 
-def analytics_view(state_dir: Path, since: date, until: date, agent: str | None = None) -> dict:
+def analytics_view(state_dir: Path, since: date, until: date, agent: str | None = None,
+                   today: date | None = None) -> dict:
     """v5.19 — the Analytics view: the usage files read once, the prices from the environment, and `analyze()`'s
     report for the period and the agent (or all); an unreadable `state/` is unavailable, never a 500."""
     if not readable(state_dir):
@@ -425,7 +426,7 @@ def analytics_view(state_dir: Path, since: date, until: date, agent: str | None 
     records, bad = _all_usage_records(state_dir)
     prices = _price_book()
     return {"available": True, "priced": prices.priced, "corrupt_lines": bad,
-            **analyze(records, since, until, agent, prices)}
+            **analyze(records, since, until, agent, prices, today)}
 
 
 def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None) -> dict:

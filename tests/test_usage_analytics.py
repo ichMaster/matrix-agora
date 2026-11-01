@@ -178,3 +178,19 @@ def test_subscription_prices_parse_like_the_per_second_ones():
     assert parse_subscription_prices("elevenlabs=lots,=5,deepgram=-1") == ({}, ["elevenlabs=lots", "=5",
                                                                                "deepgram=-1"])
     assert parse_subscription_prices(None) == ({}, [])
+
+
+def test_today_unfinished_and_the_days_before_the_first_line_leave_the_rate_and_the_trend():
+    """Code review v5.19 #2: a flat $1 a day read «falling» every morning (today's $0.30 so far counted as a day),
+    and an agent five days old always read «rising» (the zeros before its first line in the slope)."""
+    steady = [gem(f"2026-11-0{d}", p=500_000, o=0) for d in range(1, 8)]          # Pro, $1 a day
+    so_far = [gem("2026-11-08", p=150_000, o=0)]                                   # $0.30 so far today
+    r = analyze(steady + so_far, date(2026, 11, 2), date(2026, 11, 8), "kira", PRICES, today=date(2026, 11, 8))
+    assert r["total"]["cost_per_day"] == pytest.approx(1.0) and r["trend"]["direction"] == "flat"
+    assert r["trend"]["month_at_rate"] == pytest.approx(30.0) and r["total"]["cost"] == pytest.approx(6.3)
+    assert analyze(steady + so_far, date(2026, 11, 2), date(2026, 11, 8), "kira", PRICES)["trend"]["direction"] == (
+        "falling")                                                                 # without today: as before
+    young = analyze(steady, date(2026, 10, 9), date(2026, 11, 7), "kira", PRICES, today=date(2026, 11, 8))
+    assert young["trend"]["direction"] == "flat" and young["total"]["cost_per_day"] == pytest.approx(1.0)
+    only = analyze(so_far, date(2026, 11, 8), date(2026, 11, 8), "kira", PRICES, today=date(2026, 11, 8))
+    assert only["total"]["cost_per_day"] == pytest.approx(0.3)                     # the only day stays
