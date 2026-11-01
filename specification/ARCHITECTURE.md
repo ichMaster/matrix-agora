@@ -162,8 +162,10 @@ The invariants every reply path must honor:
    (`no voice|too long`); for a clip her voice note and text as before. Then, in the background, one at a time
    («записує відеоповідомлення» / «надсилає відео» kept up): the first frame is her photo (`PhotoMaker`, 1:1 a
    front-camera selfie for a кружечок, 9:16 a faceless shot for a clip, `FRAME_LINES`); a кружечок goes through
-   `pcm_to_mp3`, Kling AI Avatar v2 on fal (`NoteMaker`, `VIDEO_NOTE_MODEL`, the queue API polled; the key sent to fal's
-   queue only) and `square_note` (ffmpeg: 640×640, at most 60 s, her own mp3 as its sound — review #3) to
+   `pcm_to_mp3`, VEED Fabric 1.0 on fal (`NoteMaker`, `VIDEO_NOTE_MODEL`; the live test, 2026-11-01: Kling AI Avatar v2
+   took ~10 minutes and stays a choice; the frame and the mp3 put on fal's storage first, by signed URLs, since Fabric
+   takes no data URI; the queue API polled; the key sent to fal's queue and upload hosts only; a video fal names no
+   length of is as long as her voice) and `square_note` (ffmpeg: 640×640, at most 60 s, her own mp3 as its sound — review #3) to
    `send_video_note`; a clip through Omni Flash
    (`ClipMaker`, `VIDEO_MODEL`, `client.aio.interactions` in the background, polled; `VIDEO_RESOLUTION`, 9:16) to
    `send_video`. Each maker retries only its submission once; a job once accepted is polled again through a server error,
@@ -595,7 +597,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `NOVELAI_API_TOKEN` | v5.14 | Кіра's `server/kira.env` only: the NovelAI account's persistent API token for her backup (`agents/fallback.py`); taken out of every agent's environment at start, never in a prompt, a log or the panel; with `FALLBACK_MODEL` set and no token the backup is off, said once |
 | `CLASSIFIER_MODEL`, `CLASSIFIER_TIMEOUT_S` | v5.15 | read only by a person with `fallback` (agent settings, «Резерв»): the judge of the backup's talk on OpenRouter (`google/gemma-4-31b-it`; `openai/gpt-oss-safeguard-20b` or `openai/gpt-oss-120b` as fallbacks, by the setting only) and how long a call may take (30 s) |
 | `PROBE_CALLS`, `PROBE_DAY_CALLS` | v5.16 | read only by a person with `fallback` (agent settings, «Резерв»): how many times Gemini may be asked about a blocked prompt's parts after one prompt-stage block (12) and in her day (60, counted in her route file); 0 for either turns the probe off, and then the judge rates the blocked prompt's older lines as in v5.15 |
-| `VIDEO_MODEL`, `VIDEO_RESOLUTION`, `VIDEO_NOTE_MODEL`, `VIDEO_NOTE_MAX_S`, `VIDEO_DAY_MAX` | v5.18 | read only by a person with `videos` (agent settings, «Особистий чат»): her clips' model (`gemini-omni-1.1-flash`) and size (`720p`; `1080p`), her кружечок's model on fal (`fal-ai/kling-video/ai-avatar/v2/standard`; `…/pro`) and its longest voice (30 s; 5–60), and a day's cap for both together (4; 0 turns them off — a video costs about a dollar) |
+| `VIDEO_MODEL`, `VIDEO_RESOLUTION`, `VIDEO_NOTE_MODEL`, `VIDEO_NOTE_MAX_S`, `VIDEO_DAY_MAX` | v5.18 | read only by a person with `videos` (agent settings, «Особистий чат»): her clips' model (`gemini-omni-1.1-flash`) and size (`720p`; `1080p`), her кружечок's model on fal (`veed/fabric-1.0`; `fal-ai/kling-video/ai-avatar/v2/standard`, `…/pro`) and its longest voice (30 s; 5–60), and a day's cap for both together (4; 0 turns them off — a video costs about a dollar) |
 | `PHOTO_MODEL`, `PHOTO_SIZE`, `PHOTO_DAY_MAX` | v5.17 | read only by a person with `photos` (agent settings, «Особистий чат»): Google's image model for her photos (`gemini-nano-banana-2.1`; or `gemini-3-pro-image`, `gemini-3.1-flash-image`), their size (`1K`; `2K`) and a day's cap that only guards against a fault (40; 0 turns the photos off) |
 | `OPENROUTER_API_KEY` | v5.15 | Кіра's `server/kira.env` only: the OpenRouter key of the judge (`agents/judge.py`); taken out of every agent's environment at start, never in a prompt, a log or the panel; with the backup on and no key the judge is off, said once, and the backup's talk waits as in v5.14 |
 | `PRIVATE_FIRST_DOOR` | v5.8.2 | read only by a person with `private` (an agent setting): where she writes first — `last` (the door he used last; the default), `telegram` or `matrix`; a closed door falls back to the other. Кіра's `kira.env`: `telegram` (the owner, 2026-10-25) |
@@ -612,7 +614,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `PLAN_MAX_WORDS`, `TODAY_MAX_WORDS`, `PLAN_MUTATION_RATE` | v2.2 | plans, the today block, plan deviation from the life story (120 / 100 / 0.3) |
 | `PRICE_INPUT_PER_1M`, `PRICE_OUTPUT_PER_1M` | v3.1 | token prices for the cost column |
 | `PRICE_MODELS` | v5.1 | a model's own price pair, `model=in/out` comma-separated (USD per 1M tokens; `gemini-3.1-pro-preview=2/12`); other models use `PRICE_*`; a malformed entry is ignored with a warning |
-| `PRICE_SECONDS` | v5.18 | a model's price per second of video, `model=usd` comma-separated (`fal-ai/kling-video/ai-avatar/v2/standard=0.0562,fal-ai/kling-video/ai-avatar/v2/pro=0.115`): her кружечки on fal; read by the report and the panel (compose passes it to the panel); a malformed entry is ignored with a warning |
+| `PRICE_SECONDS` | v5.18 | a model's price per second of video, `model=usd` comma-separated (`veed/fabric-1.0=0.08,fal-ai/kling-video/ai-avatar/v2/standard=0.0562,fal-ai/kling-video/ai-avatar/v2/pro=0.115`): her кружечки on fal; read by the report and the panel (compose passes it to the panel); a malformed entry is ignored with a warning |
 | `AGENT_IMAGE_TAG` | v3.2 | which agent image the server runs: `latest` (the newest release) or `edge` (`main`, before a release); `server/.env` only |
 | `PANEL_TOKEN` | v3.3 | the single owner token for the panel API |
 | `PANEL_IMAGE_TAG`, `DOCKER_GID`, `PANEL_BIND`, `STACK_DIR` | v3.3–v3.4 | which panel image the server runs (`latest` / `edge`); the host's docker group id for the socket (999); the LAN address the panel is published on (192.168.1.197; unset → 127.0.0.1); where the stack lives on the host (`/home/ich/matrix-agora`, v3.4); `server/.env` only |

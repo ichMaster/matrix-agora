@@ -535,7 +535,7 @@ class Agent:
                 log.info("photos: %d faces", len(faces))
             else:  # review #3: the first deploy ran so, unnoticed — every selfie would quietly be redrawn without one
                 log.warning("photos: no faces — a selfie will not come out")
-        # v5.18 — her videos in Telegram: her кружечок (Kling Avatar on fal, from her selfie and her voice; the key lives
+        # v5.18 — her videos in Telegram: her кружечок (Fabric 1.0 on fal, from her selfie and her voice; the key lives
         # only in the maker) and her clips (Omni Flash, from a photo of what she sees); one at a time, after her answer
         self.notes: NoteMaker | None = None
         self.clips: ClipMaker | None = None
@@ -551,8 +551,8 @@ class Agent:
                 self.clips = clip_maker(os.environ.get("VIDEO_MODEL", "gemini-omni-1.1-flash").strip() or VIDEO_MODEL,
                                         os.environ.get("VIDEO_RESOLUTION", "720p").strip() or "720p", self.record_usage)
             if fal_key:
-                self.notes = NoteMaker(fal_key, os.environ.get("VIDEO_NOTE_MODEL", "fal-ai/kling-video/ai-avatar/v2/standard").strip()
-                                       or NOTE_MODEL, sink=self.record_video_note_usage)
+                self.notes = NoteMaker(fal_key, os.environ.get("VIDEO_NOTE_MODEL", "veed/fabric-1.0").strip() or NOTE_MODEL,
+                                       sink=self.record_video_note_usage)
             else:
                 log.warning("videos: no FAL_KEY — no кружечок")
         self._reading_lock, self._reflect_lock = asyncio.Lock(), asyncio.Lock()
@@ -2126,7 +2126,7 @@ class Agent:
             return Video(None, why="failed")
         small = await shrink_frame(frame.image)  # the owner: a кружечок needs no big picture — 640×640 to fal
         image, mime = (small, "image/jpeg") if small else (frame.image, frame.mime)
-        raw = await self.notes.make(image, mime, mp3)
+        raw = await self.notes.make(image, mime, mp3, duration_ms(pcm or b"") / 1000)  # Fabric names no length
         if raw.why != "ok":
             return raw
         square = await square_note(raw.data, mp3)  # review #3: her own voice is its sound
@@ -2691,7 +2691,7 @@ class Agent:
         self._append_usage(lambda ts: judge_usage_line(ts, self.cfg.localpart, model, prompt, output, ok, cost))
 
     def record_video_note_usage(self, model: str, video_ms: int | None, ok: bool, blocked: str | None = None) -> None:
-        """v5.18 — one line per call of Kling Avatar on fal: `fal`, priced per second by `PRICE_SECONDS`, no text."""
+        """v5.18 — one line per call of her кружечок's model on fal: `fal`, priced per second by `PRICE_SECONDS`, no text."""
         self._append_usage(lambda ts: video_note_usage_line(ts, self.cfg.localpart, model, video_ms, ok, blocked))
 
     def record_fallback_usage(self, kind: str, model: str, ok: bool) -> None:

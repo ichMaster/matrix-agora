@@ -2480,10 +2480,14 @@ She believes she recorded them.
 - **VISION's «images» non-goal is narrowed again:** her videos, in Telegram only.
 
 **The services** (looked up 2026-11-01; checked again when the issues are generated):
-- **The кружечок: Kling AI Avatar v2 on fal.ai** (`fal-ai/kling-video/ai-avatar/v2/standard`, $0.056 a second;
-  `…/v2/pro`, $0.115):
+- **The кружечок: VEED Fabric 1.0 on fal.ai** (`veed/fabric-1.0`, $0.08 a second; the owner's choice after the live
+  test, 2026-11-01: Kling AI Avatar v2 — `fal-ai/kling-video/ai-avatar/v2/standard`, $0.056 a second; `…/v2/pro`,
+  $0.115 — took ~10 minutes for 18 s of her voice, past the 10-minute wait, and Fabric ~40 s; six models were tried on
+  the same frame and voice, and the owner judged the videos; Kling stays a choice):
   - a portrait image and an audio file in, a video of that face speaking the audio out;
-  - the inputs `image_url` and `audio_url` (a URL or a data URI) and `prompt`; the output `video.url` and `duration`;
+  - the inputs `image_url` and `audio_url` (Fabric: an https URL only — the files go to fal's storage first; Kling
+    also takes a data URI) and Fabric's `resolution` (`480p`) or Kling's `prompt`; the output `video.url` (Kling also
+    `duration`);
   - a queue API: submit, then poll the status, then fetch the result, with the header `Authorization: Key <FAL_KEY>`;
   - a new account and key (owner step).
 - **The clip: Gemini Omni Flash** (`gemini-omni-1.1-flash`), the video model Google recommends now:
@@ -2511,7 +2515,7 @@ She believes she recorded them.
   1. her text is voiced by ElevenLabs as her voice note is now (her tags);
   2. the first frame is a selfie made as v5.17's `СЕЛФІ` (her reference photos, the moment, what she wears), 1:1, a
      front-camera close-up;
-  3. Kling AI Avatar takes the frame and the audio;
+  3. Fabric 1.0 takes the frame and the audio;
   4. ffmpeg (a fixed argv) cuts the result square, as `sendVideoNote` needs (MPEG4, up to 60 s);
   5. `TelegramBot.send_video_note`, multipart.
   - The audio is at most `VIDEO_NOTE_MAX_S` (30) long. A longer one, or none (the voice's monthly cap), goes as her
@@ -2538,7 +2542,8 @@ She believes she recorded them.
 - **Writing first:** the line she writes first may carry either.
 - **Settings:**
   - `VIDEO_MODEL` (`gemini-omni-1.1-flash`) and `VIDEO_RESOLUTION` (`720p`);
-  - `VIDEO_NOTE_MODEL` (`fal-ai/kling-video/ai-avatar/v2/standard`; or `…/pro`) and `VIDEO_NOTE_MAX_S` (30);
+  - `VIDEO_NOTE_MODEL` (`veed/fabric-1.0`; or Kling's `fal-ai/kling-video/ai-avatar/v2/standard`, `…/pro`) and
+    `VIDEO_NOTE_MAX_S` (30);
   - `VIDEO_DAY_MAX` (4, both kinds together; 0 turns them off) — a video costs about a dollar, so the cap is a cost
     guard;
   - `FAL_KEY` in `server/kira.env`, a secret: checked with `grep -q`, never printed.

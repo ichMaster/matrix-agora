@@ -266,12 +266,13 @@ def test_the_panel_gets_the_model_prices():
 
 
 def test_both_env_examples_price_her_kruzhechky_per_second():
-    """v5.18: Kling Avatar on fal bills per second of video — priced by PRICE_SECONDS, never by tokens."""
+    """v5.18: her кружечок's model on fal bills per second of video — priced by PRICE_SECONDS, never by tokens."""
     from agents.usage import parse_second_prices
     for path in (ROOT / ".env.example", ROOT / "server" / ".env.example"):
         values = dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines()
                       if line and not line.startswith("#") and "=" in line)
-        assert parse_second_prices(values["PRICE_SECONDS"]) == ({"fal-ai/kling-video/ai-avatar/v2/standard": 0.0562,
+        assert parse_second_prices(values["PRICE_SECONDS"]) == ({"veed/fabric-1.0": 0.08,
+                                                                 "fal-ai/kling-video/ai-avatar/v2/standard": 0.0562,
                                                                  "fal-ai/kling-video/ai-avatar/v2/pro": 0.115}, []), path
 
 

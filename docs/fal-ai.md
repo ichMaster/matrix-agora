@@ -1,13 +1,15 @@
 # fal.ai — the key for Кіра's кружечок (v5.18)
 
 From v5.18 Кіра records a кружечок (Telegram's round video message) in which she says her answer in her own voice.
-The video is made by **Kling AI Avatar v2 on fal.ai**: her selfie and the audio of her answer go in, a video of her
-face speaking that audio comes out. The clips without speech run on Google's key and need nothing here.
+The video is made by **VEED Fabric 1.0 on fal.ai**: her selfie and the audio of her answer go in, a video of her
+face speaking that audio comes out, in about 40 s. The clips without speech run on Google's key and need nothing here.
 
-**The price:**
-- `fal-ai/kling-video/ai-avatar/v2/standard` is $0.056 a second of video (the default);
-- `…/v2/pro` is $0.115 a second (`VIDEO_NOTE_MODEL`);
-- a кружечок is at most 30 s (`VIDEO_NOTE_MAX_S`), so at most $1.70 on Standard; one of 15 s costs about $0.85.
+**The price and the choice** (`VIDEO_NOTE_MODEL`):
+- `veed/fabric-1.0` is $0.08 a second of video (the default, the owner's choice after the live test of 2026-11-01);
+- Kling AI Avatar v2 stays a choice: `fal-ai/kling-video/ai-avatar/v2/standard` at $0.056 a second and `…/v2/pro` at
+  $0.115. It took about 10 minutes for 18 s of her voice, past the agent's 10-minute wait, so most of its кружечки
+  never came;
+- a кружечок is at most 30 s (`VIDEO_NOTE_MAX_S`), so at most $2.40 on Fabric; one of 15 s costs about $1.20.
 
 ## 1. The account
 
@@ -19,7 +21,7 @@ face speaking that audio comes out. The clips without speech run on Google's key
 fal works on **prepaid credits**. Each call draws them down, and credits also set how many calls may run at once.
 
 1. Open [fal.ai/dashboard/billing](https://fal.ai/dashboard/billing).
-2. Add a card and buy credits. **$10 is enough to start:** about ten кружечки of 15 s.
+2. Add a card and buy credits. **$10 is enough to start:** about eight кружечки of 15 s.
 3. Leave any automatic top-up off at first. When the credits run out, her кружечок fails and her usual voice note goes
    instead, so nothing is lost.
 
@@ -40,7 +42,7 @@ its seconds and cost.
 1. Open `server/kira.env` in the editor and add at the end:
 
    ```
-   # v5.18: her кружечок — Kling AI Avatar v2 on fal.ai (fal.ai/dashboard/keys, preset API). Unset: no кружечок.
+   # v5.18: her кружечок — VEED Fabric 1.0 on fal.ai (fal.ai/dashboard/keys, preset API). Unset: no кружечок.
    FAL_KEY=<the key>
    ```
 
@@ -58,7 +60,7 @@ a file descriptor, so the key never appears in a process's argv:
 
 ```bash
 curl -s -H @<(printf 'Authorization: Key %s\n' "$(sed -n 's/^FAL_KEY=//p' server/kira.env)") \
-  "https://api.fal.ai/v1/models/pricing?endpoint_id=fal-ai/kling-video/ai-avatar/v2/standard"
+  "https://api.fal.ai/v1/models/pricing?endpoint_id=veed/fabric-1.0"
 ```
 
 - **The key works:** a JSON answer with the billing unit and the unit price.
@@ -77,6 +79,9 @@ Nothing to do now. No code reads `FAL_KEY` before v5.18, and the v5.18 deploy sy
   - the owner's words;
   - her archive;
   - the backup's talk.
+- **How it receives them:** Fabric takes no data inside the request, so both files are put on fal's storage first,
+  each under a long unlisted link, and the job names those links. The key goes to fal's queue and upload hosts only,
+  never to the storage itself, and no link goes into a log.
 - **What it returns:** the video as a link on fal's storage. The agent downloads it at once and keeps the file in
   `state/kira.videos/` (0600). The link never goes into a log.
 - **The safety checker:** fal's checker is on by default, and turning it off needs fal's approval. A blocked кружечок

@@ -1,6 +1,7 @@
 """v5.18 — her videos' seam (`agents/video.py`, the markers in `agents/photo.py`): the `КРУЖЕЧОК:` / `ВІДЕО:` line cut
 from her answer, the first frame's shot and aspect, the clip's English request, Omni Flash through the SDK's
-interactions (polled, one retry), Kling Avatar on fal's queue (polled, one retry, the key to fal's host only), and
+interactions (polled, one retry), her кружечок's model on fal (the frame and her voice on fal's storage first; polled,
+one retry, the key to fal's hosts only), and
 ffmpeg's fixed argvs — a block or a second failure a reason, never a crash (google-genai, aiohttp and ffmpeg mocked; no
 network; made-up descriptions)."""
 
@@ -10,6 +11,7 @@ import logging
 import os
 from pathlib import Path
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
@@ -199,7 +201,7 @@ def test_a_clip_that_never_ends_is_a_timeout(monkeypatch):
     assert len(inter.calls) == 1                     # review #2: an accepted job is never sent again
 
 
-# --- Kling Avatar on fal ----------------------------------------------------------------------------------------------
+# --- her кружечок's model on fal ---------------------------------------------------------------------------------------
 class FakeResponse:
     def __init__(self, status, data=None, body=b""):
         self.status, self.data, self.body = status, data, body
@@ -219,11 +221,31 @@ class FakeResponse:
         return False
 
 
+SIGNED = "https://v3b.fal.media/upload/signed/"
+FILES = "https://v3b.fal.media/files/up/"
+
+
 class FakeSession:
-    """fal's queue and its storage: answers in turn; keeps each call's method, URL, headers and body."""
+    """fal's queue and its storage: answers in turn; keeps each call's method, URL, headers and body. An upload (the
+    live test: Fabric takes no data URI) is answered on its own and kept in `uploads`, after `fail_uploads` 503s."""
+
+    uploads: ClassVar[list] = []
+    fail_uploads = 0
 
     def __init__(self, replies, seen):
         self.replies, self.seen = replies, seen
+
+    def _upload(self, method, url, headers, json):
+        FakeSession.uploads.append((method, url, headers, json))
+        if FakeSession.fail_uploads:
+            FakeSession.fail_uploads -= 1
+            return FakeResponse(503)
+        if method == "PUT":
+            return FakeResponse(200)
+        return FakeResponse(200, {"upload_url": SIGNED + json["file_name"], "file_url": FILES + json["file_name"]})
+
+    def put(self, url, data=None, headers=None):
+        return self._upload("PUT", url, headers, None)
 
     async def __aenter__(self):
         return self
@@ -232,6 +254,8 @@ class FakeSession:
         return False
 
     def request(self, method, url, headers=None, json=None):
+        if url == vd.UPLOAD_URL:
+            return self._upload(method, url, headers, json)
         self.seen.append((method, url, headers, json))
         return self.replies.pop(0)
 
@@ -261,6 +285,7 @@ def finished(duration=12.4):
 def notes(monkeypatch, *replies):
     seen, sinks = [], []
     queue = list(replies)
+    FakeSession.uploads, FakeSession.fail_uploads = [], 0
     monkeypatch.setattr(vd, "ClientSession", lambda **kw: FakeSession(queue, seen))
     sink = lambda model, video_ms, ok, blocked: sinks.append((model, video_ms, ok, blocked))
     return NoteMaker(KEY, sink=sink, sleep=no_sleep), seen, sinks
@@ -274,12 +299,11 @@ def test_a_note_is_submitted_polled_and_fetched_with_the_key_only_on_fals_queue(
     method, url, headers, body = seen[0]
     assert (method, url) == ("POST", f"https://queue.fal.run/{NOTE_MODEL}")
     assert headers["Authorization"] == f"Key {KEY}"
-    assert body["image_url"] == "data:image/png;base64," + base64.b64encode(b"FRAME").decode()
-    assert body["audio_url"] == "data:audio/mpeg;base64," + base64.b64encode(b"MP3").decode()
+    assert body == {"image_url": FILES + "frame.png", "audio_url": FILES + "voice.mp3", "resolution": "480p"}
     assert [s[1] for s in seen[1:]] == [STATUS, STATUS, RESULT, CDN]
     assert all(s[2]["Authorization"] == f"Key {KEY}" for s in seen[:4]) and seen[4][2] is None  # never to the CDN
     assert sinks == [(NOTE_MODEL, 12400, True, None)]
-    for secret in (KEY, CDN, STATUS, "base64"):
+    for secret in (KEY, CDN, STATUS, FILES, SIGNED):
         assert secret not in caplog.text
     assert KEY not in repr(note)
 
@@ -303,9 +327,59 @@ def test_a_content_check_is_blocked_and_another_4xx_failed(monkeypatch):
     assert asyncio.run(note.make(b"F", "image/png", b"M")).why == "blocked"                    # no video in it
 
 
-def test_an_unknown_model_is_the_standard_one():
-    assert NoteMaker(KEY, model="fal-ai/other").model == NOTE_MODEL
+def test_an_unknown_model_is_fabric():
+    assert NOTE_MODEL == "veed/fabric-1.0" and NoteMaker(KEY, model="fal-ai/other").model == NOTE_MODEL
     assert NoteMaker(KEY, model="fal-ai/kling-video/ai-avatar/v2/pro").model.endswith("/pro")
+
+
+def test_the_frame_and_her_voice_go_to_fals_storage_first_with_the_key_only_to_ask_for_a_place(monkeypatch):
+    # the live test (2026-11-01): Fabric takes no data URI — each file is put by a signed URL, never with the key
+    note, seen, _ = notes(monkeypatch, submitted(), *finished())
+    asyncio.run(note.make(b"FRAME", "image/jpeg", b"MP3"))
+    ups = FakeSession.uploads
+    assert [(m, u) for m, u, *_ in ups] == [("POST", vd.UPLOAD_URL), ("PUT", SIGNED + "frame.jpg"),
+                                            ("POST", vd.UPLOAD_URL), ("PUT", SIGNED + "voice.mp3")]
+    assert ups[0][3] == {"content_type": "image/jpeg", "file_name": "frame.jpg"}
+    assert ups[2][3] == {"content_type": "audio/mpeg", "file_name": "voice.mp3"}
+    assert ups[0][2]["Authorization"] == f"Key {KEY}" and "Authorization" not in ups[1][2]
+    assert seen[0][3]["image_url"] == FILES + "frame.jpg"
+
+
+def test_kling_keeps_its_prompt_and_fabric_its_resolution(monkeypatch):
+    note, seen, _ = notes(monkeypatch, submitted(), *finished())
+    note.model = "fal-ai/kling-video/ai-avatar/v2/standard"
+    asyncio.run(note.make(b"F", "image/png", b"M"))
+    assert seen[0][1].endswith("/ai-avatar/v2/standard") and seen[0][3]["prompt"] == vd.NOTE_PROMPT
+    assert "resolution" not in seen[0][3]
+
+
+def test_a_video_fal_names_no_length_of_is_as_long_as_her_voice(monkeypatch):
+    # Fabric's result has no `duration`: her voice's length prices it and is the кружечок's
+    note, _, sinks = notes(monkeypatch, submitted(), *finished(duration=None))
+    assert asyncio.run(note.make(b"F", "image/png", b"M", 11.24)).seconds == 11.24
+    assert sinks == [(NOTE_MODEL, 11240, True, None)]
+    note, _, sinks = notes(monkeypatch, submitted(), *finished(duration=None))
+    assert asyncio.run(note.make(b"F", "image/png", b"M")).seconds is None and sinks[0][1] is None
+
+
+def test_an_exhausted_balance_is_named_in_the_log_and_never_tried_again(monkeypatch, caplog):
+    # the live test (2026-11-01): fal answered 403 «User is locked. Reason: Exhausted balance» to the upload
+    note, seen, sinks = notes(monkeypatch)
+    monkeypatch.setattr(FakeSession, "_upload", lambda self, *a: FakeResponse(
+        403, {"detail": "User is locked. Reason: Exhausted balance. Top up your balance"}))
+    assert asyncio.run(note.make(b"F", "image/png", b"M")).why == "failed" and seen == []
+    assert "video: fal HTTP 403 (balance exhausted)" in caplog.text and "Top up" not in caplog.text
+    assert sinks == [(NOTE_MODEL, None, False, None)]
+
+
+def test_a_server_error_on_the_upload_is_tried_once_more_before_any_job(monkeypatch):
+    note, seen, sinks = notes(monkeypatch, submitted(), *finished())
+    FakeSession.fail_uploads = 1
+    assert asyncio.run(note.make(b"F", "image/png", b"M")).why == "ok"
+    assert [m for m, *_ in seen].count("POST") == 1 and [s[2] for s in sinks] == [False, True]
+    note, seen, sinks = notes(monkeypatch)
+    FakeSession.fail_uploads = 2
+    assert asyncio.run(note.make(b"F", "image/png", b"M")).why == "failed" and seen == []
 
 
 # --- ffmpeg -----------------------------------------------------------------------------------------------------------

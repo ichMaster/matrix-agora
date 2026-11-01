@@ -195,9 +195,8 @@ SCHEMA: tuple[Setting, ...] = (
     _s("VIDEO_MODEL", "choice", "gemini-omni-1.1-flash", "private", "cap:videos", None, "Модель її відео",
        choices=("gemini-omni-1.1-flash",)),
     _s("VIDEO_RESOLUTION", "choice", "720p", "private", "cap:videos", None, "Якість її відео", choices=("720p", "1080p")),
-    _s("VIDEO_NOTE_MODEL", "choice", "fal-ai/kling-video/ai-avatar/v2/standard", "private", "cap:videos", None,
-       "Модель її кружечків",
-       choices=("fal-ai/kling-video/ai-avatar/v2/standard", "fal-ai/kling-video/ai-avatar/v2/pro")),
+    _s("VIDEO_NOTE_MODEL", "choice", "veed/fabric-1.0", "private", "cap:videos", None, "Модель її кружечків",
+       choices=("veed/fabric-1.0", "fal-ai/kling-video/ai-avatar/v2/standard", "fal-ai/kling-video/ai-avatar/v2/pro")),
     _s("VIDEO_NOTE_MAX_S", "int", "30", "private", "cap:videos", None, "Найдовший кружечок", "с", 5, 60),
     _s("VIDEO_DAY_MAX", "int", "4", "private", "cap:videos", None, "Скільки відео на день щонайбільше", "", 0, 20),
     # v5.16 — after a prompt-stage block Gemini is asked which parts of her prompt it blocks: calls per block and per

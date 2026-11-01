@@ -22,7 +22,7 @@ KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
          "judge",                             # v5.15: the judge rating her backup's talk (OpenRouter)
          "probe",                             # v5.16: Gemini asked whether it blocks a part of a blocked prompt
          "photo",                             # v5.17: Google's image model, her photo in Telegram
-         "video", "video_note")               # v5.18: her clip (Omni Flash) and her кружечок (Kling Avatar on fal)
+         "video", "video_note")               # v5.18: her clip (Omni Flash) and her кружечок (Fabric 1.0 on fal)
 # v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan; v5.1 also the ElevenLabs
 # plan's credits), `external` (Lumi's own)
 BILLING = ("api", "subscription", "external")
@@ -124,7 +124,7 @@ def stt_usage_line(ts_iso: str, agent: str, model: str, audio_ms: int | None, ok
 
 def video_note_usage_line(ts_iso: str, agent: str, model: str, video_ms: int | None, ok: bool,
                           blocked: str | None = None) -> dict:
-    """v5.18 — one record per call of Kling AI Avatar on fal (her кружечок, `agents/video.py`): paid per second of
+    """v5.18 — one record per call of her кружечок's model on fal (`agents/video.py`): paid per second of
     video (`api`, priced by `PRICE_SECONDS` under the model's id), counted by the video's length (usage line v6,
     `video_ms`); no tokens. Never any text."""
     return {
@@ -312,7 +312,7 @@ SecondPrices = dict[str, float]
 
 def parse_second_prices(spec: str | None) -> tuple[SecondPrices, list[str]]:
     """v5.18 — `PRICE_SECONDS`: comma-separated `model=usd` (USD per second of video), e.g.
-    `fal-ai/kling-video/ai-avatar/v2/standard=0.0562`. Returns the prices and the malformed entries (to warn about,
+    `veed/fabric-1.0=0.08`. Returns the prices and the malformed entries (to warn about,
     never fatal)."""
     prices: SecondPrices = {}
     bad: list[str] = []

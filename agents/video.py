@@ -3,14 +3,15 @@
 A last line of her answer names one (`КРУЖЕЧОК: …` / `ВІДЕО: …`, cut by `agents/photo.py`'s `split_photo`). Its first
 frame is her photo, made by the image model (`frame_shot`, `FRAME_ASPECT`, `FRAME_LINES`): a front-camera close-up of
 her for a кружечок, a vertical faceless shot for a clip.
-- **The кружечок:** Kling AI Avatar v2 on fal.ai takes the frame and her voice (her answer, voiced by ElevenLabs; mp3
-  through ffmpeg) and returns her face speaking it (`NoteMaker`, fal's queue API); ffmpeg cuts it square for
-  Telegram's round video message (`square_note`).
+- **The кружечок:** VEED Fabric 1.0 on fal.ai (the owner, after the live test; Kling AI Avatar v2 stays a choice)
+  takes the frame and her voice (her answer, voiced by ElevenLabs; mp3 through ffmpeg), both put on fal's storage
+  first, and returns her face speaking it (`NoteMaker`, fal's queue API); ffmpeg cuts it square for Telegram's round
+  video message (`square_note`).
 - **The clip:** Gemini Omni Flash takes the frame and an English request (`clip_request`, pure) and returns a short
   video with the sound of the place and no speech (`ClipMaker`, the SDK's interactions in the background, polled).
 
 Each maker retries once on a server error or a timeout; a block, or a second failure, is a reason, never a crash. The
-log holds outcomes and types only — never her description, a request, the key, a data URI or a URL.
+log holds outcomes and types only — never her description, a request, the key or a URL.
 """
 
 from __future__ import annotations
@@ -40,11 +41,14 @@ USAGE_KINDS = ("video", "video_note")  # the usage lines a video is paid by (rev
 KEY_VAR = "FAL_KEY"                # server/kira.env: fal.ai/dashboard/keys, preset API (docs/fal-ai.md)
 MODEL = "gemini-omni-1.1-flash"    # the owner, 2026-11-01: Google's video model for her clips
 RESOLUTIONS = ("720p", "1080p")
-NOTE_MODEL = "fal-ai/kling-video/ai-avatar/v2/standard"   # $0.0562 a second (fal's pricing API, 2026-11-01)
-NOTE_MODELS = (NOTE_MODEL, "fal-ai/kling-video/ai-avatar/v2/pro")  # Pro: $0.115 a second
+NOTE_MODEL = "veed/fabric-1.0"     # the owner, 2026-11-01: $0.08 a second, ~40 s for 17 s of her voice (Kling: ~10 min)
 QUEUE_URL = "https://queue.fal.run"
 QUEUE_HOST = urlsplit(QUEUE_URL).hostname
+UPLOAD_URL = "https://rest.alpha.fal.ai/storage/upload/initiate?storage_type=fal-cdn-v3"  # Fabric takes no data URI
+UPLOAD_HOST = urlsplit(UPLOAD_URL).hostname
+FILE_NAMES = {"image/jpeg": "frame.jpg", "image/png": "frame.png", "audio/mpeg": "voice.mp3"}
 POLL_S = 10.0
+NOTE_POLL_S = 3.0                  # a кружечок takes under a minute now: its status is asked more often (free)
 TIMEOUT_S = 600.0                  # minutes are expected; neither service names a time
 NOTE_SIDE = 640                    # Telegram's round video message: a square, at most 640 px
 NOTE_MAX_S = 60                    # … and at most a minute
@@ -61,6 +65,11 @@ FRAME_LINES = {
 CLIP_STYLE = ("A handheld phone video with natural motion, as someone films what they see. The sound of the place only: "
               "no dialogue, no voice, no narration, no music. No text, caption or watermark. Nobody's face.")
 NOTE_PROMPT = "She talks to the front camera of her phone, with natural small head movements and blinks."
+NOTE_MODELS = {  # each model's own fields beside the frame and the voice (fal's pricing API, 2026-11-01)
+    NOTE_MODEL: {"resolution": "480p"},                                   # cut to 640×640 anyway
+    "fal-ai/kling-video/ai-avatar/v2/standard": {"prompt": NOTE_PROMPT},  # $0.0562 a second
+    "fal-ai/kling-video/ai-avatar/v2/pro": {"prompt": NOTE_PROMPT},       # $0.115 a second
+}
 
 # her private brief's skill (v5.18, the owner): understood from the talk, never a keyword — and never a word that a
 # video is made: she records it
@@ -118,10 +127,6 @@ def clip_request(shot: Shot, moment: Moment) -> str:
     """Omni Flash's instruction (pure, English): the shot in her words, her moment, a phone video's look and sound."""
     return "\n".join([f"The video, as she describes it (in Ukrainian): {shot.description}", moment_line(moment),
                       CLIP_STYLE])
-
-
-def data_uri(data: bytes, mime: str) -> str:
-    return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
 
 
 def _retryable(exc: BaseException) -> bool:
@@ -243,9 +248,10 @@ NoteSink = Callable[[str, int | None, bool, str | None], None]  # (model, video 
 
 
 class NoteMaker:
-    """Kling AI Avatar v2 on fal (the queue API): her frame and her voice → her face speaking it."""
+    """Her кружечок's model on fal (the queue API; VEED Fabric 1.0 or Kling AI Avatar v2): her frame and her voice, put
+    on fal's storage, → her face speaking it."""
 
-    def __init__(self, key: str, model: str = NOTE_MODEL, sink: NoteSink | None = None, poll_s: float = POLL_S,
+    def __init__(self, key: str, model: str = NOTE_MODEL, sink: NoteSink | None = None, poll_s: float = NOTE_POLL_S,
                  timeout_s: float = TIMEOUT_S, sleep: Callable[[float], Awaitable] = asyncio.sleep) -> None:
         self._key = key
         self.model = model if model in NOTE_MODELS else NOTE_MODEL
@@ -262,15 +268,15 @@ class NoteMaker:
         except Exception:
             log.exception("usage accounting failed")
 
-    async def make(self, frame: bytes, frame_mime: str, mp3: bytes) -> Video:
+    async def make(self, frame: bytes, frame_mime: str, mp3: bytes, seconds: float | None = None) -> Video:
         """Her кружечок before the square cut, or why there is none: one retry on a 5xx or a timeout before fal accepts
-        the job — never once it has (review #2: it would run and be billed twice)."""
-        body = {"image_url": data_uri(frame, frame_mime), "audio_url": data_uri(mp3, "audio/mpeg"),
-                "prompt": NOTE_PROMPT}
+        the job — never once it has (review #2: it would run and be billed twice). `seconds` (her voice's length) is
+        the video's when fal names none (Fabric does not)."""
+        files = ((frame, frame_mime), (mp3, "audio/mpeg"))
         for attempt in (1, 2):
             submitted: list = []
             try:
-                return await asyncio.wait_for(self._run(body, submitted), self._timeout_s)
+                return await asyncio.wait_for(self._run(files, seconds, submitted), self._timeout_s)
             except (_Retry, TimeoutError, aiohttp.ClientConnectionError) as exc:
                 self._report(None, False)
                 if submitted and isinstance(exc, TimeoutError):  # the live test: a job still queued is never paid for
@@ -291,8 +297,8 @@ class NoteMaker:
         return Video(None, why="failed")  # never reached: the loop returns
 
     async def _queue(self, session, method: str, url: str, **kw) -> dict:
-        """One call to fal's queue — the key goes to its host only, never elsewhere."""
-        if urlsplit(url).hostname != QUEUE_HOST:
+        """One call to fal's queue or its upload — the key goes to those hosts only, never elsewhere."""
+        if urlsplit(url).hostname not in (QUEUE_HOST, UPLOAD_HOST):
             raise ValueError("not fal's queue")
         headers = {"Authorization": f"Key {self._key}", "Content-Type": "application/json"}
         async with session.request(method, url, headers=headers, **kw) as resp:
@@ -306,6 +312,9 @@ class NoteMaker:
                 detail = data.get("detail") if isinstance(data, dict) else None
                 if _blocked_words(str(detail)):
                     raise _Blocked
+                # the live test: fal locks an account whose credits ran out — the log names that, never fal's words
+                log.warning("video: fal HTTP %s%s", resp.status,
+                            " (balance exhausted)" if "balance" in str(detail).lower() else "")
                 raise RuntimeError(f"HTTP {resp.status}")
             return data if isinstance(data, dict) else {}
 
@@ -317,6 +326,21 @@ class NoteMaker:
             except (_Retry, aiohttp.ClientConnectionError) as exc:
                 log.info("video: %s while waiting — asking again", type(exc).__name__)
                 await self._sleep(self._poll_s)
+
+    async def _upload(self, session, data: bytes, mime: str) -> str:
+        """A file put on fal's storage for the job (the live test: Fabric takes no data URI): fal names a signed URL to
+        put it to — no key sent there — and the file's own URL, which the job names."""
+        init = await self._queue(session, "POST", UPLOAD_URL,
+                                 json={"content_type": mime, "file_name": FILE_NAMES.get(mime, "file")})
+        upload_url, file_url = init.get("upload_url"), init.get("file_url")
+        if not upload_url or not file_url:
+            raise RuntimeError("no upload")
+        async with session.put(upload_url, data=data, headers={"Content-Type": mime}) as resp:
+            if resp.status >= 500:
+                raise _Retry(f"HTTP {resp.status}")
+            if resp.status >= 300:
+                raise RuntimeError(f"HTTP {resp.status}")
+        return file_url
 
     async def _download(self, session, url: str) -> bytes:
         async with session.get(url) as resp:  # fal's storage: no key sent there
@@ -338,8 +362,10 @@ class NoteMaker:
         except Exception as exc:  # noqa: BLE001 — already running or done: nothing to undo
             log.info("video: fal job not cancelled (%s)", type(exc).__name__)
 
-    async def _run(self, body: dict, submitted: list) -> Video:
+    async def _run(self, files: tuple, hint: float | None, submitted: list) -> Video:
         async with ClientSession() as session:
+            image_url, audio_url = [await self._upload(session, data, mime) for data, mime in files]
+            body = {"image_url": image_url, "audio_url": audio_url, **NOTE_MODELS[self.model]}
             sent = await self._queue(session, "POST", f"{QUEUE_URL}/{self.model}", json=body)
             status_url, response_url = sent.get("status_url"), sent.get("response_url")
             if not status_url or not response_url:
@@ -361,7 +387,7 @@ class NoteMaker:
                 raise _Blocked
             data = await self._again(lambda: self._download(session, video["url"]))
         seconds = result.get("duration")
-        seconds = float(seconds) if isinstance(seconds, int | float) and not isinstance(seconds, bool) else None
+        seconds = float(seconds) if isinstance(seconds, int | float) and not isinstance(seconds, bool) else hint
         if not data:
             raise _Blocked
         self._report(round(seconds * 1000) if seconds is not None else None, True)

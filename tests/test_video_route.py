@@ -25,12 +25,12 @@ SECRET = "кадр-5182"
 
 
 class Notes:
-    """Kling Avatar on fal: one `Video` for every кружечок; keeps the calls."""
+    """Her кружечок's model on fal: one `Video` for every кружечок; keeps the calls."""
 
     def __init__(self, made):
         self.made, self.calls = made, []
 
-    async def make(self, frame, mime, mp3):
+    async def make(self, frame, mime, mp3, seconds=None):
         self.calls.append((frame, mime, mp3))
         return self.made
 
