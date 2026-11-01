@@ -88,10 +88,12 @@ FFMPEG_MP3 = ("ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le", "-a
 NOTE_FILTER = f"crop='min(iw,ih)':'min(iw,ih)',scale={NOTE_SIDE}:{NOTE_SIDE},setsar=1"
 
 
-def ffmpeg_square(src: str, dst: str) -> tuple[str, ...]:
-    """The fixed argv that cuts a video square for a round video message: the centre square, 640×640, H.264 + AAC, at
-    most a minute, `+faststart` — only the two temporary paths vary, never a word of hers."""
-    return ("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", src, "-t", str(NOTE_MAX_S),
+def ffmpeg_square(src: str, voice: str, dst: str) -> tuple[str, ...]:
+    """The fixed argv that cuts a video square for a round video message: the centre square, 640×640, H.264, with her
+    own voice as its sound (review #3: fal's output may carry none) in AAC, at most a minute, `+faststart` — only the
+    three temporary paths vary, never a word of hers."""
+    return ("ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", src, "-i", voice,
+            "-map", "0:v:0", "-map", "1:a:0", "-t", str(NOTE_MAX_S), "-shortest",
             "-vf", NOTE_FILTER, "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", dst)
 
@@ -370,14 +372,15 @@ async def pcm_to_mp3(pcm: bytes, timeout_s: float = 60.0) -> bytes | None:
     return out or None
 
 
-async def square_note(mp4: bytes, timeout_s: float = 120.0) -> bytes | None:
-    """A video cut square for a round video message, through temporary files in a 0700 folder removed after; None on
-    any failure (logged by its code)."""
+async def square_note(mp4: bytes, mp3: bytes, timeout_s: float = 120.0) -> bytes | None:
+    """A video cut square for a round video message, her voice (`mp3`) its sound, through temporary files in a 0700
+    folder removed after; None on any failure (logged by its code)."""
     with tempfile.TemporaryDirectory(prefix="note-") as folder:  # mkdtemp: 0700
-        src, dst = Path(folder) / "in.mp4", Path(folder) / "out.mp4"
-        with os.fdopen(os.open(src, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as out:
-            out.write(mp4)
-        if await _ffmpeg(ffmpeg_square(str(src), str(dst)), None, timeout_s, "square") is None:
+        src, voice, dst = Path(folder) / "in.mp4", Path(folder) / "voice.mp3", Path(folder) / "out.mp4"
+        for path, data in ((src, mp4), (voice, mp3)):
+            with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as out:
+                out.write(data)
+        if await _ffmpeg(ffmpeg_square(str(src), str(voice), str(dst)), None, timeout_s, "square") is None:
             return None
         try:
             data = dst.read_bytes()

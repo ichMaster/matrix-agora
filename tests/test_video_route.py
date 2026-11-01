@@ -54,7 +54,8 @@ def media(monkeypatch):
     async def mp3(pcm, timeout_s=60.0):
         return b"MP3"
 
-    async def square(mp4, timeout_s=120.0):
+    async def square(mp4, mp3, timeout_s=120.0):
+        assert mp3 == b"MP3"                                                             # review #3: her voice
         return b"SQUARE-" + mp4
 
     monkeypatch.setattr(agent_mod, "encode_opus", encode)

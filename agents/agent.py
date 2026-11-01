@@ -2126,7 +2126,7 @@ class Agent:
         raw = await self.notes.make(frame.image, frame.mime, mp3)
         if raw.why != "ok":
             return raw
-        square = await square_note(raw.data)
+        square = await square_note(raw.data, mp3)  # review #3: her own voice is its sound
         return Video(square, seconds=raw.seconds) if square else Video(None, why="failed")
 
     async def _video_after(self, shot: Shot, pcm: bytes | None, brief: str) -> None:

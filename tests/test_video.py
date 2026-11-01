@@ -332,16 +332,20 @@ def test_the_square_cut_runs_through_a_private_folder_removed_after(monkeypatch)
     seen = {}
 
     async def fake_exec(*argv, **kw):
-        src, dst = argv[argv.index("-i") + 1], argv[-1]
+        inputs = [argv[i + 1] for i, a in enumerate(argv) if a == "-i"]
+        src, voice, dst = inputs[0], inputs[1], argv[-1]
         seen["argv"], seen["src"] = argv, src
         seen["mode"] = Path(src).parent.stat().st_mode & 0o777
-        seen["in"] = Path(src).read_bytes()
+        seen["in"], seen["voice"] = Path(src).read_bytes(), Path(voice).read_bytes()
         return FakeProc(0, b"", on_run=lambda: Path(dst).write_bytes(b"SQUARE"))
 
     monkeypatch.setattr(vd.asyncio, "create_subprocess_exec", fake_exec)
-    assert asyncio.run(square_note(b"MP4")) == b"SQUARE"
-    assert seen["in"] == b"MP4" and seen["mode"] == 0o700 and not Path(seen["src"]).parent.exists()
+    assert asyncio.run(square_note(b"MP4", b"MP3")) == b"SQUARE"
+    assert seen["in"] == b"MP4" and seen["voice"] == b"MP3"
+    assert seen["mode"] == 0o700 and not Path(seen["src"]).parent.exists()
     argv = seen["argv"]
+    # v5.18 review #3: fal's video, her own voice as its sound — whatever audio fal's output carries
+    assert argv[argv.index("-map") + 1] == "0:v:0" and "1:a:0" in argv and "-shortest" in argv
     assert argv[argv.index("-vf") + 1] == vd.NOTE_FILTER and "640:640" in vd.NOTE_FILTER
     assert argv[argv.index("-t") + 1] == "60" and argv[argv.index("-movflags") + 1] == "+faststart"
 
@@ -352,7 +356,7 @@ def test_a_failed_cut_is_none(monkeypatch, caplog, code):
         return FakeProc(code, b"")                                                     # exit 0, no file written
 
     monkeypatch.setattr(vd.asyncio, "create_subprocess_exec", fake_exec)
-    assert asyncio.run(square_note(b"MP4")) is None
+    assert asyncio.run(square_note(b"MP4", b"MP3")) is None
     assert asyncio.run(pcm_to_mp3(b"\x00\x00")) is None
 
 
@@ -361,7 +365,7 @@ def test_no_ffmpeg_is_none(monkeypatch):
         raise FileNotFoundError("ffmpeg")
 
     monkeypatch.setattr(vd.asyncio, "create_subprocess_exec", missing)
-    assert asyncio.run(pcm_to_mp3(b"\x00\x00")) is None and asyncio.run(square_note(b"M")) is None
+    assert asyncio.run(pcm_to_mp3(b"\x00\x00")) is None and asyncio.run(square_note(b"M", b"V")) is None
 
 
 # --- with videos off ------------------------------------------------------------------------------------------------
