@@ -1,3 +1,26 @@
+Version 5.17.0 (2026-11-01)
+---------------------------
+- Phase v5.17 (AGORA-160..162), Kira's photos in Telegram: she sends the
+  owner photos in her Telegram chat, on her own and in her answers - her
+  life and selfies
+- Google's image model gemini-nano-banana-2.1 makes each from her
+  "ФОТО:" / "СЕЛФІ:" line (cut, never sent), in English with her moment
+  (part of day, season, Lviv weather) and, for a selfie, her face from the
+  owner's reference photos in agents/canon/kira.face/ (kira.png and three
+  drawn; private, synced by deploy.sh) in clothes that suit the scene
+- The photo is made before anything is sent, then her voice note, then the
+  photo with her words as the caption; one retry on a server error or a
+  timeout; a photo that does not come out draws her answer again without
+  it
+- Gemini's answers only, Telegram only, PHOTO_DAY_MAX 40 a day; kept in
+  state/kira.photos/ (0600) and named in her archive line; capability
+  "photos" (needs "telegram"); usage kind "photo", priced by PRICE_MODELS
+- Live test fix: deploy.sh keeps the canon's folders searchable (6dfaeb7)
+- Code review v5.17: the photo line is cut only from her private answers
+  (#1); her kept note, echoed anywhere, is cut and names the shot (#2); no
+  faces at start is a warning (#3); #4-#5 deferred to the backlog
+- The owner's manual checks confirmed on 2026-11-01
+
 Version 5.16.0 (2026-10-31)
 ---------------------------
 - Phase v5.16 (AGORA-156..159), Gemini checks the parts of a blocked
