@@ -163,14 +163,16 @@ class ClipMaker:
             log.exception("usage accounting failed")
 
     async def make(self, shot: Shot, moment: Moment, frame: bytes, mime: str) -> Video:
-        """The clip, or why there is none: one retry on a server error or a timeout; a block is final."""
+        """The clip, or why there is none: one retry on a server error or a timeout before the job is accepted — never
+        once it is (review #2: it would run and be billed twice); a block is final."""
         request = clip_request(shot, moment)
         for attempt in (1, 2):
+            submitted: list = []
             try:
-                done = await asyncio.wait_for(self._run(request, frame, mime), self._timeout_s)
+                done = await asyncio.wait_for(self._run(request, frame, mime, submitted), self._timeout_s)
             except Exception as exc:  # noqa: BLE001 — any provider failure: no clip, never a crash
                 self._report(None, False)
-                if attempt == 1 and _retryable(exc):
+                if attempt == 1 and not submitted and _retryable(exc):
                     log.info("video: %s — once more", type(exc).__name__)
                     continue
                 log.warning("video: failed (%s)", type(exc).__name__)
@@ -178,7 +180,7 @@ class ClipMaker:
             return await self._result(done)
         return Video(None, why="failed")  # never reached: the loop returns
 
-    async def _run(self, request: str, frame: bytes, mime: str):
+    async def _run(self, request: str, frame: bytes, mime: str, submitted: list):
         interactions = self._client.aio.interactions
         it = await interactions.create(
             model=self.model,
@@ -188,9 +190,15 @@ class ClipMaker:
                              "delivery": "uri"},
             generation_config={"video_config": {"task": "image_to_video"}},
             background=True)
+        submitted.append(True)
         while getattr(it, "status", None) in WORKING:
             await self._sleep(self._poll_s)
-            it = await interactions.get(it.id)
+            try:
+                it = await interactions.get(it.id)
+            except Exception as exc:  # review #2: the job is accepted — a server error asks again, never resubmits
+                if not _retryable(exc):
+                    raise
+                log.info("video: %s while waiting — asking again", type(exc).__name__)
         return it
 
     async def _result(self, it) -> Video:
@@ -250,15 +258,17 @@ class NoteMaker:
             log.exception("usage accounting failed")
 
     async def make(self, frame: bytes, frame_mime: str, mp3: bytes) -> Video:
-        """Her кружечок before the square cut, or why there is none: one retry on a 5xx or a timeout."""
+        """Her кружечок before the square cut, or why there is none: one retry on a 5xx or a timeout before fal accepts
+        the job — never once it has (review #2: it would run and be billed twice)."""
         body = {"image_url": data_uri(frame, frame_mime), "audio_url": data_uri(mp3, "audio/mpeg"),
                 "prompt": NOTE_PROMPT}
         for attempt in (1, 2):
+            submitted: list = []
             try:
-                return await asyncio.wait_for(self._run(body), self._timeout_s)
+                return await asyncio.wait_for(self._run(body, submitted), self._timeout_s)
             except (_Retry, TimeoutError, aiohttp.ClientConnectionError) as exc:
                 self._report(None, False)
-                if attempt == 1:
+                if attempt == 1 and not submitted:
                     log.info("video: %s — once more", type(exc).__name__)
                     continue
                 log.warning("video: failed (%s)", type(exc).__name__)
@@ -292,27 +302,40 @@ class NoteMaker:
                 raise RuntimeError(f"HTTP {resp.status}")
             return data if isinstance(data, dict) else {}
 
-    async def _run(self, body: dict) -> Video:
+    async def _again(self, call):
+        """Review #2: once fal has the job, a 5xx or a dropped connection asks again (within `make`'s timeout)."""
+        while True:
+            try:
+                return await call()
+            except (_Retry, aiohttp.ClientConnectionError) as exc:
+                log.info("video: %s while waiting — asking again", type(exc).__name__)
+                await self._sleep(self._poll_s)
+
+    async def _download(self, session, url: str) -> bytes:
+        async with session.get(url) as resp:  # fal's storage: no key sent there
+            if resp.status >= 500:
+                raise _Retry(f"HTTP {resp.status}")
+            if resp.status != 200:
+                raise RuntimeError(f"HTTP {resp.status}")
+            return await resp.read()
+
+    async def _run(self, body: dict, submitted: list) -> Video:
         async with ClientSession() as session:
             sent = await self._queue(session, "POST", f"{QUEUE_URL}/{self.model}", json=body)
             status_url, response_url = sent.get("status_url"), sent.get("response_url")
             if not status_url or not response_url:
                 raise RuntimeError("no request")
+            submitted.append(True)
             while True:
-                status = await self._queue(session, "GET", status_url)
+                status = await self._again(lambda: self._queue(session, "GET", status_url))
                 if status.get("status") not in FAL_WORKING:
                     break
                 await self._sleep(self._poll_s)
-            result = await self._queue(session, "GET", response_url)
+            result = await self._again(lambda: self._queue(session, "GET", response_url))
             video = result.get("video") if isinstance(result.get("video"), dict) else {}
             if not video.get("url"):
                 raise _Blocked
-            async with session.get(video["url"]) as resp:  # fal's storage: no key sent there
-                if resp.status >= 500:
-                    raise _Retry(f"HTTP {resp.status}")
-                if resp.status != 200:
-                    raise RuntimeError(f"HTTP {resp.status}")
-                data = await resp.read()
+            data = await self._again(lambda: self._download(session, video["url"]))
         seconds = result.get("duration")
         seconds = float(seconds) if isinstance(seconds, int | float) and not isinstance(seconds, bool) else None
         if not data:

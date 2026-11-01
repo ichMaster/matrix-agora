@@ -194,7 +194,7 @@ def test_a_clip_that_never_ends_is_a_timeout(monkeypatch):
         await asyncio.sleep(0.005)
     maker_._sleep = slow
     assert asyncio.run(maker_.make(Shot("clip", "море"), EVENING, b"F", "image/png")).why == "failed"
-    assert len(inter.calls) == 2                                                          # retried once
+    assert len(inter.calls) == 1                     # review #2: an accepted job is never sent again
 
 
 # --- Kling Avatar on fal ----------------------------------------------------------------------------------------------
@@ -417,3 +417,35 @@ def test_fals_key_leaves_the_environment_and_its_absence_is_a_warning(tmp_path, 
     agent = agent_mod.Agent(cfg, llm=GeminiClient())
     assert agent.notes is None
     assert [r.levelname for r in caplog.records if "no FAL_KEY" in r.getMessage()] == ["WARNING"]
+
+
+
+def test_a_server_error_while_waiting_asks_again_and_never_resubmits(monkeypatch, caplog):
+    # v5.18 review #2: one 5xx on a poll resubmitted the whole job — run and billed twice
+    caplog.set_level(logging.INFO)
+    maker_, inter, _, seen = clips([interaction("queued")], [StatusError(503), done_by_uri()])
+    original_get = inter.get
+
+    async def get(id):
+        out = await original_get(id)
+        if isinstance(out, Exception):
+            raise out
+        return out
+    inter.get = get
+    assert asyncio.run(maker_.make(Shot("clip", "море"), EVENING, b"F", "image/png")).why == "ok"
+    assert len(inter.calls) == 1 and [s[3] for s in seen] == [True]
+    note, posted, sinks = notes(monkeypatch, submitted(), FakeResponse(502), *finished())
+    assert asyncio.run(note.make(b"F", "image/png", b"M")) == Video(b"MP4-note", "video/mp4", 12.4)
+    assert [m for m, *_ in posted].count("POST") == 1 and sinks == [(NOTE_MODEL, 12400, True, None)]
+    assert "asking again" in caplog.text
+
+
+def test_a_note_that_never_ends_is_never_resubmitted(monkeypatch):
+    note, posted, sinks = notes(monkeypatch, submitted(), *[FakeResponse(200, {"status": "IN_PROGRESS"})] * 500)
+    note._timeout_s = 0.01
+
+    async def slow(s):
+        await asyncio.sleep(0.005)
+    note._sleep = slow
+    assert asyncio.run(note.make(b"F", "image/png", b"M")).why == "failed"
+    assert [m for m, *_ in posted].count("POST") == 1 and sinks == [(NOTE_MODEL, None, False, None)]
