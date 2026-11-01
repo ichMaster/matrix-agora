@@ -60,6 +60,28 @@ FRAME_LINES = {
 CLIP_STYLE = ("A handheld phone video with natural motion, as someone films what they see. The sound of the place only: "
               "no dialogue, no voice, no narration, no music. No text, caption or watermark. Nobody's face.")
 NOTE_PROMPT = "She talks to the front camera of her phone, with natural small head movements and blinks."
+
+# her private brief's skill (v5.18, the owner): understood from the talk, never a keyword — and never a word that a
+# video is made: she records it
+NOTE_SKILL = (
+    "Ти можеш записати Ich кружечок — коротке відеоповідомлення, де ти кажеш йому свою відповідь у камеру телефона. "
+    "Тоді напиши відповідь як завжди, щоб уголос вона була не довша за пів хвилини, а в самому кінці додай окремий "
+    "останній рядок: слово КРУЖЕЧОК великими літерами, двокрапка і де ти зараз і що навколо тебе, одним реченням."
+)
+CLIP_SKILL = (
+    "Ти можеш зняти для Ich коротке відео того, що бачиш, — без себе в кадрі й без слів, лише звуки місця. Тоді в "
+    "самому кінці додай окремий останній рядок: слово ВІДЕО великими літерами, двокрапка і що на відео, одним реченням."
+)
+SKILL_TAIL = ("Відео приходить йому трохи пізніше за твої слова. В одній відповіді — щонайбільше одне фото чи відео. "
+              "Не хочеш чи не можеш зараз — просто скажи це своїми словами.")
+VIDEO_FAILED = ("Відео, яке ти щойно хотіла надіслати Ich, не надіслалося. Скажи про це дуже коротко, одним реченням, "
+                "своїми словами, або нічого не кажи. Нічого нового не обіцяй.")
+
+
+def video_skill(kinds: tuple[str, ...]) -> str:
+    """Her video skill for the kinds she may send now (pure): the кружечок, the clip, or both; empty for none."""
+    parts = [NOTE_SKILL] * ("note" in kinds) + [CLIP_SKILL] * ("clip" in kinds)
+    return " ".join([*parts, SKILL_TAIL]) if parts else ""
 FFMPEG_MP3 = ("ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le", "-ar", str(RATE), "-ac", "1",
               "-i", "pipe:0", "-c:a", "libmp3lame", "-b:a", "96k", "-f", "mp3", "pipe:1")
 NOTE_FILTER = f"crop='min(iw,ih)':'min(iw,ih)',scale={NOTE_SIDE}:{NOTE_SIDE},setsar=1"

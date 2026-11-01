@@ -39,8 +39,9 @@ class Maker:
     def __init__(self, made=None):
         self.made, self.shots = made or Made(b"JPEG", "image/jpeg", "ok"), []
 
-    async def make(self, shot, moment):
+    async def make(self, shot, moment, aspect="3:4", extra=None):
         self.shots.append(shot)
+        self.frames = [*getattr(self, "frames", []), (aspect, extra)]
         return self.made
 
 

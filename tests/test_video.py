@@ -364,7 +364,7 @@ def test_no_ffmpeg_is_none(monkeypatch):
     assert asyncio.run(pcm_to_mp3(b"\x00\x00")) is None and asyncio.run(square_note(b"M")) is None
 
 
-# --- until its flow (AGORA-166) ----------------------------------------------------------------------------------------
+# --- with videos off ------------------------------------------------------------------------------------------------
 @pytest.fixture
 def ogg(monkeypatch):
     from agents import agent as agent_mod
@@ -374,7 +374,7 @@ def ogg(monkeypatch):
     monkeypatch.setattr(agent_mod, "encode_opus", encode)
 
 
-def test_a_video_line_is_never_made_a_photo(tmp_path, monkeypatch, ogg, caplog):
+def test_with_videos_off_a_video_line_is_dropped_never_made_a_photo(tmp_path, monkeypatch, ogg, caplog):
     from tests.test_photo_route import her
     from tests.test_private_runtime import ms
     caplog.set_level(logging.INFO)
@@ -404,6 +404,7 @@ def test_fals_key_leaves_the_environment_and_its_absence_is_a_warning(tmp_path, 
     from tests.test_telegram_runtime import kira as telegram_kira
     monkeypatch.setattr(GeminiClient, "__init__", lambda self, sink=None: None)
     monkeypatch.setattr(agent_mod, "photo_maker", lambda *a: object())
+    monkeypatch.setattr(agent_mod, "clip_maker", lambda *a: object())
     monkeypatch.setattr(agent_mod, "load_faces", lambda folder: [("kira.png", b"x", "image/png")])
     cfg = telegram_kira(tmp_path, monkeypatch).cfg
     cfg = cfg.__class__(**{**cfg.__dict__, "capabilities": cfg.capabilities | {"photos", "videos", "voice"}})

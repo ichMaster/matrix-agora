@@ -190,6 +190,16 @@ SCHEMA: tuple[Setting, ...] = (
     _s("PHOTO_SIZE", "choice", "1K", "private", "cap:photos", None, "Розмір її фото", choices=("1K", "2K")),
     _s("PHOTO_DAY_MAX", "int", "40", "private", "cap:photos", None, "Скільки фото на день щонайбільше (запобіжник)",
        "", 0, 200),
+    # v5.18 — her videos in Telegram (`videos`): her clips' model and size, her кружечок's model and length, and a
+    # day's cap for both together (a video costs about a dollar; 0 turns them off)
+    _s("VIDEO_MODEL", "choice", "gemini-omni-1.1-flash", "private", "cap:videos", None, "Модель її відео",
+       choices=("gemini-omni-1.1-flash",)),
+    _s("VIDEO_RESOLUTION", "choice", "720p", "private", "cap:videos", None, "Якість її відео", choices=("720p", "1080p")),
+    _s("VIDEO_NOTE_MODEL", "choice", "fal-ai/kling-video/ai-avatar/v2/standard", "private", "cap:videos", None,
+       "Модель її кружечків",
+       choices=("fal-ai/kling-video/ai-avatar/v2/standard", "fal-ai/kling-video/ai-avatar/v2/pro")),
+    _s("VIDEO_NOTE_MAX_S", "int", "30", "private", "cap:videos", None, "Найдовший кружечок", "с", 5, 60),
+    _s("VIDEO_DAY_MAX", "int", "4", "private", "cap:videos", None, "Скільки відео на день щонайбільше", "", 0, 20),
     # v5.16 — after a prompt-stage block Gemini is asked which parts of her prompt it blocks: calls per block and per
     # day (0 for either: off)
     _s("PROBE_CALLS", "int", "12", "fallback", "cap:fallback", None, "Скільки перевірок Gemini на один блок", "", 0, 50),

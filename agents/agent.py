@@ -294,9 +294,24 @@ from agents.usage import (
     usage_line,
     video_note_usage_line,
 )
+from agents.video import (
+    FRAME_ASPECT,
+    FRAME_LINES,
+    NOTE_MODEL,
+    NOTE_SIDE,
+    VIDEO_FAILED,
+    ClipMaker,
+    NoteMaker,
+    Video,
+    clip_maker,
+    frame_shot,
+    pcm_to_mp3,
+    square_note,
+    video_skill,
+)
 from agents.video import KEY_VAR as FAL_KEY_VAR
 from agents.video import KINDS as VIDEO_KINDS
-from agents.video import NOTE_MODEL, NoteMaker
+from agents.video import MODEL as VIDEO_MODEL
 from agents.voice import (
     STT_MODEL,
     TTS_MODEL,
@@ -518,9 +533,21 @@ class Agent:
                 log.info("photos: %d faces", len(faces))
             else:  # review #3: the first deploy ran so, unnoticed — every selfie would quietly be redrawn without one
                 log.warning("photos: no faces — a selfie will not come out")
-        # v5.18 — her кружечок: Kling Avatar on fal, from her selfie and her voice (the key lives only in the maker)
+        # v5.18 — her videos in Telegram: her кружечок (Kling Avatar on fal, from her selfie and her voice; the key lives
+        # only in the maker) and her clips (Omni Flash, from a photo of what she sees); one at a time, after her answer
         self.notes: NoteMaker | None = None
+        self.clips: ClipMaker | None = None
+        self.video_day_max, self.video_note_max_s = 0, 30
+        self._offer_video: tuple[str, ...] = ()
+        self._video_busy = False
+        self.voice_held: bytes | None = None
+        self.voice_hold_miss: str | None = None
         if cfg.can("videos"):
+            self.video_day_max = int(os.environ.get("VIDEO_DAY_MAX", "4"))
+            self.video_note_max_s = int(os.environ.get("VIDEO_NOTE_MAX_S", "30"))
+            if isinstance(self.llm, GeminiClient):
+                self.clips = clip_maker(os.environ.get("VIDEO_MODEL", "gemini-omni-1.1-flash").strip() or VIDEO_MODEL,
+                                        os.environ.get("VIDEO_RESOLUTION", "720p").strip() or "720p", self.record_usage)
             if fal_key:
                 self.notes = NoteMaker(fal_key, os.environ.get("VIDEO_NOTE_MODEL", "fal-ai/kling-video/ai-avatar/v2/standard").strip()
                                        or NOTE_MODEL, sink=self.record_video_note_usage)
@@ -991,6 +1018,7 @@ class Agent:
         self._blocked_parts = None
         self._pending_shot = None
         self._offer_photo = self._photo_open(door)  # v5.17: her photo skill, for Gemini's prompt only
+        self._offer_video = self._video_kinds(door)  # v5.18: the videos she may send now, for Gemini's prompt only
         kind = "private_nudge" if nudge else "private"
         try:
             if door == "matrix":
@@ -1021,10 +1049,15 @@ class Agent:
             seen = list(self._unanswered)  # v5.13 review #2: the lines this call answers — never one that comes later
             text, by, judge_after = await self._private_text(brief, nudge, seen)
             shot, self._pending_shot = (self._pending_shot if by == "gemini" else None), None
-            self._offer_photo = False
+            self._offer_photo, self._offer_video = False, ()
             made: Made | None = None
-            if shot is not None and shot.kind in VIDEO_KINDS:  # v5.18: a video's line, never a photo
-                log.info("video: dropped (off)")
+            video: Shot | None = None
+            if shot is not None and shot.kind in VIDEO_KINDS:  # v5.18: her video goes after her answer, never a photo
+                why = self._video_closed(door, shot.kind)
+                if why:
+                    log.info("video: dropped (%s)", why)
+                elif text is not None:
+                    video = shot
                 shot = None
             if text is not None and shot is not None:  # v5.17: her photo, made before anything is sent
                 if door != "telegram" or not self._photo_open(door):
@@ -1048,7 +1081,9 @@ class Agent:
             mark = BACKUP_MARK if by == "backup" else None  # v5.15: the owner sees which network wrote it
             if door == "matrix":
                 sent_id = await self.send_line(room, text, f"private:{self.clock()}", mark=mark)
-            elif not await self.send_telegram(text, mark=mark, photo=made):  # never said: not in the history
+            elif not await self.send_telegram(text, mark=mark, photo=made,  # never said: not in the history
+                                              hold_voice_s=self.video_note_max_s if video and video.kind == "note"
+                                              else None):  # v5.18: her voice held for her кружечок
                 log.warning("private: not delivered (telegram)")
                 return False
             if made is not None and self.photo_sent:  # v5.17: kept as a file and named in her line
@@ -1063,6 +1098,12 @@ class Agent:
             self._archive(key, self.clock(), "private", door, self.cfg.name, text)
             if self.cfg.can("summary"):
                 self.session.append((private_label(self.cfg.name), text))
+            if video is not None:  # v5.18: made and sent in the background — her next answer never waits for it
+                if video.kind == "note" and self.voice_held is None:
+                    log.info("video: dropped (%s)", self.voice_hold_miss or "no voice")
+                else:
+                    self._video_busy = True
+                    self._spawn(self._video_after(video, self.voice_held if video.kind == "note" else None, brief))
             if by == "backup":  # v5.14: the backup's talk waits for the judge — her line too, closed to Gemini
                 censor = judge_after is not None and judge_after[0] == PROHIBITED  # v5.15.3: never rated
                 self.close_lines([(self.cfg.name, str(text))])
@@ -1192,6 +1233,8 @@ class Agent:
         drawn: list = []
         if self._offer_photo:  # v5.17: her photo skill — Gemini's alone, never the backup's
             brief = f"{brief}\n\n{PHOTO_SKILL}"
+        if self._offer_video:  # v5.18: her video skill, the same way
+            brief = f"{brief}\n\n{video_skill(self._offer_video)}"
         facts = self.facts_now()  # v5.8 review #6: mirrored before the recall, so a deleted fact is not recalled
         if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
             query = next((t for s, t in reversed(self.gemini_history()) if s == "Ich"), "")  # v5.14: open only
@@ -2035,8 +2078,130 @@ class Agent:
         return (self.photos is not None and door == "telegram" and self.photo_day_max > 0
                 and self.photos_today() < self.photo_day_max)
 
-    async def _make_photo(self, shot: Shot) -> Made:
-        """v5.17 — her photo for this moment: her clock, the season and (with `mood`) her day's Lviv weather."""
+    def videos_today(self) -> int:
+        """v5.18 — her videos kept today (`state/<name>.videos/<day>/`), for the day's cap."""
+        folder = self._dir("videos") / local_now(self.clock(), self.tz).date().isoformat()
+        try:
+            return sum(1 for p in folder.iterdir() if p.is_file())
+        except OSError:
+            return 0
+
+    def _video_closed(self, door: str | None, kind: str) -> str | None:
+        """v5.18 — why her answer may not carry this video now (None: it may): not Telegram, the maker off (a кружечок
+        also needs her photo and her voice), the day's cap, or a video already being made."""
+        if door != "telegram":
+            return "element"
+        maker = self.notes if kind == "note" else self.clips
+        if maker is None or self.photos is None or (kind == "note" and self.tts is None) or self.video_day_max <= 0:
+            return "off"
+        if self.videos_today() >= self.video_day_max:
+            return "cap"
+        return "busy" if self._video_busy else None
+
+    def _video_kinds(self, door: str | None) -> tuple[str, ...]:
+        """v5.18 — the videos her answer may carry now, for Gemini's prompt."""
+        return tuple(k for k in VIDEO_KINDS if self._video_closed(door, k) is None)
+
+    async def _make_video(self, shot: Shot, pcm: bytes | None) -> Video:
+        """v5.18 — her video: its first frame (her photo), then her кружечок (her voice as mp3, fal, the square cut)
+        or her clip (Omni Flash); any step that fails is the reason."""
+        frame = await self._make_photo(frame_shot(shot), FRAME_ASPECT[shot.kind], FRAME_LINES[shot.kind])
+        if frame.why != "ok" or not frame.image:
+            return Video(None, why=frame.why if frame.why != "ok" else "failed")
+        if shot.kind == "clip":
+            return await self.clips.make(shot, self._moment(), frame.image, frame.mime)
+        mp3 = await pcm_to_mp3(pcm or b"")
+        if mp3 is None:
+            return Video(None, why="failed")
+        raw = await self.notes.make(frame.image, frame.mime, mp3)
+        if raw.why != "ok":
+            return raw
+        square = await square_note(raw.data)
+        return Video(square, seconds=raw.seconds) if square else Video(None, why="failed")
+
+    async def _video_after(self, shot: Shot, pcm: bytes | None, brief: str) -> None:
+        """v5.18 — after her answer: «записує відеоповідомлення» / «надсилає відео» kept up while the video is made,
+        then sent and kept, her line naming it; a кружечок that did not come out is her voice note after all, a clip
+        one short line of hers. Never a crash; one at a time."""
+        name = "record_video_note" if shot.kind == "note" else "upload_video"
+        action = None
+        try:
+            try:
+                await self.telegram.send_chat_action(self.telegram_owner, name)
+                action = asyncio.create_task(self._telegram_action(name))
+                made = await self._make_video(shot, pcm)
+            except Exception as exc:  # noqa: BLE001 — no video, never a crash
+                log.warning("video: failed (%s)", type(exc).__name__)
+                made = Video(None, why="failed")
+            finally:
+                if action is not None:
+                    action.cancel()
+            why, sent = made.why, False
+            if made.why == "ok" and made.data:
+                if shot.kind == "note":
+                    seconds = made.seconds if made.seconds else duration_ms(pcm or b"") / 1000
+                    sent = await self.telegram.send_video_note(self.telegram_owner, made.data, round(seconds),
+                                                               NOTE_SIDE)
+                else:
+                    sent = await self.telegram.send_video(self.telegram_owner, made.data,
+                                                          round(made.seconds) if made.seconds else None)
+                why = "ok" if sent else "not sent"
+            if sent:
+                self.keep_video(made)
+                log.info("video: sent (%s, telegram)", shot.kind)
+                self._own_private_line(photo_note("", shot).strip())
+            elif shot.kind == "note":
+                log.warning("video: %s — her voice note instead", why)
+                ogg = await encode_opus(pcm) if pcm else None
+                if ogg is None or not await self.telegram.send_voice(self.telegram_owner, ogg,
+                                                                     round(duration_ms(pcm) / 1000)):
+                    log.warning("voice: not sent (telegram)")
+            else:
+                log.warning("video: %s — a line of hers instead", why)
+                await self._video_failed_line(brief)
+        except Exception as exc:  # noqa: BLE001
+            log.error("video: failed after her answer (%s)", type(exc).__name__)
+        finally:
+            self._video_busy = False
+
+    async def _video_failed_line(self, brief: str) -> None:
+        """v5.18 — her clip did not send: one short line of hers through Gemini, or nothing — drawn in turn with her
+        answers (never while one is on its way), and an owner's line that came meanwhile is answered after."""
+        for _ in range(120):
+            if not self._private_pending:
+                break
+            await asyncio.sleep(1)
+        else:
+            log.info("video: no line — an answer kept the chat")
+            return
+        self._private_pending = True
+        try:
+            self._offer_photo, self._offer_video, self._pending_shot = False, (), None
+            text, _ = await self._gemini_text(f"{brief}\n\n{VIDEO_FAILED}", "private")
+            self._pending_shot = None
+            if text is not None and await self.send_telegram(text):
+                self._own_private_line(str(text))
+        finally:
+            again = self._private_again
+            self._private_pending = False
+            if again:  # the owner wrote meanwhile: answer him (as after a line written first)
+                self._private_pending = True
+                self._spawn(self.private_later(0))
+
+    def _own_private_line(self, text: str) -> None:
+        """v5.18 — a line of hers sent in Telegram after her answer (a video's note, a short line): her private history,
+        her archive and the session, as her answer's own."""
+        self.private_history = append_history(self.private_history, self.cfg.name, text, max(self.history_n, 1))
+        self.last_private_ms = self.clock()
+        self._own_seq += 1
+        self._archive(f"own:telegram:{self.clock()}:{self._own_seq}", self.clock(), "private", "telegram",
+                      self.cfg.name, text)
+        if self.cfg.can("summary"):
+            self.session.append((private_label(self.cfg.name), text))
+
+    def _moment(self) -> Moment:
+        """v5.17 — her moment for a photo or (v5.18) a clip: her clock, the season and (with `mood`) her day's Lviv
+        weather."""
         now = local_now(self.clock(), self.tz)
         weather = None
         if self.cfg.can("mood"):
@@ -2044,8 +2209,12 @@ class Agent:
                 weather = load_weather(self.weather_file, now.date().isoformat())
             except Exception as exc:  # noqa: BLE001 — a photo without the weather, never none
                 log.error("photo: the weather was not read (%s)", type(exc).__name__)
+        return Moment(now, weather)
+
+    async def _make_photo(self, shot: Shot, aspect: str = "3:4", extra: str | None = None) -> Made:
+        """v5.17 — her photo for this moment; v5.18: a video's first frame takes its aspect and frame line."""
         try:
-            return await self.photos.make(shot, Moment(now, weather))
+            return await self.photos.make(shot, self._moment(), aspect, extra)
         except Exception as exc:  # noqa: BLE001 — her answer without it, never a crash
             log.warning("photo: failed (%s)", type(exc).__name__)
             return Made(None, why="failed")
@@ -2053,9 +2222,15 @@ class Agent:
     def keep_photo(self, made: Made) -> None:
         """v5.17 — a photo she sent, kept as `state/<name>.photos/<day>/HHMMSS.jpg` (file 0600, folders 0700); a write
         error is logged by its type."""
+        self._keep_media("photos", made.image, ".png" if made.mime == "image/png" else ".jpg")
+
+    def keep_video(self, made: Video) -> None:
+        """v5.18 — a video she sent, kept as `state/<name>.videos/<day>/HHMMSS.mp4` (file 0600, folders 0700)."""
+        self._keep_media("videos", made.data, ".mp4")
+
+    def _keep_media(self, kind: str, data: bytes | None, ext: str) -> None:
         now = local_now(self.clock(), self.tz)
-        folder = self._dir("photos") / now.date().isoformat()
-        ext = ".png" if made.mime == "image/png" else ".jpg"
+        folder = self._dir(kind) / now.date().isoformat()
         try:
             folder.mkdir(mode=0o700, parents=True, exist_ok=True)
             os.chmod(folder.parent, 0o700)
@@ -2064,21 +2239,22 @@ class Agent:
             while path.exists():
                 n += 1
                 path = folder / f"{now:%H%M%S}-{n}{ext}"
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            try:
-                os.write(fd, made.image or b"")
-            finally:
-                os.close(fd)
+            with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as out:
+                out.write(data or b"")
         except OSError as exc:
-            log.error("photo: not kept (%s)", type(exc).__name__)
+            log.error("%s: not kept (%s)", kind[:-1], type(exc).__name__)
 
-    async def send_telegram(self, text: str, mark: str | None = None, photo: Made | None = None) -> bool:
+    async def send_telegram(self, text: str, mark: str | None = None, photo: Made | None = None,
+                            hold_voice_s: float | None = None) -> bool:
         """Every answer in Telegram is a voice note in her own voice, then the text (the owner, 2026-10-21) — the
         speakers' monthly budget and `voiceable` still hold; when the voice cannot be made, the text goes alone.
         `mark` (v5.15): a line above the text only, never voiced. v5.17: with `photo`, after the voice note the photo
         goes with her words as its caption (a text over Telegram's caption limit: the photo, then the text; a photo not
-        sent: the text alone) — `photo_sent` says whether it went. True when the text went out."""
+        sent: the text alone) — `photo_sent` says whether it went. v5.18: with `hold_voice_s`, a voice of at most that
+        long is held for her кружечок instead of sent (`voice_held`; else `voice_hold_miss` says why not). True when
+        the text went out."""
         self.photo_sent = False
+        self.voice_held, self.voice_hold_miss = None, None
         text, speech = spoken(text)  # v5.9: her voice gets the tags, the message her words
         why = self.voice_off
         if self.tts is not None:
@@ -2089,14 +2265,21 @@ class Agent:
             else:
                 pcm = await self.tts.synth(speech)
                 self.record_tts(len(speech), pcm is not None)
+                if hold_voice_s is not None and pcm is not None:
+                    if duration_ms(pcm) <= hold_voice_s * 1000:
+                        self.voice_held, pcm = pcm, None  # sent later as her кружечок, or as this voice note
+                        log.info("voice: held for a кружечок (telegram)")
+                    else:
+                        self.voice_hold_miss = "too long"
                 ogg = await encode_opus(pcm) if pcm is not None else None
-                why = ("tts failed" if pcm is None else "encode failed" if ogg is None
+                why = ("held" if self.voice_held is not None else "tts failed" if pcm is None
+                       else "encode failed" if ogg is None
                        else None if await self.telegram.send_voice(self.telegram_owner, ogg,
                                                                    round(duration_ms(pcm) / 1000))
                        else "send failed")
             if why is None:
                 log.info("voice: sent (%d chars, telegram)", len(text))
-            elif why != "not voiceable":
+            elif why not in ("not voiceable", "held"):
                 log.info("voice: text only (%s, telegram)", why)
         body = f"{mark}\n{text}" if mark else text
         if photo is not None and photo.image:
