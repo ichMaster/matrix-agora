@@ -163,8 +163,9 @@ def test_the_kinds_carry_their_share_and_the_rows_their_atoms():
     assert sum(v for v in share.values() if v) == pytest.approx(1, abs=1e-3)
     row = next(x for x in r["rows"] if x["service"] == "deepgram")
     assert set(row) == {"day", "agent", "service", "model", "kind", "calls", "failed", "blocked", "input", "output",
-                        "tokens", "characters", "audio_s", "video_s", "billing", "cost"}
-    assert row["cost"] is None and row["audio_s"] == 4.0
+                        "tokens", "characters", "audio_s", "video_s", "billing", "cost",
+                        "latency_median_ms", "latency_p95_ms"}  # v5.22: the CSV's call time
+    assert row["cost"] is None and row["audio_s"] == 4.0 and row["latency_median_ms"] is None
 
 
 def test_the_row_counts_the_audio_heard():

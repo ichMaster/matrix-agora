@@ -25,8 +25,10 @@ from agents.usage import (
     Row,
     aggregate,
     analyze,
+    analyze_detail,
     cost,
     month_chars,
+    parse_answers,
     parse_lines,
     parse_model_prices,
     parse_second_prices,
@@ -431,6 +433,21 @@ def _all_usage_records(state_dir: Path) -> tuple[list[dict], int]:
     return parse_lines(lines)
 
 
+def _all_answer_records(state_dir: Path) -> tuple[list[dict], int]:
+    """v5.22 — every `state/*.answers.jsonl`, read once: the parsed lines and how many were corrupt (skipped)."""
+    lines: list[str] = []
+    for path in sorted(state_dir.glob("*.answers.jsonl")):
+        try:
+            lines += path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+    return parse_answers(lines)
+
+
+def local_now(tz: str | None = None) -> datetime:
+    return datetime.now(ZoneInfo(tz or os.environ.get("TIMEZONE", "Europe/Kyiv")))
+
+
 def _price_book() -> PriceBook:
     """Every price from the environment; a malformed entry is named in the log once (review #12: a price spec, never
     a secret) and ignored."""
@@ -460,15 +477,19 @@ def analytics_period(since: str, until: str, max_days: int) -> tuple[date, date]
 
 
 def analytics_view(state_dir: Path, since: date, until: date, agent: str | None = None,
-                   today: date | None = None) -> dict:
+                   today: date | None = None, now: datetime | None = None) -> dict:
     """v5.19 — the Analytics view: the usage files read once, the prices from the environment, and `analyze()`'s
-    report for the period and the agent (or all); an unreadable `state/` is unavailable, never a 500."""
+    report for the period and the agent (or all); an unreadable `state/` is unavailable, never a 500. v5.22: with the
+    answers' files, `analyze_detail()`'s `speed`, `answers`, `prompts` and `media` and their `buckets`."""
     if not readable(state_dir):
         return {"available": False}
     records, bad = _all_usage_records(state_dir)
+    answers, bad_answers = _all_answer_records(state_dir)
     prices = _price_book()
-    return {"available": True, "priced": prices.priced, "corrupt_lines": bad,
-            **analyze(records, since, until, agent, prices, today)}
+    detail = analyze_detail(records, answers, since, until, agent, now, prices)
+    return {"available": True, "priced": prices.priced, "corrupt_lines": bad + bad_answers,
+            **analyze(records, since, until, agent, prices, today),
+            **{k: detail[k] for k in ("buckets", "by_hour", "speed", "answers", "prompts", "media")}}
 
 
 def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None) -> dict:

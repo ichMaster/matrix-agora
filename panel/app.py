@@ -35,7 +35,15 @@ from panel.files import (
 )
 from panel.health import Prober
 from panel.host import host_metrics
-from panel.memory import analytics_period, analytics_view, local_today, memory_view, prompt_view, usage_view
+from panel.memory import (
+    analytics_period,
+    analytics_view,
+    local_now,
+    local_today,
+    memory_view,
+    prompt_view,
+    usage_view,
+)
 from panel.registry import Registry
 from panel.settings import SettingsError, save_settings, settings_view
 
@@ -282,7 +290,8 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
             first, last = analytics_period(since, until, ANALYTICS_DAYS_MAX)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
-        return analytics_view(state_dir, first, last, agent, local_today())  # review #2: today is not over
+        now = local_now()
+        return analytics_view(state_dir, first, last, agent, now.date(), now)  # review #2: today is not over
 
     @app.get("/api/agents/{name}/logs")
     def agent_logs(name: str, tail: int = 200) -> dict:

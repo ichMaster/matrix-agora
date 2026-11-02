@@ -19,7 +19,8 @@ from panel.registry import Registry
 TOKEN = "t" * 32
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
 KEYS = {"available", "priced", "corrupt_lines", "since", "until", "days", "agent", "total", "previous", "services",
-        "kinds", "day_series", "previous_cumulative", "trend", "agents", "subscriptions", "unpriced", "rows"}
+        "kinds", "day_series", "previous_cumulative", "trend", "agents", "subscriptions", "unpriced", "rows",
+        "buckets", "by_hour", "speed", "answers", "prompts", "media"}  # v5.22
 
 
 def gem(day, agent="kira", model="gemini-3.1-pro-preview"):
@@ -61,6 +62,32 @@ def test_the_route_answers_her_month_by_service_with_the_shape_pinned(state):
     assert [s["service"] for s in body["services"]] == ["gemini", "fal", "openrouter", "elevenlabs"]
     assert body["total"]["cost"] == pytest.approx(2 * 3.2 + 1.6 + 0.75)
     assert body["agents"] == [] and body["subscriptions"] == []  # a fee is never split by agent
+
+
+def test_the_speed_the_answers_the_prompts_and_the_media_come_with_the_answers_files(state):
+    """v5.22: the timed calls, the answers' file (read beside the usage files), the prompts and the photos — a day by
+    the hour; a corrupt answer line is counted with the corrupt usage lines."""
+    from agents.usage import answer_line, usage_line
+    meta = type("M", (), {"prompt_token_count": 40_000, "candidates_token_count": 100, "total_token_count": 40_100})()
+    timed = [usage_line(f"2026-11-01T0{h}:00:00+02:00", "kira", "private", "gemini-3.1-pro-preview", meta, True,
+                        latency_ms=ms) for h, ms in ((8, 2000), (9, 6000))]
+    photo = usage_line("2026-11-01T09:30:00+02:00", "kira", "photo", "gemini-nano-banana-2.1", None, True,
+                       latency_ms=20000)
+    with (state / "kira.usage.jsonl").open("a", encoding="utf-8") as f:
+        f.write("".join(json.dumps(x) + "\n" for x in [*timed, photo]))
+    (state / "kira.answers.jsonl").write_text(json.dumps(answer_line(
+        "2026-11-01T08:00:10+02:00", "kira", "private", "telegram", "owner", 9000, 2500, "gemini", ["voice"]))
+        + "\n{torn\n", encoding="utf-8")
+    body = client(state).get("/api/analytics?since=2026-11-01&until=2026-11-01&agent=kira", headers=AUTH).json()
+    assert body["by_hour"] is True and len(body["buckets"]) == 24 and body["corrupt_lines"] == 2
+    svc = {s["service"]: s for s in body["speed"]["services"]}["gemini"]
+    assert (svc["median"], svc["max"], svc["series"][8], svc["series"][9]) == (6000, 20000, 2000, 6000)
+    assert body["answers"]["owner"]["wait"]["median"] == 9000 and body["answers"]["owner"]["net"]["median"] == 6500
+    prompts = body["prompts"]["services"][0]                         # the fixture's own 1M-token line is one
+    assert (prompts["calls"], prompts["mean"], prompts["max"]) == (3, 360_000, 1_000_000)
+    assert body["media"]["photos"] == 1 and body["media"]["series"][9]["photos"] == 1
+    row = next(r for r in body["rows"] if r["kind"] == "private" and r["service"] == "gemini" and r["latency_median_ms"])
+    assert (row["latency_median_ms"], row["latency_p95_ms"]) == (2000, 6000)
 
 
 def test_all_agents_carry_the_agents_and_the_subscriptions_fee(state):

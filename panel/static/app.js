@@ -33,7 +33,7 @@ const S = {
   prompt: undefined,  // v5.20: her last private prompt, fetched when its tab opens
   view: "dashboard",       // v5.19: or "analytics", kept in the address
   an: {range: "30d", since: "", until: "", agent: "all", metric: "calls", data: null, loading: false, error: null,
-       open: {}, req: 0, resize: 0},
+       open: {}, req: 0, resize: 0, tab: "cost"},  // v5.22: the view — cost, speed, prompts or media
 };
 
 // ── tiny helpers ─────────────────────────────────────────────────────────────
@@ -506,7 +506,9 @@ const svcColor = (s) => `var(--viz-${SERVICES[s]?.[1] || 8})`;
 const PRESETS = [["today", "Today"], ["yesterday", "Yesterday"], ["7d", "7 days"], ["30d", "30 days"],
                  ["month", "This month"], ["lastmonth", "Last month"], ["custom", "Custom"]];
 const CSV_HEAD = ["day", "agent", "service", "model", "kind", "calls", "failed", "blocked", "input", "output", "tokens",
-                  "characters", "audio_s", "video_s", "billing", "cost"];
+                  "characters", "audio_s", "video_s", "billing", "cost",
+                  "latency_median_ms", "latency_p95_ms"];  // v5.22: the calls' time
+const AN_TABS = [["cost", "Cost"], ["speed", "Speed"], ["prompts", "Prompts"], ["media", "Media"]];  // v5.22
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const fmtCost = (c) => c == null ? "—" : c !== 0 && Math.abs(c) < 0.01 ? `$${c.toFixed(4)}` : `$${c.toFixed(2)}`;
 const isoShift = (iso, days) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
@@ -527,6 +529,7 @@ function anPeriod(a = S.an) {
 function anHash() {
   const q = new URLSearchParams(S.an.range === "custom" ? {since: S.an.since, until: S.an.until} : {range: S.an.range});
   if (S.an.agent !== "all") q.set("agent", S.an.agent);
+  if (S.an.tab !== "cost") q.set("view", S.an.tab);  // v5.22
   return `#analytics?${q}`;
 }
 function readHash() {
@@ -539,6 +542,7 @@ function readHash() {
     S.an.range = PRESETS.some(([k]) => k === q.get("range") && k !== "custom") ? q.get("range") : "30d";
   }
   S.an.agent = q.get("agent") || "all";
+  S.an.tab = AN_TABS.some(([k]) => k === q.get("view")) ? q.get("view") : "cost";  // v5.22
 }
 async function loadAnalytics() {
   const [since, until] = anPeriod();
@@ -597,7 +601,7 @@ function axes(days, top, W, H, fmt) {
   const grid = [0, 0.25, 0.5, 0.75, 1].map((f) => `<line class="an-grid${f ? "" : " base"}" x1="${PAD.l}" x2="${W - PAD.r}" y1="${y(top * f)}" y2="${y(top * f)}"/>` +
     `<text class="an-tick" x="${PAD.l - 6}" y="${y(top * f) + 4}" text-anchor="end">${esc(fmt(top * f))}</text>`).join("");
   const band = (W - PAD.l - PAD.r) / days.length, every = Math.max(1, Math.ceil(days.length / Math.max(2, Math.floor((W - PAD.l) / 64))));
-  const labels = days.map((d, i) => i % every ? "" : `<text class="an-tick" x="${PAD.l + band * (i + 0.5)}" y="${H - 8}" text-anchor="middle">${esc(shortDay(d))}</text>`).join("");
+  const labels = days.map((d, i) => i % every ? "" : `<text class="an-tick" x="${PAD.l + band * (i + 0.5)}" y="${H - 8}" text-anchor="middle">${esc(bucketLabel(d))}</text>`).join("");
   return {y, band, x: (i) => PAD.l + band * (i + 0.5), html: grid + labels};
 }
 // one column per day, as tall as the plot: the reader aims at a day, never at a 2px line
@@ -605,8 +609,12 @@ const hits = (days, ax, H, tip) => days.map((d, i) => `<rect class="an-hit" x="$
 const topRounded = (x, y, w, h, r) => r <= 0 ? `M${x},${y + h}V${y}H${x + w}V${y + h}Z`
   : `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
 const pathOf = (pts) => pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join("");
+// v5.22: a line with gaps — a bucket with no value (null) breaks it, never a drop to zero
+const pathGaps = (pts) => pts.map((p, i) => p == null ? "" : `${i && pts[i - 1] != null ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("");
+// v5.22: a bucket is a day, or an hour («08») when the period is one day
+const bucketLabel = (b) => /^\d{2}$/.test(b) ? `${b}:00` : shortDay(b);
 
-function svgStackedBars({days, keys, parts, line, tip, fmt, W, H = 220}) {
+function svgStackedBars({days, keys, parts, line, tip, fmt, W, H = 220, color = svcColor, label = "Cost a day by service"}) {
   // bars stacked by key (a 2px surface gap between segments, 4px rounded tops), with `line` drawn over them
   const max = Math.max(...days.map((_, i) => keys.reduce((s, k) => s + (parts[i][k] || 0), 0)), ...line);
   const top = niceMax(max), ax = axes(days, top, W, H, fmt), bw = Math.max(2, Math.min(24, ax.band * 0.7));
@@ -616,19 +624,22 @@ function svgStackedBars({days, keys, parts, line, tip, fmt, W, H = 220}) {
     const present = keys.filter((k) => parts[i][k] > 0);
     present.forEach((k, j) => {
       const h = ax.y(0) - ax.y(parts[i][k]), gap = j ? 2 : 0, hh = Math.max(0, h - gap);
-      marks += `<path style="fill:${svcColor(k)}" d="${topRounded(ax.x(i) - bw / 2, base - h, bw, hh, j === present.length - 1 ? Math.min(4, hh) : 0)}"/>`;
+      marks += `<path style="fill:${color(k)}" d="${topRounded(ax.x(i) - bw / 2, base - h, bw, hh, j === present.length - 1 ? Math.min(4, hh) : 0)}"/>`;
       base -= h;
     });
   });
-  const avg = `<path class="an-line ink" d="${pathOf(line.map((v, i) => [ax.x(i), ax.y(v)]))}"/>`;
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cost a day by service">${ax.html}${marks}${avg}${hits(days, ax, H, tip)}</svg>`;
+  const avg = line.length ? `<path class="an-line ink" d="${pathOf(line.map((v, i) => [ax.x(i), ax.y(v)]))}"/>` : "";
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${ax.html}${marks}${avg}${hits(days, ax, H, tip)}</svg>`;
 }
 function svgLines({days, series, tip, fmt, W, H = 200}) {
   // one 2px line per series (`dashed` for a comparison); a single day draws markers
   const top = niceMax(Math.max(0, ...series.flatMap((s) => s.values))), ax = axes(days, top, W, H, fmt);
   const marks = series.map((s) => days.length === 1
-    ? `<circle class="an-dot" cx="${ax.x(0)}" cy="${ax.y(s.values[0])}" r="4" style="fill:${s.color}"/>`
-    : `<path class="an-line${s.dashed ? " dash" : ""}" style="stroke:${s.color}" d="${pathOf(s.values.map((v, i) => [ax.x(i), ax.y(v)]))}"/>`).join("");
+    ? (s.values[0] == null ? "" : `<circle class="an-dot" cx="${ax.x(0)}" cy="${ax.y(s.values[0])}" r="4" style="fill:${s.color}"/>`)
+    : `<path class="an-line${s.dashed ? " dash" : ""}" style="stroke:${s.color}" d="${pathGaps(s.values.map((v, i) => v == null ? null : [ax.x(i), ax.y(v)]))}"/>` +
+      // v5.22: a value with no neighbour draws no line — a dot shows it
+      s.values.map((v, i) => v != null && s.values[i - 1] == null && s.values[i + 1] == null
+        ? `<circle class="an-dot" cx="${ax.x(i)}" cy="${ax.y(v)}" r="3" style="fill:${s.color}"/>` : "").join("")).join("");
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map((s) => s.label).join(", "))}">${ax.html}${marks}${hits(days, ax, H, tip)}</svg>`;
 }
 function svgShare({rows, W}) {
@@ -683,8 +694,10 @@ function analyticsHtml() {
     agents.map((x) => `<option value="${esc(x.name)}"${a.agent === x.name ? " selected" : ""}>${esc(x.display)}</option>`).join("")}</select></label>`;
   const csv = `<button class="btn btn-secondary" data-act="an-csv" ${d?.available && d.rows?.length ? "" : "disabled"}>${icon("arrow-line-down", 14)}Download CSV</button>`;
   const shown = ISO_DAY.test(since) && ISO_DAY.test(until) ? rangeLabel(since, until) : "choose the days";
+  const tabs = `<div class="seg" role="group" aria-label="View">${AN_TABS.map(([k, l]) =>
+    `<button data-act="an-tab" data-id="${k}" aria-pressed="${a.tab === k}">${l}</button>`).join("")}</div>`;
   const head = `<div class="an-head"><button class="btn btn-ghost" data-act="dashboard">← Dashboard</button>
-      <h1 class="an-title">Analytics</h1><span class="muted">${esc(shown)}${a.loading ? " · loading…" : ""}</span></div>
+      <h1 class="an-title">Analytics</h1>${tabs}<span class="muted">${esc(shown)}${a.loading ? " · loading…" : ""}</span></div>
     <div class="an-controls">${presets}${dates}${who}<span style="margin-left:auto">${csv}</span></div>`;
   let body;
   if (a.error) {
@@ -695,8 +708,9 @@ function analyticsHtml() {
   } else if (!d.available) {
     body = `<section class="card"><div class="empty-box">${icon("database", 18)}<span>Memory unavailable</span></div></section>`;
   } else {
-    body = anTilesHtml(d) + (d.total.calls ? anChartsHtml(d) + anTablesHtml(d)
-      : `<section class="card"><div class="empty-box">${icon("coins", 18)}<span>No data for this period</span></div></section>`);
+    body = a.tab === "speed" ? anSpeedHtml(d) : a.tab === "prompts" ? anPromptsHtml(d) : a.tab === "media" ? anMediaHtml(d)
+      : anTilesHtml(d) + (d.total.calls ? anChartsHtml(d) + anTablesHtml(d)
+        : `<section class="card"><div class="empty-box">${icon("coins", 18)}<span>No data for this period</span></div></section>`);
   }
   return `<section class="section an">${head}${body}</section>`;
 }
@@ -776,6 +790,110 @@ function anTablesHtml(d) {
     `<tr><td>${esc(svcName(x.service))}</td><td class="r">${fmtCost(x.monthly)}</td><td class="r">${fmtCost(x.period_cost)}</td></tr>`).join("")}</tbody></table></div>
     <div class="muted" style="font-size:12px">The monthly fees (PRICE_SUBSCRIPTIONS), prorated by day — shared by every agent, never split.</div></section>` : "";
   return services + kinds + agents + fees;
+}
+
+// ── v5.22: Speed, Prompts and Media — pure builders over the route's `speed`, `answers`, `prompts` and `media` ───
+const fmtMs = (ms) => ms == null ? "—" : ms < 1000 ? `${Math.round(ms)} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)} s` : `${(ms / 60000).toFixed(1)} min`;
+function msChange(now, before) {
+  if (now == null || before == null) return "—";
+  const diff = now - before, arrow = diff > 0 ? "↑" : diff < 0 ? "↓" : "→", sign = diff > 0 ? "+" : diff < 0 ? "−" : "±";
+  return `${arrow} ${sign}${fmtMs(Math.abs(diff))}${before ? ` (${sign}${Math.abs(diff / before * 100).toFixed(0)}%)` : ""}`;
+}
+function tokChange(now, before) {
+  if (now == null || before == null) return "—";
+  const diff = now - before, arrow = diff > 0 ? "↑" : diff < 0 ? "↓" : "→", sign = diff > 0 ? "+" : diff < 0 ? "−" : "±";
+  return `${arrow} ${sign}${fmtM(Math.abs(diff))}${before ? ` (${sign}${Math.abs(diff / before * 100).toFixed(0)}%)` : ""}`;
+}
+const anCard = (title, sub, inner) => `<section class="card an-chart"><div class="usage-head"><h3 class="card-title">${esc(title)}</h3>
+  <span class="muted" style="font-size:12px">${esc(sub)}</span></div>${inner}</section>`;
+const anTiles = (tiles) => `<div class="an-tiles">${tiles.map(([l, v, sub]) => `<div class="card an-tile"><div class="an-tile-label">${esc(l)}</div>
+  <div class="an-tile-value">${esc(v)}</div><div class="muted an-tile-sub">${esc(sub)}</div></div>`).join("")}</div>`;
+const anEmpty = (name, text) => `<section class="card"><div class="empty-box">${icon(name, 18)}<span>${esc(text)}</span></div></section>`;
+const agentName = (n) => S.data?.agents.find((g) => g.name === n)?.display || n;
+const tipBucket = (b) => /^\d{2}$/.test(b) ? `${b}:00–${b}:59` : b;
+const anTable = (title, head, rows, foot = "") => `<section class="card"><h3 class="card-title">${esc(title)}</h3><div class="table-scroll an-table"><table class="table"><thead><tr>${
+  head.map(([h, right]) => `<th${right ? ' class="r"' : ""}>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>${foot}</section>`;
+const msCell = (v) => `<td class="r">${esc(fmtMs(v))}</td>`;
+const tokCell = (v) => `<td class="r">${v == null ? "—" : esc(fmtM(v))}</td>`;
+const mutedCell = (text) => `<td class="r muted">${esc(text)}</td>`;
+// a service's row with its models under a caret (the state's `open`, keyed by the view)
+function caretRows(view, s, mainCells, subCells) {
+  const key = `${view}:${s.service}`, open = S.an.open[key];
+  const name = `<td><button class="an-caret" data-act="an-open" data-id="${esc(key)}" aria-expanded="${Boolean(open)}" aria-label="Models of ${esc(svcName(s.service))}">${
+    icon(open ? "caret-down" : "caret-right", 12)}</button><i class="an-key" style="background:${svcColor(s.service)}"></i>${esc(svcName(s.service))}</td>`;
+  return `<tr>${name}${mainCells(s)}</tr>` + (open ? s.models.map((m) => `<tr class="an-sub"><td>${esc(m.model)}</td>${subCells(m)}</tr>`).join("") : "");
+}
+
+function anSpeedHtml(d) {
+  const sp = d.speed, an = d.answers, W = chartW(), b = d.buckets, per = d.by_hour ? "an hour" : "a day";
+  const tiles = anTiles([
+    ["Your wait", fmtMs(an.owner.wait.median), `median · p95 ${fmtMs(an.owner.wait.p95)} · ${fmtInt(an.owner.wait.n)} answers`],
+    ["Without the pause", fmtMs(an.owner.net.median), "median · the deliberate pause taken out"],
+    ["vs previous", msChange(an.owner.wait.median, an.owner.previous_median), "your median wait"],
+    ["Slowest service", sp.slowest ? svcName(sp.slowest.service) : "—", sp.slowest ? `p95 ${fmtMs(sp.slowest.p95)}` : "no timed calls"],
+  ]);
+  if (!sp.services.length && !an.groups.length) return tiles + anEmpty("clock", "No timed calls or answers in this period — the time is kept from v5.22 on");
+  const lines = sp.services.length ? anCard("Call time", `each service's median ${per}`,
+    svgLines({days: b, fmt: fmtMs, W, series: sp.services.map((s) => ({label: svcName(s.service), color: svcColor(s.service), values: s.series})),
+      tip: (i) => [tipBucket(b[i]), ...sp.services.filter((s) => s.series[i] != null).map((s) => `${svcName(s.service)} ${fmtMs(s.series[i])}`)].join("\n")}) +
+    legend(sp.services.map((s) => [svcName(s.service), svcColor(s.service), "ln"]))) : "";
+  const wait = an.owner.wait.n ? anCard("Your wait for an answer", `the median ${per}, the pause included`,
+    svgLines({days: b, fmt: fmtMs, W, series: [{label: "Your wait", color: "var(--color-accent)", values: an.series}],
+      tip: (i) => `${tipBucket(b[i])} · ${fmtMs(an.series[i])}`})) : "";
+  const timeCells = (x) => nCell(x.n) + msCell(x.median) + msCell(x.p95) + msCell(x.max) + mutedCell(msChange(x.median, x.previous_median));
+  const services = sp.services.length ? anTable("Services", [["service"], ["trend"], ["calls timed", 1], ["median", 1], ["p95", 1], ["max", 1], ["vs previous", 1]],
+    sp.services.map((s) => caretRows("speed", s, (x) => `<td>${svgSparkline(x.series.map((v) => v || 0), svcColor(x.service))}</td>` + timeCells(x),
+                                     (m) => "<td></td>" + timeCells(m))).join("")) : "";
+  const kinds = sp.kinds.length ? anTable("What it was for", [["kind"], ["calls timed", 1], ["median", 1], ["p95", 1], ["max", 1], ["vs previous", 1]],
+    sp.kinds.map((k) => `<tr><td class="kind">${esc(k.kind)}</td>${timeCells(k)}</tr>`).join("")) : "";
+  const answers = an.groups.length ? anTable("Answers", [["agent"], ["where"], ["by"], ["to"], ["answers", 1], ["median wait", 1], ["p95", 1], ["without the pause", 1], ["vs previous", 1]],
+    an.groups.map((g) => `<tr><td>${esc(agentName(g.agent))}</td><td class="muted">${esc(`${g.place} · ${g.door}`)}</td><td>${esc(g.by)}</td>
+      <td class="muted">${g.answered === "owner" ? "you" : "an agent"}</td>${nCell(g.wait.n)}${msCell(g.wait.median)}${msCell(g.wait.p95)}${msCell(g.net.median)}${mutedCell(msChange(g.wait.median, g.previous_median))}</tr>`).join(""),
+    an.first ? `<div class="muted" style="font-size:12px">${fmtInt(an.first)} line${an.first === 1 ? "" : "s"} written first, answering nothing.</div>` : "") : "";
+  return tiles + lines + wait + services + kinds + answers;
+}
+
+function anPromptsHtml(d) {
+  const pr = d.prompts, W = chartW(), b = d.buckets, per = d.by_hour ? "an hour" : "a day";
+  if (!pr.services.length) return anEmpty("scroll", "No call in this period reported its prompt's tokens");
+  const calls = pr.services.reduce((sum, x) => sum + x.calls, 0);
+  const mean = calls ? Math.round(pr.services.reduce((sum, x) => sum + x.mean * x.calls, 0) / calls) : null;
+  const top = pr.kinds[0];
+  const tiles = anTiles([
+    ["Mean prompt", `${fmtM(mean)} tokens`, `a call · ${fmtInt(calls)} calls`],
+    ["Largest prompt", `${fmtM(Math.max(...pr.services.map((x) => x.max || 0)))} tokens`, "one call"],
+    ["Longest kind", top ? top.kind : "—", top ? `${fmtM(top.mean)} tokens a call` : ""],
+  ]);
+  const lines = anCard("Prompt length", `each service's mean ${per}, in tokens`,
+    svgLines({days: b, fmt: (v) => fmtM(Math.round(v)), W, series: pr.services.map((s) => ({label: svcName(s.service), color: svcColor(s.service), values: s.series})),
+      tip: (i) => [tipBucket(b[i]), ...pr.services.filter((s) => s.series[i] != null).map((s) => `${svcName(s.service)} ${fmtM(s.series[i])}`)].join("\n")}) +
+    legend(pr.services.map((s) => [svcName(s.service), svcColor(s.service), "ln"])));
+  const cells = (x) => nCell(x.calls) + tokCell(x.mean) + tokCell(x.max) + mutedCell(tokChange(x.mean, x.previous_mean));
+  const head = [["calls", 1], ["mean", 1], ["max", 1], ["vs previous", 1]];
+  const services = anTable("Services", [["service"], ["trend"], ...head],
+    pr.services.map((s) => caretRows("prompts", s, (x) => `<td>${svgSparkline(x.series.map((v) => v || 0), svcColor(x.service))}</td>` + cells(x),
+                                     (m) => "<td></td>" + cells(m))).join(""));
+  const kinds = anTable("What it was for", [["kind"], ...head], pr.kinds.map((k) => `<tr><td class="kind">${esc(k.kind)}</td>${cells(k)}</tr>`).join(""));
+  const agents = pr.agents.length > 1 ? anTable("Agents", [["agent"], ...head], pr.agents.map((x) => `<tr><td>${esc(agentName(x.agent))}</td>${cells(x)}</tr>`).join("")) : "";
+  return tiles + lines + services + kinds + agents;
+}
+
+const MEDIA_COLOR = {photos: "var(--viz-1)", videos: "var(--viz-2)"};
+function anMediaHtml(d) {
+  const m = d.media, W = chartW(), b = d.buckets, per = d.by_hour ? "an hour" : "a day";
+  const cost = m.cost.photos == null || m.cost.videos == null ? null : m.cost.photos + m.cost.videos;
+  const tiles = anTiles([
+    ["Photos", fmtInt(m.photos), `${m.photos_per_hour.toFixed(2)} an hour · her selfies with them`],
+    ["Videos", fmtInt(m.videos), `${m.videos_per_hour.toFixed(2)} an hour · her кружечки with them`],
+    ["Cost", fmtCost(cost), `photos ${fmtCost(m.cost.photos)} · videos ${fmtCost(m.cost.videos)}`],
+  ]);
+  if (!m.photos && !m.videos) return tiles + anEmpty("chart-bar", "No photos or videos in this period");
+  const chart = anCard(`Photos and videos ${per}`, m.frames ? `a video's first frame (${fmtInt(m.frames)}) counts with its video, never as a photo` : "",
+    svgStackedBars({days: b, keys: ["photos", "videos"], parts: m.series, line: [], fmt: (v) => Number.isInteger(v) ? fmtInt(v) : "", W,
+      color: (k) => MEDIA_COLOR[k], label: "Photos and videos",
+      tip: (i) => `${tipBucket(b[i])} · ${m.series[i].photos} photos · ${m.series[i].videos} videos`}) +
+    legend([["Photos", MEDIA_COLOR.photos], ["Videos", MEDIA_COLOR.videos]]));
+  return tiles + chart;
 }
 
 // ── the CSV: the period's atomic rows, made in the browser from the data already here ───────────────────────────
@@ -1541,6 +1659,7 @@ document.addEventListener("click", (e) => {
   else if (act === "dashboard") leaveAnalytics();
   else if (act === "an-range") anChoose(id === "custom" ? {range: "custom", since: anPeriod()[0], until: anPeriod()[1]} : {range: id});
   else if (act === "an-metric") { S.an.metric = id; render(); }
+  else if (act === "an-tab") { S.an.tab = id; history.replaceState(null, "", anHash()); render(); }  // v5.22
   else if (act === "an-open") { S.an.open[id] = !S.an.open[id]; render(); }
   else if (act === "an-retry") loadAnalytics();
   else if (act === "an-csv") downloadCsv();

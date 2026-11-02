@@ -430,10 +430,40 @@ def test_a_subscription_is_never_zero_and_the_services_expand_to_their_models():
     assert 'data-act="an-open"' in js and 'class="an-sub"' in js and "svgSparkline(sub ? s.series.calls : s.series.cost" in js
 
 
+def test_the_switch_cost_speed_prompts_media_is_kept_in_the_address():
+    """v5.22: Analytics gets a switch; Cost is v5.19's page as it was, the choice is in the address."""
+    js = js_text()
+    assert 'const AN_TABS = [["cost", "Cost"], ["speed", "Speed"], ["prompts", "Prompts"], ["media", "Media"]];' in js
+    assert 'data-act="an-tab" data-id="${k}" aria-pressed="${a.tab === k}"' in js
+    assert 'if (S.an.tab !== "cost") q.set("view", S.an.tab);' in js
+    assert 'S.an.tab = AN_TABS.some(([k]) => k === q.get("view")) ? q.get("view") : "cost";' in js
+    assert 'else if (act === "an-tab") { S.an.tab = id; history.replaceState(null, "", anHash()); render(); }' in js
+    assert ('body = a.tab === "speed" ? anSpeedHtml(d) : a.tab === "prompts" ? anPromptsHtml(d) : a.tab === "media" '
+            '? anMediaHtml(d)') in js
+
+
+def test_the_speed_the_prompts_and_the_media_views():
+    """v5.22: the calls' and his answers' time, the prompts' length, the photos and videos — a day, or an hour for one
+    day; a bucket with no value breaks a line, never drops it to zero; every name escaped."""
+    js = js_text()
+    for builder in ("function anSpeedHtml(d)", "function anPromptsHtml(d)", "function anMediaHtml(d)",
+                    "const fmtMs = (ms)", "const pathGaps = (pts)", "const bucketLabel = (b)", "function caretRows("):
+        assert builder in js, builder
+    for words in ('["Your wait",', '["Without the pause",', '["Slowest service",', 'anCard("Call time"',
+                  'anCard("Your wait for an answer"', 'anTable("Answers"', '["Mean prompt",', 'anCard("Prompt length"',
+                  '["Photos",', '["Videos",', "an hour · her selfies with them", "never as a photo",
+                  "the time is kept from v5.22 on"):
+        assert words in js, words
+    assert "pathGaps(s.values.map((v, i) => v == null ? null : [ax.x(i), ax.y(v)]))" in js
+    assert "esc(agentName(g.agent))" in js and "<td>${esc(m.model)}</td>" in js and "esc(k.kind)" in js
+    assert 'const MEDIA_COLOR = {photos: "var(--viz-1)", videos: "var(--viz-2)"};' in js
+
+
 def test_the_csv_header_and_its_escaping():
     js = js_text()
     assert ('const CSV_HEAD = ["day", "agent", "service", "model", "kind", "calls", "failed", "blocked", "input", '
             '"output", "tokens",') in js
+    assert '"latency_median_ms", "latency_p95_ms"];  // v5.22: the calls\' time' in js
     assert "if (/^[=+\\-@]/.test(s)) s = `'${s}`;" in js                   # never a formula in a spreadsheet
     assert """return /[",\\r\\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;""" in js
     assert "link.download = `agora-usage-${d.agent || \"all\"}-${d.since}-${d.until}.csv`;" in js

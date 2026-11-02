@@ -251,6 +251,7 @@ class Row:
     blocked: int = 0        # v5.13: calls Gemini's safety filter blocked
     video_ms: int = 0       # v5.18: the videos' length (fal's кружечки)
     audio_ms: int = 0       # v5.19: the audio heard (Deepgram), for the analytics
+    latencies: list[int] = field(default_factory=list)  # v5.22: the timed calls' `latency_ms`
     by_model: dict[str, list[int]] = field(default_factory=dict)  # v5.1: the `api` tokens per model, for its price
     ms_by_model: dict[str, int] = field(default_factory=dict)     # v5.18: the `api` video ms per model, for its price
 
@@ -268,6 +269,7 @@ class Row:
         self.blocked += other.blocked
         self.video_ms += other.video_ms
         self.audio_ms += other.audio_ms
+        self.latencies += other.latencies
         for model, ms in other.ms_by_model.items():
             self.ms_by_model[model] = self.ms_by_model.get(model, 0) + ms
         for model, (p, o) in other.by_model.items():
@@ -312,6 +314,8 @@ def _add_line(row: Row, r: dict) -> None:
     row.blocked += 1 if r.get("blocked") else 0  # v5.13
     row.video_ms += r.get("video_ms") or 0       # v5.18
     row.audio_ms += r.get("audio_ms") or 0       # v5.19
+    if isinstance(r.get("latency_ms"), int) and not isinstance(r.get("latency_ms"), bool):
+        row.latencies.append(r["latency_ms"])    # v5.22
     if billing == "api" and r.get("video_ms"):
         model = str(r.get("model", ""))
         row.ms_by_model[model] = row.ms_by_model.get(model, 0) + r["video_ms"]
@@ -796,8 +800,9 @@ def analyze(records: list[dict], since: date, until: date, agent: str | None = N
         "agents": agents, "subscriptions": subscriptions,
         "unpriced": sorted({a[3] for a, r in now.items() if costs[a] is None and r.billing != "subscription"}),
         "rows": [{"day": a[0], "agent": a[1], "service": a[2], "model": a[3], "kind": a[4], **{
-            k: v for k, v in _Sum(r, costs[a] or 0.0, costs[a] is not None).totals().items() if k != "complete"}}
-                 for a, r in sorted(now.items())],
+            k: v for k, v in _Sum(r, costs[a] or 0.0, costs[a] is not None).totals().items() if k != "complete"},
+            "latency_median_ms": percentile(r.latencies, 0.5), "latency_p95_ms": percentile(r.latencies, 0.95)}
+                 for a, r in sorted(now.items())],  # v5.22: the CSV's call time
     }
 
 
