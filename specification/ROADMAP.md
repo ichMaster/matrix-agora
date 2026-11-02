@@ -21,6 +21,7 @@ are left in the v5 review docs, as backlog. The same day the owner opened two mo
 - v5.19, released as `v5.19.0`: analytics, the spending by agent and by service over a chosen period, with Кіра's
   memory fixes of 2026-11-01/02;
 - v5.20, Кіра's layered memory of the private chat: by the hour, by four hours, by the week (planned).
+- v5.21, blocked for good: the backup without the judge, its talk gone after a day (planned).
 
 Then come v6–v9 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
@@ -67,6 +68,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.18 | Кіра's videos in Telegram: a кружечок in her voice and short clips | ✅ completed | `v5.18.0` (2026-11-01) |
 | v5.19 | Analytics: the spending by agent and by service, over a chosen period | ✅ completed | `v5.19.0` (2026-11-02) |
 | v5.20 | Кіра's layered memory of the private chat: by the hour, by four hours, by the week | ⏳ planned | — |
+| v5.21 | Blocked for good: the backup without the judge, its talk gone after a day | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
 | v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -2820,6 +2822,145 @@ Gemini's history (4bbb4e4) and a capped probe that closes only what it proved (e
 - a summary of the closed talk that Gemini reads;
 - deleting or rewriting anything;
 - changes to the day memories, the digests or the session note.
+
+### v5.21 — Blocked for good: the backup without the judge, its talk gone after a day
+
+**Status:** ⏳ planned (the owner, 2026-11-02). The logic as it runs before this phase, and this design in plain
+words: [features/private-messages.md](features/private-messages.md) (Ukrainian copy `private-messages-UA.md`).
+
+**Goal:** one closed mark, `blocked`, for good. Whatever a Gemini block touches, and everything the backup says or
+answers, is `blocked`: the backup reads it as its history, and nothing else ever reads it; after a day it is deleted.
+The judge goes. The route has two modes: Gemini, and the backup for 5 minutes after a block (for the next hour after
+more than 10 blocks in an hour), and the owner can return to Gemini at any time.
+
+**Why** (2026-11-02): the judge does not predict Gemini's filter, and three paths opened closed lines:
+- the judge's `clean`;
+- v5.15's `reopened`;
+- the night's re-check (1,068 lines, about 150 of them the backup's answers).
+
+Lines that passed in groups of 20 blocked her full prompt (22 at 02:34, 6 more at 06:06–06:16). The probe's day cap was
+spent by 02:11, so from 06:06 every message was blocked again, and the day cap could keep the backup on until
+midnight.
+
+**Owner decisions** (2026-11-02):
+- «все що створено в бекап має назавжди бути закрито і ніколи не відкрито»; «всі меседжі які створені бекап
+  мережею ніколи не мають ставати клин або реопен».
+- No judge. On a block:
+  - his message becomes `blocked`, for good;
+  - the backup answers, and every message of hers from the backup is `blocked`;
+  - the route switches to the backup by itself for 5 minutes.
+- The owner can switch to Gemini by hand; `/auto` is not needed.
+- More than 10 blocks in an hour switch to the backup for the next hour; he can leave it earlier by switching to
+  Gemini. «От і все.»
+- Not until the end of the day: a fixed period («не до кінця дня а на період наприклад годину і все»).
+- The blocked messages:
+  - they are needed only in the backup's history, within 300 messages — never in the summaries, the thoughts or
+    anything else;
+  - once a day, those older than 24 hours are deleted.
+- `clean` goes to `blocked` too («бо від цього всі проблеми»).
+- A phase of its own, v5.21.
+
+**Proposed** (each point marked *to confirm* is decided when the issues are generated):
+- **The marks:** `gemini` (open) and `blocked` (closed for good). The archive's and the facts' mark functions never
+  turn `blocked` into anything else, and a test pins every path.
+- **A block** is any of these:
+  - a block at the prompt stage;
+  - a block at the answer stage;
+  - her caught refusal (v5.13).
+
+  What happens:
+  - his unanswered lines become `blocked`;
+  - the backup answers, and her line is `blocked` (still marked «⚙️ backup» in the chat);
+  - the backup mode starts for `FALLBACK_WINDOW_S` (300 s).
+- **The backup mode:**
+  - Gemini is not asked;
+  - her lines are `blocked`;
+  - his lines are `blocked` too (*to confirm*);
+  - when it ends, the next message goes to Gemini, with no rating first.
+- **The hour:** more than `FALLBACK_HOUR_MAX` (10) blocks in the last 60 minutes start the backup mode for
+  `FALLBACK_LOCK_S` (3,600 s) from that block. `FALLBACK_DAY_MAX` goes.
+- **The commands:**
+  - `/gemini` returns to Gemini now: it ends the 5 minutes or the hour and resets the hour's count (*to confirm*);
+  - `/status` shows the mode, its end and the blocks in the last hour;
+  - `/auto` goes;
+  - `/backup` stays or goes (*to confirm*).
+- **The probe (v5.16) stays** (`PROBE_CALLS` 30, `PROBE_DAY_CALLS` 200 for her). What it proves becomes `blocked`.
+  When it proves nothing, nothing else runs.
+- **The judge goes:**
+  - `agents/judge.py` and its settings;
+  - her watcher's rating;
+  - the window's end by the rating;
+  - the route's `rated` and `flagged` counts;
+  - the use of `OPENROUTER_API_KEY`.
+- **The backup's prompt:**
+  - its history is the last `FALLBACK_HISTORY_N` lines of every mark, with the default 300, fitted to
+    `FALLBACK_CONTEXT`;
+  - its recall and its facts are open ones only, so a `blocked` line reaches it only as history;
+  - it keeps no facts: a «запам'ятай» from the backup is dropped (*to confirm*).
+- **Never elsewhere:** a `blocked` line or fact never reaches Gemini's history, the recall, the facts, her thoughts, the
+  session note, the day journal or the talk summaries.
+- **The deletion:**
+  - **When:** once a day at 05:00 (*to confirm*), every `blocked` line and fact older than 24 hours is deleted.
+  - **The row stays:** its key, time, speaker and mark remain and its text is emptied, so that a Matrix private line
+    re-read at a restart never comes back open.
+  - **What follows it:** the in-memory history and the search index.
+  - **The log** holds counts only.
+  - **`/purge`** stays: it deletes every `blocked` at once.
+  - **The rule:** CLAUDE.md's and ARCHITECTURE's «nothing lived is deleted» gains this exception.
+- **The re-check command** (v5.20, AGORA-174) goes.
+- **The data, once the code is live:** a copy comes first, and only counts, times and marks are read.
+  - `waiting`, `censored` and `reopened` become `blocked`.
+  - Her lines that the log names as the backup's (279 since 2026-10-28), and his lines that they answered, become
+    `blocked`.
+  - What becomes of `clean` is *to confirm*:
+    - all 1,418 lines become `blocked` (the owner's words); or
+    - the night's 1,068 become `blocked` and the 350 lines Gemini answered, which the judge only confirmed, become
+      `gemini` (Claude's advice).
+  - The 100 facts marked `clean` become `gemini` (*to confirm*).
+  - The talk summaries already written stay (*to confirm*).
+  - Then the first deletion runs.
+- **The panel:** the settings follow (the judge's go, the new ones come); the Talk tab's closed counts read `blocked`.
+- **ARCHITECTURE:** §Contracts (the marks, the route file, the settings), the private route, the backup's prompt, the
+  deletion.
+
+**Owner steps:**
+- Confirm or waive v5.20's live checks (#173–#175), so that v5.20.0 is released first.
+- Answer the *to confirm* points.
+- The deploy and the checks below.
+
+**DoD:**
+- (Manual, owner) After a block:
+  - the backup answers and the exchange is `blocked`;
+  - after 5 minutes his next message goes to Gemini, and she answers through Gemini with no block from the backup's
+    talk;
+  - `/gemini` returns at once.
+- (Manual, owner) More than 10 blocks in an hour switch to the backup for an hour; `/gemini` ends it.
+- (Manual, owner) The next day, no `blocked` line older than 24 hours has its text (counts in the panel or `/status`).
+
+**Tests:**
+- **The marks:** no code path turns `blocked` into another mark.
+- **The route:**
+  - the 5 minutes, then Gemini;
+  - more than 10 blocks in 60 minutes give an hour;
+  - `/gemini` ends either one;
+  - no day cap;
+  - a pin left from before is read as Gemini.
+- **The prompts:**
+  - Gemini's never holds a `blocked` line or fact;
+  - the backup's holds `blocked` lines only in its history, never in its recall or facts.
+- **The deletion:**
+  - the 24-hour edge;
+  - the row kept without its text;
+  - a Matrix private line re-read at a start stays `blocked`;
+  - the index and the in-memory history follow;
+  - counts only in the log.
+- **Gone:** no judge call, no `reopened` or `clean` written, no re-check command.
+
+**Not in this phase:**
+- Agora;
+- any summary of the `blocked` talk;
+- the judge in any form;
+- reopening anything.
 
 ## v6 — Лілі: the Lumi bridge
 

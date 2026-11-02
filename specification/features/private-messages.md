@@ -200,57 +200,69 @@ whatever Gemini does not block becomes `clean`. It runs only by hand, and it has
 
 ---
 
-## Part 2 — the owner's rule (2026-11-02): proposed, not built
+## Part 2 — phase v5.21: the owner's scheme (2026-11-02), planned
 
-> «логіка має бути така — все що створено в бекап має назавжди бути закрито і ніколи не відкрито»
->
-> «всі меседжі які створені бекап мережею ніколи не мають ставати клин або реопен»
->
-> «треба блокати не до кінця дня а на період наприклад годину і все»
+The phase is [ROADMAP.md §v5.21](../ROADMAP.md). This part is the same design in plain words.
 
-### What changes
+### The rules
 
-1. **A permanent mark: `backup`.**
-   - **What gets it:** everything the backup's talk created:
-     - her answers written by the backup;
-     - his lines that the backup answered: the one that triggered the switch, and those he sent in the window;
-     - the facts kept in those answers.
-   - **What it means:** the line or fact is closed to Gemini everywhere (§2).
-   - **What can change it:** nothing — not the judge, the probe, the re-check or a hand script. The archive's and
-     the facts' mark functions refuse to change a `backup` mark. Only `/purge` deletes it.
-2. **No more `waiting` or `reopened` for the backup's talk.** Its lines are `backup` from the moment they are
-   archived.
-3. **The judge no longer rates the backup's talk:** it is closed for good, so there is nothing to decide. The judge
-   still rates two things:
-   - **At the window's end, only his new message.** Her backup answers never reach Gemini, so they no longer decide
-     the route. If the message is clean, Gemini is asked. If it is flagged, or the judge gives no answer, the backup
-     answers and a new window opens.
-   - **At a block, when the probe proves nothing:** the blocked prompt's older lines that passed through Gemini.
-4. **No day cap.** A block opens one window of a fixed length, and that is all: no block keeps the backup on until
-   midnight. `FALLBACK_DAY_MAX` is removed. The window's length is `FALLBACK_WINDOW_S` (the owner: «наприклад
-   годину»).
-5. **The re-check:**
-   - It never touches a `backup` line or fact.
-   - It opens a `censored` line only after her real prompt with that line passes in Gemini, never on the strength of
-     a group of 20.
-6. **The data, once the code is live.** A copy of the archive comes first, and only times, speakers and marks are
-   read:
-   - every `waiting` and `reopened` line and fact becomes `backup`;
-   - her lines that her log names as written by the backup become `backup`, whatever their mark now. The log has
-     277 «answered (telegram) by the backup» lines and 2 «wrote first (telegram) by the backup» lines since
-     2026-10-28 21:25. This includes the ~150 that the night's script opened.
-   - his lines that each of those answered also become `backup`;
-   - the talk summaries of the periods that held these lines are deleted and written again from the open lines.
-7. **Contracts:**
-   - `backup` joins the marks in ARCHITECTURE.md §Contracts.
-   - `FALLBACK_DAY_MAX` leaves the settings.
-   - Tests pin that no code path changes a `backup` mark.
+1. **Two marks.**
+   - `gemini`: the line is open.
+   - `blocked`: the line is closed for good. Nothing ever opens it again: no judge, no re-check, no script.
+2. **A block** is Gemini blocking the prompt or the answer, or her caught refusal. On a block:
+   - his message becomes `blocked`;
+   - the backup answers, and her answer is `blocked`;
+   - the backup mode starts for 5 minutes.
+3. **During the backup mode:**
+   - Gemini is not asked;
+   - everything she says there is `blocked`;
+   - his messages there are `blocked` too (*to confirm*).
+4. **After the 5 minutes,** his next message goes straight to Gemini. Nothing rates it first: there is no judge.
+5. **More than 10 blocks in the last hour** start the backup mode for the next hour. There is no "until midnight"
+   any more.
+6. **`/gemini`** returns to Gemini at once, from the 5 minutes or from the hour, and resets the hour's count
+   (*to confirm*).
+   - `/status` shows the mode.
+   - `/auto` goes.
+   - Whether `/backup` stays is *to confirm*.
+7. **The probe stays.** After a prompt-stage block, Gemini gets the blocked prompt in parts (30 calls a block, 200 a
+   day). The old lines it proves block become `blocked` too. This is what lets her leave the backup when an old line
+   in her history is the cause.
+8. **Who reads a `blocked` line.** Only the backup, as part of its history: the last 300 lines, open and `blocked`,
+   as far as its 32,000-token prompt allows. A `blocked` line is never in:
+   - Gemini's prompt;
+   - the recall (RAG), the facts or her thoughts;
+   - the session note, the day journal or the talk summaries;
+   - the backup's own recall or facts.
+9. **The backup keeps no facts:** a «запам'ятай» from the backup is dropped (*to confirm*).
+10. **Once a day,** at 05:00 (*to confirm*), every `blocked` line older than 24 hours loses its text for good:
+    - The row keeps its key, time, speaker and mark, so that a Matrix private line re-read at a restart does not come
+      back open.
+    - `/purge` still deletes every `blocked` line at once.
+11. **What goes:**
+    - the judge (Gemma 4 31B on OpenRouter) with its settings;
+    - `waiting`, `reopened` and `clean`;
+    - the day cap `FALLBACK_DAY_MAX`;
+    - the window's end by the rating;
+    - the v5.20 re-check command.
 
-### For the owner to decide
+### The data when v5.21 goes live
 
-- Is Part 2 right as written?
-- Do his lines that the backup answered count as created in the backup? (Proposed: yes.)
-- The window after a block: one hour, or another length?
-- The rest of the night's 1,068 lines (his lines and Gemini's answers, about 900): back to `censored`
-  (recommended), or kept open?
-- How to build it: an issue in v5.20 (AGORA-177), through the pipeline, before v5.20.0 is released?
+A copy comes first. Only counts, times and marks are read.
+
+- `waiting`, `censored` and `reopened` become `blocked`.
+- Her 279 lines that the log names as the backup's, and his lines that they answered, become `blocked`.
+- **`clean` (1,418 private lines), to confirm:**
+  - All of them become `blocked` (the owner's words). Then her history for Gemini ends on 28.10: 29.10–01.11 are
+    entirely lines the night's re-check opened.
+  - Or the night's 1,068 become `blocked`, and the 350 lines that Gemini answered (the judge only confirmed them)
+    become `gemini`. This is Claude's advice: it keeps 28.10 and today's talk.
+- The 100 facts marked `clean` become `gemini` (*to confirm*). They are Gemini's facts about him that the judge
+  confirmed.
+- The talk summaries already written stay (*to confirm*). Without them she knows nothing of 29.10–01.11.
+- Then the first deletion runs, and every `blocked` line older than 24 hours loses its text.
+
+### Before the phase starts
+
+v5.20 is released first. Its live checks (#173–#175) are confirmed or waived by the owner, and the *to confirm*
+points above are answered when the v5.21 issues are generated.
