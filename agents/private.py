@@ -75,7 +75,10 @@ def silence_line(name: str, block: tuple | None, why: str | None, by: str | None
     A service line: never in her history, the archive or a prompt; no text of theirs in it."""
     if block is not None:
         what = "блок gemini (" + " ".join(str(x) for x in block if x) + ")"
-        what += ", backup не відповів" if by == "backup" else "" if backup_on else ", backup вимкнено"
+        if by == "backup":  # code review v5.22 #5: the backup's own silent reason, when it wrote one that went nowhere
+            what += f", backup: {SILENCE_WHY.get(why, why)}" if why else ", backup не відповів"
+        elif not backup_on:
+            what += ", backup вимкнено"
     elif why in SILENCE_WHY:
         what = SILENCE_WHY[why]
     elif why:

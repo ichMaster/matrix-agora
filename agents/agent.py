@@ -1065,8 +1065,6 @@ class Agent:
         self._offer_photo = self._photo_open(door)  # v5.17: her photo skill, for Gemini's prompt only
         self._offer_video = self._video_kinds(door)  # v5.18: the videos she may send now, for Gemini's prompt only
         kind = "private_nudge" if nudge else "private"
-        LAST_BLOCK.set(None)
-        LAST_SILENCE.set(None)
         by = None
         try:
             if door == "matrix":
@@ -1095,6 +1093,8 @@ class Agent:
             her_lines = [t for s, t in self.private_history if s == self.cfg.name]
             brief = f"{brief}\n\n{style_line(self.rng, her_lines, self.cfg.can('emotion'))}"
             seen = list(self._unanswered)  # v5.13 review #2: the lines this call answers — never one that comes later
+            LAST_BLOCK.set(None)  # code review v5.22 #5: only this answer's own block and silence, never those
+            LAST_SILENCE.set(None)  # of the today block's or the mood's calls made above
             text, by = await self._private_text(brief, nudge, seen)
             shot, self._pending_shot = (self._pending_shot if by == "gemini" else None), None
             self._offer_photo, self._offer_video = False, ()

@@ -58,3 +58,18 @@ def test_a_failed_answer_is_said_and_writing_first_stays_silent(tmp_path, monkey
     agent._private_text = fails
     run_batch(agent, tg(1, "привіт", at=ms(17, 30)))
     assert texts_sent(agent) == ["⚙️ Кіра пропустила відповідь: помилка (RuntimeError)"]
+
+
+def test_the_backups_own_silent_reason_is_named_and_a_block_before_her_answer_is_not_hers(tmp_path, monkeypatch):
+    """Code review v5.22 #5: a reply of the backup's that `_compose` dropped read «backup не відповів»; a block of the
+    today block's or the mood's call made before her answer was named as her answer's."""
+    assert silence_line("Кіра", BLOCK, "only voice tags", "backup", True).endswith(
+        "блок gemini (prompt prohibited_content), backup: у відповіді були лише теги голосу")
+    agent = kira(tmp_path, monkeypatch, llm=KindLLM("PASS"))
+
+    async def today_blocks(now):
+        LAST_BLOCK.set(("prompt", "prohibited_content", None))                 # the today block's call, blocked
+    agent.cfg = type(agent.cfg)(**{**agent.cfg.__dict__, "capabilities": agent.cfg.capabilities | {"today"}})
+    agent.ensure_today = today_blocks
+    run_batch(agent, tg(1, "привіт", at=ms(17, 30)))
+    assert texts_sent(agent) == ["⚙️ Кіра пропустила відповідь: вирішила мовчати (PASS)"]
