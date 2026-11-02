@@ -2889,7 +2889,8 @@ midnight.
   - his lines are `blocked` too (the owner);
   - when it ends, the next message goes to Gemini, with no rating first.
 - **The hour:** more than `FALLBACK_HOUR_MAX` (10) blocks in the last 60 minutes start the backup mode for
-  `FALLBACK_LOCK_S` (3,600 s) from that block. `FALLBACK_DAY_MAX` goes.
+  `FALLBACK_LOCK_S` (3,600 s) from that block. Only the blocks of her answers count; the probe's calls never do.
+  `FALLBACK_DAY_MAX` goes.
 - **The commands:**
   - `/gemini` returns to Gemini now: it ends the 5 minutes or the hour and resets the hour's count (the owner);
   - `/status` shows the mode, its end and the blocks in the last hour;
