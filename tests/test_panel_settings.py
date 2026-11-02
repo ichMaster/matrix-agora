@@ -127,7 +127,7 @@ def test_a_setting_the_code_no_longer_knows_is_dropped_by_a_save_or_a_reset(room
 
 def test_a_diagnostics_switch_applies_at_once_and_restarts_nobody(tmp_path):
     """v5.22 (the owner, 2026-11-02: «зроби можливість такий трейс включати на адмін панелі»): `TRACE_CALLS` is
-    first in her tab, under Діагностика; a save of it writes the override and restarts nobody — she reads it at each
+    first in her tab, under Перемикачі; a save of it writes the override and restarts nobody — she reads it at each
     call — and her view shows it as what she runs with at once; a reset gives her back the server's value."""
     sup, _docker, compose = make(C("kira"), state_dir=tmp_path)
     reg = Registry()
@@ -139,10 +139,10 @@ def test_a_diagnostics_switch_applies_at_once_and_restarts_nobody(tmp_path):
 
     def row(name="TRACE_CALLS"):
         view = client.get(path, headers=AUTH).json()
-        assert view["groups"][0] == {"id": "diag", "title": "Діагностика"}
+        assert view["groups"][0] == {"id": "switches", "title": "Перемикачі"}
         return next(r for r in view["settings"] if r["name"] == name)
 
-    assert (row()["group"], row()["live"], row()["effective"]["kira"]) == ("diag", True,
+    assert (row()["group"], row()["live"], row()["effective"]["kira"]) == ("switches", True,
                                                                           {"value": "off", "source": "default"})
     assert row("MEMORY_DAYS")["live"] is False
     assert put(client, path, {"set": {"TRACE_CALLS": "on"}}).json() == {"saved": ["TRACE_CALLS"], "restarted": [],

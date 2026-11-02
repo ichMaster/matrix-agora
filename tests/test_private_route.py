@@ -211,6 +211,24 @@ def test_without_the_backup_a_refusal_is_v5_13s_silence_with_his_line_blocked(tm
     assert marks(agent)["tg:1"] == "blocked" and not agent.route_file.exists()
 
 
+def test_the_panels_switch_off_is_silence_at_once_and_on_again_the_backup_answers(tmp_path, monkeypatch):
+    """v5.22 (the owner, 2026-11-02: «зроби нормальний перемикач коли роутінг включений а коли ні»): with
+    `FALLBACK_ROUTE` off in the panel a block is v5.13's silence — his line blocked, the backup never called, no
+    route kept; switched on again, without a restart, the backup answers the next block."""
+    from agents.settings import OVERRIDES_FILE, save_json
+    agent = her(tmp_path, monkeypatch, Gemini(blocks=2))
+    switch = agent.memory_file.parent / OVERRIDES_FILE
+    save_json(switch, {"services": {}, "agents": {"kira": {"FALLBACK_ROUTE": "off"}}})
+    assert agent.backup_open() is False
+    agent.private_line(ASKED, ms(17), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is False
+    assert marks(agent)["tg:1"] == "blocked" and agent.fallback.calls == [] and not agent.route_file.exists()
+    save_json(switch, {"services": {}, "agents": {"kira": {"FALLBACK_ROUTE": "on"}}})
+    agent.private_line(ASKED, ms(17, 1), "telegram", "tg:2")
+    assert asyncio.run(agent.private_reply()) is True
+    assert len(agent.fallback.calls) == 1 and marks(agent)["tg:2"] == "blocked"
+
+
 def test_the_backup_never_keeps_a_fact_and_sends_the_rest(tmp_path, monkeypatch, caplog):
     """v5.21 (the owner, 2026-11-02): «ніколи» — a «ЗАПАМ'ЯТАЙ» from the backup is dropped, never kept or sent."""
     caplog.set_level(logging.INFO)

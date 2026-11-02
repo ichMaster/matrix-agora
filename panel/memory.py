@@ -304,8 +304,11 @@ def route_view(state_dir: Path, name: str, today: date, now_ms: int | None = Non
     """v5.14 — her private answer's route (`<name>.route.json`, `agents/route.py`); v5.21: the mode at `now_ms`
     (`gemini` or `backup`), the pin (`auto`, or `backup` by hand), the backup's end (ISO, or null), the blocks of the
     last hour and today's answers by Gemini and by the backup. No file yet → gemini, nothing open; unreadable → None,
-    never a 500. No text is in it."""
+    never a 500. No text is in it. v5.22: `backup` — whether a block goes to the backup now: its model (what she
+    started with) and the panel's switch `FALLBACK_ROUTE` (`live_value`, read now); None when her settings are
+    unreadable."""
     from agents.route import HOUR_MS, load_route, mode
+    from agents.settings import live_value
 
     path = state_dir / f"{name}.route.json"
     try:
@@ -320,9 +323,17 @@ def route_view(state_dir: Path, name: str, today: date, now_ms: int | None = Non
     until = (datetime.fromtimestamp(route.window_until_ms / 1000, tz).isoformat(timespec="minutes")
              if current == "backup" and route.pin != "backup" and route.window_until_ms is not None else None)
     answers = route.answers if route.day == today.isoformat() else {"gemini": 0, "backup": 0}
+    try:
+        started = json.loads((state_dir / f"{name}.settings.json").read_text(encoding="utf-8"))
+        model = str(started["FALLBACK_MODEL"]["value"]).strip()
+        switch = str(started.get("FALLBACK_ROUTE", {}).get("value", ""))
+        backup = bool(model) and live_value(state_dir, name, "FALLBACK_ROUTE", {"FALLBACK_ROUTE": switch}) == "on"
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        backup = None
     return {"mode": current, "pin": route.pin, "until": until,
             "blocks_hour": sum(1 for t in route.blocks if t > now_ms - HOUR_MS),
-            "answers": {"gemini": int(answers.get("gemini", 0)), "backup": int(answers.get("backup", 0))}}
+            "answers": {"gemini": int(answers.get("gemini", 0)), "backup": int(answers.get("backup", 0))},
+            "backup": backup}
 
 
 def models_view(state_dir: Path, name: str, voice_spec: Path | None = None) -> dict | None:

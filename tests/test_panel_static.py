@@ -342,6 +342,7 @@ def test_her_card_shows_her_route_only_with_the_backup():
     fn = js[js.index("function routeLine(mem) {"):]
     fn = fn[:fn.index("\n}\n")]
     assert 'if (!r) return "Route unreadable";' in fn and '"backup by hand"' in fn
+    assert 'r.backup === false ? "backup off · gemini only"' in fn                      # v5.22: the panel's switch
     assert "`backup until ${r.until.slice(11, 16)}`" in fn and "blocks in the last hour" in fn
     assert "backup answers today" in fn and "blocked ${fmtInt(mem.archive.blocked || 0)}" in fn
     assert "judged" not in fn and "waiting" not in fn and "pinned" not in fn                     # v5.21: no judge
@@ -543,3 +544,15 @@ def test_the_drawer_widens_to_what_overflows_it_and_never_past_the_window():
     assert 'd.querySelectorAll(".tabs, .drawer-body, .table-scroll, pre")' in js           # her tabs in one row too
     assert "const drawerKey = (dr) => dr ? `${dr.kind}:${dr.id}` : \"\";" in js            # one width across its tabs
     assert ".drawer { max-width: 94%; }" in css and "@media (max-width: 759px) { .drawer { max-width: none; } }" in css
+
+
+def test_a_live_on_off_switch_is_two_buttons_saved_at_a_click():
+    """v5.22 (the owner, 2026-11-02: «зроби нормальний перемикач коли роутінг включений а коли ні»): a live on/off
+    setting is an On | Off pair, the pressed one what she runs with; a click saves it alone, nobody restarts, and a
+    live setting never counts in the Save bar's restarts."""
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert 'const onOff = (r) => r.live && r.kind === "choice" && [...r.choices].sort().join() === "off,on";' in js
+    assert 'data-act="set-live" data-id="${esc(r.name)}" data-value="${v}" aria-pressed="${currentValue(r) === v}"' in js
+    assert 'else if (act === "set-live") saveLive(id, el.dataset.value);' in js
+    assert "await put(st.path, {set: {[name]: value}});" in js
+    assert "names.filter((n) => !rows[n].live).flatMap((n) => rows[n].agents)" in js

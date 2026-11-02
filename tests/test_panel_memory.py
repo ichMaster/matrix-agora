@@ -458,7 +458,16 @@ def test_her_route_and_the_archives_marks_for_her_card(state, monkeypatch):
     from panel.memory import archive_view, route_view
     monkeypatch.setenv("TIMEZONE", "Europe/Kyiv")
     assert route_view(state, "kira", TODAY) == {"mode": "gemini", "pin": "auto", "until": None, "blocks_hour": 0,
-                                                "answers": {"gemini": 0, "backup": 0}}
+                                                "answers": {"gemini": 0, "backup": 0}, "backup": None}
+    # v5.22: whether a block goes to the backup — her model at the start and the panel's switch, read now
+    (state / "kira.settings.json").write_text(json.dumps({"FALLBACK_MODEL": {"value": "glm-4-6", "source": "env"},
+                                                          "FALLBACK_ROUTE": {"value": "on", "source": "default"}}))
+    assert route_view(state, "kira", TODAY)["backup"] is True
+    (state / "settings.json").write_text(json.dumps({"services": {}, "agents": {"kira": {"FALLBACK_ROUTE": "off"}}}))
+    assert route_view(state, "kira", TODAY)["backup"] is False
+    (state / "settings.json").unlink()
+    (state / "kira.settings.json").write_text(json.dumps({"FALLBACK_MODEL": {"value": "", "source": "panel"}}))
+    assert route_view(state, "kira", TODAY)["backup"] is False                          # no model: none
     day0 = int(datetime(2026, 10, 4, tzinfo=ZoneInfo("Europe/Kyiv")).timestamp() * 1000)
     save_route(state / "kira.route.json", Route(blocks=(day0 - 3_600_000, day0 + 60_000), window_until_ms=day0 + 3_600_000,
                                                 day="2026-10-04", answers={"gemini": 3, "backup": 2}))
@@ -467,7 +476,8 @@ def test_her_route_and_the_archives_marks_for_her_card(state, monkeypatch):
     assert view["answers"] == {"gemini": 3, "backup": 2}
     # review #3: the file keeps an ended window until Gemini answers again — Gemini's mode, no end shown
     assert route_view(state, "kira", TODAY, now_ms=day0 + 7_200_000) | {"blocks_hour": 0} == {
-        "mode": "gemini", "pin": "auto", "until": None, "blocks_hour": 0, "answers": {"gemini": 3, "backup": 2}}
+        "mode": "gemini", "pin": "auto", "until": None, "blocks_hour": 0, "answers": {"gemini": 3, "backup": 2},
+        "backup": False}
     save_route(state / "kira.route.json", Route(pin="backup", pinned_at_ms=day0))
     assert route_view(state, "kira", TODAY, now_ms=day0)["mode"] == "backup"         # by hand: no end
     (state / "kira.route.json").write_text("{broken")

@@ -73,6 +73,17 @@ def test_without_the_backup_a_pin_says_so(tmp_path, monkeypatch):
     assert "Backup вимкнено" in texts_sent(agent)[-1] and not agent.route_file.exists()
 
 
+def test_with_the_panels_switch_off_a_pin_and_the_status_say_so(tmp_path, monkeypatch):
+    """v5.22 (the owner, 2026-11-02: «зроби нормальний перемикач коли роутінг включений а коли ні»): the backup's
+    model is there, the panel's `FALLBACK_ROUTE` is off — `/backup` pins nothing and `/status` says it is off."""
+    from agents.settings import OVERRIDES_FILE, save_json
+    agent = with_backup(kira(tmp_path, monkeypatch))
+    save_json(agent.memory_file.parent / OVERRIDES_FILE, {"services": {}, "agents": {"kira": {"FALLBACK_ROUTE": "off"}}})
+    run_batch(agent, tg(1, "/backup", at=ms(17, 30)), tg(2, "/status", at=ms(17, 31)))
+    assert "Backup вимкнено" in texts_sent(agent)[-2] and "(backup вимкнено)" in texts_sent(agent)[-1]
+    assert not agent.route_file.exists()
+
+
 def test_a_strangers_command_and_one_from_before_the_start_are_ignored(tmp_path, monkeypatch, caplog):
     caplog.set_level(logging.INFO)
     agent = with_backup(kira(tmp_path, monkeypatch))

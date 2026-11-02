@@ -1266,14 +1266,14 @@ class Agent:
             log.error("private: the prompt was not kept (%s)", type(exc).__name__)
 
     async def _private_text(self, brief: str, nudge: bool, seen: list) -> tuple[str | None, str]:
-        """(her line or None, who wrote it: `gemini` | `backup`). Without the backup, v5.13: a block or a refusal closes
-        his lines and is silence. v5.21 (the owner, 2026-11-02: no judge — Gemini's own filter decides, at once): in
+        """(her line or None, who wrote it: `gemini` | `backup`). Without the backup (no model, or v5.22's switch
+        `FALLBACK_ROUTE` off), v5.13: a block or a refusal closes his lines and is silence. v5.21 (the owner, 2026-11-02: no judge — Gemini's own filter decides, at once): in
         Gemini's mode a block (the prompt stage, the answer stage, or her caught refusal) makes his unanswered lines
         `blocked`, opens the backup mode (`agents/route.py` `step`) and the backup answers; in the backup mode (5 minutes,
         an hour after more than `FALLBACK_HOUR_MAX` blocks in an hour, or by hand until `/gemini`) Gemini is never asked,
         his lines are `blocked` and the backup answers. Her line through the backup is made `blocked` once it is sent."""
         kind = "private_nudge" if nudge else "private"
-        if self.fallback_responder is None:
+        if not self.backup_open():
             text, block = await self._gemini_text(brief, kind)
             if block is not None and not nudge:  # v5.13: what Gemini refused never reaches it again
                 self.mark_unanswered(block[0], seen)
@@ -1721,7 +1721,7 @@ class Agent:
         prompt, and never a reset of her writing-first timer. Logged by the command's name only."""
         name = command_of(text)
         known = {n for n, _ in COMMANDS}
-        if name in ("gemini", "backup") and self.fallback_responder is None:
+        if name in ("gemini", "backup") and not self.backup_open():
             answer = "⚙️ Backup вимкнено: її відповіді завжди через gemini"
         elif name in ("gemini", "backup"):
             self.route_step(f"pin:{name}")
@@ -1858,7 +1858,14 @@ class Agent:
             records = []
         answers, _, _ = day_counts(records, day_bounds(now_ms, self.tz)[0], now_ms)
         text = route_status(load_route(self.route_file), now_ms, self.tz, self.fallback_hour_max, blocked, answers)
-        return text if self.fallback_responder is not None else text + "\n(backup вимкнено)"
+        return text if self.backup_open() else text + "\n(backup вимкнено)"
+
+    def backup_open(self) -> bool:
+        """v5.22 (the owner, 2026-11-02: «зроби нормальний перемикач коли роутінг включений а коли ні») — a block
+        sends her private answer to the backup only with its model and token and the panel's `FALLBACK_ROUTE` on,
+        read at each use (`live_value`): the switch works without a restart."""
+        return self.fallback_responder is not None and live_value(self.memory_file.parent, self.cfg.localpart,
+                                                                  "FALLBACK_ROUTE", os.environ) == "on"
 
     async def telegram_hear(self, update: Update) -> None:
         """The owner's voice note as words: the capped download (in memory only), Deepgram, a `stt` usage line —

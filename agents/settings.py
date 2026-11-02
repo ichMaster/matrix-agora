@@ -180,7 +180,11 @@ SCHEMA: tuple[Setting, ...] = (
     # v5.14 — the backup for her private chat (`fallback`): GLM-4.6 on NovelAI when Gemini blocks or refuses; empty
     # model: off. The window after a block, the backup's prompt budget and its history length (v5.21: the day cap went;
     # the judge (v5.15) and the probe (v5.16) went with their settings)
-    _s("FALLBACK_MODEL", "choice", "", "fallback", "cap:fallback", None, "Резервна модель (порожньо — вимкнено)",
+    # v5.22 (the owner, 2026-11-02: «зроби нормальний перемикач коли роутінг включений а коли ні») — whether a block
+    # sends her private answer to the backup; a live switch (`LIVE`): it works at once, nobody restarts
+    _s("FALLBACK_ROUTE", "choice", "on", "switches", "cap:fallback", None,
+       "Коли Gemini блокує, відповідає резервна модель", choices=("on", "off")),
+    _s("FALLBACK_MODEL", "choice", "", "fallback", "cap:fallback", None, "Резервна модель (порожньо — немає)",
        choices=("", "glm-4-6")),
     _s("FALLBACK_WINDOW_S", "int", "300", "fallback", "cap:fallback", None, "Скільки після блоку відповідає резерв",
        "s", 60, 3600),
@@ -224,7 +228,7 @@ SCHEMA: tuple[Setting, ...] = (
     _s("VIDEO_WINDOW_S", "int", "7200", "private", "cap:videos", None, "Вікно для ліміту відео", "s", 60, 86400),
     # v5.22 (the owner, 2026-11-02: «зроби можливість такий трейс включати на адмін панелі») — every network call's
     # result as a ⚙️ line to him in Telegram; a live switch (`LIVE`): it works at once, nobody restarts
-    _s("TRACE_CALLS", "choice", "off", "diag", "cap:telegram", None,
+    _s("TRACE_CALLS", "choice", "off", "switches", "cap:telegram", None,
        "Показувати в Telegram кожен виклик мереж", choices=("off", "on")),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
@@ -245,12 +249,12 @@ SCHEMA: tuple[Setting, ...] = (
 BY_NAME: dict[str, Setting] = {s.name: s for s in SCHEMA}
 # v5.22 — the switches an agent reads while it runs (`live_value`): the panel's change works at once and restarts
 # nobody; only agent settings, never applied at the start
-LIVE = frozenset({"TRACE_CALLS"})
+LIVE = frozenset({"TRACE_CALLS", "FALLBACK_ROUTE"})
 # the groups in their order, for a service's card and for an agent's tab
 SERVICE_GROUPS = (("turns", "Room & turns"), ("moves", "Ада і Бруно: ходи"), ("cat", "Кіт у кімнаті"),
                   ("claude", "Клод у кімнаті"), ("hermes", "Гермес"), ("voice", "Голоси агентів"),
                   ("session", "Сесії розмови"))
-AGENT_GROUPS = (("diag", "Діагностика"), ("memory", "Пам'ять"), ("plans", "Плани"), ("life", "Життя"),
+AGENT_GROUPS = (("switches", "Перемикачі"), ("memory", "Пам'ять"), ("plans", "Плани"), ("life", "Життя"),
                 ("model", "Модель"), ("voice", "Голос"), ("private", "Особистий чат"), ("fallback", "Резерв"))
 
 

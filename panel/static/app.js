@@ -1127,7 +1127,9 @@ function routeLine(mem) {
   if (!mem.available) return "Memory unavailable";
   const r = mem.route;
   if (!r) return "Route unreadable";
-  const where = r.pin === "backup" ? "backup by hand" : r.mode === "backup" && r.until ? `backup until ${r.until.slice(11, 16)}` : "gemini";
+  // v5.22: with the switch off (or no backup model) a block is silence — the route says so first
+  const where = r.backup === false ? "backup off · gemini only" : r.pin === "backup" ? "backup by hand"
+    : r.mode === "backup" && r.until ? `backup until ${r.until.slice(11, 16)}` : "gemini";
   const blocked = mem.archive ? ` · blocked ${fmtInt(mem.archive.blocked || 0)}` : "";
   return `${where} · blocks in the last hour ${fmtInt(r.blocks_hour)} · backup answers today ${fmtInt(r.answers.backup)}${blocked}`;
 }
@@ -1270,7 +1272,7 @@ function talkTabHtml(a, mem) {
 
 function agentTabHtml(a, mem, tab) {
   if (tab === "files") return filesTabHtml(a);
-  if (tab === "settings") return `<div class="muted" style="font-size:12.5px;margin-bottom:12px">${esc(a.display)}'s own settings, whatever the service · a save restarts ${esc(a.display)}, a diagnostics switch applies at once</div>${settingsHtml()}`;
+  if (tab === "settings") return `<div class="muted" style="font-size:12.5px;margin-bottom:12px">${esc(a.display)}'s own settings, whatever the service · a save restarts ${esc(a.display)}; a switch applies at once</div>${settingsHtml()}`;
   if (!mem.available) return unavailableBox();
   if (tab === "mood") return moodTabHtml(mem);
   if (tab === "events") return eventsTabHtml(a, mem);
@@ -1404,19 +1406,41 @@ function settingField(r) {
   const value = st.edits[r.name] ?? (resetting ? serverValue(r) : currentValue(r));
   const attrs = `data-setting="${esc(r.name)}" aria-label="${esc(r.name)}" ${resetting ? "disabled" : ""}`;
   let input;
-  if (r.kind === "choice") {
+  if (onOff(r)) {  // v5.22: a live on/off switch — one click saves it, nobody restarts
+    input = `<div class="seg" role="group" aria-label="${esc(r.name)}">${[["on", "On"], ["off", "Off"]].map(([v, l]) =>
+      `<button data-act="set-live" data-id="${esc(r.name)}" data-value="${v}" aria-pressed="${currentValue(r) === v}" ${st.busy ? "disabled" : ""}>${l}</button>`).join("")}</div>`;
+  } else if (r.kind === "choice") {
     input = `<select class="input" ${attrs}>${r.choices.map((c) => `<option value="${esc(c)}" ${c === value ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>`;
   } else if (r.kind === "int" || r.kind === "float") {
     input = `<input class="input" type="number" inputmode="decimal" step="${r.kind === "int" ? 1 : 0.01}" ${r.low != null ? `min="${r.low}"` : ""} ${r.high != null ? `max="${r.high}"` : ""} value="${esc(value)}" ${attrs}>`;
   } else {
     input = `<input class="input" type="text" ${r.kind === "hours" ? 'placeholder="HH-HH"' : ""} value="${esc(value)}" ${attrs}>`;
   }
-  const mark = resetting ? `<span class="pill unknown">reset → server value</span><button class="btn btn-ghost" data-act="set-undo" data-id="${esc(r.name)}">Undo</button>`
+  const mark = onOff(r) ? "" : resetting ? `<span class="pill unknown">reset → server value</span><button class="btn btn-ghost" data-act="set-undo" data-id="${esc(r.name)}">Undo</button>`
     : r.override != null ? `<span class="pill ok">panel</span><button class="btn btn-ghost" data-act="set-reset" data-id="${esc(r.name)}" title="Back to the server value">Reset</button>` : "";
   return `<div class="field" style="margin-bottom:14px">
     <label>${esc(r.description)} <span class="mono muted" style="font-size:11px">${esc(r.name)}</span></label>
     <div style="display:flex;gap:8px;align-items:center">${input}${r.unit ? `<span class="muted" style="font-size:12px">${esc(r.unit)}</span>` : ""}${mark}</div>
     <div class="muted" style="font-size:12px;margin-top:4px">default ${esc(r.default)}${nowLine(r) ? ` · ${esc(nowLine(r))}` : ""}${r.live ? " · applies at once, no restart" : ""}</div></div>`;
+}
+const onOff = (r) => r.live && r.kind === "choice" && [...r.choices].sort().join() === "off,on";
+async function saveLive(name, value) {  // v5.22: a live switch is saved at its click — it restarts nobody
+  const st = S.settings;
+  if (!st || st.busy) return;
+  st.busy = true; render();
+  try {
+    await put(st.path, {set: {[name]: value}});
+    showToast("ok", `${name} ${value} · applies at once`);
+    const view = await api(st.path);
+    if (S.settings === st) st.view = view;
+  } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    showToast("err", `Not saved: ${err.message}`);
+  } finally {
+    st.busy = false;
+  }
+  render();
+  refresh(true);
 }
 function settingsHtml() {
   const st = S.settings;
@@ -1714,6 +1738,7 @@ document.addEventListener("click", (e) => {
   else if (act === "svclog") openDrawer({kind: "service", id, sim: el.dataset.sim});
   else if (act === "sim-settings") openSimSettings(id);
   else if (act === "settings-retry") { const p = settingsPath(); if (p) loadSettings(p).then(render); }
+  else if (act === "set-live") saveLive(id, el.dataset.value);
   else if (act === "set-reset") { S.settings.reset[id] = true; delete S.settings.edits[id]; render(); }
   else if (act === "set-undo") { delete S.settings.reset[id]; delete S.settings.edits[id]; render(); }
   else if (act === "set-save") { if (pendingSettings().names.length) { S.dialog = {action: "save", kind: "settings", fresh: true}; render(); } }
