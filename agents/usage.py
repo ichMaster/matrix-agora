@@ -804,10 +804,11 @@ def analyze(records: list[dict], since: date, until: date, agent: str | None = N
 BY = ("service", "model", "kind", "day", "agent")  # v5.19: `usage_report.py --by`
 
 
-def render_analysis(report: dict, by: str, markdown: bool = False) -> str:
+def render_analysis(report: dict, by: str, markdown: bool = False, records: list[dict] | None = None) -> str:
     """v5.19 — `analyze()`'s report as one table grouped `by` (pure): the atomic rows summed per service, model
     (service / model), kind, day or agent, then the period's total, the unpriced models and, for all agents by service,
-    the subscriptions' fees. A cost is «—» with nothing priced and «≥» when an unpriced `api` part is left out."""
+    the subscriptions' fees. A cost is «—» with nothing priced and «≥» when an unpriced `api` part is left out.
+    v5.22: with the usage `records`, each group also gets its calls' median and p95 time and its mean prompt tokens."""
     groups: dict[str, dict] = {}
     for r in report["rows"]:
         label = f"{r['service']} / {r['model']}" if by == "model" else str(r[by])
@@ -824,10 +825,33 @@ def render_analysis(report: dict, by: str, markdown: bool = False) -> str:
     def money(c, priced, complete) -> str:
         return "—" if not priced or c is None else f"{'' if complete else '≥'}{c:.4f}"
 
+    lat: dict[str, list[int]] = defaultdict(list)
+    tok: dict[str, list[int]] = defaultdict(list)
+    for r in records or []:  # v5.22: the period's own lines, grouped as the rows are
+        ts = str(r["ts"])
+        if not report["since"] <= ts[:10] <= report["until"] or (report["agent"] and r.get("agent") != report["agent"]):
+            continue
+        svc = _engine(r)
+        key = {"service": svc, "model": f"{svc} / {r.get('model') or '?'}", "kind": str(r.get("kind", "?")),
+               "day": ts[:10], "agent": str(r.get("agent", "?"))}[by]
+        for k in (key, "TOTAL"):
+            if _int_of(r, "latency_ms") is not None:
+                lat[k].append(r["latency_ms"])
+            if _int_of(r, "prompt_tokens") is not None:
+                tok[k].append(r["prompt_tokens"])
+
+    def secs(ms: int | None) -> str:
+        return "—" if ms is None else f"{ms / 1000:,.1f}"
+
     def cells(label: str, g: dict) -> list[str]:
-        return [label, _n(g["calls"]), _n(g["failed"]), _n(g["input"]), _n(g["output"]), _n(g["characters"]),
-                f"{g['audio_s']:,.0f}", f"{g['video_s']:,.0f}", g["billing"] or "api",
-                money(g["cost"], g["priced"], g["complete"])]
+        out = [label, _n(g["calls"]), _n(g["failed"]), _n(g["input"]), _n(g["output"]), _n(g["characters"]),
+               f"{g['audio_s']:,.0f}", f"{g['video_s']:,.0f}", g["billing"] or "api",
+               money(g["cost"], g["priced"], g["complete"])]
+        if records is not None:
+            xs = tok.get(label, [])
+            out += [secs(percentile(lat.get(label, []), 0.5)), secs(percentile(lat.get(label, []), 0.95)),
+                    _n(sum(xs) / len(xs)) if xs else "—"]
+        return out
 
     order = sorted(groups.items()) if by == "day" else sorted(
         groups.items(), key=lambda kv: (-(kv[1]["cost"] if kv[1]["priced"] else -1.0), -kv[1]["calls"], kv[0]))
@@ -835,7 +859,8 @@ def render_analysis(report: dict, by: str, markdown: bool = False) -> str:
     total = cells("TOTAL", {**t, "priced": t["cost"] is not None})
     who = report["agent"] or "all agents"
     out = [f"{who} · {report['since']} … {report['until']} ({report['days']} days) — by {by}", "",
-           table([by, "calls", "failed", "input", "output", "chars", "audio s", "video s", "billing", "cost $"],
+           table([by, "calls", "failed", "input", "output", "chars", "audio s", "video s", "billing", "cost $"]
+                 + (["p50 s", "p95 s", "prompt"] if records is not None else []),
                  [cells(k, g) for k, g in order] + [total], markdown)]
     if report["unpriced"]:
         out += ["", "No price (a cost with them is «≥»): " + ", ".join(report["unpriced"]) + "."]
@@ -843,3 +868,198 @@ def render_analysis(report: dict, by: str, markdown: bool = False) -> str:
         out += ["", "Subscriptions for the period: " + "; ".join(
             f"{x['service']} ${x['period_cost']:.2f} (${x['monthly']:g} a month)" for x in report["subscriptions"]) + "."]
     return "\n".join(out)
+
+
+# --- v5.22: the calls' and the answers' time, the prompts, the photos and videos ---
+def percentile(values: list[int], q: float) -> int | None:
+    """The nearest-rank percentile (q in 0..1) of whole numbers, or None for none (pure)."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    return ordered[max(0, math.ceil(q * len(ordered)) - 1)]
+
+
+def time_stats(values: list[int]) -> dict:
+    """How many, the median, p95, max and mean (whole ms), all None for none (pure)."""
+    return {"n": len(values), "median": percentile(values, 0.5), "p95": percentile(values, 0.95),
+            "max": max(values) if values else None, "mean": round(sum(values) / len(values)) if values else None}
+
+
+def _answer_ok(a: Any) -> bool:
+    if not isinstance(a, dict) or not isinstance(a.get("ts"), str):
+        return False
+    try:
+        date.fromisoformat(a["ts"][:10])
+    except ValueError:
+        return False
+    ints = all(a.get(f) is None or (isinstance(a[f], int) and not isinstance(a[f], bool)) for f in ("wait_ms", "delay_ms"))
+    return (ints and isinstance(a.get("agent"), str) and a.get("place") in ANSWER_PLACES
+            and a.get("answered") in ANSWERED and isinstance(a.get("by"), str) and isinstance(a.get("parts", []), list))
+
+
+def parse_answers(lines: list[str]) -> tuple[list[dict], int]:
+    """v5.22 — `state/<name>.answers.jsonl`'s lines: (records, corrupt_count); a corrupt line is skipped."""
+    out, bad = [], 0
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            rec = None
+        if _answer_ok(rec):
+            out.append(rec)
+        else:
+            bad += 1
+    return out, bad
+
+
+def _int_of(r: dict, key: str) -> int | None:
+    v = r.get(key)
+    return v if isinstance(v, int) and not isinstance(v, bool) else None
+
+
+def analyze_detail(records: list[dict], answers: list[dict], since: date, until: date, agent: str | None = None,
+                   now: datetime | None = None, prices: PriceBook | None = None) -> dict:
+    """v5.22 — beside `analyze`, for [since, until] (local days, inclusive) and one agent, or all (None): pure, the days
+    and `now` given. Buckets are the period's days, or its hours when it is one day.
+    - `speed`: the timed calls (`latency_ms`) by service and its models, and by kind — the median, p95, max and mean,
+      the previous period's median, the median a bucket; the slowest service's p95;
+    - `answers`: the answers' `wait_ms` and `wait_ms − delay_ms` (the pause apart) by agent, place, door, writer and
+      what they answered, the previous period's median, the owner's median wait a bucket, and how many she wrote first;
+    - `prompts`: `prompt_tokens` a call (the mean and max) by service and its models, by kind and by agent, the previous
+      period's mean, the mean a bucket — a service that reports none (NovelAI) is absent;
+    - `media`: the ok `photo` calls (photos) and `video` + `video_note` calls (videos) in all, a bucket and on average an
+      hour (the period's hours, today's up to `now`), their cost; a video's `frame` is its cost, never a photo."""
+    prices = prices or PriceBook()
+    n = (until - since).days + 1
+    p_since, p_until = since - timedelta(days=n), since - timedelta(days=1)
+    one_day = n == 1
+    buckets = [f"{h:02d}" for h in range(24)] if one_day else _days(since, until)
+
+    def bucket(ts: str) -> str:
+        return ts[11:13] if one_day else ts[:10]
+
+    def within(ts: str, a: date, b: date) -> bool:
+        return a.isoformat() <= ts[:10] <= b.isoformat()
+
+    mine = [r for r in records if agent is None or r.get("agent") == agent]
+    now_l = [r for r in mine if within(str(r["ts"]), since, until)]
+    prev_l = [r for r in mine if within(str(r["ts"]), p_since, p_until)]
+
+    def grouped(rows: list[dict], key) -> dict:
+        out: dict = defaultdict(list)
+        for r in rows:
+            out[key(r)].append(r)
+        return out
+
+    def series(rows: list[dict], value, reduce) -> list:
+        by = grouped(rows, lambda r: bucket(str(r["ts"])))
+        return [reduce([value(r) for r in by.get(b, [])]) for b in buckets]
+
+    def median_of(xs: list[int]) -> int | None:
+        return percentile(xs, 0.5)
+
+    def mean_of(xs: list[int]) -> int | None:
+        return round(sum(xs) / len(xs)) if xs else None
+
+    # the calls' time
+    timed = [r for r in now_l if _int_of(r, "latency_ms") is not None]
+    p_timed = grouped([r for r in prev_l if _int_of(r, "latency_ms") is not None], _engine)
+    lat = lambda r: r["latency_ms"]
+
+    def speed_row(rows: list[dict], prev: list[dict]) -> dict:
+        return {**time_stats([lat(r) for r in rows]), "previous_median": median_of([lat(r) for r in prev])}
+
+    services = []
+    for svc, rows in grouped(timed, _engine).items():
+        models = [{"model": m, **speed_row(mr, [r for r in p_timed.get(svc, []) if str(r.get("model")) == m])}
+                  for m, mr in sorted(grouped(rows, lambda r: str(r.get("model") or "?")).items())]
+        services.append({"service": svc, **speed_row(rows, p_timed.get(svc, [])),
+                         "series": series(rows, lat, median_of), "models": models})
+    services.sort(key=lambda s: (-(s["p95"] or 0), s["service"]))
+    p_kinds = grouped([r for r in prev_l if _int_of(r, "latency_ms") is not None], lambda r: str(r.get("kind")))
+    kinds = sorted(({"kind": k, **speed_row(rows, p_kinds.get(k, []))}
+                    for k, rows in grouped(timed, lambda r: str(r.get("kind"))).items()),
+                   key=lambda s: (-(s["p95"] or 0), s["kind"]))
+    slowest = {"service": services[0]["service"], "p95": services[0]["p95"]} if services else None
+
+    # the answers' time
+    ans = [a for a in answers if agent is None or a.get("agent") == agent]
+    now_a = [a for a in ans if within(a["ts"], since, until)]
+    prev_a = [a for a in ans if within(a["ts"], p_since, p_until)]
+    waited = [a for a in now_a if a["answered"] != "none" and a.get("wait_ms") is not None]
+    net = lambda a: max(0, a["wait_ms"] - (a.get("delay_ms") or 0))
+    gkey = lambda a: (a["agent"], a["place"], a["door"], a["by"], a["answered"])
+    p_groups = grouped([a for a in prev_a if a["answered"] != "none" and a.get("wait_ms") is not None], gkey)
+    groups = [{"agent": k[0], "place": k[1], "door": k[2], "by": k[3], "answered": k[4],
+               "wait": time_stats([a["wait_ms"] for a in rows]), "net": time_stats([net(a) for a in rows]),
+               "previous_median": median_of([a["wait_ms"] for a in p_groups.get(k, [])])}
+              for k, rows in sorted(grouped(waited, gkey).items())]
+    owner = [a for a in waited if a["answered"] == "owner"]
+    p_owner = [a["wait_ms"] for a in prev_a if a["answered"] == "owner" and a.get("wait_ms") is not None]
+    answers_block = {"owner": {"wait": time_stats([a["wait_ms"] for a in owner]),
+                               "net": time_stats([net(a) for a in owner]), "previous_median": median_of(p_owner)},
+                     "groups": groups, "series": series(owner, lambda a: a["wait_ms"], median_of),
+                     "first": sum(1 for a in now_a if a["answered"] == "none")}
+
+    # the prompts
+    prompted = [r for r in now_l if _int_of(r, "prompt_tokens") is not None]
+    p_prompted = [r for r in prev_l if _int_of(r, "prompt_tokens") is not None]
+    tok = lambda r: r["prompt_tokens"]
+
+    def prompt_row(rows: list[dict], prev: list[dict]) -> dict:
+        xs = [tok(r) for r in rows]
+        return {"calls": len(xs), "mean": mean_of(xs), "max": max(xs) if xs else None,
+                "previous_mean": mean_of([tok(r) for r in prev])}
+
+    p_svc = grouped(p_prompted, _engine)
+    prompt_services = []
+    for svc, rows in sorted(grouped(prompted, _engine).items()):
+        models = [{"model": m, **prompt_row(mr, [r for r in p_svc.get(svc, []) if str(r.get("model")) == m])}
+                  for m, mr in sorted(grouped(rows, lambda r: str(r.get("model") or "?")).items())]
+        prompt_services.append({"service": svc, **prompt_row(rows, p_svc.get(svc, [])),
+                                "series": series(rows, tok, mean_of), "models": models})
+    p_k, p_ag = grouped(p_prompted, lambda r: str(r.get("kind"))), grouped(p_prompted, lambda r: str(r.get("agent")))
+    prompts_block = {
+        "services": prompt_services,
+        "kinds": sorted(({"kind": k, **prompt_row(rows, p_k.get(k, []))}
+                         for k, rows in grouped(prompted, lambda r: str(r.get("kind"))).items()),
+                        key=lambda x: (-(x["mean"] or 0), x["kind"])),
+        "agents": [{"agent": a, **prompt_row(rows, p_ag.get(a, []))}
+                   for a, rows in sorted(grouped(prompted, lambda r: str(r.get("agent"))).items())]}
+
+    # the photos and videos
+    photo = [r for r in now_l if r.get("kind") == "photo"]
+    video = [r for r in now_l if r.get("kind") in ("video", "video_note", "frame")]
+    ok_photo = [r for r in photo if r.get("ok")]
+    ok_video = [r for r in video if r.get("ok") and r.get("kind") != "frame"]
+    if now is not None and since <= now.date() <= until:
+        hours = (now.date() - since).days * 24 + now.hour + now.minute / 60
+    else:
+        hours = n * 24
+    hours = max(hours, 1 / 60)
+
+    def media_cost(rows: list[dict]) -> float | None:
+        acc = Row()
+        for r in rows:
+            _add_line(acc, r)
+        if not rows:
+            return 0.0
+        c = cost(acc, prices.price_in, prices.price_out, prices.models, prices.seconds)
+        return round(c, 6) if c is not None else None
+
+    per = grouped(ok_photo + ok_video, lambda r: bucket(str(r["ts"])))
+    media_block = {
+        "photos": len(ok_photo), "videos": len(ok_video),
+        "frames": sum(1 for r in video if r.get("kind") == "frame" and r.get("ok")),
+        "hours": round(hours, 2), "photos_per_hour": round(len(ok_photo) / hours, 3),
+        "videos_per_hour": round(len(ok_video) / hours, 3),
+        "cost": {"photos": media_cost(photo), "videos": media_cost(video)},
+        "series": [{"bucket": b, "photos": sum(1 for r in per.get(b, []) if r.get("kind") == "photo"),
+                    "videos": sum(1 for r in per.get(b, []) if r.get("kind") != "photo")} for b in buckets]}
+
+    return {"since": since.isoformat(), "until": until.isoformat(), "agent": agent, "by_hour": one_day,
+            "buckets": buckets,
+            "speed": {"services": services, "kinds": kinds, "slowest": slowest},
+            "answers": answers_block, "prompts": prompts_block, "media": media_block}

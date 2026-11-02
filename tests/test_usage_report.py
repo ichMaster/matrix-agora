@@ -270,10 +270,29 @@ def test_by_prints_each_grouping_and_a_total(analytics_env, tmp_path, capsys, gr
 def test_by_service_for_one_agent_prices_and_counts_her_units(analytics_env, tmp_path, capsys):
     out = by(analytics_state(tmp_path), capsys, "--by", "service", "--agent", "kira", "--markdown")
     assert out.startswith("kira · 2026-10-31") and "| service | calls |" in out and "ada" not in out
-    rows = {line.split("|")[1].strip(): line for line in out.splitlines() if line.startswith("| ")}
-    assert rows["fal"].rstrip(" |").endswith("0.8000") and "10" in rows["fal"]   # 10 s at $0.08
-    assert rows["elevenlabs"].rstrip(" |").endswith("—") and "250" in rows["elevenlabs"]  # a subscription, never $0
+    rows = {cells[0]: cells for line in out.splitlines() if line.startswith("| ")
+            for cells in [[c.strip() for c in line.split("|")[1:-1]]]}
+    cost = rows["service"].index("cost $")
+    assert rows["fal"][cost] == "0.8000" and "10" in rows["fal"]                   # 10 s at $0.08
+    assert rows["elevenlabs"][cost] == "—" and "250" in rows["elevenlabs"]          # a subscription, never $0
     assert "3" in rows["deepgram"] and "Subscriptions" not in out                  # one agent: no fee
+
+
+def test_by_adds_each_groups_median_and_p95_time_and_its_mean_prompt(analytics_env, tmp_path, capsys):
+    """v5.22: the calls' median and p95 time (`latency_ms`) and the mean prompt tokens, a group and in total; a group
+    with no timed line is «—»."""
+    from agents.usage import usage_line
+    meta = SimpleNamespace(prompt_token_count=1000, candidates_token_count=10, total_token_count=1010)
+    lines = [usage_line(f"2026-11-01T1{i}:00:00+02:00", "kira", "private", "m", meta, True, latency_ms=ms)
+             for i, ms in enumerate((1000, 2000, 9000))]
+    (tmp_path / "kira.usage.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+    out = by(tmp_path, capsys, "--by", "service", "--markdown")
+    rows = {cells[0]: cells for line in out.splitlines() if line.startswith("| ")
+            for cells in [[c.strip() for c in line.split("|")[1:-1]]]}
+    head = rows["service"]
+    assert head[-3:] == ["p50 s", "p95 s", "prompt"]
+    assert [rows["gemini"][head.index(c)] for c in ("p50 s", "p95 s", "prompt")] == ["2.0", "9.0", "1,000"]
+    assert rows["TOTAL"][head.index("p50 s")] == "2.0"
 
 
 def test_by_service_with_all_agents_adds_the_fees_and_names_the_unpriced(analytics_env, tmp_path, capsys,

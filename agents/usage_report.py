@@ -14,7 +14,8 @@ the month so far and today) to DIR/YYYY-MM-DD.md and DIR/latest.md
 
 --by (v5.19) prints the analytics of the period (--since or --days, to --until, default today) for one agent
 (--agent) or all, grouped by service, model, kind, day or agent, with the cost of each — the same analysis as the
-panel's Analytics view; with all agents, --by service adds the subscriptions' fees (PRICE_SUBSCRIPTIONS).
+panel's Analytics view; with all agents, --by service adds the subscriptions' fees (PRICE_SUBSCRIPTIONS). From
+v5.22 each group also shows its calls' median and p95 time (`p50 s`, `p95 s`) and its mean prompt tokens.
 """
 
 from __future__ import annotations
@@ -103,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
             print("error: --since is after --until", file=sys.stderr)
             return 2
         report = analyze(records, since, until, args.agent, PriceBook(*prices, models, seconds, fees), now.date())
-        print(render_analysis(report, args.by, markdown=args.markdown))
+        print(render_analysis(report, args.by, markdown=args.markdown, records=records))  # v5.22: the time
         return 0
     print(render(aggregate(records, since), *prices, markdown=args.markdown, models=models, seconds=seconds))
     return 0

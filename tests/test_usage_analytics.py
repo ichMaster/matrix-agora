@@ -194,3 +194,101 @@ def test_today_unfinished_and_the_days_before_the_first_line_leave_the_rate_and_
     assert young["trend"]["direction"] == "flat" and young["total"]["cost_per_day"] == pytest.approx(1.0)
     only = analyze(so_far, date(2026, 11, 8), date(2026, 11, 8), "kira", PRICES, today=date(2026, 11, 8))
     assert only["total"]["cost_per_day"] == pytest.approx(0.3)                     # the only day stays
+
+
+# --- v5.22: the calls' and the answers' time, the prompts, the photos and videos ---------------------------------------
+def timed(ts, kind="private", engine="gemini", model="gemini-3.1-pro-preview", latency=1000, prompt=None,
+          agent="kira", ok=True, video_ms=None, output=None):
+    return {"ts": ts, "agent": agent, "kind": kind, "model": model, "prompt_tokens": prompt, "output_tokens": output,
+            "total_tokens": None, "ok": ok, "engine": engine, "billing": "subscription" if engine == "novelai" else "api",
+            "latency_ms": latency, "video_ms": video_ms}
+
+
+def ans(ts, wait, delay=0, answered="owner", by="gemini", agent="kira", place="private", door="telegram"):
+    return {"ts": ts, "agent": agent, "place": place, "door": door, "answered": answered,
+            "wait_ms": None if answered == "none" else wait, "delay_ms": delay, "by": by, "parts": []}
+
+
+def test_the_calls_time_by_service_model_and_kind_with_the_previous_median_and_the_days():
+    from agents.usage import analyze_detail
+    lines = [timed("2026-11-01T10:00:00+02:00", latency=1000), timed("2026-11-01T11:00:00+02:00", latency=3000),
+             timed("2026-11-02T10:00:00+02:00", latency=2000), timed("2026-11-02T11:00:00+02:00", latency=None),
+             timed("2026-11-02T12:00:00+02:00", "private", "novelai", "glm-4-6", latency=8000),
+             timed("2026-10-30T12:00:00+02:00", latency=500)]                        # the previous period
+    r = analyze_detail(lines, [], date(2026, 11, 1), date(2026, 11, 2))
+    gem_, nov = {s["service"]: s for s in r["speed"]["services"]}["gemini"], r["speed"]["services"][0]
+    assert (gem_["n"], gem_["median"], gem_["p95"], gem_["max"], gem_["mean"]) == (3, 2000, 3000, 3000, 2000)
+    assert gem_["previous_median"] == 500 and gem_["series"] == [1000, 2000]          # a null time is skipped
+    assert gem_["models"][0]["model"] == "gemini-3.1-pro-preview"
+    assert nov["service"] == "novelai" and r["speed"]["slowest"] == {"service": "novelai", "p95": 8000}
+    assert {k["kind"] for k in r["speed"]["kinds"]} == {"private"} and r["buckets"] == ["2026-11-01", "2026-11-02"]
+
+
+def test_a_one_day_period_is_by_hour():
+    from agents.usage import analyze_detail
+    lines = [timed("2026-11-02T08:15:00+02:00", latency=1000), timed("2026-11-02T08:45:00+02:00", latency=3000),
+             timed("2026-11-02T11:00:00+02:00", latency=5000)]
+    r = analyze_detail(lines, [], date(2026, 11, 2), date(2026, 11, 2))
+    series = r["speed"]["services"][0]["series"]
+    assert r["by_hour"] and len(r["buckets"]) == 24 and series[8] == 1000 and series[11] == 5000 and series[9] is None
+
+
+def test_the_answers_time_with_the_pause_apart_by_agent_door_and_writer():
+    from agents.usage import analyze_detail
+    answers = [ans("2026-11-02T10:00:00+02:00", 9000, 3000), ans("2026-11-02T10:05:00+02:00", 30000, 2000, by="backup"),
+               ans("2026-11-02T11:00:00+02:00", 4000, 1000, answered="agent", agent="ada", place="agora", door="matrix"),
+               ans("2026-11-02T12:00:00+02:00", None, None, answered="none"),
+               ans("2026-11-01T12:00:00+02:00", 6000, 1000)]                         # the previous period
+    r = analyze_detail([], answers, date(2026, 11, 2), date(2026, 11, 2), agent="kira")["answers"]
+    assert r["owner"]["wait"]["median"] == 9000 and r["owner"]["wait"]["max"] == 30000
+    assert r["owner"]["net"]["median"] == 6000 and r["owner"]["previous_median"] == 6000 and r["first"] == 1
+    by = {(g["by"], g["answered"]): g for g in r["groups"]}
+    assert by[("backup", "owner")]["wait"]["median"] == 30000 and by[("gemini", "owner")]["net"]["median"] == 6000
+    assert ("gemini", "agent") not in by                                            # ada's, not kira's
+    every = analyze_detail([], answers, date(2026, 11, 2), date(2026, 11, 2))["answers"]
+    assert {(g["agent"], g["answered"]) for g in every["groups"]} == {("kira", "owner"), ("ada", "agent")}
+
+
+def test_the_prompts_mean_and_max_by_service_kind_and_agent_and_novelai_is_absent():
+    from agents.usage import analyze_detail
+    lines = [timed("2026-11-02T10:00:00+02:00", prompt=40000), timed("2026-11-02T11:00:00+02:00", prompt=60000),
+             timed("2026-11-02T12:00:00+02:00", "reflection", prompt=10000),
+             timed("2026-11-02T12:00:00+02:00", "private", "novelai", "glm-4-6"),
+             timed("2026-11-01T12:00:00+02:00", prompt=20000)]
+    r = analyze_detail(lines, [], date(2026, 11, 2), date(2026, 11, 2))["prompts"]
+    assert [s["service"] for s in r["services"]] == ["gemini"]
+    g = r["services"][0]
+    assert (g["calls"], g["mean"], g["max"], g["previous_mean"]) == (3, 36667, 60000, 20000)
+    assert {k["kind"]: k["mean"] for k in r["kinds"]} == {"private": 50000, "reflection": 10000}
+    assert r["agents"] == [{"agent": "kira", "calls": 3, "mean": 36667, "max": 60000, "previous_mean": 20000}]
+
+
+def test_photos_and_videos_in_all_by_hour_and_an_hour_on_average_and_a_frame_is_never_a_photo():
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from agents.usage import analyze_detail
+    lines = [timed("2026-11-02T08:10:00+02:00", "photo", model="gemini-nano-banana-2.1", prompt=4600, output=1500),
+             timed("2026-11-02T08:20:00+02:00", "photo", model="gemini-nano-banana-2.1", ok=False),
+             timed("2026-11-02T09:00:00+02:00", "frame", model="gemini-nano-banana-2.1", prompt=4600, output=1500),
+             timed("2026-11-02T09:01:00+02:00", "video_note", "fal", "veed/fabric-1.0", video_ms=20000)]
+    now = datetime(2026, 11, 2, 10, 0, tzinfo=ZoneInfo("Europe/Kyiv"))
+    prices = PriceBook(models={"gemini-nano-banana-2.1": (1.50, 30.0)}, seconds={"veed/fabric-1.0": 0.08})
+    m = analyze_detail(lines, [], date(2026, 11, 2), date(2026, 11, 2), now=now, prices=prices)["media"]
+    assert (m["photos"], m["videos"], m["frames"], m["hours"]) == (1, 1, 1, 10.0)
+    assert (m["photos_per_hour"], m["videos_per_hour"]) == (0.1, 0.1)
+    assert m["cost"] == {"photos": 0.0519, "videos": 1.6519}                          # the frame is the video's cost
+    assert m["series"][8] == {"bucket": "08", "photos": 1, "videos": 0} and m["series"][9]["videos"] == 1
+
+
+def test_no_data_gives_empty_blocks_and_a_corrupt_answer_line_is_skipped():
+    import json
+
+    from agents.usage import analyze_detail, parse_answers
+    r = analyze_detail([], [], date(2026, 11, 1), date(2026, 11, 2))
+    assert r["speed"] == {"services": [], "kinds": [], "slowest": None}
+    assert r["answers"]["owner"]["wait"]["n"] == 0 and r["answers"]["groups"] == [] and r["answers"]["first"] == 0
+    assert r["prompts"]["services"] == [] and r["media"]["photos"] == r["media"]["videos"] == 0
+    good = ans("2026-11-02T10:00:00+02:00", 9000)
+    records, bad = parse_answers([json.dumps(good), "{torn", json.dumps({**good, "answered": "bot"}), ""])
+    assert records == [good] and bad == 2
