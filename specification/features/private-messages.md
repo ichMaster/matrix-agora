@@ -221,7 +221,7 @@ The phase is [ROADMAP.md §v5.21](../ROADMAP.md). This part is the same design i
 5. **More than 10 blocks in the last hour** start the backup mode for the next hour. There is no "until midnight"
    any more.
 6. **`/gemini`** returns to Gemini at once, from the 5 minutes or from the hour, and resets the hour's count
-   (*to confirm*).
+   (the owner).
    - `/status` shows the mode.
    - `/auto` goes.
    - `/backup` stays: the owner switches to the backup himself when he sees the talk turn explicit, until
@@ -279,5 +279,4 @@ A copy comes first. Only counts, times and marks are read.
 
 ### Before the phase starts
 
-v5.20 is released first, once the owner confirms or waives its live checks (#173–#175). One point is still
-*to confirm*: whether `/gemini` resets the hour's count.
+v5.20 is released first, once the owner confirms or waives its live checks (#173–#175). Nothing is left to confirm.

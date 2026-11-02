@@ -2871,8 +2871,7 @@ midnight.
   grows, so the owner switches to the backup by hand (`/backup`) when the talk turns to what should not reach
   Gemini («користувач має розуміти … має сам в ручному режимі перейти в бекап мережу»).
 
-**Proposed** (the owner's answers of 2026-11-02 included; the points still marked *to confirm* are decided when the
-issues are generated):
+**Proposed** (with the owner's answers of 2026-11-02; nothing is left to confirm):
 - **The marks:** `gemini` (open) and `blocked` (closed for good). The archive's and the facts' mark functions never
   turn `blocked` into anything else, and a test pins every path. `clean` is never written again; the lines and facts
   that have it keep it and stay open, so they can still be found if they cause trouble.
@@ -2893,7 +2892,7 @@ issues are generated):
 - **The hour:** more than `FALLBACK_HOUR_MAX` (10) blocks in the last 60 minutes start the backup mode for
   `FALLBACK_LOCK_S` (3,600 s) from that block. `FALLBACK_DAY_MAX` goes.
 - **The commands:**
-  - `/gemini` returns to Gemini now: it ends the 5 minutes or the hour and resets the hour's count (*to confirm*);
+  - `/gemini` returns to Gemini now: it ends the 5 minutes or the hour and resets the hour's count (the owner);
   - `/status` shows the mode, its end and the blocks in the last hour;
   - `/auto` goes;
   - `/backup` stays (the owner): the backup mode until `/gemini`, for when he sees the talk turn explicit.
@@ -2937,7 +2936,6 @@ issues are generated):
 
 **Owner steps:**
 - Confirm or waive v5.20's live checks (#173–#175), so that v5.20.0 is released first.
-- Answer the point still *to confirm* (`/gemini` and the hour's count).
 - The deploy and the checks below.
 
 **DoD:**
