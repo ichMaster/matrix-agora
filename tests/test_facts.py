@@ -495,3 +495,18 @@ def test_a_new_text_drops_the_judges_clean_and_a_closed_fact_stays_closed(tmp_pa
         fid = add_fact(folder, "Любить каву", 1, "private", "2026-10-30", 50, 240, mark=mark)
         assert replace_fact(folder, fid, "Любить чай", "2026-10-31", 240)
         assert [(f.text, f.mark) for f in load_facts(folder)] == [("Любить чай", after)], mark
+
+
+def test_closed_facts_last_written_before_the_cut_are_deleted(tmp_path):
+    """v5.21: the daily emptying deletes a closed fact older than a day (its file's time); an open one stays."""
+    import os
+
+    from agents.facts import add_fact, empty_closed_facts, fact_path, load_facts
+    folder = tmp_path / "kira.facts"
+    old = add_fact(folder, "Старий закритий", 1, "asked", "2026-10-28", 50, 240, mark="blocked")
+    add_fact(folder, "Новий закритий", 1, "asked", "2026-11-02", 50, 240, mark="blocked")
+    opened = add_fact(folder, "Старий відкритий", 1, "private", "2026-10-28", 50, 240)
+    for fid in (old, opened):
+        os.utime(fact_path(folder, fid), (100, 100))
+    assert empty_closed_facts(folder, 1000) == 1
+    assert sorted(f.text for f in load_facts(folder)) == ["Новий закритий", "Старий відкритий"]

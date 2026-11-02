@@ -20,6 +20,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import numpy as np
 
@@ -267,24 +268,28 @@ class Archive:
         return dict(self.db.execute("SELECT mark, COUNT(*) FROM lines WHERE place = ? GROUP BY mark", (place,)))
 
     def closed_count(self, place: str = "private") -> int:
-        """v5.14 — how many lines of a place are the backup's talk (`BACKUP_MARKS`; v5.15 `reopened` too)."""
+        """v5.14 — how many lines of a place are closed (`BACKUP_MARKS`; v5.21 `blocked`) and still hold their text."""
         marks = ",".join("?" * len(BACKUP_MARKS))
-        return self.db.execute(f"SELECT COUNT(*) FROM lines WHERE place = ? AND mark IN ({marks})",
+        return self.db.execute(f"SELECT COUNT(*) FROM lines WHERE place = ? AND mark IN ({marks}) AND text != ''",
                                (place, *BACKUP_MARKS)).fetchone()[0]
 
-    def purge_closed(self, place: str = "private") -> list[tuple[str, str]]:
-        """v5.14, the owner's `/purge` — delete every line of a place that is the backup's talk (`BACKUP_MARKS`: what
-        Gemini blocked or refused, what went through the backup, rated or not), with its word index: the one exception
-        to «nothing lived is deleted». The (speaker, text) of the lines deleted, for her history."""
+    def empty_blocked(self, before_ms: int | None = None) -> list[tuple[str, str]]:
+        """v5.21 (the owner, 2026-11-02: «раз в день вони мають взагалі видалятись якщо вони старші 24 години»; and
+        `/purge`, with no cut) — the text of every closed line (`BACKUP_MARKS`) older than `before_ms`, any place but the
+        facts' mirror, is deleted with its word index and vector; the row keeps its key, time, place, speaker and mark,
+        so a Matrix line read again at a start (`append` by key) never comes back open. The exception to «nothing lived
+        is deleted». The (speaker, text) of the lines emptied, for her history."""
         marks = ",".join("?" * len(BACKUP_MARKS))
+        cut = (" AND ts_ms < ?", (int(before_ms),)) if before_ms is not None else ("", ())
         with self.db:
-            rows = self.db.execute(f"SELECT id, speaker, text FROM lines WHERE place = ? AND mark IN ({marks})",
-                                   (place, *BACKUP_MARKS)).fetchall()
+            rows = self.db.execute(f"SELECT id, speaker, text FROM lines WHERE place != 'facts' AND mark IN ({marks}) "
+                                   f"AND text != ''{cut[0]}", (*BACKUP_MARKS, *cut[1])).fetchall()
             for row_id, _, text in rows:
                 self.db.execute("INSERT INTO fts(fts, rowid, text) VALUES ('delete', ?, ?)", (row_id, text))
-            self.db.execute(f"DELETE FROM lines WHERE place = ? AND mark IN ({marks})", (place, *BACKUP_MARKS))
+            self.db.executemany("UPDATE lines SET text = '', emb = NULL WHERE id = ?", [(r[0],) for r in rows])
         self._cache = None
         return [(speaker, text) for _, speaker, text in rows]
+
 
     def censor(self, keys: Iterable[str]) -> int:
         """v5.13 — mark these lines `censored`: Gemini never reads them again. How many."""
@@ -437,3 +442,9 @@ class Archive:
             f"SELECT {_COLS} FROM lines WHERE place = ? AND ts_ms >= ? "
             f"AND {_open_to(gemini)} ORDER BY ts_ms DESC, id DESC LIMIT ?", (place, since_ms or 0, limit)).fetchall()
         return [Line(*r) for r in reversed(rows)]
+
+
+def emptying_due(now_ms: int, last_day: str, tz: str, hour: int = 5) -> bool:
+    """v5.21 — the daily emptying runs once a day, at or after `hour` (05:00) in her `TIMEZONE`, when today's has not."""
+    now = datetime.fromtimestamp(now_ms / 1000, ZoneInfo(tz))
+    return now.hour >= hour and last_day != now.date().isoformat()

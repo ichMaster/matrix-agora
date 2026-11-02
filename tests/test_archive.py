@@ -5,8 +5,10 @@ import asyncio
 import logging
 import os
 import sqlite3
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pytest
@@ -435,3 +437,60 @@ def test_a_blocked_line_is_closed_to_gemini_and_an_emptied_one_leaves_her_histor
     assert {i for i, _ in a.unembedded(10)} == {a.by_keys(["k0"])[0].id}
     agent.seed_private_from_archive()
     assert agent.private_history == [("Ich", "відкритий рядок"), ("Ich", "закритий рядок")]
+
+
+def test_the_daily_emptying_keeps_the_row_without_its_text_and_a_reread_line_stays_blocked(tmp_path):
+    """v5.21 (the owner, 2026-11-02: «раз в день вони мають взагалі видалятись якщо вони старші 24 години»): a closed
+    line older than the cut loses its text, word index and vector; its key stays, so the Matrix room's line read again
+    at a start never comes back open; a younger one and an open one keep theirs."""
+    a = Archive(tmp_path / "kira.archive.db")
+    a.append("$old", ms(10, 0), "private", "matrix", "Ich", "стара гроза")
+    a.append("$young", ms(10, 30), "private", "matrix", "Кіра", "свіжа гроза")
+    a.append("$open", ms(9, 0), "private", "matrix", "Ich", "відкрита гроза")
+    a.mark(["$old", "$young"], "blocked")
+    assert a.empty_blocked(ms(10, 10)) == [("Ich", "стара гроза")]
+    rows = dict(a.db.execute("SELECT key, text FROM lines").fetchall())
+    assert rows == {"$old": "", "$young": "свіжа гроза", "$open": "відкрита гроза"}
+    assert a.append("$old", ms(10, 0), "private", "matrix", "Ich", "стара гроза") is False   # the room gives it back
+    assert a.db.execute("SELECT mark, text FROM lines WHERE key = '$old'").fetchone() == ("blocked", "")
+    assert a.search_words("стара", ("private",), gemini=False) == []
+    assert a.closed_count() == 1 and len(a.empty_blocked()) == 1 and a.closed_count() == 0  # `/purge`: no cut
+
+
+def test_the_emptying_is_due_once_a_day_from_five():
+    from agents.archive import emptying_due
+    tz = "Europe/Kyiv"
+
+    def at(day, hour, minute=0):
+        return int(datetime(2026, 11, day, hour, minute, tzinfo=ZoneInfo(tz)).timestamp() * 1000)
+
+    assert not emptying_due(at(3, 4, 59), "2026-11-02", tz) and emptying_due(at(3, 5), "2026-11-02", tz)
+    assert not emptying_due(at(3, 5, 1), "2026-11-03", tz) and emptying_due(at(3, 23), "", tz)
+    dst = int(datetime(2026, 10, 25, 5, 0, tzinfo=ZoneInfo(tz)).timestamp() * 1000)   # the day the clocks went back
+    assert emptying_due(dst, "2026-10-24", tz) and not emptying_due(dst - 3_600_000, "2026-10-24", tz)
+
+
+def test_her_watcher_empties_the_closed_talk_once_a_day_and_her_history_follows(tmp_path, monkeypatch, caplog):
+    import logging
+    import os
+    import stat
+
+    from agents.facts import add_fact, fact_path, load_facts
+    caplog.set_level(logging.INFO)
+    agent = kira(tmp_path, monkeypatch, EmbedLLM())
+    agent.facts_dir = tmp_path / "kira.facts"
+    shut = add_fact(agent.facts_dir, "Старий закритий факт", 1, "asked", "2026-10-30", 50, 240, mark="blocked")
+    add_fact(agent.facts_dir, "Відкритий факт", 1, "private", "2026-10-30", 50, 240)
+    os.utime(fact_path(agent.facts_dir, shut), (1, 1))
+    day = int(datetime(2026, 11, 3, 5, 1, tzinfo=ZoneInfo("Europe/Kyiv")).timestamp() * 1000)
+    agent.clock = lambda: day
+    agent.archive.append("tg:1", day - 2 * 86_400_000, "private", "telegram", "Ich", "давній закритий рядок")
+    agent.archive.append("tg:2", day - 3_600_000, "private", "telegram", "Ich", "свіжий закритий рядок")
+    agent.archive.mark(["tg:1", "tg:2"], "blocked")
+    agent.private_history = [("Ich", "давній закритий рядок"), ("Ich", "свіжий закритий рядок")]
+    assert agent.maybe_empty_blocked() is True
+    assert agent.private_history == [("Ich", "свіжий закритий рядок")]
+    assert [f.text for f in load_facts(agent.facts_dir)] == ["Відкритий факт"]
+    assert stat.S_IMODE(os.stat(agent.emptied_file).st_mode) == 0o600
+    assert agent.maybe_empty_blocked() is False                                    # once a day
+    assert "the daily emptying — 1 closed lines and 1 closed facts" in caplog.text and "давній" not in caplog.text

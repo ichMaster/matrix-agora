@@ -4,7 +4,8 @@ On top of her private prompt stay the last `HISTORY_N` messages word for word. B
 older than that window: by the hour for the last `TALK_HOUR_DAYS` days, by local four-hour blocks (00, 04, 08, 12, 16,
 20) up to `TALK_4H_DAYS`, by the week (Monday 00:00) after that. Gemini 3.1 Pro writes each one once, from the lines
 open to it; the rows live in her archive's `talk` table and are never rewritten. The closed talk is never summarized
-for Gemini: it stays in the archive, counted per period.
+for Gemini: it is counted per period (v5.21: its text is emptied after a day, and nothing reopens it — the re-check
+went).
 
 Everything here is pure — plain data and an injected clock; the agent reads the archive and calls Gemini.
 """
@@ -126,100 +127,3 @@ def talk_section(rows: list, before_ms: int, now: datetime, tz: str, words_budge
     while lines and sum(len(x.split()) for x in lines) > words_budget:
         lines.pop(0)
     return TALK_TITLE + "\n" + "\n".join(lines) if lines else None
-
-
-RECHECK_GROUP = 20  # the re-check's group: halved down to the lines that block
-
-
-async def sift(items: list[tuple[str, str]], blocked, group: int = RECHECK_GROUP) -> tuple[set[str], int]:
-    """The re-check (2026-11-02, made a command): (the ids that stay closed, the calls made). `items` are (id, line)
-    in order; `blocked(text)` says whether Gemini blocks those lines at the prompt stage (True), passes them (False)
-    or failed (None). Each group of `group` that blocks is halved down to the lines that block; a set whose halves both
-    pass blocks only together and stays closed whole; a failed call keeps its lines closed."""
-    calls = 0
-
-    async def closed_of(part: list[tuple[str, str]]) -> list[str]:
-        nonlocal calls
-        calls += 1
-        verdict = await blocked("\n".join(line for _, line in part))
-        if verdict is False:
-            return []
-        if verdict is None or len(part) == 1:
-            return [i for i, _ in part]
-        half = len(part) // 2
-        first, second = await closed_of(part[:half]), await closed_of(part[half:])
-        return first + second if first or second else [i for i, _ in part]
-
-    closed: set[str] = set()
-    for n in range(0, len(items), group):
-        closed.update(await closed_of(items[n:n + group]))
-    return closed, calls
-
-
-def main(argv: list[str] | None = None) -> int:
-    """`python -m agents.talk recheck [--agent kira] [--since YYYY-MM-DD] [--until YYYY-MM-DD]`, in her container while
-    she is stopped: her `censored` private lines of the local days go to Gemini again (`GeminiClient.probe`); what
-    passes is marked `clean`. `waiting` and `reopened` stay. Counts only, never a text; the calls are usage lines of
-    the kind `probe`."""
-    import argparse
-    import asyncio
-    import json
-    import os
-    import time
-    from datetime import date
-    from pathlib import Path
-
-    from agents.archive import Archive
-    from agents.llm import GeminiClient
-    from agents.usage import usage_line
-    from agents.world import local_now
-
-    parser = argparse.ArgumentParser(prog="python -m agents.talk")
-    sub = parser.add_subparsers(dest="cmd", required=True)
-    recheck = sub.add_parser("recheck", help="her censored private lines sent to Gemini again; what passes reopens")
-    recheck.add_argument("--agent", default="kira")
-    recheck.add_argument("--since", type=date.fromisoformat, default=None)
-    recheck.add_argument("--until", type=date.fromisoformat, default=None)
-    args = parser.parse_args(argv)
-    tz = os.environ.get("TIMEZONE", "Europe/Kyiv")
-    state = Path("state")
-    usage_file = state / f"{args.agent}.usage.jsonl"
-
-    def sink(kind, model, meta, ok, blocked=None):  # counted under the agent, like any other call of hers
-        line = usage_line(local_now(int(time.time() * 1000), tz).isoformat(timespec="seconds"), args.agent, kind,
-                          model, meta, ok, blocked)
-        fd = os.open(usage_file, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-        try:
-            os.write(fd, (json.dumps(line, ensure_ascii=False) + "\n").encode())
-        finally:
-            os.close(fd)
-
-    def edge(day: date | None, default: int) -> int:
-        return _ms(datetime(day.year, day.month, day.day, tzinfo=ZoneInfo(tz))) if day else default
-
-    start, end = edge(args.since, 0), edge(args.until + timedelta(days=1) if args.until else None, 2 ** 62)
-    archive = Archive(state / f"{args.agent}.archive.db")
-    try:
-        rows = archive.db.execute("SELECT key, speaker, text FROM lines WHERE place = 'private' AND mark = 'censored' "
-                                  "AND ts_ms >= ? AND ts_ms < ? ORDER BY ts_ms, id", (start, end)).fetchall()
-        items = [(key, f"{speaker}: {text}") for key, speaker, text in rows]
-        client = GeminiClient(sink=sink)
-
-        async def blocked(text: str) -> bool | None:
-            for attempt in range(3):  # a transient failure is tried again before its lines stay closed
-                verdict = await client.probe(text, None)
-                if verdict is not None:
-                    return verdict
-                await asyncio.sleep(5 * (attempt + 1))
-            return None
-
-        closed, calls = asyncio.run(sift(items, blocked))
-        reopened = archive.mark([k for k, _ in items if k not in closed], "clean")
-    finally:
-        archive.close()
-    print(f"recheck: {len(items)} censored · reopened {reopened} · still closed {len(closed)} · calls {calls}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

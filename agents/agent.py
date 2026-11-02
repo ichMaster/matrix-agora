@@ -39,6 +39,7 @@ from agents.archive import (
     THOUGHT_PLACES,
     Archive,
     cosine_top,
+    emptying_due,
     fuse,
     pick_recall,
     render_agora_now,
@@ -98,6 +99,7 @@ from agents.facts import (
     CLOSED_MARKS,
     REMEMBER_SKILL,
     add_fact,
+    empty_closed_facts,
     extraction_request,
     facts_section,
     load_facts,
@@ -1722,13 +1724,14 @@ class Agent:
                 f"Надішли /purge yes протягом {PURGE_CONFIRM_S // 60} хв")
 
     def purge_backup_talk(self) -> tuple[int, int]:
-        """v5.14 — delete the backup's talk: (lines, facts). The one exception to «nothing lived is deleted», at the
-        owner's command; her usage lines and logs hold no text and stay."""
+        """v5.14 — delete the backup's talk: (lines, facts), at the owner's command; v5.21: every closed line loses its
+        text (`Archive.empty_blocked`, the row kept so the Matrix room never gives it back open) and every closed fact
+        goes. Her usage lines and logs hold no text and stay."""
         lines = facts = 0
         gone = set(self._closed)
         if self.archive is not None:
             try:
-                deleted = self.archive.purge_closed()
+                deleted = self.archive.empty_blocked()
                 lines = len(deleted)
                 gone |= {(sp, form) for sp, text in deleted for form in (text, history_entry(text))}  # v5.15: reopened
             except Exception as exc:  # noqa: BLE001
@@ -1741,6 +1744,38 @@ class Agent:
         self._closed = set()
         log.warning("purge: the backup's talk deleted (%d lines, %d facts)", lines, facts)
         return lines, facts
+
+    @property
+    def emptied_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.emptied.json"
+
+    def maybe_empty_blocked(self) -> bool:
+        """v5.21 (the owner, 2026-11-02: «раз в день вони мають взагалі видалятись якщо вони старші 24 години», at
+        05:00) — once a day (`emptying_due`, the day kept in `state/<name>.emptied.json`, 0600): every closed line older
+        than 24 hours loses its text (`Archive.empty_blocked`), every closed fact older than that goes, and both leave
+        her history. Counts only in the log. Whether it ran."""
+        now_ms = self.clock()
+        try:
+            last = json.loads(self.emptied_file.read_text(encoding="utf-8")).get("day", "")
+        except (OSError, ValueError, AttributeError):
+            last = ""
+        if not emptying_due(now_ms, str(last), self.tz):
+            return False
+        emptied = self.archive.empty_blocked(now_ms - 86_400_000)
+        facts = empty_closed_facts(self.facts_dir, now_ms / 1000 - 86_400) if self.facts_dir is not None else 0
+        if facts:
+            self.facts_now()  # the archive's mirror of the facts follows
+        gone = {(sp, form) for sp, text in emptied for form in (text, history_entry(text))}
+        self.private_history = [line for line in self.private_history if line not in gone]
+        self._closed -= gone
+        tmp = self.emptied_file.with_suffix(".json.tmp")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump({"day": day_bounds(now_ms, self.tz)[0]}, f)
+        os.replace(tmp, self.emptied_file)
+        log.warning("archive: the daily emptying — %d closed lines and %d closed facts older than a day", len(emptied),
+                    facts)
+        return True
 
     def status_answer(self) -> str:
         """The `/status` line (v5.21 `route_status`): the mode and its end, the last hour's blocks, her `blocked`
@@ -3584,6 +3619,11 @@ class Agent:
                     await self.maybe_update_facts()
                 except Exception:
                     log.exception("facts: the update failed (bot keeps running)")
+            if self.archive is not None:  # v5.21: the closed talk older than a day loses its text, at 05:00
+                try:
+                    self.maybe_empty_blocked()
+                except Exception:
+                    log.exception("archive: the daily emptying failed (bot keeps running)")
             if self.archive is not None:  # v5.8: the archive's meaning search, a batch at a time
                 try:
                     await self.embed_tick()

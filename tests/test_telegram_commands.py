@@ -168,7 +168,8 @@ def test_purge_asks_first_then_deletes_only_the_backups_talk(tmp_path, monkeypat
     assert agent.archive.closed_count() == 3                              # nothing gone yet
     run_batch(agent, tg(2, "/purge yes", at=ms(17, 31)))
     assert "Видалено розмову через backup: 3 рядків, 1 фактів" in texts_sent(agent)[-1]
-    assert agent.archive.closed_count() == 0 and agent.archive.counts()[0] == 2  # the open line and the open fact
+    assert agent.archive.closed_count() == 0 and agent.archive.counts()[0] == 5  # v5.21: the rows stay, emptied
+    assert agent.archive.db.execute("SELECT COUNT(*) FROM lines WHERE text = ''").fetchone()[0] == 3
     assert [f.text for f in load_facts(agent.facts_dir)] == ["Відкритий факт"]
     assert agent.private_history == [("Ich", "відкритий рядок")] and agent._closed == set()
     assert agent.archive.search_words("закритий", ("private",), gemini=False) == []  # out of the word index too

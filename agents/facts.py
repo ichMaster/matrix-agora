@@ -249,6 +249,18 @@ def purge_closed_facts(folder: Path) -> int:
     return gone
 
 
+def empty_closed_facts(folder: Path, before_s: float) -> int:
+    """v5.21 (the owner, 2026-11-02) — every closed fact last written before `before_s` (its file's time, epoch
+    seconds) is deleted: the daily emptying of what is older than 24 hours. How many."""
+    gone = 0
+    for fact in load_facts(folder):
+        path = fact_path(folder, fact.id)
+        if fact.mark in CLOSED_MARKS and path is not None and path.stat().st_mtime < before_s:
+            path.unlink()
+            gone += 1
+    return gone
+
+
 def remove_fact(folder: Path, fact_id: str) -> bool:
     path = fact_path(folder, fact_id)
     if path is None:
