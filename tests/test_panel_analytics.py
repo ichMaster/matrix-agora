@@ -91,6 +91,15 @@ def test_the_speed_the_answers_the_prompts_and_the_media_come_with_the_answers_f
     assert (row["latency_median_ms"], row["latency_p95_ms"]) == (2000, 6000)
 
 
+def test_a_bad_byte_in_a_usage_or_an_answers_file_is_a_corrupt_line_never_a_500(state):
+    """Code review v5.22 #6: a torn write's non-UTF-8 byte raised UnicodeDecodeError out of the route."""
+    with (state / "kira.usage.jsonl").open("ab") as f:
+        f.write(b'{"ts": "2026-11-01T12:00:00+02:00", "kind": "\xff\xfe"\n')
+    (state / "kira.answers.jsonl").write_bytes(b"\xff\xfe torn\n")
+    r = client(state).get("/api/analytics?since=2026-10-31&until=2026-11-01&agent=kira", headers=AUTH)
+    assert r.status_code == 200 and r.json()["corrupt_lines"] == 3
+
+
 def test_all_agents_carry_the_agents_and_the_subscriptions_fee(state):
     body = client(state).get("/api/analytics?since=2026-11-01&until=2026-11-30", headers=AUTH).json()
     assert [a["agent"] for a in body["agents"]] == ["kira", "ada"]

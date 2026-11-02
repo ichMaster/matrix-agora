@@ -437,8 +437,8 @@ def _all_usage_records(state_dir: Path) -> tuple[list[dict], int]:
     """Every `state/*.usage.jsonl`, read once: the parsed lines and how many were corrupt (skipped)."""
     lines: list[str] = []
     for path in sorted(state_dir.glob("*.usage.jsonl")):
-        try:
-            lines += path.read_text(encoding="utf-8").splitlines()
+        try:  # code review v5.22 #6: a bad byte is a corrupt line, never a 500
+            lines += path.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
             continue
     return parse_lines(lines)
@@ -448,8 +448,8 @@ def _all_answer_records(state_dir: Path) -> tuple[list[dict], int]:
     """v5.22 — every `state/*.answers.jsonl`, read once: the parsed lines and how many were corrupt (skipped)."""
     lines: list[str] = []
     for path in sorted(state_dir.glob("*.answers.jsonl")):
-        try:
-            lines += path.read_text(encoding="utf-8").splitlines()
+        try:  # code review v5.22 #6: a bad byte is a corrupt line, never a 500
+            lines += path.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
             continue
     return parse_answers(lines)
