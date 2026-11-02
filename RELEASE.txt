@@ -1,3 +1,24 @@
+Version 5.22.0 (2026-11-03)
+---------------------------
+- Phase v5.22 (AGORA-183..187): analytics - the answer time of every service
+  and agent (usage line v7 `latency_ms`, `state/<name>.answers.jsonl`), the
+  prompts' length and structure by part, the photos and videos; Analytics'
+  Cost · Speed · Prompts · Media, Today and Yesterday by the hour;
+  `usage_report.py` adds the call time and the mean prompt
+- The owner's decisions during the phase: caps per window on her photos (3
+  in 30 min) and videos (2 in 2 h); `/unblock` in Telegram; `TRACE_CALLS`
+  and `FALLBACK_ROUTE` as live switches in the panel; no PASS alone with
+  him; a ⚙️ line why her answer came to nothing; her session summary on 3.1
+  Pro when Flash blocks it; her shorter life story and canon for her private
+  prompt only (`life_private`, `canon_private`)
+- Code review v5.22: an answers line without a door is corrupt, never a 500
+  (#1); a summary both models block goes to Pro again only with a new line
+  (#2); her answer's wait counts from his line (#3); the facts seed counts
+  its calls again (#4); the silence line names its own cause (#5); a bad
+  byte is a corrupt line (#6); Media's cost by Cost's rule (#7); the persona
+  scan covers her private files (#8); #9-#16 LOW deferred
+- The owner's manual checks confirmed on 2026-11-03
+
 Version 5.21.0 (2026-11-02)
 ---------------------------
 - Phase v5.21 (AGORA-177..182): blocked for good, no judge and no probe -
