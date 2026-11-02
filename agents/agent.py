@@ -500,7 +500,7 @@ class Agent:
         # her own key (taken above), never Claude's state; the seam: tests pass canned fetches
         self.reading_sources = Sources(reading_key)
         # v5.20 — her layered memory of the private chat (`talk`): the hours' and blocks' bands, a summary's words
-        self.talk_hour_days, self.talk_4h_days, self.talk_words = 0, 0, {}
+        self.talk_hour_days, self.talk_4h_days, self.talk_words, self.talk_prompt_words = 0, 0, {}, 0
         self._talk_lock, self._talk_check_ms, self._talk_retry_ms = asyncio.Lock(), 0, 0
         if cfg.can("talk"):
             self.talk_hour_days = int(os.environ.get("TALK_HOUR_DAYS", "2"))
@@ -508,6 +508,7 @@ class Agent:
             self.talk_words = {"hour": int(os.environ.get("TALK_WORDS_HOUR", "60")),
                                "4h": int(os.environ.get("TALK_WORDS_4H", "100")),
                                "week": int(os.environ.get("TALK_WORDS_WEEK", "150"))}
+            self.talk_prompt_words = int(os.environ.get("TALK_PROMPT_WORDS", "4000"))
         # v5.14 — the backup for her private chat: on with `fallback`, a model and the token; its settings
         self.fallback: FallbackClient | None = None
         self.fallback_responder: FallbackResponder | None = None
@@ -582,6 +583,8 @@ class Agent:
         self._reading_retry_ms = self._reflect_retry_ms = self._reflect_ms = 0
         # v5.6 — the private chat: writing first after this much silence, at most so many a day, in these hours.
         # Only a person with `private` reads them (a typo never takes the others down).
+        # 2026-11-02 (the owner, «відключи всю історію»): Gemini's private window — 0: `HISTORY_N`; 1: his new lines only
+        self.private_history_n = int(os.environ.get("PRIVATE_HISTORY_N", "0")) if cfg.can("private") else 0
         self.private_idle_ms, self.private_per_day, self.private_hours = 0, 0, (0, 0)
         self.private_first_door = "last"
         if cfg.can("private"):
@@ -1654,7 +1657,11 @@ class Agent:
         except Exception as exc:  # noqa: BLE001
             log.error("archive: Gemini's history was not read (%s) — her own", type(exc).__name__)
             return None
-        return [line for line in lines if (line.speaker, line.text) not in self._closed]
+        lines = [line for line in lines if (line.speaker, line.text) not in self._closed]
+        if self.private_history_n > 0:  # the owner's cap — never below his lines since her last one
+            unanswered = next((n for n, x in enumerate(reversed(lines)) if x.speaker == self.cfg.name), len(lines))
+            lines = lines[-max(self.private_history_n, unanswered):] if lines else lines
+        return lines
 
     def gemini_history_shown(self) -> list[tuple[str | None, tuple[str, str]]]:
         """`gemini_history_keyed` as her prompt shows it (the owner, 2026-11-01): a time line (`history_times`, no id,
@@ -1678,7 +1685,10 @@ class Agent:
             return None
         try:
             lines = self._gemini_lines() or []
-            return talk_section(self.archive.talk_rows(), lines[0].ts_ms if lines else self.clock(), now, self.tz)
+            if self.talk_prompt_words <= 0:  # the owner's switch: no summaries in her prompt
+                return None
+            return talk_section(self.archive.talk_rows(), lines[0].ts_ms if lines else self.clock(), now, self.tz,
+                                self.talk_prompt_words)
         except Exception as exc:  # noqa: BLE001
             log.error("talk: the summaries were not read (%s)", type(exc).__name__)
             return None

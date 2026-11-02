@@ -50,7 +50,7 @@ def talking(tmp_path, monkeypatch, llm=None):
     agent = kira(tmp_path, monkeypatch, llm or Pro())
     agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "capabilities": agent.cfg.capabilities | {"talk"}})
     agent.talk_hour_days, agent.talk_4h_days = 2, 14
-    agent.talk_words = {"hour": 60, "4h": 100, "week": 150}
+    agent.talk_words, agent.talk_prompt_words = {"hour": 60, "4h": 100, "week": 150}, 4000
     agent.clock = lambda: NOW
     return agent
 
@@ -185,3 +185,21 @@ def test_her_private_prompt_to_gemini_holds_the_summaries_before_the_window_and_
     assert TALK_TITLE not in asyncio.run(agent._backup_private_prompt(PRIVATE_BRIEF))[0]
     plain = kira(tmp_path / "plain", monkeypatch, Pro())
     assert TALK_TITLE not in asyncio.run(plain._gemini_private_prompt(PRIVATE_BRIEF))
+
+
+
+def test_the_owners_switches_his_new_lines_only_and_no_summaries(tmp_path, monkeypatch):
+    """2026-11-02 (the owner, «відключи всю історію … я маю на увазі 300 рядків»): `PRIVATE_HISTORY_N` 1 leaves Gemini
+    only his lines since her last one; `TALK_PROMPT_WORDS` 0 takes the summaries out of her prompt."""
+    from agents.private import PRIVATE_BRIEF
+    from agents.talk import TALK_TITLE
+    agent = talking(tmp_path, monkeypatch)
+    for i, (who, text) in enumerate([("Ich", "Давнє"), ("Кіра", "Моє"), ("Ich", "Нове 1"), ("Ich", "Нове 2")]):
+        say(agent, f"tg:{i}", ms(2026, 11, 2, 11, i), who, text)
+    agent.archive.talk_put("4h", ms(2026, 10, 31, 8), ms(2026, 10, 31, 12), "Ми говорили про поїзд.", 1, 0, 0, 1)
+    assert [x.text for x in agent._gemini_lines()] == ["Давнє", "Моє", "Нове 1", "Нове 2"]
+    agent.private_history_n = 1
+    assert [x.text for x in agent._gemini_lines()] == ["Нове 1", "Нове 2"]     # never below his unanswered lines
+    assert TALK_TITLE in asyncio.run(agent._gemini_private_prompt(PRIVATE_BRIEF))
+    agent.talk_prompt_words = 0
+    assert TALK_TITLE not in asyncio.run(agent._gemini_private_prompt(PRIVATE_BRIEF))

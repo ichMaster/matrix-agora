@@ -143,6 +143,9 @@ SCHEMA: tuple[Setting, ...] = (
     _s("FACTS_IN_PROMPT", "int", "25", "memory", "cap:facts", None, "Скільки фактів бачить в особистому чаті", "facts",
        0, 100),
     _s("FACT_MAX_CHARS", "int", "240", "memory", "cap:facts", None, "Найдовший факт", "chars", 80, 600),
+    # 2026-11-02 (the owner, «відключи всю історію»): how much of the private chat Gemini sees; 1 — his new lines only
+    _s("PRIVATE_HISTORY_N", "int", "0", "private", "cap:private", None,
+       "Скільки останніх рядків особистого чату бачить Gemini (0 — як HISTORY_N; 1 — лише нові від Ich)", "lines", 0, 300),
     _s("PRIVATE_AGORA_N", "int", "20", "private", "cap:recall", None,
        "Скільки сьогоднішніх рядків Агори бачить в особистому чаті", "lines", 0, 60),
     # v5.11 — events of her life (`events`): the hourly roll, the kinds' weights, her waking hours
@@ -172,6 +175,8 @@ SCHEMA: tuple[Setting, ...] = (
     _s("TALK_WORDS_HOUR", "int", "60", "memory", "cap:talk", None, "Слів на підсумок години", "words", 20, 400),
     _s("TALK_WORDS_4H", "int", "100", "memory", "cap:talk", None, "Слів на підсумок чотирьох годин", "words", 20, 400),
     _s("TALK_WORDS_WEEK", "int", "150", "memory", "cap:talk", None, "Слів на підсумок тижня", "words", 20, 400),
+    _s("TALK_PROMPT_WORDS", "int", "4000", "memory", "cap:talk", None, "Слів підсумків розмови в її запиті (0 — без них)",
+       "words", 0, 8000),
     # v5.14 — the backup for her private chat (`fallback`): GLM-4.6 on NovelAI when Gemini blocks or refuses; empty
     # model: off. The window after a block, the day cap of blocks, the backup's prompt budget and its history length
     _s("FALLBACK_MODEL", "choice", "", "fallback", "cap:fallback", None, "Резервна модель (порожньо — вимкнено)",
