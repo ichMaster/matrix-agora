@@ -183,6 +183,22 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
     }
 
 
+ANSWER_PLACES = ("agora", "private")
+ANSWERED = ("owner", "agent", "none")  # what an answer answered: the owner, another agent, nothing (she wrote first)
+
+
+def answer_line(ts_iso: str, agent: str, place: str, door: str, answered: str, wait_ms: Any, delay_ms: Any,
+                by: str, parts: list[str] | tuple[str, ...] = ()) -> dict:
+    """v5.22 — one record per answer an agent sends, in `state/<name>.answers.jsonl`: when it went, where (`place`:
+    `agora` | `private`; `door`: `matrix` | `telegram`), what it answered (`owner` | `agent` | `none` when she writes
+    first), `wait_ms` from that message's own time to the answer sent (null for `none`), the deliberate pause in it
+    (`delay_ms`), who wrote it (`gemini` | `backup` | `claude`) and what went with it (`voice`, `photo`). Never any
+    text."""
+    return {"ts": ts_iso, "agent": agent, "place": place, "door": door, "answered": answered,
+            "wait_ms": None if answered == "none" else _ms(wait_ms), "delay_ms": _ms(delay_ms), "by": by,
+            "parts": sorted(set(parts))}
+
+
 COUNT_FIELDS = ("prompt_tokens", "output_tokens", "total_tokens", "cache_read_tokens", "cache_write_tokens",
                 "characters", "audio_ms", "video_ms", "latency_ms")  # v5.22: the call's time
 

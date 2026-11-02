@@ -302,6 +302,7 @@ from agents.turns import (
     wave_frees_at,
 )
 from agents.usage import (
+    answer_line,
     fallback_usage_line,
     parse_lines,
     sdk_usage_line,
@@ -603,6 +604,7 @@ class Agent:
         self.summary_max_words = int(os.environ.get("SUMMARY_MAX_WORDS", "200"))
         self.clock = lambda: int(time.time() * 1000)  # injectable
         self.mono = time.monotonic  # v5.22: a call's and an answer's time — injectable
+        self.voice_sent, self._private_delay_ms = False, 0  # v5.22: an answer's parts and pause
         self.last_activity_ms: int | None = None
         self.last_attempt_ms: int | None = None
         self._summary_lock = asyncio.Lock()
@@ -1006,6 +1008,7 @@ class Agent:
             return
         self._private_pending = True
         delay = 1.0 + self.rng() * max(self.reply_delay_s - 1.0, 0.0)
+        self._private_delay_ms = round(delay * 1000)  # v5.22: the deliberate pause in his wait
         log.info("private: answering (in %.1fs)", delay)
         self._spawn(self.private_later(delay))
 
@@ -1033,6 +1036,8 @@ class Agent:
         if door is None:
             return False
         action = None
+        asked_ms = None if nudge else self.last_private_ms  # v5.22: his latest line's own time
+        delay_ms, self._private_delay_ms = (None if nudge else self._private_delay_ms), 0
         self._pending_shot = None
         self._offer_photo = self._photo_open(door)  # v5.17: her photo skill, for Gemini's prompt only
         self._offer_video = self._video_kinds(door)  # v5.18: the videos she may send now, for Gemini's prompt only
@@ -1122,6 +1127,9 @@ class Agent:
             self._own_seq += 1
             key = sent_id or f"own:{door}:{self.clock()}:{self._own_seq}"
             self._archive(key, self.clock(), "private", door, self.cfg.name, text)
+            self.record_answer("private", door, "none" if nudge else "owner", asked_ms, delay_ms, by,  # v5.22
+                               [p for p, on in (("voice", self.voice_sent),
+                                                ("photo", made is not None and self.photo_sent)) if on])
             if self.cfg.can("summary"):
                 self.session.append((private_label(self.cfg.name), text))
             if video is not None:  # v5.18: made and sent in the background — her next answer never waits for it
@@ -2069,6 +2077,7 @@ class Agent:
                 log.info("voice: sent (%d chars, telegram)", len(text))
             elif why not in ("not voiceable", "held"):
                 log.info("voice: text only (%s, telegram)", why)
+        self.voice_sent = why is None and self.tts is not None  # v5.22: what went with the answer
         body = f"{mark}\n{text}" if mark else text
         if photo is not None and photo.image:
             caption = body if len(body) <= CAPTION_MAX else None
@@ -2111,6 +2120,7 @@ class Agent:
                 log.info("voice: sent (%d chars)", len(text))
             elif why not in ("share", "not voiceable"):
                 log.info("voice: text only (%s)", why)
+        self.voice_sent = why is None and self.tts is not None  # v5.22: what went with the answer
         resp = await self.client.room_send(room_id=room_id, message_type="m.room.message",
                                            content={"msgtype": "m.text", "body": f"{mark}\n{text}" if mark else text})
         event_id = getattr(resp, "event_id", None)  # v5.8 review #1: the text's own id, so a re-read deduplicates
@@ -2249,7 +2259,7 @@ class Agent:
                 log.info("resume: silent (%s)", decision.reason)
                 return
             log.info("resume: %s", decision.reason)
-            await self.reply(room_id, event_id, at_ms)
+            await self.reply(room_id, event_id, at_ms, delay_ms=round(wait_s * 1000))
         except Exception:
             log.exception("resume failed (bot keeps running)")
 
@@ -2273,7 +2283,7 @@ class Agent:
             log.info("reply: fallback — nobody answered the owner")
             self._reply_pending = True
             try:
-                await self.reply(room_id, fallback_for=event_id)
+                await self.reply(room_id, fallback_for=event_id, delay_ms=round(self.fallback_s * 1000))
             finally:
                 self._reply_pending = False
         except Exception:
@@ -2479,11 +2489,35 @@ class Agent:
                                                      latency_ms))
 
     def _append_usage(self, build) -> None:
+        self._append_jsonl(self.usage_file, build, "usage")
+
+    @property
+    def answers_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.answers.jsonl"
+
+    def record_answer(self, place: str, door: str, answered: str, asked_ms: int | None, delay_ms: int | None,
+                      by: str, parts: list[str]) -> None:
+        """v5.22 — one line per answer sent (`answer_line`): how long the message it answered waited, from that
+        message's own time to now, and the deliberate pause in it; no text, and a failed write never stops an
+        answer."""
+        wait = self.clock() - asked_ms if asked_ms else None
+        self._append_jsonl(self.answers_file, lambda ts: answer_line(ts, self.cfg.localpart, place, door, answered,
+                                                                     wait, delay_ms, by, parts), "answer")
+
+    def _event_at(self, event_id: str) -> tuple[int, str] | None:
+        """v5.22 — a room message's own time and whose it was (`owner` | `agent`), from the shared timeline."""
+        owner = self.names.get(self.cfg.owner, self.cfg.owner)
+        for speaker, ts, eid, *_ in reversed(self.timeline):
+            if eid == event_id:
+                return ts, "owner" if speaker == owner else "agent"
+        return None
+
+    def _append_jsonl(self, path: Path, build, what: str) -> None:
         try:
             line = build(local_now(self.clock(), self.tz).isoformat(timespec="seconds"))
-            self.usage_file.parent.mkdir(parents=True, exist_ok=True)
+            path.parent.mkdir(parents=True, exist_ok=True)
             # private from birth (code review #2): created 0600, a looser old file tightened
-            fd = os.open(self.usage_file, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+            fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
             try:
                 if stat.S_IMODE(os.fstat(fd).st_mode) != 0o600:
                     os.fchmod(fd, 0o600)
@@ -2491,7 +2525,7 @@ class Agent:
             finally:
                 os.close(fd)
         except Exception:
-            log.exception("usage line not written (the conversation continues)")
+            log.exception("%s line not written (the conversation continues)", what)
 
     @property
     def today_file(self) -> Path:
@@ -3267,7 +3301,7 @@ class Agent:
                     log.info("silent: moved on")
                     return
                 self._owner_seen = self._owner_coalesced
-                sent = await self.reply(room_id, trigger)
+                sent = await self.reply(room_id, trigger, delay_ms=round(delay_s * 1000))
                 if self._owner_coalesced != self._owner_seen:  # v4.5 review #4: never swallowed by a slow reply
                     log.info("reply: the owner wrote again while generating — answering it")
                     continue
@@ -3280,7 +3314,7 @@ class Agent:
             self._reply_pending = False
 
     async def reply(self, room_id: str, trigger: str | None = None, at_ms: int | None = None,
-                    fallback_for: str | None = None) -> bool:
+                    fallback_for: str | None = None, delay_ms: int | None = None) -> bool:
         """Typing on → Gemini → m.text; silence on failure or PASS; typing reset in finally. An agent-to-agent
         reply (`trigger`) is re-checked before sending (R3): the room may have moved on during generation.
         Returns whether a message was sent."""
@@ -3337,6 +3371,10 @@ class Agent:
                 return False
             self._last_sent = text
             await self.send_line(room_id, text, answered_id, answering=answered_id)
+            asked = self._event_at(answered_id) if answered_id else None  # v5.22: how long it waited
+            self.record_answer("agora", "matrix", asked[1] if asked else "none", asked[0] if asked else None,
+                               delay_ms, "claude" if self.cfg.engine == "claude-sdk" else "gemini",
+                               ["voice"] if self.voice_sent else [])
             if memory is not None:
                 self.told.add(memory)
             return True
