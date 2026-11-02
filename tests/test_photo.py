@@ -20,6 +20,7 @@ from agents.photo import (
     PhotoMaker,
     Shot,
     load_faces,
+    photo_note,
     photo_request,
     pick_faces,
     split_photo,
@@ -53,6 +54,16 @@ def test_her_kept_note_echoed_anywhere_in_any_case_is_cut_and_names_the_shot():
     assert split_photo("Ось я знову [селфі: я на балконі] 🙂") == ("Ось я знову 🙂", Shot("selfie", "я на балконі"))
     assert split_photo("Дивись\n[Фото: чашка на підвіконні]") == ("Дивись", Shot("photo", "чашка на підвіконні"))
     assert split_photo("ну [фото] і що") == ("ну [фото] і що", None)                  # no colon: not a note
+
+
+def test_her_kept_note_holds_no_description_and_echoed_names_no_shot():
+    # the owner, 2026-11-02: her selfies' descriptions in her history made Gemini block her whole private prompt
+    note = photo_note("Ось я", Shot("selfie", f"я на балконі {SECRET}"))
+    assert note == "Ось я\n[селфі: ...]" and SECRET not in note
+    assert photo_note("", Shot("photo", "чашка")).strip() == "[фото: ...]"
+    assert split_photo("Ось я знову [селфі: ...] 🙂") == ("Ось я знову 🙂", None)      # cut, never a shot of nothing
+    assert split_photo("Дивись\n[фото: …]") == ("Дивись", None)
+    assert split_photo("Тримай\nСЕЛФІ: ...") == ("Тримай", None)
 
 
 def test_the_request_holds_her_words_her_moment_and_the_look_and_the_face_only_for_a_selfie():

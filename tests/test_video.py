@@ -52,8 +52,8 @@ def test_a_video_line_is_cut_and_the_last_media_line_of_any_kind_names_the_shot(
     assert split_photo("Ось я знову [кружечок: я на кухні] 🙂") == ("Ось я знову 🙂", Shot("note", "я на кухні"))
     assert split_photo("Дивись\n[Відео: туман над містом]") == ("Дивись", Shot("clip", "туман над містом"))
     assert split_photo("Відео з концерту в мене десь є") == ("Відео з концерту в мене десь є", None)  # no colon
-    assert photo_note("Ось", Shot("note", "я на кухні")) == "Ось\n[кружечок: я на кухні]"
-    assert photo_note("Ось", Shot("clip", "море")) == "Ось\n[відео: море]"
+    assert photo_note("Ось", Shot("note", "я на кухні")) == "Ось\n[кружечок: ...]"
+    assert photo_note("Ось", Shot("clip", "море")) == "Ось\n[відео: ...]"
 
 
 # --- the frame ------------------------------------------------------------------------------------------------------

@@ -68,6 +68,7 @@ PHOTO_SKILL = (
 )
 PHOTO_FAILED = "Фото цього разу не вийшло надіслати — не згадуй його й не обіцяй."
 NOTES = {"photo": "фото", "selfie": "селфі", "note": "кружечок", "clip": "відео"}
+HIDDEN = "..."  # the owner, 2026-11-02: what stands in her kept note for what was in the shot
 
 
 @dataclass(frozen=True)
@@ -101,7 +102,7 @@ def split_photo(text: str) -> tuple[str, Shot | None]:
             continue
         found = m or note
         description = split_tags(found.group("shot"))[0].strip(" \t«»\"'*_()[]")  # no voice tag in a shot
-        if description:
+        if description.strip(" .…"):  # her kept `[селфі: ...]`, echoed, names no shot
             shot = Shot(KINDS[found.group("kind").upper()], description)
         kept = (line[:m.start()] if m is not None
                 else re.sub(r"[ \t]{2,}", " ", line[:note.start()] + line[note.end():])).rstrip()
@@ -111,9 +112,10 @@ def split_photo(text: str) -> tuple[str, Shot | None]:
 
 
 def photo_note(text: str, shot: Shot) -> str:
-    """Her line as she keeps it after a photo went out: the words, then `[селфі: …]` or `[фото: …]` — so her history
-    and her recall know what she sent."""
-    return f"{text}\n[{NOTES[shot.kind]}: {shot.description}]"
+    """Her line as she keeps it after a photo went out: the words, then `[селфі: ...]` or `[фото: ...]` — so her
+    history and her recall know that she sent one. Never what is in it (the owner, 2026-11-02): her selfies'
+    descriptions in her history made Gemini block her whole private prompt (`prohibited_content`)."""
+    return f"{text}\n[{NOTES[shot.kind]}: {HIDDEN}]"
 
 
 def moment_line(moment: Moment) -> str:

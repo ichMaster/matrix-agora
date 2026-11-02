@@ -153,8 +153,10 @@ The invariants every reply path must honor:
    references'), her reference photos for a selfie (`kira.png` and three drawn from `agents/canon/kira.face/`), one
    retry on a server error or a timeout. Then her voice note, then the photo with her words as its caption
    (`send_photo`; a text over 1024 characters: the photo, then the text; a photo not sent: the text alone). The photo
-   is kept in `state/<name>.photos/` and her archive and history keep her line with `[селфі: …]` or `[фото: …]`, so
-   she knows what she sent. A photo that does not come out (`blocked` or `failed`) draws her answer once more on
+   is kept in `state/<name>.photos/` and her archive and history keep her line with `[селфі: ...]` or `[фото: ...]`,
+   so she knows that she sent one — never what is in it (the owner, 2026-11-02: her selfies' descriptions in her
+   history made Gemini block her whole private prompt as `prohibited_content`); an echoed `[селфі: ...]` names no
+   shot. A photo that does not come out (`blocked` or `failed`) draws her answer once more on
    Gemini without the skill and with `PHOTO_FAILED` — never «дивись» with nothing; a failed redraw sends her first
    words without the line. The log holds outcomes and kinds, never her description, the request or a path.
    **From v5.18** (a person with `videos`) the same line may name a video: `КРУЖЕЧОК: <where she is>` (her round video
