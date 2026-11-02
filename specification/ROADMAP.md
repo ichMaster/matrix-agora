@@ -20,7 +20,8 @@ are left in the v5 review docs, as backlog. The same day the owner opened two mo
 - v5.18, released as `v5.18.0`: Кіра's videos in Telegram, a кружечок in her voice and short clips;
 - v5.19, released as `v5.19.0`: analytics, the spending by agent and by service over a chosen period, with Кіра's
   memory fixes of 2026-11-01/02;
-- v5.20, Кіра's layered memory of the private chat: by the hour, by four hours, by the week (planned).
+- v5.20, released as `v5.20.0`: Кіра's layered memory of the private chat, by the hour, by four hours and by the
+  week;
 - v5.21, blocked for good: the backup without the judge, its talk gone after a day (planned).
 
 Then come v6–v9 in order. Other further work (the
@@ -67,7 +68,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.17 | Кіра's photos in Telegram | ✅ completed | `v5.17.0` (2026-11-01) |
 | v5.18 | Кіра's videos in Telegram: a кружечок in her voice and short clips | ✅ completed | `v5.18.0` (2026-11-01) |
 | v5.19 | Analytics: the spending by agent and by service, over a chosen period | ✅ completed | `v5.19.0` (2026-11-02) |
-| v5.20 | Кіра's layered memory of the private chat: by the hour, by four hours, by the week | ⏳ planned | — |
+| v5.20 | Кіра's layered memory of the private chat: by the hour, by four hours, by the week | ✅ completed | `v5.20.0` (2026-11-02) |
 | v5.21 | Blocked for good: the backup without the judge, its talk gone after a day | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
@@ -2749,7 +2750,9 @@ numbers out.
 
 ### v5.20 — Кіра's layered memory of the private chat: by the hour, by four hours, by the week
 
-**Status:** ⏳ planned (the owner, 2026-11-02).
+**Status:** ✅ completed — released `v5.20.0` on 2026-11-02. The owner confirmed the live checks. Grown during
+his test: the Prompt tab (AGORA-175) and his switches `PRIVATE_HISTORY_N` and `TALK_PROMPT_WORDS` (AGORA-176).
+Code review: two fixes; the re-check command goes in v5.21.
 
 **Goal:** Кіра keeps her private chat in layers. On top, the last `HISTORY_N` (300) messages word for word, as now.
 Below them, summaries of the open talk older than that window: by the hour for the last 2 days, by four hours up to
