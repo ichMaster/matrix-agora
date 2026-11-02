@@ -1,3 +1,23 @@
+Version 5.20.0 (2026-11-02)
+---------------------------
+- Phase v5.20 (AGORA-171..176): Кіра's layered memory of the private chat -
+  the last 300 messages word for word on top, then summaries of the open
+  talk by Gemini 3.1 Pro: by the hour for 2 days, by four hours up to
+  2 weeks, by the week after
+- The archive's talk table and the bands (pure, DST-true); the writer (the
+  backfill, a block folded from its hours, a blocked period halved and
+  counted); her private prompt's section, oldest first, labelled as she
+  remembers it, never a date or an hour; the panel's Talk tab;
+  python -m agents.talk recheck (goes in v5.21)
+- The panel's Prompt tab: her last private prompt to Gemini, whole, with its
+  outcome (AGORA-175, at the owner's word)
+- The owner's switches PRIVATE_HISTORY_N and TALK_PROMPT_WORDS (AGORA-176)
+- Code review v5.20: a period that keeps failing with the prompt passing is
+  left empty, never stalling the later ones (#2); an empty coarser summary
+  no longer hides the finer ones (#3); #1 (the re-check opens the backup's
+  lines) and #4 carried into v5.21; #5-#6 LOW deferred
+- The owner's manual checks confirmed on 2026-11-02
+
 Version 5.19.0 (2026-11-02)
 ---------------------------
 - Phase v5.19 (AGORA-167..170): analytics of the spending by agent and by
