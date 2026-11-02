@@ -202,8 +202,6 @@ SCHEMA: tuple[Setting, ...] = (
        "", 0, 200),
     # v5.22 (the owner, 2026-11-02: «Кіра висилає фото з кожним меседжем … ліпше кількість на 30 хв, тоді вона може
     # висилати нерівномірно»): at most this many photos in any window of that length (0: no such cap)
-    _s("TRACE_CALLS", "choice", "off", "private", "cap:telegram", None,
-       "Показувати в Telegram кожен виклик мереж (діагностика)", choices=("off", "on")),
     _s("PHOTO_WINDOW_MAX", "int", "3", "private", "cap:photos", None, "Скільки фото щонайбільше за вікно (0 — без ліміту)",
        "", 0, 100),
     _s("PHOTO_WINDOW_S", "int", "1800", "private", "cap:photos", None, "Вікно для ліміту фото", "s", 60, 86400),
@@ -224,6 +222,10 @@ SCHEMA: tuple[Setting, ...] = (
     _s("VIDEO_WINDOW_MAX", "int", "2", "private", "cap:videos", None, "Скільки відео щонайбільше за вікно (0 — без ліміту)",
        "", 0, 100),
     _s("VIDEO_WINDOW_S", "int", "7200", "private", "cap:videos", None, "Вікно для ліміту відео", "s", 60, 86400),
+    # v5.22 (the owner, 2026-11-02: «зроби можливість такий трейс включати на адмін панелі») — every network call's
+    # result as a ⚙️ line to him in Telegram; a live switch (`LIVE`): it works at once, nobody restarts
+    _s("TRACE_CALLS", "choice", "off", "diag", "cap:telegram", None,
+       "Показувати в Telegram кожен виклик мереж", choices=("off", "on")),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
        choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),
@@ -241,12 +243,15 @@ SCHEMA: tuple[Setting, ...] = (
        "tokens", 0, 64000),
 )
 BY_NAME: dict[str, Setting] = {s.name: s for s in SCHEMA}
+# v5.22 — the switches an agent reads while it runs (`live_value`): the panel's change works at once and restarts
+# nobody; only agent settings, never applied at the start
+LIVE = frozenset({"TRACE_CALLS"})
 # the groups in their order, for a service's card and for an agent's tab
 SERVICE_GROUPS = (("turns", "Room & turns"), ("moves", "Ада і Бруно: ходи"), ("cat", "Кіт у кімнаті"),
                   ("claude", "Клод у кімнаті"), ("hermes", "Гермес"), ("voice", "Голоси агентів"),
                   ("session", "Сесії розмови"))
-AGENT_GROUPS = (("memory", "Пам'ять"), ("plans", "Плани"), ("life", "Життя"), ("model", "Модель"),
-                ("voice", "Голос"), ("private", "Особистий чат"), ("fallback", "Резерв"))
+AGENT_GROUPS = (("diag", "Діагностика"), ("memory", "Пам'ять"), ("plans", "Плани"), ("life", "Життя"),
+                ("model", "Модель"), ("voice", "Голос"), ("private", "Особистий чат"), ("fallback", "Резерв"))
 
 
 def validate(name: str, raw: object) -> tuple[str | None, str | None]:
@@ -358,7 +363,7 @@ def apply_overrides(env: MutableMapping[str, str], overrides: Mapping[str, Mappi
             if setting is None or not in_scope(setting, sim_kind):
                 ignored.append(name)
                 continue
-            if not concerns(setting, member):
+            if name in LIVE or not concerns(setting, member):  # a live switch is read while it runs (`live_value`)
                 continue
             value, _why = validate(name, raw)
             if value is None:
@@ -367,6 +372,14 @@ def apply_overrides(env: MutableMapping[str, str], overrides: Mapping[str, Mappi
             env[name] = value
             applied.append(name)
     return applied, ignored
+
+
+def live_value(state_dir: Path, agent: str, name: str, env: Mapping[str, str]) -> str:
+    """v5.22 — a `LIVE` switch as the agent reads it now: the panel's valid override in `state/settings.json`, else
+    the env, else the code default; read at each use, so the panel's change works without a restart."""
+    raw = load_overrides(state_dir / OVERRIDES_FILE)["agents"].get(agent, {}).get(name)
+    value = validate(name, raw)[0] if raw is not None else None
+    return value if value is not None else (str(env.get(name, "")).strip() or BY_NAME[name].default)
 
 
 def effective(env: Mapping[str, str], member: Member, applied: list[str]) -> dict[str, dict[str, str]]:

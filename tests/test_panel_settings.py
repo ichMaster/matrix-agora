@@ -125,6 +125,36 @@ def test_a_setting_the_code_no_longer_knows_is_dropped_by_a_save_or_a_reset(room
     assert put(client, "/api/agents/ada/settings", {"reset": ["PROBE_CALLS"]}).status_code == 422  # not stored now
 
 
+def test_a_diagnostics_switch_applies_at_once_and_restarts_nobody(tmp_path):
+    """v5.22 (the owner, 2026-11-02: «зроби можливість такий трейс включати на адмін панелі»): `TRACE_CALLS` is
+    first in her tab, under Діагностика; a save of it writes the override and restarts nobody — she reads it at each
+    call — and her view shows it as what she runs with at once; a reset gives her back the server's value."""
+    sup, _docker, compose = make(C("kira"), state_dir=tmp_path)
+    reg = Registry()
+    client = TestClient(create_app(token=TOKEN, registry=reg, docker_reader=sup.reader, prober=Prober(reg),
+                                   state_dir=tmp_path, background=False, supervisor=sup))
+    (tmp_path / "kira.settings.json").write_text(json.dumps({"TRACE_CALLS": {"value": "off", "source": "default"}}),
+                                                 encoding="utf-8")
+    path = "/api/agents/kira/settings"
+
+    def row(name="TRACE_CALLS"):
+        view = client.get(path, headers=AUTH).json()
+        assert view["groups"][0] == {"id": "diag", "title": "Діагностика"}
+        return next(r for r in view["settings"] if r["name"] == name)
+
+    assert (row()["group"], row()["live"], row()["effective"]["kira"]) == ("diag", True,
+                                                                          {"value": "off", "source": "default"})
+    assert row("MEMORY_DAYS")["live"] is False
+    assert put(client, path, {"set": {"TRACE_CALLS": "on"}}).json() == {"saved": ["TRACE_CALLS"], "restarted": [],
+                                                                        "skipped": []}
+    assert compose.calls == [] and saved(tmp_path)["agents"] == {"kira": {"TRACE_CALLS": "on"}}
+    assert row()["override"] == "on" and row()["effective"]["kira"] == {"value": "on", "source": "panel"}
+    assert put(client, path, {"set": {"TRACE_CALLS": "off", "MEMORY_DAYS": 10}}).json()["restarted"] == ["kira"]
+    compose.calls.clear()
+    assert put(client, path, {"reset": ["TRACE_CALLS"]}).json()["restarted"] == [] and compose.calls == []
+    assert row()["override"] is None and row()["effective"]["kira"] == {"value": "off", "source": "default"}
+
+
 def test_a_cross_origin_save_is_refused(room):
     client, *_ = room
     r = client.put(SIM, headers={**AUTH, "origin": "http://evil.example"}, json={"set": {}})

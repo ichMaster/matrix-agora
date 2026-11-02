@@ -14,11 +14,15 @@ from agents.claude_sdk import forbidden_vars
 from agents.moves import DEFAULT_WEIGHTS, WEIGHT_VARS
 from agents.roster import load_roster
 from agents.settings import (
+    AGENT_GROUPS,
     BY_NAME,
+    LIVE,
+    OVERRIDES_FILE,
     SCHEMA,
     apply_overrides,
     concerns,
     effective,
+    live_value,
     load_overrides,
     save_json,
     start,
@@ -36,6 +40,8 @@ def code_default(name):
     if name in WEIGHT_VARS.values():
         kind = next(k for k, v in WEIGHT_VARS.items() if v == name)
         return str(DEFAULT_WEIGHTS[kind])
+    if name in LIVE and re.search(rf'live_value\([^)]*"{name}"', CODE):
+        return BY_NAME[name].default  # v5.22: a live switch, read at each use with the schema's default
     if name == "GEMINI_MODEL":
         from agents.llm import MODEL
         return MODEL
@@ -234,3 +240,21 @@ def test_each_agents_voice_is_its_own_and_the_panel_overrides_one_agent(tmp_path
     assert {s.name for s in SCHEMA if concerns(s, ROOM["hermes"])} >= {"HERMES_VOICE_ID"}
     assert not {"VOICE_ID", "VOICE_REPLY_P", "VOICE_MONTHLY_CHARS"} & {s.name for s in SCHEMA if concerns(s, ROOM["hermes"])}
     assert BY_NAME["VOICE_MONTHLY_CHARS"].default == "200000" and BY_NAME["VOICE_REPLY_P"].default == "1.0"
+
+
+def test_a_live_switch_is_the_agents_own_never_applied_at_the_start_and_read_at_each_use(tmp_path):
+    """v5.22 (the owner, 2026-11-02: «зроби можливість такий трейс включати на адмін панелі»): `TRACE_CALLS` stands
+    first in her tab, under Діагностика; the start never puts it into the env, and `live_value` reads the panel's
+    override at each use — the panel's, else the env, else the code default; an invalid one is not hers."""
+    assert all(BY_NAME[n].service is None for n in LIVE) and BY_NAME["TRACE_CALLS"].group == "diag"
+    assert AGENT_GROUPS[0] == ("diag", "Діагностика")
+    env = {}
+    overrides = {"services": {}, "agents": {"kira": {"TRACE_CALLS": "on", "MEMORY_DAYS": "5"}}}
+    assert apply_overrides(env, overrides, ROOM["kira"], AGORA) == (["MEMORY_DAYS"], []) and "TRACE_CALLS" not in env
+    assert live_value(tmp_path, "kira", "TRACE_CALLS", {}) == "off"                       # no file: the default
+    assert live_value(tmp_path, "kira", "TRACE_CALLS", {"TRACE_CALLS": "on"}) == "on"     # the env
+    save_json(tmp_path / OVERRIDES_FILE, overrides)
+    assert live_value(tmp_path, "kira", "TRACE_CALLS", {"TRACE_CALLS": "off"}) == "on"    # the panel's, at once
+    save_json(tmp_path / OVERRIDES_FILE, {"services": {}, "agents": {"kira": {"TRACE_CALLS": "loud"}}})
+    assert live_value(tmp_path, "kira", "TRACE_CALLS", {}) == "off"
+    assert live_value(tmp_path, "ada", "TRACE_CALLS", {}) == "off"                        # another agent's: none

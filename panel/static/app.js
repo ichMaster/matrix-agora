@@ -1270,7 +1270,7 @@ function talkTabHtml(a, mem) {
 
 function agentTabHtml(a, mem, tab) {
   if (tab === "files") return filesTabHtml(a);
-  if (tab === "settings") return `<div class="muted" style="font-size:12.5px;margin-bottom:12px">${esc(a.display)}'s own settings, whatever the service · a save restarts ${esc(a.display)}</div>${settingsHtml()}`;
+  if (tab === "settings") return `<div class="muted" style="font-size:12.5px;margin-bottom:12px">${esc(a.display)}'s own settings, whatever the service · a save restarts ${esc(a.display)}, a diagnostics switch applies at once</div>${settingsHtml()}`;
   if (!mem.available) return unavailableBox();
   if (tab === "mood") return moodTabHtml(mem);
   if (tab === "events") return eventsTabHtml(a, mem);
@@ -1385,7 +1385,7 @@ function pendingSettings() {
   const rows = Object.fromEntries(st.view.settings.map((r) => [r.name, r]));
   const names = [...Object.keys(st.edits).filter((n) => !st.reset[n] && String(st.edits[n]).trim() !== String(currentValue(rows[n]))),
                  ...Object.keys(st.reset).filter((n) => rows[n].override != null)];
-  const agents = [...new Set(names.flatMap((n) => rows[n].agents))];
+  const agents = [...new Set(names.filter((n) => !rows[n].live).flatMap((n) => rows[n].agents))];  // v5.22: live — no restart
   return {names: [...new Set(names)], agents};
 }
 function nowLine(r) {
@@ -1416,7 +1416,7 @@ function settingField(r) {
   return `<div class="field" style="margin-bottom:14px">
     <label>${esc(r.description)} <span class="mono muted" style="font-size:11px">${esc(r.name)}</span></label>
     <div style="display:flex;gap:8px;align-items:center">${input}${r.unit ? `<span class="muted" style="font-size:12px">${esc(r.unit)}</span>` : ""}${mark}</div>
-    <div class="muted" style="font-size:12px;margin-top:4px">default ${esc(r.default)}${nowLine(r) ? ` · ${esc(nowLine(r))}` : ""}</div></div>`;
+    <div class="muted" style="font-size:12px;margin-top:4px">default ${esc(r.default)}${nowLine(r) ? ` · ${esc(nowLine(r))}` : ""}${r.live ? " · applies at once, no restart" : ""}</div></div>`;
 }
 function settingsHtml() {
   const st = S.settings;

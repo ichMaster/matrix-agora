@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 from agents.agent import TTS_MODEL
 from agents.llm import LAST_BLOCK
+from agents.settings import OVERRIDES_FILE, save_json
 from agents.usage import fallback_usage_line, trace_line, tts_usage_line, usage_line, video_note_usage_line
 from tests.test_telegram_runtime import kira, texts_sent
 
@@ -67,3 +68,17 @@ def test_off_by_default_and_without_telegram(tmp_path, monkeypatch):
     assert texts_sent(agent) == [] and len(agent.usage_file.read_text(encoding="utf-8").splitlines()) == 2
     monkeypatch.setenv("TRACE_CALLS", "on")
     assert kira(tmp_path, monkeypatch, env=False).trace_calls is False             # no bot: nothing to send to
+
+
+def test_the_panels_switch_works_at_once_without_a_restart(tmp_path, monkeypatch):
+    """v5.22 (the owner, 2026-11-02: «зроби можливість такий трейс включати на адмін панелі»): the panel's override in
+    `state/settings.json` is read at each record — on, her calls go to him; off again, they stop; she never restarts."""
+    agent = kira(tmp_path, monkeypatch)
+    agent.memory_file = tmp_path / "kira.memory.md"
+    save_json(tmp_path / OVERRIDES_FILE, {"services": {}, "agents": {"kira": {"TRACE_CALLS": "on"}}})
+    assert agent.trace_calls is True
+    run_record(agent)
+    assert len(texts_sent(agent)) == 2
+    save_json(tmp_path / OVERRIDES_FILE, {"services": {}, "agents": {"kira": {"TRACE_CALLS": "off"}}})
+    run_record(agent)
+    assert len(texts_sent(agent)) == 2 and len(agent.usage_file.read_text(encoding="utf-8").splitlines()) == 4

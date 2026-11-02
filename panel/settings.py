@@ -21,6 +21,7 @@ from typing import Any
 from agents.settings import (
     AGENT_GROUPS,
     BY_NAME,
+    LIVE,
     OVERRIDES_FILE,
     SCHEMA,
     SERVICE_GROUPS,
@@ -64,14 +65,16 @@ def settings_view(state_dir: Path, part: str, owner: str, sim_kind: str | None, 
     for s in _rows(agents, sim_kind):
         concerned = [a.name for a in agents if concerns(s, a)]
         per_agent = {}
+        live = validate(s.name, overrides[s.name])[0] if s.name in LIVE and s.name in overrides else None
         for name in concerned:
             entry = (effective[name] or {}).get(s.name) if effective[name] is not None else None
-            per_agent[name] = ({"value": str(entry.get("value", "")), "source": str(entry.get("source", ""))}
+            per_agent[name] = ({"value": live, "source": "panel"} if live is not None  # v5.22: at once, no restart
+                               else {"value": str(entry.get("value", "")), "source": str(entry.get("source", ""))}
                                if isinstance(entry, dict) else None)
         rows.append({"name": s.name, "kind": s.kind, "default": s.default, "unit": s.unit,
                      "description": s.description, "group": s.group, "scope": s.scope, "low": s.low,
                      "high": s.high, "choices": list(s.choices), "override": overrides.get(s.name),
-                     "agents": concerned, "effective": per_agent})
+                     "agents": concerned, "effective": per_agent, "live": s.name in LIVE})
     groups = SERVICE_GROUPS if sim_kind is not None else AGENT_GROUPS
     return {"scope": part, "owner": owner, "groups": [{"id": g, "title": t} for g, t in groups], "settings": rows}
 
@@ -127,7 +130,8 @@ def _save(state_dir: Path, part: str, owner: str, sim_kind: str | None, agents: 
     overrides[part] = {k: v for k, v in overrides[part].items() if v}
     save_json(state_dir / OVERRIDES_FILE, overrides)
     log.info("settings saved (%s %s): %s", part, owner, ", ".join(sorted(changed)))
-    concerned = [a for a in agents if any(concerns(BY_NAME[n], a) for n in changed if n in BY_NAME)]
+    # v5.22: a live switch (`LIVE`) is read by the running agent — it restarts nobody
+    concerned = [a for a in agents if any(concerns(BY_NAME[n], a) for n in changed if n in BY_NAME and n not in LIVE)]
     restarted, skipped = [], []
     for a in concerned:
         state = state_of(a.container)
