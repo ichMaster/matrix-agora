@@ -1,5 +1,7 @@
 """The server stack contract (v3.2): the compose service set, the agent containers, the mounts, the env names."""
 
+import os
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -76,6 +78,56 @@ def test_deploy_pulls_before_up_and_prepares_the_mounts():
     deploy = (ROOT / "server" / "deploy.sh").read_text()
     assert "docker compose pull && docker compose up -d" in deploy
     assert "~/matrix-agora/state ~/matrix-agora/reports" in deploy
+
+
+FAKE_DOCKER = """#!/usr/bin/env bash
+case "$1 $2" in
+  "ps -a") printf '%s\\n' ghcr.io/ichmaster/matrix-agora-agent:sha-old1 lumi:sha-1 ;;
+  "images --filter") printf '%s\\n' ghcr.io/ichmaster/matrix-agora-agent ghcr.io/ichmaster/matrix-agora-panel ;;
+  "images ghcr.io/ichmaster/matrix-agora-agent") printf '%s\\n' \\
+      '2026-11-02 09:39:00 +0200 EET|ghcr.io/ichmaster/matrix-agora-agent:sha-new' \\
+      '2026-11-01 09:00:00 +0200 EET|ghcr.io/ichmaster/matrix-agora-agent:sha-mid' \\
+      '2026-10-31 09:00:00 +0200 EET|ghcr.io/ichmaster/matrix-agora-agent:sha-old2' \\
+      '2026-10-30 09:00:00 +0200 EET|ghcr.io/ichmaster/matrix-agora-agent:sha-old1' \\
+      '2026-10-29 09:00:00 +0200 EET|ghcr.io/ichmaster/matrix-agora-agent:<none>' ;;
+  "images ghcr.io/ichmaster/matrix-agora-panel") printf '%s\\n' \\
+      '2026-11-02 09:39:00 +0200 EET|ghcr.io/ichmaster/matrix-agora-panel:sha-new' ;;
+  "rmi "*|"image prune") echo "$*" >> "$LOG" ;;
+esac
+"""
+
+
+def retention_script() -> str:
+    deploy = (ROOT / "server" / "deploy.sh").read_text()
+    return deploy.split("<<'EOF'\n", 1)[1].split("\nEOF\n", 1)[0]
+
+
+def run_retention(tmp_path, dry: str) -> tuple[str, list[str]]:
+    (tmp_path / "docker").write_text(FAKE_DOCKER)
+    (tmp_path / "docker").chmod(0o755)
+    log = tmp_path / "docker.log"
+    out = subprocess.run(["bash", "-s", "--", "2", dry], input=retention_script(), capture_output=True, text=True,
+                         env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "LOG": str(log)}, check=True)
+    return out.stdout, log.read_text().splitlines() if log.exists() else []
+
+
+def test_deploy_keeps_the_images_in_use_and_the_two_newest_and_removes_the_rest(tmp_path):
+    """2026-11-02: 37 builds' images, never removed, filled the host's disk and every agent stopped. Retention runs
+    before the pull and after the new containers are up; only this project's tags, never one a container uses."""
+    out, calls = run_retention(tmp_path, "0")
+    assert out.strip() == "deploy: retention: removing 1 old image tag(s)"
+    assert calls == ["rmi ghcr.io/ichmaster/matrix-agora-agent:sha-old2", "image prune -f"]  # sha-old1 is in use
+    (tmp_path / "dry").mkdir()
+    out, calls = run_retention(tmp_path / "dry", "1")
+    assert out.strip() == "deploy: retention: would remove 1 old image tag(s)" and calls == []  # --dry-run
+    deploy = (ROOT / "server" / "deploy.sh").read_text()
+    assert 'KEEP_IMAGES="${KEEP_IMAGES:-2}"' in deploy and 'MIN_FREE_GB="${MIN_FREE_GB:-10}"' in deploy
+    apply = deploy.split("# --- apply ---", 1)[1]
+    assert apply.index("retention ||") < apply.index("free_gb") < apply.index("docker compose pull")
+    assert apply.rindex("retention ||") > apply.index("docker compose pull && docker compose up -d")
+    assert "too little disk space" in apply
+    for never in ("system prune", "prune -a", "rmi -f", "--force"):
+        assert never not in deploy
 
 
 def test_python_is_never_pid_1():
