@@ -115,12 +115,12 @@ def _label(row, now: datetime, tz: str) -> str:
 
 def talk_section(rows: list, before_ms: int, now: datetime, tz: str, words_budget: int = TALK_PROMPT_WORDS) -> str | None:
     """Her private prompt's summaries (pure): each period shown at the coarsest level written for it — a row is left
-    out when a coarser row covers its start — only those that began before `before_ms` (the first line of Gemini's
+    out when a coarser row with text covers its start — only those that began before `before_ms` (the first line of Gemini's
     history window), oldest first, an empty one skipped, labelled as she remembers it; past `words_budget` words the
     oldest go first. None when nothing is left."""
     coarser = {"hour": ("4h", "week"), "4h": ("week",), "week": ()}
-    shown = [r for r in rows if r.text and r.start_ms < before_ms and not any(
-        o.level in coarser[r.level] and o.start_ms <= r.start_ms < o.end_ms for o in rows)]
+    shown = [r for r in rows if r.text and r.start_ms < before_ms and not any(  # an empty coarser row hides nothing
+        o.text and o.level in coarser[r.level] and o.start_ms <= r.start_ms < o.end_ms for o in rows)]  # (review #3)
     shown.sort(key=lambda r: r.start_ms)
     lines = [f"- {_label(r, now, tz)}: {r.text}" for r in shown]
     while lines and sum(len(x.split()) for x in lines) > words_budget:

@@ -102,6 +102,18 @@ def test_her_prompt_shows_each_period_at_its_coarsest_level_before_the_window_ol
     assert budgeted.splitlines()[1:] == ["- вчора ввечері: Вечір.", "- сьогодні вранці: Кава."]  # the oldest go first
 
 
+def test_an_empty_coarser_row_hides_nothing_so_its_hours_stay():
+    """Code review v5.20 #3: a block folded from its hours and blocked whole is written empty — its hours' own
+    summaries are still shown."""
+    from agents.talk import TALK_TITLE, talk_section
+    now = datetime(2026, 11, 4, 12, 0, tzinfo=KYIV)
+    rows = [row("4h", ms(2026, 11, 2, 8), ms(2026, 11, 2, 12), ""),
+            row("hour", ms(2026, 11, 2, 9), ms(2026, 11, 2, 10), "Кава."),
+            row("hour", ms(2026, 11, 2, 10), ms(2026, 11, 2, 11), "Прогулянка.")]
+    assert talk_section(rows, before_ms=ms(2026, 11, 4, 11), now=now, tz=TZ) == (
+        f"{TALK_TITLE}\n- позавчора вранці: Кава.\n- позавчора вранці: Прогулянка.")
+
+
 def test_the_recheck_keeps_closed_only_what_blocks_alone_or_together_and_a_failed_call():
     import asyncio
 
