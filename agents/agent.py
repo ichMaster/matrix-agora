@@ -3780,8 +3780,14 @@ class Agent:
             system, contents = build_summary_request(
                 self.cfg.name, self.cfg.canon, self.summary, snapshot, self.summary_max_words,
             )
-            text = await self.llm.generate(contents, system, max_output_tokens=self.summary_max_words * 3,
-                                           kind="summary")
+            # v5.22 (the owner, 2026-11-02: «підсумок сесії на 2.5 Flash блокувався — тоді хай буде 3.1»): an agent
+            # whose answers think (Кіра's 3.1 Pro) writes its session summary on that model, at `low`
+            reply_model = getattr(self.llm, "reply_model", None)
+            if reply_model in THINKING_MODELS:
+                text = await self.llm.think(contents, system, model=reply_model, kind="summary", level="low")
+            else:
+                text = await self.llm.generate(contents, system, max_output_tokens=self.summary_max_words * 3,
+                                               kind="summary")
             if text is None:
                 log.error("session summary failed — keeping the previous one")
                 return False

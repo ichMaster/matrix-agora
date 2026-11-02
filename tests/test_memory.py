@@ -89,6 +89,26 @@ def test_failed_summary_keeps_the_previous_file_and_the_session(tmp_path):
     assert agent.session == [("Ich", "нове")]
 
 
+def test_a_thinking_reply_model_writes_the_session_summary_at_low(tmp_path):
+    """v5.22 (the owner, 2026-11-02: «підсумок сесії на 2.5 Flash блокувався — тоді хай буде 3.1»)."""
+    class Pro(FakeLLM):
+        reply_model = "gemini-3.1-pro-preview"
+
+        async def generate(self, *a, **k):
+            raise AssertionError("never on GEMINI_MODEL")
+
+        async def think(self, contents, system_instruction, model="", max_output_tokens=0, kind="", level=None):
+            self.thought = (model, kind, level)
+            return "ми говорили про Тустань"
+
+    llm = Pro()
+    agent = make(tmp_path, llm=llm)
+    agent.session = [("Ich", "підемо в гори?")]
+    assert asyncio.run(agent.summarize()) is True
+    assert llm.thought == ("gemini-3.1-pro-preview", "summary", "low")
+    assert load_memory(agent.memory_file) == "ми говорили про Тустань"
+
+
 def test_summary_is_capped_to_the_word_limit(tmp_path):
     agent = make(tmp_path, llm=FakeLLM("слово " * 500))
     agent.summary_max_words = 20
