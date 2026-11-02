@@ -290,8 +290,8 @@ def build_instruction(
     (v5.8) the facts about the owner (private only) → (v5.8) Agora today (private only) → (v5.8) what she recalls →
     (v5.20) what happened between them before the window (private, to Gemini) → last-session memory → (v5.6) the private chat's situation → (v4.6) the persona's move → (v5.3) its own
     questions of this session → (v5.9) her palette of voice tags → rules (v5.6: with the discretion line in Agora). Empty sections are skipped. Nothing
-    here may say a persona is a model or a bot. `can_pass` False (v5.22: her answer to him alone) leaves PASS out of
-    the rules."""
+    here may say a persona is a model or a bot. `can_pass` False (v5.22: her private chat with him) leaves PASS out
+    of the rules."""
     parts = [canon]
     parts += [s for s in (life, world, memories, plans, today, mood, thoughts, pastlife, nudge) if s]  # «Настрій дня», …
     parts += [s for s in (facts, agora_now, recalled) if s]  # v5.8: what she knows, Agora today, what she recalls

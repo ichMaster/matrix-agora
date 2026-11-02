@@ -106,17 +106,17 @@ def test_the_private_brief_comes_after_the_memory_and_the_discretion_closes_the_
                                                  "іменем. Якщо тобі нема чого додати — відповідай рівно PASS."
 
 
-def test_answering_him_alone_she_is_never_offered_pass_writing_first_she_still_is(tmp_path, monkeypatch):
-    """v5.22 (the owner, 2026-11-02: «прибрати рядок про PASS з її промпту, щоб вона завжди відповідала»): Gemini took
-    the rules' PASS for a quiet refusal and she said nothing to him; her answer's rules (Gemini's and the backup's)
-    no longer offer it, writing first and in Agora they still do."""
+def test_alone_with_him_she_is_never_offered_pass_in_agora_she_still_is(tmp_path, monkeypatch):
+    """v5.22 (the owner, 2026-11-02: «прибрати рядок про PASS з її промпту, щоб вона завжди відповідала»; «коли вона
+    пише першою — теж забери»): Gemini took the rules' PASS for a quiet refusal and she said nothing to him; her
+    private rules (her answer, writing first, Gemini's and the backup's) no longer offer it; in Agora they do."""
     assert build_instruction("Кіра", "КАНОН", can_pass=False).endswith(
         "Ти — Кіра. Відповідай лише від себе, коротко, без префікса з іменем.")
     from tests.test_archive import kira
     agent = kira(tmp_path, monkeypatch)
     answer = agent.build_prompt(private=f"{PRIVATE_BRIEF}\n\nЯК ЦЬОГО РАЗУ")
     assert "PASS" not in answer and answer.split("\n\n")[-1].startswith("Ти — Кіра.")
-    assert agent.build_prompt(private=PRIVATE_NUDGE).endswith("відповідай рівно PASS.")
+    assert "PASS" not in agent.build_prompt(private=PRIVATE_NUDGE)
     assert "відповідай рівно PASS." in agent.build_prompt()
 
 

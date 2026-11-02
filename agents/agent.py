@@ -2448,10 +2448,10 @@ class Agent:
             "agora_now": agora_now if private is not None and can("recall") else None,
             "recalled": recalled if can("recall") else None,
             "talk": self.talk_now(now) if talk and private is not None and can("talk") else None,  # v5.20
-            # v5.22 (the owner, 2026-11-02: «прибрати рядок про PASS з її промпту, щоб вона завжди відповідала»):
-            # answering him alone she is never offered PASS — Gemini took it for a quiet refusal; writing first she
-            # still may say nothing
-            "can_pass": not (private is not None and private.startswith(PRIVATE_BRIEF)),
+            # v5.22 (the owner, 2026-11-02: «прибрати рядок про PASS з її промпту, щоб вона завжди відповідала»; «коли
+            # вона пише першою — теж забери»): alone with him she is never offered PASS — Gemini took it for a quiet
+            # refusal
+            "can_pass": private is None,
             "voice": self.cfg.voice_spec if can("emotion") and self.cfg.voice_spec else None,  # v5.9: both her prompts
         }
 
