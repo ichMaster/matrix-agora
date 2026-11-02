@@ -531,12 +531,13 @@ class Agent:
         # v5.17 — her photos in Telegram: Google's image model, her face from the owner's reference photos (next to her
         # private canon); offered to Gemini only, in Telegram, under the day's cap
         self.photos: PhotoMaker | None = None
-        self.photo_day_max = 0
+        self.photo_day_max, self.photo_gap_s = 0, 0
         self.photo_sent = False
         self._offer_photo = False
         self._pending_shot: Shot | None = None
         if cfg.can("photos"):
             self.photo_day_max = int(os.environ.get("PHOTO_DAY_MAX", "40"))
+            self.photo_gap_s = int(os.environ.get("PHOTO_GAP_S", "1800"))  # v5.22: the pause between her photos
             faces = load_faces(Path("agents/canon") / f"{cfg.localpart}.face")
             if isinstance(self.llm, GeminiClient):
                 self.photos = photo_maker(os.environ.get("PHOTO_MODEL", "gemini-nano-banana-2.1").strip() or PHOTO_MODEL,
@@ -1096,8 +1097,9 @@ class Agent:
                     video = shot
                 shot = None
             if text is not None and shot is not None:  # v5.17: her photo, made before anything is sent
-                if door != "telegram" or not self._photo_open(door):
-                    log.info("photo: dropped (%s)", "element" if door != "telegram" else "cap")
+                why = self._photo_closed(door)
+                if why:
+                    log.info("photo: dropped (%s)", why)
                 else:
                     if action is not None:
                         action.cancel()
@@ -1861,10 +1863,36 @@ class Agent:
         except OSError:
             return 0
 
+    def last_photo_ms(self) -> int | None:
+        """v5.22 — when her last photo was kept: the latest `HHMMSS` of today's folder, on her clock (None: none)."""
+        day = local_now(self.clock(), self.tz)
+        try:
+            names = [p.stem for p in (self._dir("photos") / day.date().isoformat()).iterdir() if p.is_file()]
+        except OSError:
+            return None
+        stamps = [n for n in names if len(n) == 6 and n.isdigit()]
+        if not stamps:
+            return None
+        h, m, sec = (int(x) for x in (max(stamps)[:2], max(stamps)[2:4], max(stamps)[4:]))
+        return int(day.replace(hour=h, minute=m, second=sec, microsecond=0).timestamp() * 1000)
+
+    def _photo_closed(self, door: str | None) -> str | None:
+        """Why her answer may not carry a photo now (None: it may) — v5.17: not Telegram, the image model off, the day's
+        cap; v5.22: her last photo less than `PHOTO_GAP_S` ago (the owner, 2026-11-02: «з кожним меседжем»)."""
+        if door != "telegram":
+            return "element"
+        if self.photos is None or self.photo_day_max <= 0:
+            return "off"
+        if self.photos_today() >= self.photo_day_max:
+            return "cap"
+        last = self.last_photo_ms() if self.photo_gap_s > 0 else None
+        if last is not None and self.clock() - last < self.photo_gap_s * 1000:
+            return "pause"
+        return None
+
     def _photo_open(self, door: str | None) -> bool:
-        """v5.17 — may her answer carry a photo: the image model is on, the door is Telegram, the day's cap not reached."""
-        return (self.photos is not None and door == "telegram" and self.photo_day_max > 0
-                and self.photos_today() < self.photo_day_max)
+        """v5.17 — may her answer carry a photo (the skill offered to Gemini): `_photo_closed` names no reason."""
+        return self._photo_closed(door) is None
 
     def videos_today(self) -> int:
         """v5.18 — her videos today, for the day's cap: the ones paid for (today's ok `video` / `video_note` lines in
