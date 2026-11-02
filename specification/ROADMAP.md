@@ -2993,7 +2993,7 @@ midnight.
 
 ### v5.22 — Analytics: the answer time, the prompts' length, the photos and videos
 
-**Status:** ⏳ planned (the owner, 2026-11-02).
+**Status:** ✅ completed — released `v5.22.0` on 2026-11-03. The owner confirmed the live checks. Grown during his test: the owner's decisions below. Code review: eight fixes (#1–#8), eight LOW findings deferred.
 
 **Goal:** in **Analytics** the owner sees how fast every service answers and how fast each agent answers him, how long
 the prompts are, and how many photos and videos were made — each over the chosen period, by day (by hour for one
