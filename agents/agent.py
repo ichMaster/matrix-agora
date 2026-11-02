@@ -3179,8 +3179,12 @@ class Agent:
         level, start, end = due[0]
         open_n, closed_n = self.archive.private_counts(start, end)
         lines = self.archive.private_between(start, end)  # open to Gemini only: a closed line never reaches it
-        finer = [r for r in self.archive.talk_rows(FINER.get(level), start, end)] if level in FINER else []
-        from_summaries = covered([x.ts_ms for x in lines], finer)
+        finer, from_summaries = [], False
+        for finer_level in FINER.get(level, ()):  # v5.23: its hours, else v5.20's blocks, when they cover it
+            finer = self.archive.talk_rows(finer_level, start, end)
+            if covered([x.ts_ms for x in lines], finer):
+                from_summaries = True
+                break
         items = ([(r.level, r.text) for r in finer if r.text] if from_summaries
                  else [(x.speaker, history_entry(x.text)) for x in lines])
         self._talk_probed = None

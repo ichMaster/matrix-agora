@@ -63,7 +63,10 @@ def periods_due(now_ms: int, tz: str, open_times: list[int], held: set[tuple[str
 
 
 SPAN = {"hour": "цієї години", "day": "цього дня"}
-FINER = {"day": "hour"}  # v5.23: a day is written from its hours when they cover it, else from its lines
+# v5.23: a day is written from its hours when they cover it, else from v5.20's four-hour blocks (the first backfill's
+# days, whose hours were never written: a whole day's lines named what she is twice and left the day empty), else
+# from its lines
+FINER = {"day": ("hour", "4h")}
 TALK_SPLIT_MIN = 4   # a blocked part this small is left out, never halved again
 TALK_CALLS_MAX = 12  # a period's calls, halvings included
 TALK_FAILS_MAX = 3   # code review v5.20 #2: a period whose call keeps failing, unblocked at the prompt stage, is

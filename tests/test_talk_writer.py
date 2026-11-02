@@ -197,6 +197,22 @@ def test_a_summary_naming_what_she_is_twice_is_left_empty(tmp_path, monkeypatch)
     assert agent.archive.talk_rows()[0].text == "" and len(agent.llm.thought) == 2
 
 
+def test_a_day_without_hours_is_written_from_its_four_hour_blocks_when_they_cover_it(tmp_path, monkeypatch):
+    """v5.23, the first live backfill (2026-11-03): two of four days written from a whole day's lines named what she
+    is twice and were left empty; v5.20's blocks, which had passed, cover those days."""
+    agent = talking(tmp_path, monkeypatch)
+    say(agent, "tg:1", ms(2026, 10, 28, 9, 10), "Ich", "Ранковий рядок")
+    say(agent, "tg:2", ms(2026, 10, 28, 15, 40), "Кіра", "Денний рядок")
+    for t in (ms(2026, 10, 28, 8), ms(2026, 10, 28, 12)):
+        agent.archive.talk_put("4h", t, t + 4 * 3_600_000, f"Блок {t}.", 1, 0, 0, t)
+    drain(agent)
+    assert agent.llm.thought[-1]["contents"].startswith("Що ти пам'ятаєш про ці години")
+    assert "Ранковий рядок" not in agent.llm.thought[-1]["contents"] and agent.archive.talk_rows("day")[0].text
+    say(agent, "tg:3", ms(2026, 10, 29, 9, 30), "Ich", "Рядок без блоку")    # neither hours nor blocks: its lines
+    drain(agent)
+    assert agent.llm.thought[-1]["contents"] == "Розмова:\nIch: Рядок без блоку"
+
+
 def test_without_talk_nothing_is_due(tmp_path, monkeypatch):
     agent = kira(tmp_path, monkeypatch, Pro())
     assert agent.talk_is_due() is False
