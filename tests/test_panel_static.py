@@ -470,6 +470,19 @@ def test_one_day_is_drawn_by_the_hour_against_the_day_before():
     assert "hourly && d.since === panelToday() && i > new Date().getHours() ? null : x.cost_cumulative" in js  # no future
 
 
+def test_the_prompts_structure_by_part_and_its_dynamics():
+    """v5.22 (the owner, 2026-11-02: «аналіз структури промпта … і динаміка»): each answer kind's prompt by its parts
+    — the 7 largest by colour, the rest as Other — a day or an hour, and a table with the change; names escaped."""
+    js = js_text()
+    assert "function structureHtml(st, d)" in js and "(pr.structure || []).slice(0, 3).map((st) => structureHtml(st, d))" in js
+    for label in ('canon: "Canon"', 'recall: "Recall (RAG)"', 'talk: "Talk summaries"', 'history: "History"',
+                  'life: "Life so far"'):
+        assert label in js, label
+    assert 'const color = (k) => k === "other" ? "var(--muted)" : `var(--viz-${top.indexOf(k) + 1})`;' in js
+    assert "anCard(`Prompt structure · ${st.kind}`" in js and "<td>${esc(partName(p.part))}</td>" in js
+    assert "The prompt's parts are kept from v5.22 on" in js
+
+
 def test_the_csv_header_and_its_escaping():
     js = js_text()
     assert ('const CSV_HEAD = ["day", "agent", "service", "model", "kind", "calls", "failed", "blocked", "input", '

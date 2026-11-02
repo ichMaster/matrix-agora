@@ -858,6 +858,32 @@ function anSpeedHtml(d) {
   return tiles + lines + wait + services + kinds + answers;
 }
 
+// v5.22 (the owner: «аналіз структури промпта … і динаміка»): an answer's prompt by its parts
+const PART_LABEL = {canon: "Canon", life: "Life so far", world: "Place and time", memories: "Day memories", plans: "Plans",
+  today: "Today", mood: "Mood of the day", thoughts: "Thoughts", facts: "Facts", agora_today: "Agora today",
+  recall: "Recall (RAG)", talk: "Talk summaries", summary: "Last session", brief: "Brief and skills", voice: "Voice tags",
+  rules: "Rules", history: "History", move: "Move", asked: "Asked before", pastlife: "Past life", nudge: "Nudge",
+  rules_extra: "Creature rules", discretion: "Discretion"};
+const partName = (k) => k === "other" ? "Other" : PART_LABEL[k] || k;
+function structureHtml(st, d) {
+  // the 7 largest parts by colour, the rest as «Other» (a fixed slot each, never more hues than the palette)
+  const W = chartW(), b = d.buckets, per = d.by_hour ? "an hour" : "a day";
+  const top = st.parts.slice(0, 7).map((p) => p.part), rest = st.parts.slice(7);
+  const color = (k) => k === "other" ? "var(--muted)" : `var(--viz-${top.indexOf(k) + 1})`;
+  const keys = rest.length ? [...top, "other"] : top;
+  const parts = b.map((_, i) => Object.fromEntries([...top.map((k) => [k, st.parts.find((p) => p.part === k).series[i] || 0]),
+    ...(rest.length ? [["other", rest.reduce((sum, p) => sum + (p.series[i] || 0), 0)]] : [])]));
+  const chart = anCard(`Prompt structure · ${st.kind}`, `the mean tokens a call by part, ${per} · ${fmtInt(st.calls)} calls`,
+    svgStackedBars({days: b, keys, parts, line: [], fmt: (v) => fmtM(Math.round(v)), W, color, label: `Prompt structure, ${st.kind}`,
+      tip: (i) => [tipBucket(b[i]), ...keys.filter((k) => parts[i][k]).map((k) => `${partName(k)} ${fmtM(Math.round(parts[i][k]))}`)].join("\n")}) +
+    legend(keys.map((k) => [partName(k), color(k)])));
+  const table = anTable(`Parts · ${st.kind}`, [["part"], ["tokens a call", 1], ["share", 1], ["vs previous", 1]],
+    st.parts.map((p) => `<tr><td>${esc(partName(p.part))}</td>${tokCell(p.tokens)}<td class="r">${p.share == null ? "—" : `${(p.share * 100).toFixed(0)}%`}</td>${
+      mutedCell(tokChange(p.tokens, p.previous_tokens))}</tr>`).join(""),
+    `<div class="muted" style="font-size:12px">Each call's parts are kept in characters and shared out over its own prompt tokens · ${esc(fmtM(st.tokens))} tokens a call in all.</div>`);
+  return chart + table;
+}
+
 function anPromptsHtml(d) {
   const pr = d.prompts, W = chartW(), b = d.buckets, per = d.by_hour ? "an hour" : "a day";
   if (!pr.services.length) return anEmpty("scroll", "No call in this period reported its prompt's tokens");
@@ -880,7 +906,9 @@ function anPromptsHtml(d) {
                                      (m) => "<td></td>" + cells(m))).join(""));
   const kinds = anTable("What it was for", [["kind"], ...head], pr.kinds.map((k) => `<tr><td class="kind">${esc(k.kind)}</td>${cells(k)}</tr>`).join(""));
   const agents = pr.agents.length > 1 ? anTable("Agents", [["agent"], ...head], pr.agents.map((x) => `<tr><td>${esc(agentName(x.agent))}</td>${cells(x)}</tr>`).join("")) : "";
-  return tiles + lines + services + kinds + agents;
+  const structure = (pr.structure || []).slice(0, 3).map((st) => structureHtml(st, d)).join("")
+    || anEmpty("scroll", "The prompt's parts are kept from v5.22 on — none yet in this period");
+  return tiles + structure + lines + services + kinds + agents;
 }
 
 const MEDIA_COLOR = {photos: "var(--viz-1)", videos: "var(--viz-2)"};

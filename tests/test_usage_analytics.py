@@ -312,3 +312,20 @@ def test_one_day_has_its_cost_calls_and_tokens_by_the_hour_beside_the_day_before
     assert r["previous_hour_cumulative"][8] == 0 and r["previous_hour_cumulative"][9] == pytest.approx(3.2)
     longer = analyze(lines, date(2026, 11, 1), date(2026, 11, 2), "kira", PRICES)
     assert longer["hour_series"] == [] and longer["previous_hour_cumulative"] == []
+
+
+def test_the_prompts_structure_by_kind_each_part_in_tokens_by_the_hour_and_beside_the_day_before():
+    """v5.22 (the owner, 2026-11-02: «аналіз структури промпта … і динаміка»): an answer call's parts (characters)
+    apportioned to its own prompt tokens — the mean a call, the share, the previous period and a bucket."""
+    from agents.usage import analyze_detail
+    parts = {"canon": 1000, "talk": 3000, "recall": 1000, "history": 5000}
+    lines = [{**timed("2026-11-02T08:00:00+02:00", prompt=40000), "prompt_parts": parts},
+             {**timed("2026-11-02T09:00:00+02:00", prompt=20000), "prompt_parts": parts},
+             {**timed("2026-11-02T09:30:00+02:00", "reflection", prompt=8000)},                 # no parts: not in it
+             {**timed("2026-11-01T09:00:00+02:00", prompt=10000), "prompt_parts": parts}]        # the day before
+    r = analyze_detail(lines, [], date(2026, 11, 2), date(2026, 11, 2))["prompts"]["structure"]
+    assert [s["kind"] for s in r] == ["private"] and r[0]["calls"] == 2 and r[0]["tokens"] == 30000
+    by = {p["part"]: p for p in r[0]["parts"]}
+    assert [p["part"] for p in r[0]["parts"]] == ["history", "talk", "canon", "recall"]
+    assert (by["history"]["tokens"], by["history"]["share"], by["history"]["previous_tokens"]) == (15000, 0.5, 5000)
+    assert by["canon"]["series"][8] == 4000 and by["canon"]["series"][9] == 2000 and by["canon"]["series"][10] is None

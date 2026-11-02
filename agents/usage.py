@@ -7,6 +7,7 @@ import calendar
 import json
 import math
 from collections import defaultdict
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -27,6 +28,19 @@ KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
 # v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan; v5.1 also the ElevenLabs
 # plan's credits), `external` (Lumi's own)
 BILLING = ("api", "subscription", "external")
+
+
+# v5.22 (the owner, 2026-11-02: «аналіз структури промпта … і динаміка») — the answer call's prompt in parts, each
+# part's size in characters (the canon, the life story, the recall, the history, …), set by the agent around the call
+# and written into its usage line; a context variable, so a concurrent call never reads another's
+PROMPT_PARTS: ContextVar[dict | None] = ContextVar("prompt_parts", default=None)
+
+
+def _parts(value: Any) -> dict | None:
+    """A prompt's parts as {name: chars} — only names and whole sizes, never a text; else null."""
+    if not isinstance(value, dict) or not value:
+        return None
+    return {str(k): int(v) for k, v in value.items() if isinstance(v, int) and not isinstance(v, bool) and v >= 0}
 
 
 def _ms(value: Any) -> int | None:
@@ -50,7 +64,7 @@ def _output(usage: Any) -> int | None:
 
 
 def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: bool,
-               blocked: str | None = None, latency_ms: int | None = None) -> dict:
+               blocked: str | None = None, latency_ms: int | None = None, prompt_parts: dict | None = None) -> dict:
     """One record per Gemini call (v2 since v4.4: engine, billing, cache tokens; v3 since v5.1: `characters`, null
     here, and the thinking counted in the output; v5 since v5.13: `blocked`, the stage of a safety block — `prompt`
     or `answer` — or null; v7 since v5.22: `latency_ms`, the call's wall time on a monotonic clock, on every kind of
@@ -74,6 +88,7 @@ def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: b
         "blocked": blocked,
         "video_ms": None,  # v6 (v5.18): a video's length, on a `video_note` line only
         "latency_ms": _ms(latency_ms),  # v7 (v5.22): how long the call took
+        "prompt_parts": _parts(prompt_parts),  # v7 (v5.22): an answer's prompt, its parts' sizes in characters
     }
 
 
@@ -91,11 +106,12 @@ def tts_usage_line(ts_iso: str, agent: str, model: str, characters: int, ok: boo
         "blocked": None,  # v5.13: one line shape — only a Gemini call is ever blocked
         "video_ms": None,
         "latency_ms": _ms(latency_ms),
+        "prompt_parts": None,
     }
 
 
 def fallback_usage_line(ts_iso: str, agent: str, kind: str, model: str, ok: bool,
-                        latency_ms: int | None = None) -> dict:
+                        latency_ms: int | None = None, prompt_parts: dict | None = None) -> dict:
     """v5.14 — one record per call of Кіра's backup model (GLM-4.6 on NovelAI): the subscription pays it, so it is
     never priced, and the stream reports no token counts. Never any text."""
     return {
@@ -104,6 +120,7 @@ def fallback_usage_line(ts_iso: str, agent: str, kind: str, model: str, ok: bool
         "engine": "novelai", "billing": "subscription",
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
         "characters": None, "audio_ms": None, "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
+        "prompt_parts": _parts(prompt_parts),
     }
 
 
@@ -119,6 +136,7 @@ def judge_usage_line(ts_iso: str, agent: str, model: str, prompt_tokens: int | N
         "engine": "openrouter", "billing": "api",
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": reported_cost,
         "characters": None, "audio_ms": None, "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
+        "prompt_parts": None,
     }
 
 
@@ -133,6 +151,7 @@ def stt_usage_line(ts_iso: str, agent: str, model: str, audio_ms: int | None, ok
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
         "characters": None, "audio_ms": int(audio_ms) if isinstance(audio_ms, int) else None,
         "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
+        "prompt_parts": None,
     }
 
 
@@ -149,6 +168,7 @@ def video_note_usage_line(ts_iso: str, agent: str, model: str, video_ms: int | N
         "characters": None, "audio_ms": None, "blocked": blocked,
         "video_ms": int(video_ms) if isinstance(video_ms, int) and not isinstance(video_ms, bool) else None,
         "latency_ms": _ms(latency_ms),
+        "prompt_parts": None,
     }
 
 
@@ -158,7 +178,8 @@ def _int(d: dict, key: str) -> int | None:
 
 
 def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict | None, ok: bool,
-                   reported_cost: float | None = None, latency_ms: int | None = None) -> dict:
+                   reported_cost: float | None = None, latency_ms: int | None = None,
+                   prompt_parts: dict | None = None) -> dict:
     """v4.4 — one record per Claude Agent SDK call: always `claude-sdk` / `subscription` (the Max plan, never an API
     key); the SDK's `total_cost_usd` is a client-side estimate, kept as reported and never billed."""
     usage = usage or {}
@@ -180,6 +201,7 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
         "blocked": None,
         "video_ms": None,
         "latency_ms": _ms(latency_ms),
+        "prompt_parts": _parts(prompt_parts),
     }
 
 
@@ -216,7 +238,9 @@ def _valid(rec: Any) -> bool:
     return (counts_ok and isinstance(rec.get("ok"), bool)
             and isinstance(rec.get("agent"), str) and isinstance(rec.get("kind"), str)
             and rec.get("billing", "api") in BILLING and isinstance(rec.get("engine", "gemini"), str)
-            and isinstance(rec.get("blocked") or "", str))  # v5.13: missing or null on an older line
+            and isinstance(rec.get("blocked") or "", str)  # v5.13: missing or null on an older line
+            and (rec.get("prompt_parts") is None or (isinstance(rec["prompt_parts"], dict) and all(  # v5.22
+                isinstance(v, int) and not isinstance(v, bool) for v in rec["prompt_parts"].values()))))
 
 
 def parse_lines(lines: list[str]) -> tuple[list[dict], int]:
@@ -966,7 +990,9 @@ def analyze_detail(records: list[dict], answers: list[dict], since: date, until:
     - `answers`: the answers' `wait_ms` and `wait_ms − delay_ms` (the pause apart) by agent, place, door, writer and
       what they answered, the previous period's median, the owner's median wait a bucket, and how many she wrote first;
     - `prompts`: `prompt_tokens` a call (the mean and max) by service and its models, by kind and by agent, the previous
-      period's mean, the mean a bucket — a service that reports none (NovelAI) is absent;
+      period's mean, the mean a bucket — a service that reports none (NovelAI) is absent; and its `structure`: by
+      answer kind, each part's mean tokens a call (its `prompt_parts` characters apportioned to the call's own prompt
+      tokens), its share, the previous period's and the mean a bucket;
     - `media`: the ok `photo` calls (photos) and `video` + `video_note` calls (videos) in all, a bucket and on average an
       hour (the period's hours, today's up to `now`), their cost; a video's `frame` is its cost, never a photo."""
     prices = prices or PriceBook()
@@ -1066,6 +1092,34 @@ def analyze_detail(records: list[dict], answers: list[dict], since: date, until:
                         key=lambda x: (-(x["mean"] or 0), x["kind"])),
         "agents": [{"agent": a, **prompt_row(rows, p_ag.get(a, []))}
                    for a, rows in sorted(grouped(prompted, lambda r: str(r.get("agent"))).items())]}
+
+    # the prompts' structure (the owner, 2026-11-02: «скільки що займає в токенах — канон, історія, РАГ … і динаміка»):
+    # each answer call's parts, their characters apportioned to the call's own prompt tokens
+    def split(r: dict) -> dict[str, float] | None:
+        parts, tokens = r.get("prompt_parts"), _int_of(r, "prompt_tokens")
+        if not isinstance(parts, dict) or not tokens or not sum(parts.values()):
+            return None
+        total = sum(parts.values())
+        return {k: tokens * v / total for k, v in parts.items()}
+
+    def mean_part(splits: list[dict], k: str) -> int | None:
+        return round(sum(sp.get(k, 0.0) for sp in splits) / len(splits)) if splits else None
+
+    p_split = grouped([r for r in prev_l if split(r)], lambda r: str(r.get("kind")))
+    structure = []
+    for kind, rows in sorted(grouped([r for r in now_l if split(r)], lambda r: str(r.get("kind"))).items(),
+                             key=lambda kv: (-len(kv[1]), kv[0])):
+        splits, before = [split(r) for r in rows], [split(r) for r in p_split.get(kind, [])]
+        by_b = grouped(rows, lambda r: bucket(str(r["ts"])))
+        total = sum(sum(sp.values()) for sp in splits) / len(splits)
+        parts_out = [{"part": k, "tokens": mean_part(splits, k),
+                      "share": round((mean_part(splits, k) or 0) / total, 4) if total else None,
+                      "previous_tokens": mean_part(before, k),
+                      "series": [mean_part([split(r) for r in by_b.get(b, [])], k) for b in buckets]}
+                     for k in sorted({k for sp in splits for k in sp})]
+        parts_out.sort(key=lambda x: (-(x["tokens"] or 0), x["part"]))
+        structure.append({"kind": kind, "calls": len(rows), "tokens": round(total), "parts": parts_out})
+    prompts_block["structure"] = structure
 
     # the photos and videos
     photo = [r for r in now_l if r.get("kind") == "photo"]

@@ -16,6 +16,7 @@ import signal
 import stat
 import sys
 import time
+from contextvars import ContextVar
 from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -302,6 +303,7 @@ from agents.turns import (
     wave_frees_at,
 )
 from agents.usage import (
+    PROMPT_PARTS,
     answer_line,
     fallback_usage_line,
     parse_lines,
@@ -355,6 +357,10 @@ from agents.world import (
 )
 
 log = logging.getLogger("agent")
+# v5.22 — the prompt this task built last and its parts' sizes in characters (`build_prompt`), read by `_compose` for
+# the answer call's usage line when that very prompt is sent; a context variable, as concurrent answers never share it
+_LAST_PARTS: ContextVar[tuple[str, dict] | None] = ContextVar("last_prompt_parts", default=None)
+PART_NAMES = {"private": "brief", "agora_now": "agora_today", "recalled": "recall"}  # a layer's name in the parts
 RECENT_THOUGHTS = 5  # v5.12: her last thoughts a reading or a reflection sees
 THOUGHTS_IN_MEMORY = 12  # v5.12: the most of a day's thoughts its memory request carries
 BACKFILL_PAGE = 100  # the homeserver's cap on one /messages page
@@ -1213,7 +1219,9 @@ class Agent:
         if cuts or n < len(history):
             log.info("backup: the prompt fitted (left out: %s; history %d of %d)", "+".join(cuts) or "nothing", n,
                      len(history))
-        return instruction(cuts), history[-n:]
+        skip = frozenset().union(*(CUT_LAYERS.get(c, frozenset()) for c in cuts))  # v5.22: built once more, as sent,
+        return self.build_prompt(private=brief, recalled=recalled, facts=facts, skip_layers=skip,  # for its parts
+                                 agora_now=None if "agora" in cuts else agora_now), history[-n:]
 
     async def _backup_text(self, brief: str, kind: str):
         prompt, lines = await self._backup_private_prompt(brief)
@@ -2307,9 +2315,16 @@ class Agent:
         (v5.6; an Agora reply of a person with `private` closes its rules with the discretion line). An assistant
         (v4.4, Claude) has no canon: its brief is the instruction."""
         if self.cfg.type == "assistant":
-            return self.brief(CLAUDE_BRIEF_DIRECT)
-        return build_instruction(**self.prompt_layers(pastlife, nudge, move, private, recalled, agora_now, facts,
-                                                      skip_layers, talk))
+            prompt = self.brief(CLAUDE_BRIEF_DIRECT)
+            _LAST_PARTS.set((prompt, {"brief": len(prompt)}))
+            return prompt
+        layers = self.prompt_layers(pastlife, nudge, move, private, recalled, agora_now, facts, skip_layers, talk)
+        prompt = build_instruction(**layers)
+        # v5.22: its parts' sizes (the rules and the joins are what is left), for the answer call's usage line
+        parts = {PART_NAMES.get(k, k): len(v) for k, v in layers.items() if k != "name" and isinstance(v, str) and v}
+        parts["rules"] = max(0, len(prompt) - sum(parts.values()))
+        _LAST_PARTS.set((prompt, parts))
+        return prompt
 
     def prompt_layers(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None,
                       private: str | None = None, recalled: str | None = None, agora_now: str | None = None,
@@ -2470,7 +2485,9 @@ class Agent:
                      latency_ms: int | None = None) -> None:
         """One JSON line per Gemini call (v3.1) — no texts; a write error never blocks. `blocked` (v5.13): the stage
         of a safety block; `latency_ms` (v5.22): how long the call took."""
-        self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked, latency_ms))
+        parts = PROMPT_PARTS.get()  # v5.22: an answer's prompt in parts
+        self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked, latency_ms,
+                                                 parts))
 
     def record_video_note_usage(self, model: str, video_ms: int | None, ok: bool, blocked: str | None = None,
                                 latency_ms: int | None = None) -> None:
@@ -2480,13 +2497,15 @@ class Agent:
 
     def record_fallback_usage(self, kind: str, model: str, ok: bool, latency_ms: int | None = None) -> None:
         """v5.14 — one line per call of her backup model: `novelai`, the subscription, never priced, no text."""
-        self._append_usage(lambda ts: fallback_usage_line(ts, self.cfg.localpart, kind, model, ok, latency_ms))
+        parts = PROMPT_PARTS.get()
+        self._append_usage(lambda ts: fallback_usage_line(ts, self.cfg.localpart, kind, model, ok, latency_ms, parts))
 
     def record_sdk_usage(self, kind: str, model: str, usage: dict | None, ok: bool,
                          reported_cost: float | None, latency_ms: int | None = None) -> None:
         """v4.4 — one line per Claude Agent SDK call: always `subscription`, never priced."""
+        parts = PROMPT_PARTS.get()
         self._append_usage(lambda ts: sdk_usage_line(ts, self.cfg.localpart, kind, model, usage, ok, reported_cost,
-                                                     latency_ms))
+                                                     latency_ms, parts))
 
     def _append_usage(self, build) -> None:
         self._append_jsonl(self.usage_file, build, "usage")
@@ -3386,8 +3405,15 @@ class Agent:
                        responder=None, shots: list | None = None) -> str | None:
         """One model call → the line as it would be sent, or None (logged): never half a sentence, never another's
         words, PASS honoured, the creature's word cap applied (`max_words` overrides it: a telegram's joke)."""
-        reply = await (responder or self.responder).respond(Turn(list(self.history if lines is None else lines), prompt,
-                                                                 self.reply_max_tokens, kind, effort, toolset))
+        history = list(self.history if lines is None else lines)
+        built = _LAST_PARTS.get()  # v5.22: the prompt's parts, when this prompt is the one last built in this task
+        parts = {**built[1], "history": len(build_transcript(history))} if built and built[0] is prompt else None
+        token = PROMPT_PARTS.set(parts)
+        try:
+            reply = await (responder or self.responder).respond(Turn(history, prompt, self.reply_max_tokens, kind, effort,
+                                                                     toolset))
+        finally:
+            PROMPT_PARTS.reset(token)
         if reply is None:
             return None  # already logged
         text = reply.text

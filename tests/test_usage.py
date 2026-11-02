@@ -25,7 +25,8 @@ def test_usage_line_shape_and_no_text():
                          "characters", "audio_ms",  # v2; v3 (v5.1) `characters`; v4 (v5.2) `audio_ms`
                          "blocked",  # v5 (v5.13): a safety block's stage
                          "video_ms",  # v6 (v5.18): a video's length
-                         "latency_ms"}  # v7 (v5.22): the call's time
+                         "latency_ms",  # v7 (v5.22): the call's time
+                         "prompt_parts"}  # v7 (v5.22): an answer's prompt, its parts' sizes
     assert line["characters"] is None and line["audio_ms"] is None and line["blocked"] is None
     assert line["video_ms"] is None and line["latency_ms"] is None
     assert (line["engine"], line["billing"]) == ("gemini", "api")

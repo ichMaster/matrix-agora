@@ -3012,6 +3012,7 @@ its time — nor how long he waits for an answer, how the prompts grow, or how m
 - the dynamics by period, by service and by agent;
 - phase v5.22, after v5.21's release.
 - **one day by the hour** (2026-11-02, during the phase: «за сьогодні і за вчора по годинах»): Today and Yesterday draw the Cost view by the hour too — the cost an hour by service, the running total against the day before's, the calls or tokens an hour.
+- **the prompt's structure and its dynamics** (2026-11-02, during the phase: «аналіз структури промпта … скільки що займає в токенах — канон, історія, РАГ … і динаміка»): each answer call's usage line keeps its prompt's parts in characters, shared out over its own prompt tokens; Prompts shows each part's tokens a call by day or by hour, its share and its change.
 
 **What the data holds now:** a usage line has the tokens, characters, audio and video seconds, `ok` and `blocked`,
 but no time; an answer leaves no record at all. A video's first frame is made by the image model as a `photo` line,
