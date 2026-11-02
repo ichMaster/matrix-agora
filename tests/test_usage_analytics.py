@@ -295,6 +295,21 @@ def test_no_data_gives_empty_blocks_and_a_corrupt_answer_line_is_skipped():
     assert records == [good] and bad == 2
 
 
+def test_an_answer_line_without_a_door_is_corrupt_never_a_crash_of_the_analysis():
+    """Code review v5.22 #1: a line without `door` (or `door: null` beside a real one) passed and broke the grouping —
+    `GET /api/analytics` was a 500 for every view."""
+    import json
+
+    from agents.usage import analyze_detail, parse_answers
+    good = ans("2026-11-02T10:00:00+02:00", 9000)
+    no_door = {k: v for k, v in good.items() if k != "door"}
+    records, bad = parse_answers([json.dumps(good), json.dumps(no_door), json.dumps({**good, "door": None}),
+                                  json.dumps({**good, "door": "sms"})])
+    assert records == [good] and bad == 3
+    r = analyze_detail([], records, date(2026, 11, 2), date(2026, 11, 2))
+    assert r["answers"]["owner"]["wait"]["n"] == 1
+
+
 def test_one_day_has_its_cost_calls_and_tokens_by_the_hour_beside_the_day_before():
     """v5.22 (the owner, 2026-11-02: «за сьогодні і за вчора по годинах»): a one-day period's `hour_series` — each
     hour's cost by service, calls and tokens and the running total — and the day before's running total by the hour;

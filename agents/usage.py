@@ -231,6 +231,7 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
 
 ANSWER_PLACES = ("agora", "private")
 ANSWERED = ("owner", "agent", "none")  # what an answer answered: the owner, another agent, nothing (she wrote first)
+ANSWER_DOORS = ("matrix", "telegram")  # the door an answer went through (code review v5.22 #1)
 
 
 def answer_line(ts_iso: str, agent: str, place: str, door: str, answered: str, wait_ms: Any, delay_ms: Any,
@@ -980,6 +981,7 @@ def _answer_ok(a: Any) -> bool:
         return False
     ints = all(a.get(f) is None or (isinstance(a[f], int) and not isinstance(a[f], bool)) for f in ("wait_ms", "delay_ms"))
     return (ints and isinstance(a.get("agent"), str) and a.get("place") in ANSWER_PLACES
+            and a.get("door") in ANSWER_DOORS  # code review v5.22 #1: else the analysis's grouping fails
             and a.get("answered") in ANSWERED and isinstance(a.get("by"), str) and isinstance(a.get("parts", []), list))
 
 
