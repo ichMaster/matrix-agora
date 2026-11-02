@@ -212,6 +212,7 @@ from agents.private import (
     rediscover,
     save_private_state,
     silence_line,
+    window_start,
 )
 from agents.reading import (
     PICK_MAX_TOKENS,
@@ -587,6 +588,9 @@ class Agent:
         # Only a person with `private` reads them (a typo never takes the others down).
         # 2026-11-02 (the owner, «відключи всю історію»): Gemini's private window — 0: `HISTORY_N`; 1: his new lines only
         self.private_history_n = int(os.environ.get("PRIVATE_HISTORY_N", "0")) if cfg.can("private") else 0
+        # v5.23 (the owner): Gemini's private window by time — the last day word for word, never fewer than 20 lines
+        self.private_history_hours = int(os.environ.get("PRIVATE_HISTORY_HOURS", "24")) if cfg.can("private") else 0
+        self.private_history_min = int(os.environ.get("PRIVATE_HISTORY_MIN", "20")) if cfg.can("private") else 0
         self.private_idle_ms, self.private_per_day, self.private_hours = 0, 0, (0, 0)
         self.private_first_door = "last"
         if cfg.can("private"):
@@ -1358,6 +1362,10 @@ class Agent:
             log.error("archive: Gemini's history was not read (%s) — her own", type(exc).__name__)
             return None
         lines = [line for line in lines if (line.speaker, line.text) not in self._closed]
+        if self.private_history_hours > 0 and lines:  # v5.23: the last day, at least the floor, his new lines always
+            his = next((n for n, x in enumerate(reversed(lines)) if x.speaker == self.cfg.name), len(lines))
+            lines = lines[window_start([x.ts_ms for x in lines], self.clock(), self.private_history_hours,
+                                       self.private_history_min, len(lines) - his):]
         if self.private_history_n > 0:  # the owner's cap — never below his lines since her last one
             unanswered = next((n for n, x in enumerate(reversed(lines)) if x.speaker == self.cfg.name), len(lines))
             lines = lines[-max(self.private_history_n, unanswered):] if lines else lines

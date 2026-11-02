@@ -236,3 +236,45 @@ def test_the_owners_switches_his_new_lines_only_and_no_summaries(tmp_path, monke
     assert TALK_TITLE in asyncio.run(agent._gemini_private_prompt(PRIVATE_BRIEF))
     agent.talk_prompt_words = 0
     assert TALK_TITLE not in asyncio.run(agent._gemini_private_prompt(PRIVATE_BRIEF))
+
+
+# --- v5.23: Gemini's window by time ----------------------------------------------------------------------------------
+def test_the_cut_keeps_the_last_day_the_floor_and_his_new_lines():
+    """v5.23 (the owner: «залишити всі меседжі за добу»; «Так, 20 рядків»): the pure cut over the open lines' times."""
+    from agents.private import window_start
+    hour = 3_600_000
+    times = [NOW - 48 * hour, NOW - 25 * hour, NOW - 24 * hour - 60_000, NOW - 24 * hour + 60_000, NOW - hour]
+    assert window_start(times, NOW, 24, 0) == 3                         # 24 h 01 min out, 23 h 59 min in
+    assert window_start(times, NOW, 24, 3) == 2                         # the floor: the last 3 lines whatever their time
+    assert window_start(times, NOW, 24, 0, keep_from=1) == 1            # his lines since her last one, always
+    assert window_start(times, NOW, 0, 0) == 0 and window_start([], NOW, 24, 20) == 0
+    assert window_start([NOW - 72 * hour] * 30, NOW, 24, 20) == 10      # three days' pause: the last 20 lines
+    # a DST night (2026-10-25 04:00 → 03:00 in Kyiv): 24 real hours, never 24 of the wall clock
+    dst_now = ms(2026, 10, 25, 12, 0)
+    assert window_start([ms(2026, 10, 24, 12, 30), ms(2026, 10, 24, 13, 30)], dst_now, 24, 0) == 1
+
+
+def test_her_window_is_the_last_day_at_least_the_floor_and_capped_as_before(tmp_path, monkeypatch):
+    """`_gemini_lines` over a made-up archive with the clock injected: the last 24 hours, at least the floor, his
+    unanswered lines, `PRIVATE_HISTORY_N` still the owner's cap, 0 hours the window by lines; the backup's view keeps
+    its own history."""
+    agent = talking(tmp_path, monkeypatch)
+    agent.private_history_hours, agent.private_history_min = 24, 2
+    lines = [(ms(2026, 10, 30, 20, 0), "Ich", "Давнє 1"), (ms(2026, 10, 30, 20, 1), "Кіра", "Давнє 2"),
+             (ms(2026, 10, 31, 21, 0), "Ich", "Позавчора"), (ms(2026, 11, 1, 11, 59), "Кіра", "Добу тому"),
+             (ms(2026, 11, 1, 12, 1), "Ich", "Вчора"), (ms(2026, 11, 2, 11, 0), "Кіра", "Сьогодні")]
+    for i, (when, who, text) in enumerate(lines):
+        say(agent, f"tg:{i}", when, who, text)
+    assert [x.text for x in agent._gemini_lines()] == ["Вчора", "Сьогодні"]
+    agent.private_history_min = 3
+    assert [x.text for x in agent._gemini_lines()] == ["Добу тому", "Вчора", "Сьогодні"]
+    agent.private_history_min = 0
+    agent.clock = lambda: ms(2026, 11, 5, 12, 0)                        # three days later, he writes
+    say(agent, "tg:9", ms(2026, 11, 5, 11, 58), "Ich", "Привіт")
+    assert [x.text for x in agent._gemini_lines()] == ["Привіт"]       # his new line always, the rest in the summaries
+    agent.private_history_hours = 0                                     # the window by lines, as before
+    assert len(agent._gemini_lines()) == 7
+    agent.private_history_n = 1
+    assert [x.text for x in agent._gemini_lines()] == ["Привіт"]
+    agent.seed_private_from_archive()                                   # the backup's own view: every line, untouched
+    assert len(agent.private_history) == 7

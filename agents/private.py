@@ -90,6 +90,20 @@ def silence_line(name: str, block: tuple | None, why: str | None, by: str | None
     return f"⚙️ {name} пропустила відповідь: {what}"
 
 
+def window_start(times: list[int], now_ms: int, hours: int, floor: int, keep_from: int | None = None) -> int:
+    """v5.23 (the owner, 2026-11-02: «залишити всі меседжі за добу»; 2026-11-03: «Так, 20 рядків») — the index of the
+    first line of Gemini's private window over the open lines' times, oldest first (pure): every line from `now −
+    hours` on, at least the last `floor` lines, and every line from `keep_from` (his lines since her last one); `hours`
+    0 cuts nothing. The hours are real ones, so a DST night's window is 24 of them."""
+    n = len(times)
+    if hours <= 0 or not n:
+        return 0
+    cut = now_ms - hours * 3_600_000
+    start = next((i for i, t in enumerate(times) if t >= cut), n)
+    start = min(start, max(0, n - floor))
+    return min(start, keep_from) if keep_from is not None else start
+
+
 def pick_door(wanted: str, matrix_open: bool, telegram_open: bool) -> str | None:
     """v5.7 — the channel a private line goes to: the wanted one when it is open, else the other open one, else
     none (the owner never opened the Element chat, or Telegram is off)."""

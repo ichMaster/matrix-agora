@@ -146,6 +146,11 @@ SCHEMA: tuple[Setting, ...] = (
     # 2026-11-02 (the owner, «відключи всю історію»): how much of the private chat Gemini sees; 1 — his new lines only
     _s("PRIVATE_HISTORY_N", "int", "0", "private", "cap:private", None,
        "Скільки останніх рядків особистого чату бачить Gemini (0 — як HISTORY_N; 1 — лише нові від Ich)", "lines", 0, 300),
+    # v5.23 (the owner): Gemini's private window by time, and the fewest lines it holds whatever their time
+    _s("PRIVATE_HISTORY_HOURS", "int", "24", "private", "cap:private", None,
+       "Скільки годин особистого чату Gemini бачить дослівно (0 — за рядками)", "hours", 0, 168),
+    _s("PRIVATE_HISTORY_MIN", "int", "20", "private", "cap:private", None,
+       "Найменше останніх рядків, які він бачить, хоч би якими давніми", "lines", 0, 300),
     _s("PRIVATE_AGORA_N", "int", "20", "private", "cap:recall", None,
        "Скільки сьогоднішніх рядків Агори бачить в особистому чаті", "lines", 0, 60),
     # v5.11 — events of her life (`events`): the hourly roll, the kinds' weights, her waking hours
