@@ -156,3 +156,75 @@ def test_flagged_at_the_windows_end_opens_the_next_window_but_is_no_block():
     assert r.window_until_ms == ms(28, 20, 11) and r.blocks == ended.blocks
     assert state(r, ms(28, 20, 7)) == "window"
     assert step(Route(pin="gemini"), ms(28, 20), "flagged").window_until_ms is None
+
+
+# --- v5.21 (the owner, 2026-11-02): two modes, the hour after more than 10 blocks, `/gemini` and `/backup` -------------
+def test_v5_21_a_block_gives_five_minutes_of_the_backup_then_gemini_directly():
+    from agents.route import mode
+    from agents.route import step as step21
+    r = step21(Route(), ms(28, 20), "block", 300, 10, 3600, "2026-10-28")
+    assert mode(r, ms(28, 20, 4)) == "backup" and mode(r, ms(28, 20, 5)) == "gemini"   # no window_end any more
+    assert mode(Route(), ms(28, 20)) == "gemini"
+    r = step21(r, ms(28, 20, 6), "gemini", 300, 10, 3600, "2026-10-28")
+    assert r.window_until_ms is None and r.answers == {"gemini": 1, "backup": 0}
+
+
+def test_v5_21_more_than_ten_blocks_in_an_hour_give_an_hour_and_the_count_forgets_older_blocks():
+    from agents.route import mode
+    from agents.route import step as step21
+    r = Route()
+    for i in range(10):                                                     # ten blocks, six minutes apart
+        r = step21(r, ms(28, 20, 0) + i * 360_000, "block", 300, 10, 3600, "2026-10-28")
+    tenth = ms(28, 20, 0) + 9 * 360_000
+    assert r.window_until_ms == tenth + 300_000                              # ten: still five minutes
+    edge = step21(r, tenth + 360_000, "block", 300, 10, 3600, "2026-10-28")  # 21:00: the 20:00 block is an hour old
+    assert edge.window_until_ms == tenth + 360_000 + 300_000                  # ten in the last hour: five minutes
+    r = step21(r, tenth + 300_000, "block", 300, 10, 3600, "2026-10-28")   # 20:59: the 11th within the hour
+    assert r.window_until_ms == tenth + 300_000 + 3_600_000 and mode(r, tenth + 300_000 + 3_599_000) == "backup"
+    later = Route(blocks=tuple(ms(28, 18, m) for m in range(0, 50, 5)))      # ten blocks over an hour ago
+    later = step21(later, ms(28, 20), "block", 300, 10, 3600, "2026-10-28")
+    assert later.blocks == (ms(28, 20),) and later.window_until_ms == ms(28, 20, 5)
+
+
+def test_v5_21_gemini_by_hand_ends_either_window_and_empties_the_count_and_backup_holds_until_it():
+    from agents.route import mode
+    from agents.route import step as step21
+    r = Route()
+    for i in range(11):
+        r = step21(r, ms(28, 20) + i * 60_000, "block", 300, 10, 3600, "2026-10-28")
+    assert mode(r, ms(28, 20, 30)) == "backup"
+    r = step21(r, ms(28, 20, 31), "pin:gemini", 300, 10, 3600, "2026-10-28")
+    assert mode(r, ms(28, 20, 31)) == "gemini" and r.blocks == () and r.pin == "auto"
+    r = step21(r, ms(28, 21), "pin:backup", 300, 10, 3600, "2026-10-28")
+    assert mode(r, ms(29, 9)) == "backup"                                   # no end of its own
+    held = step21(r, ms(28, 21, 1), "block", 300, 10, 3600, "2026-10-28")
+    assert held.blocks == () and held.window_until_ms is None              # by hand: neither counted nor windowed
+    assert mode(step21(held, ms(29, 9), "pin:gemini", 300, 10, 3600, "2026-10-29"), ms(29, 9)) == "gemini"
+
+
+def test_v5_21_the_mark_names_the_windows_end_or_by_hand_and_every_form_is_stripped():
+    from agents.route import BACKUP_MARK_RE, backup_mark
+    from agents.route import step as step21
+    r = step21(Route(), ms(28, 20, 36), "block", 300, 10, 3600, "2026-10-28")
+    assert backup_mark(r, ms(28, 20, 37), TZ) == "⚙️ backup до 20:41"
+    assert backup_mark(Route(pin="backup"), ms(28, 20), TZ) == "⚙️ backup · вручну"
+    assert backup_mark(Route(), ms(28, 20), TZ) == "⚙️ backup"
+    dst = int(datetime(2026, 10, 25, 3, 58, tzinfo=ZoneInfo(TZ)).timestamp() * 1000)  # Kyiv's clocks went back at 04:00
+    assert backup_mark(step21(Route(), dst, "block", 300, 10, 3600, "2026-10-25"), dst, TZ) == "⚙️ backup до 03:03"
+    for mark in ("⚙️ backup до 20:41", "⚙️ backup · вручну", "⚙️ backup"):
+        assert BACKUP_MARK_RE.sub("", f"{mark}\nПривіт") == "Привіт"
+    assert BACKUP_MARK_RE.sub("", "⚙️ backupний рядок\nПривіт") != "Привіт"
+
+
+def test_v5_21_the_status_names_the_mode_the_hours_blocks_and_never_a_text():
+    from agents.route import route_status
+    from agents.route import step as step21
+    r = step21(Route(), ms(28, 20), "block", 300, 10, 3600, "2026-10-28")
+    text = route_status(r, ms(28, 20, 1), TZ, 10, 7, {"gemini": 3, "backup": 1})
+    assert text.splitlines() == ["⚙️ Маршрут — backup до 20:05 (повернути зараз: /gemini)",
+                                 "Блоків за останню годину: 1 з 10 (більше — backup на годину)",
+                                 "Приватний чат: закритих рядків 7",
+                                 "Сьогодні відповіла: через gemini 3, через backup 1"]
+    assert route_status(Route(pin="backup"), ms(28, 20), TZ, 10, 0, {}).startswith(
+        "⚙️ Маршрут — backup вручну (повернути: /gemini)")
+    assert route_status(Route(), ms(28, 20), TZ, 10, 0, {}).startswith("⚙️ Маршрут — gemini\n")

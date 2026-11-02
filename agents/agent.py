@@ -519,6 +519,7 @@ class Agent:
         self.fallback: FallbackClient | None = None
         self.fallback_responder: FallbackResponder | None = None
         self.fallback_window_s, self.fallback_day_max = 300, 10
+        self.fallback_hour_max, self.fallback_lock_s = 10, 3600
         self.fallback_context, self.fallback_history_n = 32000, 60
         self.probe_calls, self.probe_day_calls = 0, 0  # v5.16: Gemini's check of a blocked prompt's parts
         if cfg.can("fallback"):
@@ -527,6 +528,8 @@ class Agent:
             self.probe_day_calls = int(os.environ.get("PROBE_DAY_CALLS", "60"))
             self.fallback_window_s = int(float(os.environ.get("FALLBACK_WINDOW_S", "300")))
             self.fallback_day_max = int(os.environ.get("FALLBACK_DAY_MAX", "10"))
+            self.fallback_hour_max = int(os.environ.get("FALLBACK_HOUR_MAX", "10"))  # v5.21: the hour's blocks
+            self.fallback_lock_s = int(os.environ.get("FALLBACK_LOCK_S", "3600"))    # v5.21: then the backup this long
             self.fallback_context = int(os.environ.get("FALLBACK_CONTEXT", "32000"))
             self.fallback_history_n = int(os.environ.get("FALLBACK_HISTORY_N", "60"))
             if model and fallback_token:

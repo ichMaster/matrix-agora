@@ -185,6 +185,11 @@ SCHEMA: tuple[Setting, ...] = (
        "s", 60, 3600),
     _s("FALLBACK_DAY_MAX", "int", "10", "fallback", "cap:fallback", None,
        "Скільки блоків на день, після чого резерв до кінця дня", "", 1, 100),
+    # v5.21 (the owner, 2026-11-02): more than this many blocks in the last 60 minutes — the backup for the next hour
+    _s("FALLBACK_HOUR_MAX", "int", "10", "fallback", "cap:fallback", None,
+       "Скільки блоків за годину, після чого резерв на годину", "", 1, 50),
+    _s("FALLBACK_LOCK_S", "int", "3600", "fallback", "cap:fallback", None, "Скільки резерв після частих блоків",
+       "s", 300, 14400),
     _s("FALLBACK_CONTEXT", "int", "32000", "fallback", "cap:fallback", None, "Бюджет промпту резерву", "tokens", 4000,
        36000),
     _s("FALLBACK_HISTORY_N", "int", "60", "fallback", "cap:fallback", None, "Скільки рядків історії бачить резерв",
