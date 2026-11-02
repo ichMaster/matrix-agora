@@ -510,3 +510,21 @@ def test_closed_facts_last_written_before_the_cut_are_deleted(tmp_path):
         os.utime(fact_path(folder, fid), (100, 100))
     assert empty_closed_facts(folder, 1000) == 1
     assert sorted(f.text for f in load_facts(folder)) == ["Новий закритий", "Старий відкритий"]
+
+
+def test_the_seeds_usage_sink_takes_the_calls_time_as_the_client_passes_it(tmp_path):
+    """Code review v5.22 #4: `GeminiClient._report` passes `latency_ms=` since v5.22; the seed's four-argument sink
+    raised TypeError, and every seed call's usage line was lost («usage accounting failed»)."""
+    import json as _json
+    from types import SimpleNamespace as NS
+
+    from agents.facts import seed_sink
+    usage = tmp_path / "kira.usage.jsonl"
+    sink = seed_sink(usage, "kira", "Europe/Kyiv", clock=lambda: 1_793_000_000_000)
+    meta = NS(prompt_token_count=1200, candidates_token_count=80, thoughts_token_count=None, total_token_count=1280,
+              cached_content_token_count=None)
+    sink("facts", "gemini-2.5-flash", meta, True, latency_ms=1234)                  # `_report`'s call, as it is
+    sink("facts", "gemini-2.5-flash", None, False, blocked="prompt", latency_ms=90)  # a block's
+    ok, blocked = [_json.loads(x) for x in usage.read_text(encoding="utf-8").splitlines()]
+    assert (ok["kind"], ok["agent"], ok["prompt_tokens"], ok["latency_ms"]) == ("facts", "kira", 1200, 1234)
+    assert (blocked["ok"], blocked["blocked"], blocked["latency_ms"]) == (False, "prompt", 90)

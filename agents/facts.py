@@ -385,6 +385,26 @@ async def run_seed(lines: list[tuple[str, str]], folder: Path, llm, name: str, t
     return kept
 
 
+def seed_sink(usage_file: Path, agent: str, tz: str, clock=None):
+    """The seed's usage sink: its calls are counted under the agent, like any other (code review v5.22 #4: with the
+    call's `latency_ms`, which `GeminiClient._report` passes since v5.22 — without it every line was lost)."""
+    import time
+
+    from agents.usage import usage_line
+    from agents.world import local_now
+    clock = clock or (lambda: int(time.time() * 1000))
+
+    def sink(kind, model, meta, ok, blocked=None, latency_ms=None):
+        line = usage_line(local_now(clock(), tz).isoformat(timespec="seconds"), agent, kind, model, meta, ok, blocked,
+                          latency_ms=latency_ms)
+        fd = os.open(usage_file, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        try:
+            os.write(fd, (json.dumps(line, ensure_ascii=False) + "\n").encode())
+        finally:
+            os.close(fd)
+    return sink
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m agents.facts")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -398,21 +418,11 @@ def main(argv: list[str] | None = None) -> int:
 
     from agents.archive import Archive
     from agents.llm import GeminiClient
-    from agents.usage import usage_line
     from agents.world import local_now
 
     tz = os.environ.get("TIMEZONE", "Europe/Kyiv")
     state = Path("state")
-    usage_file = state / f"{args.agent}.usage.jsonl"
-
-    def sink(kind, model, meta, ok, blocked=None):  # the seed's calls are counted under the agent, like any other
-        line = usage_line(local_now(int(time.time() * 1000), tz).isoformat(timespec="seconds"), args.agent, kind,
-                          model, meta, ok, blocked)
-        fd = os.open(usage_file, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-        try:
-            os.write(fd, (json.dumps(line, ensure_ascii=False) + "\n").encode())
-        finally:
-            os.close(fd)
+    sink = seed_sink(state / f"{args.agent}.usage.jsonl", args.agent, tz)
 
     archive = Archive(state / f"{args.agent}.archive.db")
     try:
