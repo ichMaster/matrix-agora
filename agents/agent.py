@@ -211,6 +211,7 @@ from agents.private import (
     private_nudge_due,
     rediscover,
     save_private_state,
+    silence_line,
 )
 from agents.reading import (
     PICK_MAX_TOKENS,
@@ -362,6 +363,13 @@ log = logging.getLogger("agent")
 # the answer call's usage line when that very prompt is sent; a context variable, as concurrent answers never share it
 _LAST_PARTS: ContextVar[tuple[str, dict] | None] = ContextVar("last_prompt_parts", default=None)
 PART_NAMES = {"private": "brief", "agora_now": "agora_today", "recalled": "recall"}  # a layer's name in the parts
+# v5.22 — why `_compose`'s last line in this task came to nothing (its `silent:` reason), for the owner's ⚙️ line
+LAST_SILENCE: ContextVar[str | None] = ContextVar("last_silence", default=None)
+
+
+def _silent(why: str) -> None:
+    log.info("silent: %s", why)
+    LAST_SILENCE.set(why)
 RECENT_THOUGHTS = 5  # v5.12: her last thoughts a reading or a reflection sees
 THOUGHTS_IN_MEMORY = 12  # v5.12: the most of a day's thoughts its memory request carries
 BACKFILL_PAGE = 100  # the homeserver's cap on one /messages page
@@ -1054,6 +1062,9 @@ class Agent:
         self._offer_photo = self._photo_open(door)  # v5.17: her photo skill, for Gemini's prompt only
         self._offer_video = self._video_kinds(door)  # v5.18: the videos she may send now, for Gemini's prompt only
         kind = "private_nudge" if nudge else "private"
+        LAST_BLOCK.set(None)
+        LAST_SILENCE.set(None)
+        by = None
         try:
             if door == "matrix":
                 await self.client.room_typing(room, True)
@@ -1119,6 +1130,9 @@ class Agent:
                         if again is not None:
                             text = again
             if text is None:
+                if not nudge and door == "telegram":  # v5.22: never a bare silence to him
+                    await self._say_silence(silence_line(self.cfg.name, LAST_BLOCK.get(), LAST_SILENCE.get(), by,
+                                                         self.backup_open()))
                 return False
             sent_id = None
             # v5.15: the owner sees which network wrote it; v5.21: and until when the backup answers
@@ -1161,11 +1175,26 @@ class Agent:
             log.info("private: %s%s%s", "wrote first" if nudge else "answered", " (telegram)" if door == "telegram" else "",
                      " by the backup" if by == "backup" else "")
             return True
+        except Exception as exc:
+            if not nudge and door == "telegram":  # v5.22: a failed answer is said too, then logged by the caller
+                await self._say_silence(f"⚙️ {self.cfg.name} пропустила відповідь: помилка ({type(exc).__name__})")
+            raise
         finally:
             if action is not None:
                 action.cancel()
             if door == "matrix":
                 await self.client.room_typing(room, False)
+
+    async def _say_silence(self, line: str) -> None:
+        """v5.22 (the owner, 2026-11-02: «я не хочу щоб було просто тиша у відповідь … бо не зрозуміло чи вона взагалі
+        працює») — her answer to him in Telegram came to nothing: one ⚙️ line why (`silence_line`), sent as text,
+        never voiced; never in her history, the archive or a prompt; a failed send is only logged."""
+        log.info("private: the silence said to him")
+        try:
+            if not await self.telegram.send_message(self.telegram_owner, line):
+                log.warning("telegram: the silence line was not delivered")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("telegram: the silence line was not delivered (%s)", type(exc).__name__)
 
     # --- v5.14: the route of her private answer — Gemini, or the backup's window after a block --------------------------
     @property
@@ -3540,7 +3569,7 @@ class Agent:
                 else:
                     self.remember(fact, "asked")
             if not text:
-                log.info("silent: only a line to remember")
+                _silent("only a line to remember")
                 return None
         if shots is not None or backup:  # v5.17: only her private answers — Agora's lines are never cut (review #1)
             text, shot = split_photo(text)  # a photo's line is never sent — Gemini's private answer keeps its shot
@@ -3550,28 +3579,28 @@ class Agent:
                 else:
                     log.info("photo: dropped (backup)")
             if not text:
-                log.info("silent: only a photo's line")
+                _silent("only a photo's line")
                 return None
         if reply.finish == "max_tokens":  # the cap cut it: never send half a sentence
             text = trim_to_sentence(text)
             if text is None:
-                log.info("silent: cut mid-sentence")
+                _silent("cut mid-sentence")
                 return None
         others = [n for n in {*self.names.values()} if n != self.cfg.name]
         text = clean_reply(text, self.cfg.name, others)
         if text is None:
-            log.info("silent: the reply spoke only for others")
+            _silent("the reply spoke only for others")
             return None
         text = strip_pass(text)  # PASS alone → silence; text + PASS → the text only
         if text is None:
-            log.info("silent: model passed")
+            _silent("model passed")
             return None
         if self.cfg.type == "creature":  # v4.2: a small vocabulary, enforced
             text = cap_words(text, max_words or self.cat_max_words)
         if self.cfg.can("emotion"):  # v5.9: her words for every text, the tags only for her voice
             words, speech = split_tags(text)
             if not re.search(r"\w", words):  # review #2: `[laughs] … [laughs harder] …` leaves «……», not words
-                log.info("silent: only voice tags")
+                _silent("only voice tags")
                 return None
             return Spoken(words, speech_for(getattr(self.tts, "model", None) or TTS_MODEL, words, speech))
         return text

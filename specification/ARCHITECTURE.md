@@ -135,7 +135,15 @@ The invariants every reply path must honor:
    (`emptying_due`; the day kept in `state/<name>.emptied.json`), empties every closed line older than 24 hours the
    same way, deletes every closed fact last written before that (`empty_closed_facts`), and drops them from her
    history — counts only in the log (pinned by `tests/test_archive.py`, `tests/test_facts.py`);
-   her usage lines and logs (no text) stay, as do Telegram's own copy of the chat and the Element room. The answer is one ⚙️ service line,
+   her usage lines and logs (no text) stay, as do Telegram's own copy of the chat and the Element room. **Never a bare
+   silence (v5.22, the owner, 2026-11-02: «я не хочу щоб було просто тиша у відповідь, тоді пиши що вона пропустила і
+   вирішила мовчати, бо не зрозуміло чи вона взагалі працює»; pinned by `tests/test_silence.py`):** when her answer to
+   his Telegram message comes to nothing, he gets one ⚙️ line why (`agents/private.py` `silence_line`) — «⚙️ Кіра
+   пропустила відповідь: …» with Gemini's block (its stage, reason and category, and «backup вимкнено» or «backup не
+   відповів»), `_compose`'s silent reason (`LAST_SILENCE`: PASS, only a line to remember or a photo's, cut
+   mid-sentence, only voice tags), the backup or Gemini that returned nothing, or an error by its type; writing first
+   stays silent; the line, like a command's answer, is text only and never reaches her history, the archive or a
+   prompt. The answer is one ⚙️ service line,
    text only, never voiced; a command and its answer never reach her history, the archive, the facts, the session or
    a prompt, and never reset her writing-first timer; logged by the command's name only. A command from before the
    start stays `ignored: command`. With `fallback` the list is registered at start for his chat only (`setMyCommands`,

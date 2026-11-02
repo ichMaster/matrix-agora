@@ -57,6 +57,36 @@ PRIVATE_NOT_HEARD = "Ой, не розчула. Скажеш ще раз або 
 PRIVATE_CANT_LISTEN = "Зараз не можу послухати голосове — напишеш мені?"
 
 
+# v5.22 (the owner, 2026-11-02: «я не хочу щоб було просто тиша у відповідь, тоді пиши що вона пропустила і вирішила
+# мовчати») — why her answer to him came to nothing, by `_compose`'s silent reason
+SILENCE_WHY = {
+    "model passed": "вирішила мовчати (PASS)",
+    "only a line to remember": "у відповіді був лише рядок «запам'ятай»",
+    "only a photo's line": "у відповіді був лише рядок фото",
+    "cut mid-sentence": "відповідь обірвалась посеред речення",
+    "the reply spoke only for others": "відповідь була від імені інших",
+    "only voice tags": "у відповіді були лише теги голосу",
+}
+
+
+def silence_line(name: str, block: tuple | None, why: str | None, by: str | None, backup_on: bool) -> str:
+    """v5.22 — the owner's ⚙️ line when her answer to him came to nothing: Gemini's block (its stage, reason and
+    category), a silent reason of `_compose`, the backup that gave nothing, an error, or Gemini that returned nothing.
+    A service line: never in her history, the archive or a prompt; no text of theirs in it."""
+    if block is not None:
+        what = "блок gemini (" + " ".join(str(x) for x in block if x) + ")"
+        what += ", backup не відповів" if by == "backup" else "" if backup_on else ", backup вимкнено"
+    elif why in SILENCE_WHY:
+        what = SILENCE_WHY[why]
+    elif why:
+        what = why
+    elif by == "backup":
+        what = "backup не відповів"
+    else:
+        what = "gemini нічого не повернув"
+    return f"⚙️ {name} пропустила відповідь: {what}"
+
+
 def pick_door(wanted: str, matrix_open: bool, telegram_open: bool) -> str | None:
     """v5.7 — the channel a private line goes to: the wanted one when it is open, else the other open one, else
     none (the owner never opened the Element chat, or Telegram is off)."""
