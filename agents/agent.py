@@ -309,6 +309,7 @@ from agents.usage import (
     parse_lines,
     sdk_usage_line,
     stt_usage_line,
+    trace_line,
     tts_usage_line,
     usage_line,
     video_note_usage_line,
@@ -741,6 +742,8 @@ class Agent:
                     self.stt = DeepgramSTT(stt_key)
                 else:
                     log.warning("telegram: hearing off (no DEEPGRAM_API_KEY)")
+        # v5.22 (the owner, 2026-11-02) — every network call's result as a ⚙️ line to him in Telegram, for diagnosis
+        self.trace_calls = self.telegram_open and os.environ.get("TRACE_CALLS", "off").strip() == "on"
         self.heralds = [m.localpart for m in self.roster.values() if m.type == "herald"]
         self.member_ids = frozenset(m.user_id for m in self.roster.values())
         self._transcript_voice: dict[str, str] = {}  # a transcript's event id → the owner's voice it answers (RAM)
@@ -2585,7 +2588,25 @@ class Agent:
                                                      latency_ms, parts))
 
     def _append_usage(self, build) -> None:
-        self._append_jsonl(self.usage_file, build, "usage")
+        if not self.trace_calls:
+            self._append_jsonl(self.usage_file, build, "usage")
+            return
+        made: list[dict] = []
+        self._append_jsonl(self.usage_file, lambda ts: made.append(build(ts)) or made[-1], "usage")
+        if made:
+            self._trace(made[0])
+
+    def _trace(self, record: dict) -> None:
+        """v5.22 (the owner, 2026-11-02: «виключи бекап і включи щоб показувало все що приходить з джемені і інших
+        мереж») — under `TRACE_CALLS` each usage record goes to him at once as one ⚙️ line (`trace_line`: the model,
+        the kind, ok or the block with its reason, the tokens and the time); never a text, never in her history, the
+        archive or a prompt, and a send that fails is only the trace's."""
+        block = LAST_BLOCK.get() if record.get("blocked") else None
+        send = self.telegram.send_message(self.telegram_owner, trace_line(record, block))
+        try:
+            self._spawn(send)
+        except RuntimeError:  # no running loop: the record stays in the usage file only
+            send.close()
 
     @property
     def answers_file(self) -> Path:

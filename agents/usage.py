@@ -92,6 +92,30 @@ def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: b
     }
 
 
+def trace_line(rec: dict, block: tuple | None = None) -> str:
+    """v5.22 (the owner, 2026-11-02: «щоб показувало все що приходить з джемені і інших мереж») — one usage record as
+    the owner's ⚙️ line in Telegram (`TRACE_CALLS`): the model, the kind, what came back (ok, a failure, or a block with
+    its stage, reason and category — `block`, when it is this record's), the tokens, characters or seconds, and the
+    call's time. Never a text."""
+    if rec.get("blocked"):
+        named = block if block and block[0] == rec["blocked"] else (rec["blocked"],)
+        outcome = "БЛОК " + " ".join(str(x) for x in named if x)
+    else:
+        outcome = "ok" if rec.get("ok") else "помилка"
+    parts = [f"⚙️ {rec.get('model') or rec.get('engine') or '?'}", str(rec.get("kind") or "?"), outcome]
+    for name, label in (("prompt_tokens", "in"), ("output_tokens", "out")):
+        if isinstance(rec.get(name), int):
+            parts.append(f"{label} {rec[name]:,}".replace(",", " "))
+    if isinstance(rec.get("characters"), int):
+        parts.append(f"{rec['characters']} симв.")
+    for name, label in (("audio_ms", "аудіо"), ("video_ms", "відео")):
+        if isinstance(rec.get(name), int):
+            parts.append(f"{label} {rec[name] / 1000:.1f} с")
+    if isinstance(rec.get("latency_ms"), int):
+        parts.append(f"{rec['latency_ms'] / 1000:.1f} с")
+    return " · ".join(parts)
+
+
 def tts_usage_line(ts_iso: str, agent: str, model: str, characters: int, ok: bool,
                    latency_ms: int | None = None) -> dict:
     """v5.1 — one record per text-to-speech call (ElevenLabs): counted in characters, paid from the plan's credits

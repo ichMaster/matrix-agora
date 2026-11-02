@@ -202,6 +202,8 @@ SCHEMA: tuple[Setting, ...] = (
        "", 0, 200),
     # v5.22 (the owner, 2026-11-02: «Кіра висилає фото з кожним меседжем … ліпше кількість на 30 хв, тоді вона може
     # висилати нерівномірно»): at most this many photos in any window of that length (0: no such cap)
+    _s("TRACE_CALLS", "choice", "off", "private", "cap:telegram", None,
+       "Показувати в Telegram кожен виклик мереж (діагностика)", choices=("off", "on")),
     _s("PHOTO_WINDOW_MAX", "int", "3", "private", "cap:photos", None, "Скільки фото щонайбільше за вікно (0 — без ліміту)",
        "", 0, 100),
     _s("PHOTO_WINDOW_S", "int", "1800", "private", "cap:photos", None, "Вікно для ліміту фото", "s", 60, 86400),

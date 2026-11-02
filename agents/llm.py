@@ -103,9 +103,10 @@ class GeminiClient:
         """v5.13 — an empty answer: a block is reported with its stage and logged by stage, reason and category (never
         a text); anything else logs `line` as before."""
         block = blocked_reason(resp)
+        if block:  # v5.22: set before the report, so the owner's trace line (`TRACE_CALLS`) can name its reason
+            LAST_BLOCK.set(block)
         self._report(kind, usage, False, model, block)
         if block:
-            LAST_BLOCK.set(block)
             log.warning(BLOCK_LOG, *block, kind, model)
         else:
             log.error(line, finish_of(resp))
