@@ -518,16 +518,21 @@ def test_the_prompt_tab_loads_when_opened_and_shows_the_outcome_and_both_texts_e
     assert 'block("Transcript", "transcript", P.transcript)' in js and 'if (tab === "prompt") return promptTabHtml(a);' in js
 
 
-def test_the_prompt_boxes_grow_with_their_text_and_each_copies():
-    """The owner, 2026-11-02: the Prompt tab's boxes as tall as their text, and a copy button each — on plain http,
+def test_the_prompt_boxes_share_the_drawer_each_scrolling_on_its_own_and_each_copies():
+    """The owner, 2026-11-02 («один скрол на кожен текст бокс, а не загальний»): the Prompt tab fills the drawer's
+    height and its two boxes share it, each with its own scroll; a caret folds one; a copy button each — on plain http,
     where a page gets no Clipboard API, the old way."""
     js, css = js_text(), (STATIC_DIR / "panel.css").read_text(encoding="utf-8")
-    assert '<pre class="mono prompt-box">' in js and "max-height:480px" not in js
-    box = css[css.index(".prompt-box {"):].split("}")[0]
-    assert "max-height" not in box and "overflow:" not in box and "white-space: pre-wrap" in box
+    assert '<div class="prompt-tab">' in js and '<pre class="mono prompt-box">' in js and "max-height:480px" not in js
+    rule = lambda sel: css[css.index(sel + " {"):].split("}")[0]
+    assert "height: 100%" in rule(".prompt-tab") and "flex: 1 1 0" in rule(".prompt-part")
+    assert "overflow: auto" in rule(".prompt-box") and "flex: 1 1 0" in rule(".prompt-box")
+    assert "max-height: calc(50vh - 60px)" in rule(".prompt-box")    # each under half the page (the owner)
+    assert "flex: none" in rule(".prompt-part.folded")
     assert 'data-act="prompt-copy" data-id="${part}">Copy</button>' in js and 'data-id="all">Copy all</button>' in js
-    assert 'else if (act === "prompt-copy") copyPrompt(id);' in js
+    assert 'else if (act === "prompt-copy") copyPrompt(id);' in js and 'data-act="prompt-fold" data-id="${part}"' in js
     assert "if (window.isSecureContext && navigator.clipboard)" in js and 'document.execCommand("copy")' in js
+    assert "prompt-jump" not in js
 
 
 def test_the_drawer_widens_to_what_overflows_it_and_never_past_the_window():

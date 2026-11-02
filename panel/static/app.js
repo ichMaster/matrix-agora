@@ -1490,15 +1490,20 @@ function promptTabHtml(a) {
   if (!P.system) return `<p class="muted">No prompt yet — ${esc(a.display)}'s next private answer to Gemini is kept here.</p>`;
   const words = (t) => (t || "").split(/\s+/).filter(Boolean).length;
   const outcome = P.outcome === "blocked" && P.block ? `Blocked · ${P.block.slice(0, 2).filter(Boolean).join(" · ")}` : P.outcome === "answered" ? "Answered" : "No answer";
-  // the owner, 2026-11-02: each box as tall as its text (the drawer scrolls, never the box), and a copy button each
-  const block = (title, part, text) => `<div style="display:flex;align-items:center;gap:8px;margin:14px 0 6px">
+  // the owner, 2026-11-02 («один скрол на кожен текст бокс»): the two boxes share the drawer's height, each scrolling on
+  // its own; a caret folds one, and the other takes the whole height; a copy button each
+  const block = (title, part, text) => {
+    const folded = Boolean(S.promptFold?.[part]);
+    return `<div class="prompt-part${folded ? " folded" : ""}"><div class="prompt-head">
+      <button class="an-caret" data-act="prompt-fold" data-id="${part}" aria-expanded="${!folded}" aria-label="${folded ? "Show" : "Hide"} ${esc(title)}">${icon(folded ? "caret-right" : "caret-down", 12)}</button>
       <div class="section-label">${esc(title)} · ${words(text)} words</div>
       <button class="btn btn-ghost" style="margin-left:auto" data-act="prompt-copy" data-id="${part}">Copy</button></div>
-    <pre class="mono prompt-box">${esc(text || "")}</pre>`;
-  return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    ${folded ? "" : `<pre class="mono prompt-box">${esc(text || "")}</pre>`}</div>`;
+  };
+  return `<div class="prompt-tab"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex:none">
       <span class="kind-tag">${esc(outcome)}</span><span class="muted" style="font-size:12.5px">${esc(new Date(P.at).toLocaleString("en-GB"))} · ${esc(P.model || "")}</span>
       <span style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-ghost" data-act="prompt-copy" data-id="all">Copy all</button>
-      <button class="btn btn-ghost" data-act="prompt-reload">Reload</button></span></div>${block("System instruction", "system", P.system)}${block("Transcript", "transcript", P.transcript)}`;
+      <button class="btn btn-ghost" data-act="prompt-reload">Reload</button></span></div>${block("System instruction", "system", P.system)}${block("Transcript", "transcript", P.transcript)}</div>`;
 }
 // the panel is plain http on the LAN, where a page gets no Clipboard API: the old way (a hidden field, «copy») then
 async function copyText(text) {
@@ -1715,6 +1720,7 @@ document.addEventListener("click", (e) => {
   else if (act === "close") { S.drawer = null; S.settings = null; render(); }
   else if (act === "prompt-reload") loadPrompt(S.drawer.id);
   else if (act === "prompt-copy") copyPrompt(id);
+  else if (act === "prompt-fold") { S.promptFold = {...S.promptFold, [id]: !S.promptFold?.[id]}; render(); }
   else if (act === "tab") { S.drawer.tab = id; S.log = {lines: [], available: true, follow: true, seen: 0}; render(); if (id === "log") loadLog(); if (id === "files") loadFiles(S.drawer.id); if (id === "prompt") loadPrompt(S.drawer.id); if (id === "settings") openAgentSettings(S.drawer.id); }
   else if (act === "file-open") openFile(S.drawer.id, id);
   else if (act === "file-close") { S.files.open = null; render(); }
