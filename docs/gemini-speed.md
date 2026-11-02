@@ -148,6 +148,22 @@ Notes on the table:
 
 **The canon is a small part of her prompt.** It is about 3,000 of her 42,000 tokens. The rest is the dynamic sections and Gemini's history window. So caching the static start of her prompt (the canon) would save no time that can be measured, and little on the price.
 
+### 3.8 Flash at higher thinking levels
+
+**Question (the owner):** does 3.8 Flash think at all? At `low` it never had a thinking token in 15 calls.
+
+**Method.** The canon alone again, 3 calls at each level with 1, 3 and 5 made-up lines. The thoughts were requested (`include_thoughts`), so a thought would show as a part of the answer even if no count came back. Only the parts were counted; no text was read.
+
+| Level | Time per call (s) | Thinking tokens | Thought parts | Output tokens |
+|---|---|---|---|---|
+| `low` | 2.4 · 3.2 · 2.4 | 0 | 0 | 37–52 |
+| `medium` | 11.6 · 9.4 · 13.0 | 679–891 | 1 in each call | 26–49 |
+| `high` | 13.9 · 16.1 · 16.3 | 853–1,261 | 1 in each call | 30–52 |
+
+**At `low` it does not think at all.** There was no thinking token and no thought part.
+
+**At `medium` and `high` it does think, and it gets slow.** It thought for 680–1,260 tokens per answer and took 9–16 s. That is as slow as 3.1 Pro at `low`, which took 10–13 s for 880–1,170 thinking tokens on the same prompt. So with thinking on, 3.8 Flash is no faster than 3.1 Pro. It is fast at `low` only because it does not think there.
+
 ## Open questions before a switch
 
 - **Quality.** Her language and character on a Flash model compared with 3.1 Pro. The owner judges this in a real conversation.
