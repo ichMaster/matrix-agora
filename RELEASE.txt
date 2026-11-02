@@ -1,3 +1,25 @@
+Version 5.21.0 (2026-11-02)
+---------------------------
+- Phase v5.21 (AGORA-177..182): blocked for good, no judge and no probe -
+  one closed mark `blocked` for whatever a Gemini block touches and
+  everything the backup says or answers, migrated from the older closed
+  marks; the backup 5 minutes after a block and an hour after more than 10
+  blocks in an hour, /gemini (it also empties the hour's count) and
+  /backup, /auto removed, her backup line marked «⚙️ backup до HH:MM»; the
+  backup's prompt holds 300 lines of every mark, the open facts and the
+  open recall by words, and the backup never keeps a fact; every day at
+  05:00 a blocked line or fact older than 24 h loses its text, /purge
+  empties every closed line, the night re-check removed
+- Her photo and video notes keep no description (`[селфі: ...]`): the
+  descriptions of her selfies in her history made Gemini block her whole
+  private prompt
+- Image retention and a free-space check in server/deploy.sh after old
+  images filled the host's disk
+- Code review v5.21: a photo line that names nothing is a photo that did
+  not come out (#1); a save drops a setting the code no longer knows (#2);
+  #3-#6 LOW deferred
+- The owner's manual checks confirmed on 2026-11-02
+
 Version 5.20.0 (2026-11-02)
 ---------------------------
 - Phase v5.20 (AGORA-171..176): Кіра's layered memory of the private chat -
