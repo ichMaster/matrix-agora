@@ -22,7 +22,8 @@ are left in the v5 review docs, as backlog. The same day the owner opened two mo
   memory fixes of 2026-11-01/02;
 - v5.20, released as `v5.20.0`: Кіра's layered memory of the private chat, by the hour, by four hours and by the
   week;
-- v5.21, blocked for good: the backup without the judge, its talk gone after a day (planned).
+- v5.21, released as `v5.21.0`: blocked for good, the backup without the judge, its talk gone after a day;
+- v5.22, analytics: the answer time, the prompts' length, the photos and videos (planned).
 
 Then come v6–v9 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
@@ -69,7 +70,8 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.18 | Кіра's videos in Telegram: a кружечок in her voice and short clips | ✅ completed | `v5.18.0` (2026-11-01) |
 | v5.19 | Analytics: the spending by agent and by service, over a chosen period | ✅ completed | `v5.19.0` (2026-11-02) |
 | v5.20 | Кіра's layered memory of the private chat: by the hour, by four hours, by the week | ✅ completed | `v5.20.0` (2026-11-02) |
-| v5.21 | Blocked for good: the backup without the judge, its talk gone after a day | ⏳ planned | — |
+| v5.21 | Blocked for good: the backup without the judge, its talk gone after a day | ✅ completed | `v5.21.0` (2026-11-02) |
+| v5.22 | Analytics: the answer time, the prompts' length, the photos and videos | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
 | v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -2828,7 +2830,9 @@ Gemini's history (4bbb4e4) and a capped probe that closes only what it proved (e
 
 ### v5.21 — Blocked for good: the backup without the judge, its talk gone after a day
 
-**Status:** ⏳ planned (the owner, 2026-11-02).
+**Status:** ✅ completed — `v5.21.0` (2026-11-02); the owner's checks confirmed on 2026-11-02. With it shipped the
+same day's fixes (her photo and video notes without a description, image retention in `server/deploy.sh`) and the
+review's (`v5.21-code-review.md`).
 
 **Goal:** one closed mark, `blocked`, for good. Whatever a Gemini block touches, and everything the backup says or
 answers, is `blocked`: the backup reads it as its history, and nothing else ever reads it; after a day it is deleted.
@@ -2986,6 +2990,101 @@ midnight.
 - any summary of the `blocked` talk;
 - the judge in any form;
 - reopening anything.
+
+### v5.22 — Analytics: the answer time, the prompts' length, the photos and videos
+
+**Status:** ⏳ planned (the owner, 2026-11-02).
+
+**Goal:** in **Analytics** the owner sees how fast every service answers and how fast each agent answers him, how long
+the prompts are, and how many photos and videos were made — each over the chosen period, by day (by hour for one
+day), by service and by agent, beside the previous period.
+
+**Why** (2026-11-02): v5.19's analytics shows what was spent. It cannot say how long a call took — no usage line holds
+its time — nor how long he waits for an answer, how the prompts grow, or how many photos and videos Кіра makes.
+
+**Owner decisions** (2026-11-02):
+- **the answer time, both:** each call of each service, and the whole time from his message to the agent's answer in
+  the chat;
+- **the prompt's length in tokens only**, where the service reports them (Gemini, Claude); the backup on NovelAI
+  reports none and is left out;
+- **photos and videos as two numbers:** photos (her selfies with them) and videos (her кружечки with them) — in all,
+  a day, and on average an hour;
+- the dynamics by period, by service and by agent;
+- phase v5.22, after v5.21's release.
+
+**What the data holds now:** a usage line has the tokens, characters, audio and video seconds, `ok` and `blocked`,
+but no time; an answer leaves no record at all. A video's first frame is made by the image model as a `photo` line,
+so the photo lines also count the frames.
+
+**Proposed** (confirmed when the issues are generated):
+- **The call's time:** every usage line gains `latency_ms` (usage line v7): the call's wall time on a monotonic clock,
+  from the request to the last byte (a stream's end; for fal's кружечок, from the submit to the result), for a failed
+  or blocked call too; null on an older line. Every client measures its own: Gemini (answers, probes, embeddings,
+  the image model, Omni), NovelAI, Claude, ElevenLabs, Deepgram, fal. No text, as ever.
+- **The answer's time:** each answer an agent sends — an Agora line, a private answer in Matrix or Telegram — adds a
+  line to `state/<name>.answers.jsonl` (0600; no text): when it went, the place and the door, what it answered (the
+  owner's message, another agent's line, or none when she writes first), `wait_ms` from that message's own time (the
+  Matrix event's server time, Telegram's message date) to her line sent, the deliberate pause in it (`delay_ms`,
+  v1.2's and the private chat's «answering (in N s)»), who wrote it (`gemini`, `backup`, `claude`), and its parts
+  (voice, photo). A кружечок sent later is the `video_note` call's own time, not the answer's.
+- **The frame's own kind:** the image call for a video's first frame is the kind `frame` (with `photo`, `video`,
+  `video_note`), so the photos are what she sent; an older line stays `photo`.
+- **The analysis**, pure, in `agents/usage.py` beside `analyze` (or inside it), the days given:
+  - **calls' time** by service and model and by kind: calls timed, the median, p95, max and mean; by day (by hour for
+    a one-day period); the previous period's median for the change;
+  - **answers' time** by agent, by place and door, by who wrote it, for his messages and for the agents' lines apart:
+    the median, p95 and max of `wait_ms`, and of `wait_ms − delay_ms`; by day (by hour for one day);
+  - **the prompts:** the mean and the max prompt tokens a call by service, model, kind and agent; by day;
+  - **photos and videos:** the ok `photo` and `video` + `video_note` calls — in all, a day, by hour for one day, and
+    on average an hour (the count over the period's hours, today's up to now).
+- **The route:** `GET /api/analytics` adds `speed`, `answers`, `prompts` and `media` to its response (the same
+  parameters; Bearer; the shape pinned). The answers files are read with the usage files.
+- **The view:** Analytics gets a switch at the top — **Cost · Speed · Prompts · Media**; Cost is v5.19's page as it is.
+  - **Speed:** tiles (the median and p95 of his wait for an answer, the slowest service's p95); a table of services
+    and models with the median, p95, max and its change, a sparkline each; lines a day (an hour for one day) of each
+    service's median; the agents' answer times by place and door, and Кіра's by Gemini and the backup.
+  - **Prompts:** the mean prompt a call by service and kind, with its change; lines a day; the agents' means.
+  - **Media:** tiles (photos, videos, an hour on average, their cost); bars a day (an hour for one day) of photos and
+    videos.
+  - The same charts' rules as v5.19's (inline SVG, the handoff's colours in both themes, a native tooltip on each
+    mark); the choice kept in the address.
+  - **Download CSV** adds `latency_ms`'s median and p95 to the rows.
+- **The CLI:** `usage_report.py --by service|model|kind|day|agent` adds the median and p95 call time and the mean
+  prompt tokens.
+- **ARCHITECTURE:**
+  - §Token accounting: usage line v7, the kind `frame`, the answers' file and the analysis;
+  - §The panel: the switch and the three views;
+  - §Contracts: `state/<name>.answers.jsonl`, the usage line's `latency_ms`, the route's response, pinned by tests.
+
+**Owner steps:** the deploy; the live checks once a day of data is in (nothing before the deploy has a time).
+
+**DoD:**
+- (Manual, owner) In Analytics → Speed, for «Today» and «7 days», he sees each service's median and p95 call time
+  (Gemini, NovelAI, Claude, ElevenLabs, Deepgram, fal), by day and, for today, by hour; and Кіра's answer time in
+  Telegram, by Gemini and the backup, with the deliberate pause apart.
+- (Manual, owner) In Prompts he sees the mean prompt a call by service and kind, and its change.
+- (Manual, owner) In Media he sees today's photos and videos, on average an hour, by hour; the frames are not counted
+  as photos.
+
+**Tests:**
+- **The time:** each client writes `latency_ms` from an injected monotonic clock, on a failed and a blocked call too;
+  an older line without it is read as null.
+- **The answers' file:** a line per answer (Agora and private, Matrix and Telegram, Gemini and the backup), its
+  `wait_ms` and `delay_ms` from injected clocks, writing first has no answered message, 0600, no text.
+- **The frame:** a video's frame is a `frame` line, her photo a `photo` line.
+- **The analysis:** the median, p95 and max on made-up lines; nulls skipped; by day and by hour; the previous period;
+  photos and videos and the hourly average (today up to now); the prompts' mean by service and kind; no data.
+- **The route:** the new blocks' shape pinned; 401, 400 and 404 as before.
+- **The page:** the switch, the three views' builders (pure functions), the CSV's new columns.
+- **The CLI:** the new columns over a made-up file.
+- **Never:** no text in a line, a response, a CSV or a log.
+
+**Not in this phase:**
+- alerts or limits on a slow service;
+- the time of anything before the deploy;
+- NovelAI's prompt length;
+- a trace of one answer's calls;
+- a chart library.
 
 ## v6 — Лілі: the Lumi bridge
 
