@@ -537,7 +537,7 @@ class Agent:
         self._pending_shot: Shot | None = None
         if cfg.can("photos"):
             self.photo_day_max = int(os.environ.get("PHOTO_DAY_MAX", "40"))
-            self.photo_gap_s = int(os.environ.get("PHOTO_GAP_S", "600"))  # v5.22: the pause between her photos
+            self.photo_gap_s = int(os.environ.get("PHOTO_GAP_S", "1800"))  # v5.22: the pause between her photos
             faces = load_faces(Path("agents/canon") / f"{cfg.localpart}.face")
             if isinstance(self.llm, GeminiClient):
                 self.photos = photo_maker(os.environ.get("PHOTO_MODEL", "gemini-nano-banana-2.1").strip() or PHOTO_MODEL,
@@ -552,12 +552,14 @@ class Agent:
         self.notes: NoteMaker | None = None
         self.clips: ClipMaker | None = None
         self.video_day_max, self.video_note_max_s, self.video_note_lead_ms = 0, 30, NOTE_LEAD_MS
+        self.video_gap_s = 0  # v5.22: the pause between her videos
         self._offer_video: tuple[str, ...] = ()
         self._video_busy = False
         self.voice_held: bytes | None = None
         self.voice_hold_miss: str | None = None
         if cfg.can("videos"):
             self.video_day_max = int(os.environ.get("VIDEO_DAY_MAX", "40"))
+            self.video_gap_s = int(os.environ.get("VIDEO_GAP_S", "7200"))
             self.video_note_max_s = int(os.environ.get("VIDEO_NOTE_MAX_S", "30"))
             self.video_note_lead_ms = int(os.environ.get("VIDEO_NOTE_LEAD_MS", "1000"))  # Telegram cuts her first sound
             if isinstance(self.llm, GeminiClient):
@@ -1863,11 +1865,12 @@ class Agent:
         except OSError:
             return 0
 
-    def last_photo_ms(self) -> int | None:
-        """v5.22 — when her last photo was kept: the latest `HHMMSS` of today's folder, on her clock (None: none)."""
+    def last_photo_ms(self, kind: str = "photos") -> int | None:
+        """v5.22 — when her last photo (or, `videos`, video) was kept: the latest `HHMMSS` of today's folder, on her
+        clock (None: none)."""
         day = local_now(self.clock(), self.tz)
         try:
-            names = [p.stem for p in (self._dir("photos") / day.date().isoformat()).iterdir() if p.is_file()]
+            names = [p.stem for p in (self._dir(kind) / day.date().isoformat()).iterdir() if p.is_file()]
         except OSError:
             return None
         stamps = [n for n in names if len(n) == 6 and n.isdigit()]
@@ -1921,6 +1924,9 @@ class Agent:
             return "off"
         if self.videos_today() >= self.video_day_max:
             return "cap"
+        last = self.last_photo_ms("videos") if self.video_gap_s > 0 else None  # v5.22: the pause after her last
+        if last is not None and self.clock() - last < self.video_gap_s * 1000:
+            return "pause"
         return "busy" if self._video_busy else None
 
     def _video_kinds(self, door: str | None) -> tuple[str, ...]:
