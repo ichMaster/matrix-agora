@@ -180,6 +180,22 @@ Notes on the table:
 
 **At `high` it thinks, and it is the slowest of all.** It thought for 790–1,030 tokens and took 16–19 s. 3.8 Flash at `high` and 3.1 Pro at `low` think about as much and take 14–16 s and 10–13 s on the same prompt. So Argon is fast only when it does not think.
 
+### 3.1 Pro at higher thinking levels
+
+**Question (the owner):** what happens to 3.1 Pro, her model now, if its thinking is raised?
+
+**Method.** The same as for 3.8 Flash and Argon above: the canon alone, 3 calls per level, thoughts requested, only the parts counted.
+
+| Level | Time per call (s) | Thinking tokens | Thought parts | Output tokens |
+|---|---|---|---|---|
+| `low` (now) | 12.3 · 13.3 · 17.7 | 899–1,322 | 1 in each call | 34–43 |
+| `medium` | 11.5 · 14.8 · 19.5 | 699–1,722 | 1 in each call | 32–69 |
+| `high` | 15.2 · 14.6 · 16.0 | 1,094–1,126 | 1 in each call | 46–61 |
+
+**The level hardly changes anything here.** 3.1 Pro thinks at every level, for 700–1,700 tokens. Each level's range overlaps the others, and so do the times: 11–20 s. On a short exchange like this one, the model seems to decide for itself how much to think, and the level does not push it far either way.
+
+**`low` was slower in this run than in the canon-alone run above** (12–18 s against 10–13 s). Here the thoughts were requested (`include_thoughts`), and there they were not. Asking for them may cost some time, or the difference may only be the spread between runs.
+
 ## Open questions before a switch
 
 - **Quality.** Her language and character on a Flash model compared with 3.1 Pro. The owner judges this in a real conversation.
