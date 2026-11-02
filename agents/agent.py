@@ -627,6 +627,7 @@ class Agent:
         self.voice_sent, self._private_delay_ms = False, 0  # v5.22: an answer's parts and pause
         self.last_activity_ms: int | None = None
         self.last_attempt_ms: int | None = None
+        self._summary_pro_blocked: int | None = None  # code review v5.22 #2: the session's length Pro blocked
         self._summary_lock = asyncio.Lock()
         self.location = os.environ.get("LOCATION", "Львів, Україна")
         self.tz = os.environ.get("TIMEZONE", "Europe/Kyiv")
@@ -3791,8 +3792,15 @@ class Agent:
             # Gemini blocks on GEMINI_MODEL is written once more on a thinking reply model (Кіра's 3.1 Pro), at `low`
             reply_model = getattr(self.llm, "reply_model", None)
             if text is None and LAST_BLOCK.get() is not None and reply_model in THINKING_MODELS:
-                log.info("session summary blocked on %s — written on %s", getattr(self.llm, "model", "?"), reply_model)
-                text = await self.llm.think(contents, system, model=reply_model, kind="summary", level="low")
+                if self._summary_pro_blocked == len(snapshot):  # code review v5.22 #2: no new line, no second try
+                    log.info("session summary blocked on %s — %s blocked it too, until a new line",
+                             getattr(self.llm, "model", "?"), reply_model)
+                else:
+                    log.info("session summary blocked on %s — written on %s", getattr(self.llm, "model", "?"),
+                             reply_model)
+                    LAST_BLOCK.set(None)  # only Pro's own block counts below
+                    text = await self.llm.think(contents, system, model=reply_model, kind="summary", level="low")
+                    self._summary_pro_blocked = len(snapshot) if text is None and LAST_BLOCK.get() else None
             if text is None:
                 log.error("session summary failed — keeping the previous one")
                 return False

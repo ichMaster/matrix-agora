@@ -103,7 +103,11 @@ class FlashThenPro(FakeLLM):
         return self.flash
 
     async def think(self, contents, system_instruction, model="", max_output_tokens=0, kind="", level=None):
-        self.thought = (model, kind, level)
+        from agents.llm import LAST_BLOCK
+        self.thought, self.thinks = (model, kind, level), getattr(self, "thinks", 0) + 1
+        if getattr(self, "pro_blocks", False):
+            LAST_BLOCK.set(("prompt", "prohibited_content", None))
+            return None
         return "ми говорили про Тустань"
 
 
@@ -115,6 +119,20 @@ def test_a_summary_flash_blocks_is_written_on_the_thinking_reply_model(tmp_path)
     assert asyncio.run(agent.summarize()) is True
     assert llm.thought == ("gemini-3.1-pro-preview", "summary", "low")
     assert load_memory(agent.memory_file) == "ми говорили про Тустань"
+
+
+def test_a_summary_both_models_block_goes_to_pro_again_only_with_a_new_line(tmp_path):
+    """Code review v5.22 #2: the idle watcher retries a failed summary every 15 minutes — Pro once per session length,
+    not at every retry."""
+    llm = FlashThenPro(None)
+    llm.pro_blocks = True
+    agent = make(tmp_path, llm=llm)
+    agent.session = [("Ich", "підемо в гори?")]
+    assert asyncio.run(agent.summarize()) is False and asyncio.run(agent.summarize()) is False
+    assert llm.thinks == 1 and agent.session == [("Ich", "підемо в гори?")]
+    agent.session.append(("Ich", "то що?"))
+    asyncio.run(agent.summarize())
+    assert llm.thinks == 2
 
 
 def test_a_summary_stays_on_flash_unless_it_is_blocked(tmp_path):
