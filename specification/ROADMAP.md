@@ -2866,6 +2866,9 @@ midnight.
 - Every line opened before (`clean`: the night's re-check and the judge's) goes to `blocked` and is then deleted
   («все відкрите переведи в блокед і стери потім»).
 - No archive copy is kept: «не потрібно архіву якщо це стирається».
+- Gemini's own filter now plays the judge's part, at once rather than afterwards. The risk of a ban by Google
+  grows, so the owner switches to the backup by hand (`/backup`) when the talk turns to what should not reach
+  Gemini («користувач має розуміти … має сам в ручному режимі перейти в бекап мережу»).
 
 **Proposed** (the owner's answers of 2026-11-02 included; the points still marked *to confirm* are decided when the
 issues are generated):

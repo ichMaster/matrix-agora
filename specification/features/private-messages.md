@@ -247,6 +247,23 @@ The phase is [ROADMAP.md §v5.21](../ROADMAP.md). This part is the same design i
     - the window's end by the rating;
     - the v5.20 re-check command.
 
+### The risk, and the owner's part
+
+Without the judge, Gemini's own filter decides, on each message, at once. The owner (2026-11-02): the risk of a ban
+by Google grows, so he must switch to the backup himself (`/backup`) when the talk turns to what should not reach
+Gemini, and return with `/gemini`.
+
+- **What actually changes.** On the normal route, his message always went to Gemini first, judge or no judge. The
+  judge kept a message from Gemini in one place only: the first message after the 5-minute window. That message now
+  goes to Gemini. While the talk stays explicit, this means one blocked request every 5 minutes at most. After more
+  than 10 blocks in an hour, the backup takes the next hour.
+- **The probe also sends blocked requests.** After each prompt-stage block it sends the blocked prompt to Gemini
+  again, in parts, up to 30 times (200 a day). Many of those calls are blocked too. Lowering `PROBE_CALLS` and
+  `PROBE_DAY_CALLS` sends fewer of them, but then an old line that blocks may stay open, as on 2026-11-02 06:06.
+- **What `/backup` costs.** Everything said in the backup mode is `blocked`. Gemini-Кіра never knows it, and its
+  text is gone after a day.
+- **Not known:** Google does not publish after how many blocks it limits a key.
+
 ### The data when v5.21 goes live
 
 A copy comes first. Only counts, times and marks are read.
