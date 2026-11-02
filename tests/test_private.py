@@ -120,6 +120,42 @@ def test_alone_with_him_she_is_never_offered_pass_in_agora_she_still_is(tmp_path
     assert "відповідай рівно PASS." in agent.build_prompt()
 
 
+def test_alone_with_him_her_shorter_life_story_in_agora_the_whole_one(tmp_path, monkeypatch):
+    """v5.22 (the owner, 2026-11-02: «окрему коротку версію лише для приватного промпту»): `life_private` is her
+    private prompt's story (her answer, writing first, Gemini's and the backup's); Agora keeps the whole one."""
+    from agents.life import parse_life
+    from tests.test_archive import kira
+    from tests.test_chronicle import LIFE
+    short = parse_life("# Життя\n\nНародження: 1994-03-14 08:00, Львів\nСмерть: 2081-11-30\n\n"
+                       "## 1994–2019 · Дитинство\n\nКОРОТКО ПРО ДИТИНСТВО.\n\n"
+                       "## 2020–2027 · Редакція\n\nКОРОТКО ЗАРАЗ.\n\n## 2028–2081 · Книжка\n\nКнижка.\n")
+    agent = kira(tmp_path, monkeypatch)
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "life": LIFE, "life_private": short,
+                               "capabilities": agent.cfg.capabilities | {"life"}})
+    for private in (f"{PRIVATE_BRIEF}\n\nЯК ЦЬОГО РАЗУ", PRIVATE_NUDGE):
+        alone = agent.build_prompt(private=private)
+        assert "КОРОТКО ЗАРАЗ." in alone and "редакторкою" not in alone
+    agora = agent.build_prompt()
+    assert "редакторкою" in agora and "КОРОТКО" not in agora
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "life_private": None})  # none in her canon: the whole story
+    assert "редакторкою" in agent.build_prompt(private=PRIVATE_NUDGE)
+
+
+@pytest.mark.canon
+def test_her_private_life_story_is_read_or_named_when_missing(tmp_path):
+    from pathlib import Path
+
+    from agents.config import ConfigError, load_config
+    from tests.test_thoughts import ENV
+    cfg = load_config("agents/kira.toml", env=ENV)
+    assert cfg.life_private is not None and cfg.life_private.chapters[0].start == cfg.life.chapters[0].start
+    src = Path("agents/kira.toml").read_text(encoding="utf-8")
+    toml = tmp_path / "kira.toml"
+    toml.write_text(src.replace('"agents/canon/kira.life.private.md"', f'"{tmp_path}/none.md"'), encoding="utf-8")
+    with pytest.raises(ConfigError, match="private life story not found"):
+        load_config(toml, env=ENV)
+
+
 def test_the_discretion_line_keeps_their_relationship_and_her_plans_about_him():
     """v5.9.2 (the owner, 2026-10-26): her plans may name him; what is between them stays out of Agora by her own
     judgement — a rule in her Agora prompt, not a filter in code."""

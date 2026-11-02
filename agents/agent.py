@@ -2453,7 +2453,9 @@ class Agent:
             world = now_line(now, self.location)
             if self.summary_ms is not None:
                 world += " " + last_talk_line(local_now(self.summary_ms, self.tz), now)
-        life = life_section(self.cfg.life, now.date()) if can("life") and self.cfg.life else None
+        # v5.22 (the owner): alone with him the shorter story, when her canon has one (`life_private`)
+        story = self.cfg.life_private if private is not None and self.cfg.life_private else self.cfg.life
+        life = life_section(story, now.date()) if can("life") and story else None
         return {
             "name": self.cfg.name, "canon": self.cfg.canon if can("canon") else "",
             "summary": self.summary if can("summary") else None, "life": life, "world": world,

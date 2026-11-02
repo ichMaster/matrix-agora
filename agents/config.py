@@ -44,6 +44,9 @@ class AgentConfig:
     theses: tuple = ()  # v4.3: the past-life theses (agents.pastlife.Thesis) for an agent with `pastlife`
     voice_spec: str = ""  # v5.9: the palette of tags verified on her voice, for an agent with `emotion`
     reading: str = ""  # v5.12: what she reads and how she sees the news, for an agent with `thoughts` (private canon)
+    # v5.22 (the owner, 2026-11-02: «окрему коротку версію лише для приватного промпту»): a shorter life story,
+    # the private chat's prompt only (private canon); None: the whole story there too
+    life_private: LifeStory | None = None
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -125,6 +128,15 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
             raise ConfigError(f"life story not found: {life_path}") from exc
         except LifeError as exc:
             raise ConfigError(f"{life_path}: {exc}") from exc
+    life_private = None
+    if life is not None and member.can("private") and str(data.get("life_private", "")).strip():
+        private_path = Path(str(data["life_private"]))
+        try:
+            life_private = parse_life(private_path.read_text(encoding="utf-8"))
+        except FileNotFoundError as exc:
+            raise ConfigError(f"private life story not found: {private_path}") from exc
+        except LifeError as exc:
+            raise ConfigError(f"{private_path}: {exc}") from exc
 
     natal = ""
     if member.can("mood"):
@@ -194,6 +206,7 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         owner=_require(env, "OWNER"),
         password=_require(env, f"{localpart.upper()}_PASSWORD"),
         life=life,
+        life_private=life_private,
         simulation=sim_id,
         type=member.type,
         engine=member.engine,

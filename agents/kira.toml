@@ -2,6 +2,7 @@ name = "Кіра"
 user_id = "@kira:agora.lan"
 canon = "agents/canon/kira.md"
 life = "agents/canon/kira.life.md"
+life_private = "agents/canon/kira.life.private.md"  # v5.22: the shorter story, her private prompt only (private canon)
 simulation = "agora"
 type = "persona"         # v5.5: one of the four newcomers — a person, like Ada and Bruno
 engine = "gemini"
