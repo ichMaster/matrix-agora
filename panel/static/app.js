@@ -970,19 +970,14 @@ function blocksLine(name) {
 }
 
 function routeLine(mem) {
-  // v5.14: her private answer's route — auto or pinned, an open window, today's backup answers, the waiting lines
+  // v5.21: her private answer's route — gemini, the backup until its end, or the backup by hand; the last hour's
+  // blocks, today's backup answers, the blocked lines
   if (!mem.available) return "Memory unavailable";
   const r = mem.route;
   if (!r) return "Route unreadable";
-  const pin = r.pin === "auto" ? "auto" : `pinned ${r.pin}`;
-  // an ended window stays in the file until Gemini answers again: shown as ended, never as open (v5.14 review #3)
-  const until = r.pin === "auto" && r.window_until
-    ? (r.window_open ? ` · window until ${r.window_until.slice(11, 16)}` : " · window ended") : "";
-  const waiting = mem.archive ? ` · waiting ${fmtInt(mem.archive.waiting || 0)}` : "";
-  // v5.15: the judge's lines today, when it has rated any
-  const judged = r.judged && (r.judged.rated || r.judged.flagged)
-    ? ` · judged ${fmtInt(r.judged.rated)} · flagged ${fmtInt(r.judged.flagged)}` : "";
-  return `${pin}${until} · blocks today ${fmtInt(r.blocks_today)} · backup answers today ${fmtInt(r.answers.backup)}${judged}${waiting}`;
+  const where = r.pin === "backup" ? "backup by hand" : r.mode === "backup" && r.until ? `backup until ${r.until.slice(11, 16)}` : "gemini";
+  const blocked = mem.archive ? ` · blocked ${fmtInt(mem.archive.blocked || 0)}` : "";
+  return `${where} · blocks in the last hour ${fmtInt(r.blocks_hour)} · backup answers today ${fmtInt(r.answers.backup)}${blocked}`;
 }
 
 function archiveLine(mem) {

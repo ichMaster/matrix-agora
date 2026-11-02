@@ -1,12 +1,13 @@
-"""v5.14 — the owner's Telegram commands for her route: `/status`, `/auto`, `/gemini`, `/backup` and the list; a service
-line, never voiced, never a trace in her talk (a fake bot; no network)."""
+"""v5.14, v5.21 — the owner's Telegram commands for her route: `/status`, `/gemini` (back to Gemini now), `/backup` (by
+hand until `/gemini`), `/purge` and the list; a service line, never voiced, never a trace in her talk (a fake bot; no
+network)."""
 
 import asyncio
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from agents.route import Route, load_route, save_route, status_text
+from agents.route import Route, load_route, route_status, save_route
 from agents.telegram import COMMANDS, TelegramBot, command_of
 from tests.test_telegram_runtime import OWNER_TG, STRANGER, TOKEN, kira, ms, run_batch, texts_sent, tg
 
@@ -34,23 +35,28 @@ def test_status_answers_with_one_service_line_and_leaves_no_trace(tmp_path, monk
     before = tuple(list(x) if isinstance(x, list) else x for x in untouched(agent))
     spawned = run_batch(agent, tg(1, "/status", at=ms(17, 30)))
     sent = texts_sent(agent)
-    assert len(sent) == 1 and sent[0].startswith("⚙️ Маршрут — auto: gemini") and "з 10" in sent[0]
+    assert len(sent) == 1 and sent[0].startswith("⚙️ Маршрут — gemini\n") and "з 10" in sent[0]
     assert not spawned and agent.telegram.send_voice.await_count == 0          # never her answer, never voiced
     assert untouched(agent) == before
     assert "telegram: command status" in caplog.text and str(OWNER_TG) not in caplog.text
 
 
-def test_the_pins_and_auto(tmp_path, monkeypatch):
+def test_backup_by_hand_and_gemini_now_and_no_auto(tmp_path, monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
     agent = with_backup(kira(tmp_path, monkeypatch))
     agent.route_file.parent.mkdir(parents=True, exist_ok=True)
     run_batch(agent, tg(1, "/backup", at=ms(17, 30)))
     assert load_route(agent.route_file).pin == "backup"
-    assert "Маршрут — backup (закріплено о 18:00; скасувати: /auto)" in texts_sent(agent)[-1]
+    assert "Маршрут — backup вручну (повернути: /gemini)" in texts_sent(agent)[-1]
     assert "резерв" not in texts_sent(agent)[-1]
+    save_route(agent.route_file, Route(blocks=(ms(17, 50), ms(17, 55)), window_until_ms=ms(18, 50)))  # an hour's backup
     run_batch(agent, tg(2, "/gemini", at=ms(17, 31)))
-    assert load_route(agent.route_file).pin == "gemini"
-    run_batch(agent, tg(3, "/auto", at=ms(17, 32)))
-    assert load_route(agent.route_file).pin == "auto" and "auto: gemini" in texts_sent(agent)[-1]
+    r = load_route(agent.route_file)
+    assert (r.pin, r.window_until_ms, r.blocks) == ("auto", None, ())     # back now, the hour's count emptied
+    assert texts_sent(agent)[-1].startswith("⚙️ Маршрут — gemini\n")
+    run_batch(agent, tg(3, "/auto", at=ms(17, 32)))                       # v5.21: gone — the list
+    assert "/auto" not in texts_sent(agent)[-1] and "/gemini" in texts_sent(agent)[-1]
+    assert "telegram: command unknown" in caplog.text
 
 
 def test_an_unknown_command_gets_the_list(tmp_path, monkeypatch, caplog):
@@ -77,32 +83,19 @@ def test_a_strangers_command_and_one_from_before_the_start_are_ignored(tmp_path,
 
 def test_the_status_text():
     now = 1_761_670_000_000
-    window = status_text(Route(window_until_ms=now + 120_000), now, TZ, 10, 3, 1, {"gemini": 4, "backup": 2}, 1, 2)
-    assert "auto: backup до" in window and "за годину 1, сьогодні 2 з 10" in window
-    assert "чекають на суддю 3, цензуровані 1" in window and "через gemini 4, через backup 2" in window
-    pinned = status_text(Route(pin="backup", pinned_at_ms=now), now, TZ, 10, 0, 0, {"gemini": 0, "backup": 0}, 0, 0)
-    assert "Маршрут — backup (закріплено о" in pinned and "скасувати: /auto" in pinned and "резерв" not in pinned
-    assert pinned.endswith("Суддя: вимкнено")                                         # v5.15: no judge
-    judged = status_text(Route(), now, TZ, 10, 4, 1, {"gemini": 0, "backup": 0}, 0, 0, {"rated": 25, "flagged": 3})
-    assert judged.endswith("Суддя: оцінено сьогодні 25, позначено 3, чекають 4")
-    assert "не в ліміті" not in window                                                # v5.15.3: no pinned blocks
-    old = now - 2 * 86_400_000                                                       # … one of them on an older day
-    held = status_text(Route(pinned_blocks=(old, now - 60_000, now - 30_000)), now, TZ, 10, 0, 0,
-                       {"gemini": 0, "backup": 0}, 2, 3)
-    assert "сьогодні 3 з 10 (під закріпленням 2 — не в ліміті)" in held
+    window = route_status(Route(window_until_ms=now + 120_000, blocks=(now - 60_000,)), now, TZ, 10, 3,
+                          {"gemini": 4, "backup": 2})
+    assert "Маршрут — backup до" in window and "(повернути зараз: /gemini)" in window
+    assert "за останню годину: 1 з 10" in window and "закритих рядків 3" in window
+    assert "через gemini 4, через backup 2" in window and "суддя" not in window.lower()  # v5.21: no judge
+    pinned = route_status(Route(pin="backup", pinned_at_ms=now), now, TZ, 10, 0, {})
+    assert "Маршрут — backup вручну (повернути: /gemini)" in pinned and "резерв" not in pinned
 
 
-def test_status_shows_the_judges_day(tmp_path, monkeypatch):
-    """v5.15 — `/status` with the judge on: today's ratings from the route file, the waiting lines from the archive."""
-    from agents.route import Route, day_bounds, save_route
-    from tests.test_judge_verdicts import FakeJudge
+def test_status_counts_her_blocked_lines(tmp_path, monkeypatch):
+    """v5.21 — `/status` with the archive: every closed line counted as `blocked`."""
     agent = with_talk(tmp_path, monkeypatch)
-    agent.judge = FakeJudge()
-    today = day_bounds(agent.clock(), agent.tz)[0]
-    save_route(agent.route_file, Route(day=today, judged={"rated": 7, "flagged": 2}))
-    assert agent.status_answer().endswith("Суддя: оцінено сьогодні 7, позначено 2, чекають 2")
-    agent.judge = None
-    assert "Суддя: вимкнено" in agent.status_answer()
+    assert "Приватний чат: закритих рядків 3" in agent.status_answer()
 
 
 def test_the_days_counts_come_from_her_usage_lines_the_whole_day():
@@ -135,7 +128,7 @@ def test_the_command_list_is_set_for_the_owners_chat_only(monkeypatch):
     assert asyncio.run(bot.set_commands(OWNER_TG)) is True
     method, body = calls[0]
     assert method == "setMyCommands" and body["scope"] == {"type": "chat", "chat_id": OWNER_TG}
-    assert [c["command"] for c in body["commands"]] == ["status", "auto", "gemini", "backup", "purge"]
+    assert [c["command"] for c in body["commands"]] == ["status", "gemini", "backup", "purge"]  # v5.21: no /auto
 
 
 def test_a_saved_window_shows_in_status(tmp_path, monkeypatch):
@@ -143,7 +136,7 @@ def test_a_saved_window_shows_in_status(tmp_path, monkeypatch):
     agent.route_file.parent.mkdir(parents=True, exist_ok=True)
     save_route(agent.route_file, Route(window_until_ms=ms(18, 5)))
     run_batch(agent, tg(1, "/status", at=ms(17, 30)))
-    assert "auto: backup до 18:05" in texts_sent(agent)[-1]
+    assert "Маршрут — backup до 18:05" in texts_sent(agent)[-1]
 
 
 # --- /purge: the backup's talk deleted, at the owner's word, after a confirmation ----------------------------------------

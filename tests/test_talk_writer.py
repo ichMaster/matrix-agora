@@ -213,9 +213,6 @@ def test_her_private_prompt_to_gemini_holds_the_summaries_before_the_window_and_
     agent.archive.talk_put("4h", ms(2026, 10, 31, 8), ms(2026, 10, 31, 12), "Ми говорили про поїзд.", 1, 0, 0, 1)
     prompt = asyncio.run(agent._gemini_private_prompt(PRIVATE_BRIEF))
     assert TALK_TITLE in prompt and "- позавчора вранці: Ми говорили про поїзд." in prompt
-    parts: list = []
-    asyncio.run(agent._gemini_private_prompt(PRIVATE_BRIEF, None, parts))
-    assert "talk" in parts[-1].layer_names() and TALK_TITLE in parts[-1].render()[0]   # a fixed layer for the probe
     agent.fallback, agent.fallback_responder = Backup(), FallbackResponder(Backup())
     agent.fallback_context, agent.fallback_history_n = 32000, 60
     assert TALK_TITLE not in asyncio.run(agent._backup_private_prompt(PRIVATE_BRIEF))[0]

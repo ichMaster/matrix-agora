@@ -449,26 +449,27 @@ def test_the_blocks_are_counted_per_agent_and_for_today(state):
 
 
 def test_her_route_and_the_archives_marks_for_her_card(state, monkeypatch):
-    """v5.14 — the route file read as the card needs it, today's counts only; the archive counts the closed lines."""
+    """v5.14, v5.21 — the route file read as the card needs it: the mode, the backup's end, the last hour's blocks and
+    today's answers; the archive counts the closed lines."""
     import sqlite3
 
     from agents.archive import Archive
     from agents.route import Route, save_route
     from panel.memory import archive_view, route_view
     monkeypatch.setenv("TIMEZONE", "Europe/Kyiv")
-    assert route_view(state, "kira", TODAY) == {"pin": "auto", "window_until": None, "window_open": False,
-                                                "blocks_today": 0, "answers": {"gemini": 0, "backup": 0},
-                                                "judged": {"rated": 0, "flagged": 0}}
+    assert route_view(state, "kira", TODAY) == {"mode": "gemini", "pin": "auto", "until": None, "blocks_hour": 0,
+                                                "answers": {"gemini": 0, "backup": 0}}
     day0 = int(datetime(2026, 10, 4, tzinfo=ZoneInfo("Europe/Kyiv")).timestamp() * 1000)
-    save_route(state / "kira.route.json", Route(blocks=(day0 - 1000, day0 + 60_000), window_until_ms=day0 + 3_600_000,
-                                                day="2026-10-04", answers={"gemini": 3, "backup": 2},
-                                                judged={"rated": 25, "flagged": 3}))
+    save_route(state / "kira.route.json", Route(blocks=(day0 - 3_600_000, day0 + 60_000), window_until_ms=day0 + 3_600_000,
+                                                day="2026-10-04", answers={"gemini": 3, "backup": 2}))
     view = route_view(state, "kira", TODAY, now_ms=day0 + 1_800_000)
-    assert view["window_until"] == "2026-10-04T01:00+03:00" and view["blocks_today"] == 1
-    assert view["window_open"] is True and view["answers"] == {"gemini": 3, "backup": 2}
-    assert view["judged"] == {"rated": 25, "flagged": 3}  # v5.15: today's ratings by the judge
-    # review #3: the file keeps an ended window until Gemini answers again — it is not open any more
-    assert route_view(state, "kira", TODAY, now_ms=day0 + 7_200_000)["window_open"] is False
+    assert view["mode"] == "backup" and view["until"] == "2026-10-04T01:00+03:00" and view["blocks_hour"] == 1
+    assert view["answers"] == {"gemini": 3, "backup": 2}
+    # review #3: the file keeps an ended window until Gemini answers again — Gemini's mode, no end shown
+    assert route_view(state, "kira", TODAY, now_ms=day0 + 7_200_000) | {"blocks_hour": 0} == {
+        "mode": "gemini", "pin": "auto", "until": None, "blocks_hour": 0, "answers": {"gemini": 3, "backup": 2}}
+    save_route(state / "kira.route.json", Route(pin="backup", pinned_at_ms=day0))
+    assert route_view(state, "kira", TODAY, now_ms=day0)["mode"] == "backup"         # by hand: no end
     (state / "kira.route.json").write_text("{broken")
     assert route_view(state, "kira", TODAY) is None
     a = Archive(state / "kira.archive.db")
@@ -476,12 +477,12 @@ def test_her_route_and_the_archives_marks_for_her_card(state, monkeypatch):
         a.append(key, 1, "private", "telegram", "Ich", f"рядок {key}")
         a.mark([key], mark)
     a.close()
-    assert archive_view(state, "kira") == {"lines": 4, "embedded": 0, "waiting": 2, "censored": 1}
+    assert archive_view(state, "kira") == {"lines": 4, "embedded": 0, "blocked": 3}  # v5.21: every closed mark
     old = sqlite3.connect(state / "ada.archive.db")  # before v5.13: no mark column
     old.execute("CREATE TABLE lines (id INTEGER PRIMARY KEY, emb BLOB)")
     old.commit()
     old.close()
-    assert archive_view(state, "ada") == {"lines": 0, "embedded": 0, "waiting": 0, "censored": 0}
+    assert archive_view(state, "ada") == {"lines": 0, "embedded": 0, "blocked": 0}
     assert memory_view(state, "kira", TODAY, with_route=False)["route"] is None
 
 

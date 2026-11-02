@@ -1,4 +1,5 @@
-"""v5.14 — the route of her private answer (`agents/route.py`): pure, with an injected clock, and its state file."""
+"""v5.21 — the route of her private answer (`agents/route.py`): two modes, the hour after more than 10 blocks, `/gemini`
+and `/backup`, the backup's mark with its end, `/status`; pure, with an injected clock, and its state file."""
 
 import json
 import os
@@ -6,7 +7,7 @@ import stat
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from agents.route import Route, after, blocks_since, capped_since, day_bounds, load_route, save_route, state
+from agents.route import BACKUP_MARK_RE, Route, backup_mark, load_route, mode, route_status, save_route, step
 
 TZ = "Europe/Kyiv"
 
@@ -15,126 +16,14 @@ def ms(day, hour, minute=0):
     return int(datetime(2026, 10, day, hour, minute, tzinfo=ZoneInfo(TZ)).timestamp() * 1000)
 
 
-def step(route, now, outcome, window_s=300, day_max=10):
-    day, start, end = day_bounds(now, TZ)
-    return after(route, now, outcome, window_s, day_max, day, start, end)
-
-
-def test_a_block_opens_five_minutes_of_the_backup_then_the_window_ends():
-    r = step(Route(), ms(28, 20), "block")
-    assert state(r, ms(28, 20, 4)) == "window" and state(r, ms(28, 20, 5)) == "window_end"
-    assert state(Route(), ms(28, 20)) == "gemini"
-
-
-def test_at_the_windows_end_gemini_takes_the_talk_back_and_a_block_there_opens_the_next():
-    r = step(Route(), ms(28, 20), "block")
-    closed = step(r, ms(28, 20, 6), "gemini")
-    assert state(closed, ms(28, 20, 6)) == "gemini" and closed.answers == {"gemini": 1, "backup": 0}
-    again = step(r, ms(28, 20, 6), "block")
-    assert state(again, ms(28, 20, 10)) == "window" and state(again, ms(28, 20, 11)) == "window_end"
-    inside = step(r, ms(28, 20, 2), "gemini")  # never closed from inside the window
-    assert state(inside, ms(28, 20, 3)) == "window"
-
-
-def test_the_tenth_block_of_her_day_holds_the_backup_to_local_midnight_and_the_next_day_starts_fresh():
-    r = Route()
-    for minute in range(10):
-        r = step(r, ms(28, 12, minute * 6), "block")
-    assert state(r, ms(28, 23, 59)) == "window" and state(r, ms(29, 0, 0)) == "window_end"
-    assert blocks_since(r, day_bounds(ms(28, 12), TZ)[1]) == 10
-    r = step(r, ms(29, 0, 1), "backup")
-    assert r.day == "2026-10-29" and r.answers == {"gemini": 0, "backup": 1}
-    assert blocks_since(r, day_bounds(ms(29, 0, 1), TZ)[1]) == 0
-
-
-def test_a_dst_day_is_25_hours_and_the_cap_holds_to_its_real_midnight():
-    day, start, end = day_bounds(ms(25, 12), TZ)  # 2026-10-25: summer time ends in Kyiv
-    assert day == "2026-10-25" and end - start == 25 * 3_600_000
-    r = Route()
-    for minute in range(10):
-        r = step(r, ms(25, 12, minute), "block")
-    assert r.window_until_ms == end
-
-
-def test_a_pin_overrides_the_rules_the_day_cap_included_until_auto():
-    r = step(Route(), ms(28, 20), "pin:backup")
-    assert state(r, ms(28, 20)) == "window" and state(r, ms(29, 20)) == "window" and r.pinned_at_ms == ms(28, 20)
-    g = step(Route(), ms(28, 20), "pin:gemini")
-    for minute in range(12):
-        g = step(g, ms(28, 20, minute), "block")
-    assert state(g, ms(28, 20, 30)) == "gemini" and g.window_until_ms is None  # a block opens no window
-    assert blocks_since(g, ms(28, 0)) == 12                                      # but is counted
-    assert capped_since(g, ms(28, 0)) == 0                                       # … never toward the day cap
-    auto = step(g, ms(28, 21), "pin:auto")
-    assert auto.pin == "auto" and auto.pinned_at_ms is None and state(auto, ms(28, 21)) == "gemini"
-    assert step(Route(), ms(28, 20), "pin:nonsense") == step(Route(), ms(28, 20), "nothing")
-
-
-def test_blocks_under_a_pin_never_count_toward_the_day_cap_after_auto(tmp_path):
-    # v5.15.3 (the owner, v5.14 review #5): a pinned evening of blocks, then `/auto` — one block is a five-minute window
-    r = step(Route(), ms(28, 18), "pin:gemini")
-    for minute in range(12):
-        r = step(r, ms(28, 18, minute), "block")
-    r = step(r, ms(28, 19), "pin:auto")
-    r = step(r, ms(28, 19, 30), "block")
-    assert r.window_until_ms == ms(28, 19, 35) and capped_since(r, ms(28, 0)) == 1
-    for minute in range(9):                                                      # nine more under `auto`: the cap
-        r = step(r, ms(28, 20, minute * 6), "block")
-    assert r.window_until_ms == day_bounds(ms(28, 20), TZ)[2]
-    path = tmp_path / "kira.route.json"
-    save_route(path, r)
-    assert load_route(path).pinned_blocks == r.pinned_blocks and len(r.pinned_blocks) == 12
-    r = step(r, ms(29, 9), "backup")                                             # the next day: trimmed alike
-    assert r.pinned_blocks == () and r.blocks == ()
-
-
-def test_old_blocks_are_dropped_but_the_last_hour_and_her_day_stay():
-    r = Route(blocks=(ms(27, 23, 30), ms(27, 10)))
-    r = step(r, ms(28, 0, 10), "backup")
-    assert r.blocks == (ms(27, 23, 30),)
-
-
 def test_the_state_file_survives_a_restart_is_private_and_holds_no_text(tmp_path):
     path = tmp_path / "kira.route.json"
-    r = step(step(Route(), ms(28, 20), "block"), ms(28, 20, 1), "backup")
+    r = step(step(Route(), ms(28, 20), "block", 300, 10, 3600, "2026-10-28"), ms(28, 20, 1), "backup", 300, 10, 3600,
+             "2026-10-28")
     save_route(path, r)
     assert load_route(path) == r
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
-    assert set(json.loads(path.read_text())) == {"pin", "pinned_at_ms", "blocks", "window_until_ms", "day", "answers",
-                                                 "judged",          # v5.15: today's ratings by the judge
-                                                 "pinned_blocks",   # v5.15.3: the blocks under a pin
-                                                 "probed"}          # v5.16: today's probe calls and closings
-
-
-def test_the_judges_ratings_are_counted_for_the_day_and_reset_with_it(tmp_path):
-    """v5.15 — `rated` adds today's lines the judge rated and flagged; a new day starts at zero; the file keeps them."""
-    def judged(r, at, rated, flagged):
-        day, start, end = day_bounds(at, "Europe/Kyiv")
-        return after(r, at, "rated", 300, 10, day, start, end, rated=rated, flagged=flagged)
-
-    r = judged(judged(Route(), ms(28, 20), 25, 3), ms(28, 21), 4, 0)
-    assert r.judged == {"rated": 29, "flagged": 3} and r.window_until_ms is None and r.blocks == ()
-    path = tmp_path / "kira.route.json"
-    save_route(path, r)
-    assert load_route(path).judged == {"rated": 29, "flagged": 3}
-    assert judged(r, ms(29, 9), 1, 1).judged == {"rated": 1, "flagged": 1}  # the next day
-
-
-def test_todays_probe_calls_are_counted_for_the_day_and_reset_with_it(tmp_path):
-    """v5.16 — `probed` adds today's probe calls and the parts they closed; a new day starts at zero; the file keeps
-    them; nothing else of the route moves."""
-    def probed(r, at, calls, closed):
-        day, start, end = day_bounds(at, "Europe/Kyiv")
-        return after(r, at, "probed", 300, 10, day, start, end, calls=calls, closed=closed)
-
-    r = probed(probed(Route(), ms(28, 20), 12, 2), ms(28, 21), 5, 0)
-    assert r.probed == {"calls": 17, "closed": 2} and r.window_until_ms is None and r.blocks == ()
-    assert r.judged == {"rated": 0, "flagged": 0} and r.answers == {"gemini": 0, "backup": 0}
-    path = tmp_path / "kira.route.json"
-    save_route(path, r)
-    assert load_route(path).probed == {"calls": 17, "closed": 2}
-    assert probed(r, ms(29, 9), 1, 0).probed == {"calls": 1, "closed": 0}  # the next day
-    assert step(r, ms(29, 9), "gemini").probed == {"calls": 0, "closed": 0}
+    assert set(json.loads(path.read_text())) == {"pin", "pinned_at_ms", "blocks", "window_until_ms", "day", "answers"}
 
 
 def test_a_missing_or_corrupt_file_is_auto_with_nothing_open(tmp_path):
@@ -148,78 +37,70 @@ def test_a_missing_or_corrupt_file_is_auto_with_nothing_open(tmp_path):
     assert (r.pin, r.blocks, r.window_until_ms, r.answers) == ("auto", (5,), None, {"gemini": 0, "backup": 3})
 
 
-def test_flagged_at_the_windows_end_opens_the_next_window_but_is_no_block():
-    """v5.15 — the judge kept the backup on: the next window from now, the block times and the day cap untouched; a
-    pin opens none."""
-    ended = Route(window_until_ms=ms(28, 20), blocks=(ms(28, 19, 55),))
-    r = step(ended, ms(28, 20, 6), "flagged")
-    assert r.window_until_ms == ms(28, 20, 11) and r.blocks == ended.blocks
-    assert state(r, ms(28, 20, 7)) == "window"
-    assert step(Route(pin="gemini"), ms(28, 20), "flagged").window_until_ms is None
+def test_a_file_from_before_v5_21_loads_its_gemini_pin_as_the_rules_and_ignores_the_judge_and_the_probe(tmp_path):
+    path = tmp_path / "kira.route.json"
+    path.write_text(json.dumps({"pin": "gemini", "pinned_at_ms": 5, "blocks": [7], "judged": {"rated": 25},
+                                "pinned_blocks": [7], "probed": {"calls": 60}, "day": "2026-11-02"}))
+    assert load_route(path) == Route(pin="auto", blocks=(7,), day="2026-11-02")
+
+
+def test_a_day_change_resets_the_answers():
+    r = step(Route(), ms(28, 23, 50), "gemini", 300, 10, 3600, "2026-10-28")
+    assert step(r, ms(29, 0, 10), "backup", 300, 10, 3600, "2026-10-29").answers == {"gemini": 0, "backup": 1}
 
 
 # --- v5.21 (the owner, 2026-11-02): two modes, the hour after more than 10 blocks, `/gemini` and `/backup` -------------
-def test_v5_21_a_block_gives_five_minutes_of_the_backup_then_gemini_directly():
-    from agents.route import mode
-    from agents.route import step as step21
-    r = step21(Route(), ms(28, 20), "block", 300, 10, 3600, "2026-10-28")
+def test_a_block_gives_five_minutes_of_the_backup_then_gemini_directly():
+    r = step(Route(), ms(28, 20), "block", 300, 10, 3600, "2026-10-28")
     assert mode(r, ms(28, 20, 4)) == "backup" and mode(r, ms(28, 20, 5)) == "gemini"   # no window_end any more
     assert mode(Route(), ms(28, 20)) == "gemini"
-    r = step21(r, ms(28, 20, 6), "gemini", 300, 10, 3600, "2026-10-28")
+    r = step(r, ms(28, 20, 6), "gemini", 300, 10, 3600, "2026-10-28")
     assert r.window_until_ms is None and r.answers == {"gemini": 1, "backup": 0}
 
 
-def test_v5_21_more_than_ten_blocks_in_an_hour_give_an_hour_and_the_count_forgets_older_blocks():
-    from agents.route import mode
-    from agents.route import step as step21
+def test_more_than_ten_blocks_in_an_hour_give_an_hour_and_the_count_forgets_older_blocks():
     r = Route()
     for i in range(10):                                                     # ten blocks, six minutes apart
-        r = step21(r, ms(28, 20, 0) + i * 360_000, "block", 300, 10, 3600, "2026-10-28")
+        r = step(r, ms(28, 20, 0) + i * 360_000, "block", 300, 10, 3600, "2026-10-28")
     tenth = ms(28, 20, 0) + 9 * 360_000
     assert r.window_until_ms == tenth + 300_000                              # ten: still five minutes
-    edge = step21(r, tenth + 360_000, "block", 300, 10, 3600, "2026-10-28")  # 21:00: the 20:00 block is an hour old
+    edge = step(r, tenth + 360_000, "block", 300, 10, 3600, "2026-10-28")  # 21:00: the 20:00 block is an hour old
     assert edge.window_until_ms == tenth + 360_000 + 300_000                  # ten in the last hour: five minutes
-    r = step21(r, tenth + 300_000, "block", 300, 10, 3600, "2026-10-28")   # 20:59: the 11th within the hour
+    r = step(r, tenth + 300_000, "block", 300, 10, 3600, "2026-10-28")   # 20:59: the 11th within the hour
     assert r.window_until_ms == tenth + 300_000 + 3_600_000 and mode(r, tenth + 300_000 + 3_599_000) == "backup"
     later = Route(blocks=tuple(ms(28, 18, m) for m in range(0, 50, 5)))      # ten blocks over an hour ago
-    later = step21(later, ms(28, 20), "block", 300, 10, 3600, "2026-10-28")
+    later = step(later, ms(28, 20), "block", 300, 10, 3600, "2026-10-28")
     assert later.blocks == (ms(28, 20),) and later.window_until_ms == ms(28, 20, 5)
 
 
-def test_v5_21_gemini_by_hand_ends_either_window_and_empties_the_count_and_backup_holds_until_it():
-    from agents.route import mode
-    from agents.route import step as step21
+def test_gemini_by_hand_ends_either_window_and_empties_the_count_and_backup_holds_until_it():
     r = Route()
     for i in range(11):
-        r = step21(r, ms(28, 20) + i * 60_000, "block", 300, 10, 3600, "2026-10-28")
+        r = step(r, ms(28, 20) + i * 60_000, "block", 300, 10, 3600, "2026-10-28")
     assert mode(r, ms(28, 20, 30)) == "backup"
-    r = step21(r, ms(28, 20, 31), "pin:gemini", 300, 10, 3600, "2026-10-28")
+    r = step(r, ms(28, 20, 31), "pin:gemini", 300, 10, 3600, "2026-10-28")
     assert mode(r, ms(28, 20, 31)) == "gemini" and r.blocks == () and r.pin == "auto"
-    r = step21(r, ms(28, 21), "pin:backup", 300, 10, 3600, "2026-10-28")
+    r = step(r, ms(28, 21), "pin:backup", 300, 10, 3600, "2026-10-28")
     assert mode(r, ms(29, 9)) == "backup"                                   # no end of its own
-    held = step21(r, ms(28, 21, 1), "block", 300, 10, 3600, "2026-10-28")
+    held = step(r, ms(28, 21, 1), "block", 300, 10, 3600, "2026-10-28")
     assert held.blocks == () and held.window_until_ms is None              # by hand: neither counted nor windowed
-    assert mode(step21(held, ms(29, 9), "pin:gemini", 300, 10, 3600, "2026-10-29"), ms(29, 9)) == "gemini"
+    assert mode(step(held, ms(29, 9), "pin:gemini", 300, 10, 3600, "2026-10-29"), ms(29, 9)) == "gemini"
 
 
-def test_v5_21_the_mark_names_the_windows_end_or_by_hand_and_every_form_is_stripped():
-    from agents.route import BACKUP_MARK_RE, backup_mark
-    from agents.route import step as step21
-    r = step21(Route(), ms(28, 20, 36), "block", 300, 10, 3600, "2026-10-28")
+def test_the_mark_names_the_windows_end_or_by_hand_and_every_form_is_stripped():
+    r = step(Route(), ms(28, 20, 36), "block", 300, 10, 3600, "2026-10-28")
     assert backup_mark(r, ms(28, 20, 37), TZ) == "⚙️ backup до 20:41"
     assert backup_mark(Route(pin="backup"), ms(28, 20), TZ) == "⚙️ backup · вручну"
     assert backup_mark(Route(), ms(28, 20), TZ) == "⚙️ backup"
     dst = int(datetime(2026, 10, 25, 3, 58, tzinfo=ZoneInfo(TZ)).timestamp() * 1000)  # Kyiv's clocks went back at 04:00
-    assert backup_mark(step21(Route(), dst, "block", 300, 10, 3600, "2026-10-25"), dst, TZ) == "⚙️ backup до 03:03"
+    assert backup_mark(step(Route(), dst, "block", 300, 10, 3600, "2026-10-25"), dst, TZ) == "⚙️ backup до 03:03"
     for mark in ("⚙️ backup до 20:41", "⚙️ backup · вручну", "⚙️ backup"):
         assert BACKUP_MARK_RE.sub("", f"{mark}\nПривіт") == "Привіт"
     assert BACKUP_MARK_RE.sub("", "⚙️ backupний рядок\nПривіт") != "Привіт"
 
 
-def test_v5_21_the_status_names_the_mode_the_hours_blocks_and_never_a_text():
-    from agents.route import route_status
-    from agents.route import step as step21
-    r = step21(Route(), ms(28, 20), "block", 300, 10, 3600, "2026-10-28")
+def test_the_status_names_the_mode_the_hours_blocks_and_never_a_text():
+    r = step(Route(), ms(28, 20), "block", 300, 10, 3600, "2026-10-28")
     text = route_status(r, ms(28, 20, 1), TZ, 10, 7, {"gemini": 3, "backup": 1})
     assert text.splitlines() == ["⚙️ Маршрут — backup до 20:05 (повернути зараз: /gemini)",
                                  "Блоків за останню годину: 1 з 10 (більше — backup на годину)",

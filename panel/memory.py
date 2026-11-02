@@ -294,17 +294,16 @@ def archive_view(state_dir: Path, name: str) -> dict | None:
             con.close()
     except sqlite3.Error:
         return None
-    return {"lines": int(lines), "embedded": int(embedded),  # v5.14: the lines closed to Gemini, by mark
-            "waiting": int(marks.get("waiting", 0)), "censored": int(marks.get("censored", 0))}
+    closed = ("blocked", "waiting", "censored", "reopened")  # v5.21: one closed mark for good, and any older left
+    return {"lines": int(lines), "embedded": int(embedded), "blocked": sum(int(marks.get(m, 0)) for m in closed)}
 
 
 def route_view(state_dir: Path, name: str, today: date, now_ms: int | None = None) -> dict | None:
-    """v5.14 — her private answer's route (`<name>.route.json`, `agents/route.py`): the pin, the window's end (ISO, or
-    null) and whether it is still open at `now_ms` (the file keeps an ended one until Gemini answers again — review
-    #3), today's blocks, today's answers by Gemini and by the backup, and (v5.15) today's lines the judge rated and
-    flagged. No file yet → auto, nothing open;
-    unreadable → None, never a 500. No text is in it."""
-    from agents.route import load_route
+    """v5.14 — her private answer's route (`<name>.route.json`, `agents/route.py`); v5.21: the mode at `now_ms`
+    (`gemini` or `backup`), the pin (`auto`, or `backup` by hand), the backup's end (ISO, or null), the blocks of the
+    last hour and today's answers by Gemini and by the backup. No file yet → gemini, nothing open; unreadable → None,
+    never a 500. No text is in it."""
+    from agents.route import HOUR_MS, load_route, mode
 
     path = state_dir / f"{name}.route.json"
     try:
@@ -312,19 +311,16 @@ def route_view(state_dir: Path, name: str, today: date, now_ms: int | None = Non
             json.loads(path.read_text(encoding="utf-8"))  # a corrupt file is "unreadable" here, `auto` for her
         route = load_route(path)
         tz = ZoneInfo(os.environ.get("TIMEZONE", "Europe/Kyiv"))
-        start = int(datetime(today.year, today.month, today.day, tzinfo=tz).timestamp() * 1000)
     except (OSError, ValueError):
         return None
-    window = (datetime.fromtimestamp(route.window_until_ms / 1000, tz).isoformat(timespec="minutes")
-              if route.window_until_ms is not None else None)
     now_ms = int(time.time() * 1000) if now_ms is None else now_ms
+    current = mode(route, now_ms)
+    until = (datetime.fromtimestamp(route.window_until_ms / 1000, tz).isoformat(timespec="minutes")
+             if current == "backup" and route.pin != "backup" and route.window_until_ms is not None else None)
     answers = route.answers if route.day == today.isoformat() else {"gemini": 0, "backup": 0}
-    judged = route.judged if route.day == today.isoformat() else {"rated": 0, "flagged": 0}  # v5.15: the judge
-    return {"pin": route.pin, "window_until": window,
-            "window_open": route.window_until_ms is not None and now_ms < route.window_until_ms,
-            "blocks_today": sum(1 for t in route.blocks if t >= start),
-            "answers": {"gemini": int(answers.get("gemini", 0)), "backup": int(answers.get("backup", 0))},
-            "judged": {"rated": int(judged.get("rated", 0)), "flagged": int(judged.get("flagged", 0))}}
+    return {"mode": current, "pin": route.pin, "until": until,
+            "blocks_hour": sum(1 for t in route.blocks if t > now_ms - HOUR_MS),
+            "answers": {"gemini": int(answers.get("gemini", 0)), "backup": int(answers.get("backup", 0))}}
 
 
 def models_view(state_dir: Path, name: str, voice_spec: Path | None = None) -> dict | None:

@@ -333,7 +333,7 @@ def test_an_agents_card_shows_its_blocks_today_only_when_there_are_any():
 
 
 def test_her_card_shows_her_route_only_with_the_backup():
-    """v5.14 — «Route» from the memory view's `route` and the archive's waiting count, escaped, degrading."""
+    """v5.14, v5.21 — «Route» from the memory view's `route` and the archive's blocked count, escaped, degrading."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     card = js[js.index("function agentCardHtml(a) {"):]
     assert ('${a.capabilities && can(a, "fallback") ? `<div style="display:flex;flex-direction:column;gap:3px">'
@@ -341,12 +341,10 @@ def test_her_card_shows_her_route_only_with_the_backup():
             ': ""}') in card
     fn = js[js.index("function routeLine(mem) {"):]
     fn = fn[:fn.index("\n}\n")]
-    assert 'if (!r) return "Route unreadable";' in fn and "pinned ${r.pin}" in fn
-    assert "window until ${r.window_until.slice(11, 16)}" in fn and "backup answers today" in fn and "waiting" in fn
-    # review #3: an ended window is never shown as open
-    assert '(r.window_open ? ` · window until ${r.window_until.slice(11, 16)}` : " · window ended")' in fn
-    # v5.15: the judge's lines today, only when it has rated any
-    assert "` · judged ${fmtInt(r.judged.rated)} · flagged ${fmtInt(r.judged.flagged)}`" in fn and "${judged}" in fn
+    assert 'if (!r) return "Route unreadable";' in fn and '"backup by hand"' in fn
+    assert "`backup until ${r.until.slice(11, 16)}`" in fn and "blocks in the last hour" in fn
+    assert "backup answers today" in fn and "blocked ${fmtInt(mem.archive.blocked || 0)}" in fn
+    assert "judged" not in fn and "waiting" not in fn and "pinned" not in fn                     # v5.21: no judge
 
 
 def test_the_usage_table_shows_her_kruzhechoks_seconds():

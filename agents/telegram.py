@@ -85,9 +85,10 @@ def parse_update(raw: Any) -> Update | None:
     return Update(*base, "other")
 
 
-# v5.14 — the owner's commands in her chat (the route of her private answer): never a word of her talk
-COMMANDS = (("status", "Маршрут і блоки"), ("auto", "Правила вирішують"), ("gemini", "Закріпити gemini"),
-            ("backup", "Закріпити backup"), ("purge", "Видалити розмову через backup"))
+# v5.14 — the owner's commands in her chat (the route of her private answer): never a word of her talk; v5.21 (the
+# owner, 2026-11-02): no `/auto` — `/gemini` returns now, `/backup` holds until `/gemini`
+COMMANDS = (("status", "Маршрут і блоки"), ("gemini", "Повернути gemini зараз"),
+            ("backup", "Увімкнути backup до /gemini"), ("purge", "Видалити розмову через backup"))
 COMMAND_HELP = "⚙️ Команди: " + ", ".join(f"/{name} — {about.lower()}" for name, about in COMMANDS)
 
 

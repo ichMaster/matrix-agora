@@ -40,7 +40,7 @@ def test_a_refused_answer_marks_his_unanswered_lines_and_they_never_reach_gemini
     caplog.set_level(logging.INFO)
     agent.private_line("Привіт!", ms(17), "telegram", "tg:1")
     asyncio.run(agent.private_reply())                                # refused
-    assert agent._unanswered == [] and marks(agent)["tg:1"] == "waiting"
+    assert agent._unanswered == [] and marks(agent)["tg:1"] == "blocked"  # v5.21: for good
     assert agent.private_history == [("Ich", "Привіт!")] and agent.gemini_history() == []  # the backup's, not Gemini's
     assert not agent.session
 
@@ -50,7 +50,7 @@ def test_a_refused_answer_marks_his_unanswered_lines_and_they_never_reach_gemini
     asyncio.run(agent.private_reply())
     assert "Привіт!" not in llm2.transcripts[-1] and "Привіт ще раз" in llm2.transcripts[-1]
     assert agent._unanswered == [] and marks(agent)["tg:2"] == "gemini"
-    assert "1 line(s) marked waiting after a refusal" in caplog.text and "Привіт!" not in caplog.text
+    assert "1 line(s) marked blocked after a refusal" in caplog.text and "Привіт!" not in caplog.text
 
 
 def test_only_the_lines_since_her_last_answer_are_marked_and_the_session_loses_them(tmp_path, monkeypatch):
@@ -64,7 +64,7 @@ def test_only_the_lines_since_her_last_answer_are_marked_and_the_session_loses_t
     assert len(agent.session) == 4                                   # both his lines are in the session
     asyncio.run(agent.private_reply())
     got = marks(agent)
-    assert (got["tg:1"], got["$p1"], got["tg:2"]) == ("gemini", "waiting", "waiting")
+    assert (got["tg:1"], got["$p1"], got["tg:2"]) == ("gemini", "blocked", "blocked")
     assert [v for k, v in got.items() if k not in ("tg:1", "$p1", "tg:2")] == ["gemini"]  # her answer
     assert [t for s, t in agent.private_history] == ["Як ти?", "Привіт, сонце.", CENSORED, "і ще одне"]
     assert [t for s, t in agent.gemini_history()] == ["Як ти?", "Привіт, сонце."]
@@ -111,7 +111,7 @@ def test_a_block_censors_only_the_line_gemini_saw_never_one_that_came_while_she_
     agent.private_line(CENSORED, ms(17), "telegram", "tg:1")
     asyncio.run(agent.private_reply())
     got = marks(agent)
-    assert (got["tg:1"], got["tg:2"]) == ("waiting", "gemini")
+    assert (got["tg:1"], got["tg:2"]) == ("blocked", "gemini")
     assert agent.gemini_history() == [("Ich", "вибач, я пожартував")]          # the refused line closed, not the new one
     assert agent.session == [(private_label("Ich"), "вибач, я пожартував")]
     assert agent._unanswered == [("tg:2", "вибач, я пожартував")]               # still to be answered

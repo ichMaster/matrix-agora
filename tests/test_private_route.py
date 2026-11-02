@@ -1,7 +1,7 @@
-"""v5.14 — her private answer through the route: Gemini; a block or a refusal sends the backup, which answers and opens
-the window; the window is the backup's alone; at the window's end both start together and Gemini's line wins; pins
-over the rules; the backup's prompt and budget; and nothing of the backup's talk reaches Gemini (nio, Gemini and
-NovelAI mocked; an injected clock)."""
+"""v5.14, v5.21 — her private answer through the route: Gemini; a block or a refusal makes the exchange `blocked` and
+the backup answers for 5 minutes (an hour after more than 10 blocks in an hour), marked with its end; in the backup
+mode Gemini is never asked; after it his next message goes straight to Gemini; `/backup` by hand; the backup's prompt
+and budget; and nothing of the backup's talk reaches Gemini (nio, Gemini and NovelAI mocked; an injected clock)."""
 
 import asyncio
 import logging
@@ -51,8 +51,17 @@ def her(tmp_path, monkeypatch, gemini=None, backup=None):
     agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "capabilities": agent.cfg.capabilities | {"fallback"}})
     agent.fallback = backup or Backup()
     agent.fallback_responder = FallbackResponder(agent.fallback)
-    agent.fallback_window_s, agent.fallback_day_max = 300, 10
+    agent.fallback_window_s, agent.fallback_hour_max, agent.fallback_lock_s = 300, 10, 3600
     agent.fallback_context, agent.fallback_history_n = 32000, 60
+    agent.marks_sent = []
+    for door in ("send_line", "send_telegram"):                            # the mark above her words, as sent
+        sent = getattr(agent, door)
+
+        async def keep(*args, _sent=sent, **kwargs):
+            agent.marks_sent.append(kwargs.get("mark"))
+            return await _sent(*args, **kwargs)
+
+        setattr(agent, door, keep)
     return agent
 
 
@@ -71,10 +80,11 @@ def test_in_geminis_state_nothing_else_is_called_and_the_lines_stay_gemini(tmp_p
     assert agent.fallback.calls == [] and set(marks(agent).values()) == {"gemini"}
     r = load_route(agent.route_file)
     assert (r.window_until_ms, r.answers) == (None, {"gemini": 1, "backup": 0})
+    assert agent.marks_sent == [None]
 
 
-def test_a_refusal_sends_the_backup_which_answers_opens_the_window_and_marks_the_talk_waiting(tmp_path, monkeypatch,
-                                                                                             caplog):
+def test_a_refusal_makes_the_exchange_blocked_and_the_backup_answers_for_five_minutes_marked_with_its_end(
+        tmp_path, monkeypatch, caplog):
     caplog.set_level(logging.INFO)
     agent = her(tmp_path, monkeypatch, Gemini(blocks=1))
     agent.private_line(ASKED, ms(17), "telegram", "tg:1")
@@ -82,11 +92,19 @@ def test_a_refusal_sends_the_backup_which_answers_opens_the_window_and_marks_the
     assert len(agent.fallback.calls) == 1 and ASKED in agent.fallback.calls[0]["transcript"]
     r = load_route(agent.route_file)
     assert r.window_until_ms == ms(18, 5) and r.answers == {"gemini": 0, "backup": 1} and len(r.blocks) == 1
-    assert set(marks(agent).values()) == {"waiting"}                       # his line and hers
+    assert set(marks(agent).values()) == {"blocked"}                       # his line and hers, for good
+    assert agent.marks_sent == ["⚙️ backup до 18:05"]                        # her clock reads 18:00
     assert agent.gemini_history() == [] and len(agent.private_history) == 2
     assert agent.session == []                                             # the summary is Gemini's
     assert "answered (telegram) by the backup" in caplog.text or "answered by the backup" in caplog.text
     assert SECRET not in caplog.text and "Від резерву" not in caplog.text
+
+
+def test_an_answer_stage_block_takes_the_same_path(tmp_path, monkeypatch):
+    agent = her(tmp_path, monkeypatch, Gemini(blocks=1, block=("answer", "prohibited_content", None)))
+    agent.private_line(ASKED, ms(17), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    assert set(marks(agent).values()) == {"blocked"} and load_route(agent.route_file).window_until_ms == ms(18, 5)
 
 
 def test_a_long_line_the_history_cuts_is_closed_to_gemini_too(tmp_path, monkeypatch):
@@ -108,7 +126,8 @@ def test_a_long_line_the_history_cuts_is_closed_to_gemini_too(tmp_path, monkeypa
     assert ASKED not in gemini.transcripts[-1] and "довга відповідь" not in gemini.transcripts[-1]
 
 
-def test_in_the_window_the_backup_alone_answers_and_its_talk_never_reaches_gemini(tmp_path, monkeypatch):
+def test_in_the_backup_mode_gemini_is_never_asked_and_his_lines_are_blocked_then_gemini_directly(tmp_path,
+                                                                                                monkeypatch):
     gemini = Gemini()
     agent = her(tmp_path, monkeypatch, gemini)
     save_route(agent.route_file, Route(window_until_ms=ms(18, 5)))
@@ -116,49 +135,54 @@ def test_in_the_window_the_backup_alone_answers_and_its_talk_never_reaches_gemin
     embedded = len(gemini.embedded)
     assert asyncio.run(agent.private_reply()) is True
     assert gemini.transcripts == [] and len(gemini.embedded) == embedded   # no answer, no recall embedding
-    assert set(marks(agent).values()) == {"waiting"}
-    at(agent, 18, 6)                                                       # the window's end
+    assert set(marks(agent).values()) == {"blocked"}
+    at(agent, 18, 6)                                                       # after the window
     agent.private_line("Добре, а тепер про погоду", ms(18, 6), "telegram", "tg:2")
     assert asyncio.run(agent.private_reply()) is True
+    assert len(agent.fallback.calls) == 1                                   # straight to Gemini, no backup beside it
     assert ASKED not in gemini.transcripts[-1] and "Від резерву" not in gemini.transcripts[-1]
     assert "Добре, а тепер про погоду" in gemini.transcripts[-1]
     assert load_route(agent.route_file).window_until_ms is None            # Gemini's again
     assert agent.private_history[-1] == ("Кіра", "Від Gemini.")
 
 
-def test_at_the_windows_end_a_block_takes_the_backups_ready_line_and_opens_the_next_window(tmp_path, monkeypatch):
-    agent = her(tmp_path, monkeypatch, Gemini(blocks=1), Backup(delay=0.01))
+def test_after_the_window_a_block_opens_the_next(tmp_path, monkeypatch):
+    agent = her(tmp_path, monkeypatch, Gemini(blocks=1))
     save_route(agent.route_file, Route(window_until_ms=ms(17, 50)))
     agent.private_line(ASKED, ms(17, 59), "telegram", "tg:1")
     assert asyncio.run(agent.private_reply()) is True
     assert len(agent.fallback.calls) == 1 and agent.private_history[-1][1].endswith("Від резерву, сонце.")
     assert load_route(agent.route_file).window_until_ms == ms(18, 5)
-    assert marks(agent)["tg:1"] == "waiting"
+    assert marks(agent)["tg:1"] == "blocked"
 
 
-def test_at_the_windows_end_geminis_line_wins_and_the_backup_is_cancelled(tmp_path, monkeypatch):
-    agent = her(tmp_path, monkeypatch, Gemini(), Backup(delay=5))
-    save_route(agent.route_file, Route(window_until_ms=ms(17, 50)))
-    agent.private_line("Привіт", ms(17, 59), "telegram", "tg:1")
-    assert asyncio.run(asyncio.wait_for(agent.private_reply(), 2)) is True  # never waits for the backup
-    assert agent.private_history[-1] == ("Кіра", "Від Gemini.") and marks(agent)["tg:1"] == "gemini"
+def test_more_than_ten_blocks_in_an_hour_give_the_backup_an_hour(tmp_path, monkeypatch):
+    agent = her(tmp_path, monkeypatch, Gemini(blocks=1))
+    save_route(agent.route_file, Route(blocks=tuple(ms(17, m) for m in range(0, 50, 5))))  # ten in the last hour
+    at(agent, 17, 55)
+    agent.private_line(ASKED, ms(17, 55), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    assert load_route(agent.route_file).window_until_ms == ms(18, 55)
+    assert agent.marks_sent == ["⚙️ backup до 18:55"]
 
 
-def test_pins_override_the_rules(tmp_path, monkeypatch):
+def test_backup_by_hand_holds_and_an_old_gemini_pin_is_the_rules(tmp_path, monkeypatch):
     agent = her(tmp_path, monkeypatch)
     save_route(agent.route_file, Route(pin="backup"))
     agent.private_line("Привіт", ms(17), "telegram", "tg:1")
     asyncio.run(agent.private_reply())
     assert len(agent.fallback.calls) == 1 and agent.llm.transcripts == []
-    pinned = her(tmp_path / "g", monkeypatch, Gemini(blocks=1))
-    save_route(pinned.route_file, Route(pin="gemini"))
-    pinned.private_line(ASKED, ms(17), "telegram", "tg:1")
-    asyncio.run(pinned.private_reply())
-    r = load_route(pinned.route_file)
-    assert len(pinned.fallback.calls) == 1 and r.window_until_ms is None and len(r.blocks) == 1
+    assert agent.marks_sent == ["⚙️ backup · вручну"] and marks(agent)["tg:1"] == "blocked"
+    old = her(tmp_path / "g", monkeypatch, Gemini(blocks=1))
+    old.route_file.parent.mkdir(parents=True, exist_ok=True)
+    old.route_file.write_text('{"pin": "gemini", "judged": {"rated": 3}, "pinned_blocks": [1]}', encoding="utf-8")
+    old.private_line(ASKED, ms(17), "telegram", "tg:1")
+    asyncio.run(old.private_reply())
+    r = load_route(old.route_file)
+    assert r.pin == "auto" and r.window_until_ms == ms(18, 5) and len(r.blocks) == 1   # v5.21's rules
 
 
-def test_a_line_she_writes_first_in_the_window_is_the_backups_and_marks_none_of_his(tmp_path, monkeypatch):
+def test_a_line_she_writes_first_in_the_backup_mode_is_blocked_and_marks_none_of_his(tmp_path, monkeypatch):
     agent = her(tmp_path, monkeypatch)
     agent.private_line("Добраніч", ms(1), "telegram", "tg:1")
     agent._unanswered = []
@@ -166,25 +190,25 @@ def test_a_line_she_writes_first_in_the_window_is_the_backups_and_marks_none_of_
     assert asyncio.run(agent.private_reply(nudge=True)) is True
     assert agent.fallback.calls[0]["kind"] == "private_nudge"
     got = marks(agent)
-    assert got["tg:1"] == "gemini" and sorted(got.values()) == ["gemini", "waiting"]
+    assert got["tg:1"] == "gemini" and sorted(got.values()) == ["blocked", "gemini"]
 
 
-def test_a_dropped_backup_answer_is_silence_and_his_line_still_waits(tmp_path, monkeypatch, caplog):
+def test_a_dropped_backup_answer_is_silence_and_his_line_stays_blocked(tmp_path, monkeypatch, caplog):
     caplog.set_level(logging.INFO)
     agent = her(tmp_path, monkeypatch, Gemini(), Backup("Привет! Это ты?"))
     save_route(agent.route_file, Route(window_until_ms=ms(18, 5)))
     agent.private_line(ASKED, ms(17, 59), "telegram", "tg:1")
     assert asyncio.run(agent.private_reply()) is False
-    assert "backup: dropped (russian)" in caplog.text and marks(agent)["tg:1"] == "waiting"
+    assert "backup: dropped (russian)" in caplog.text and marks(agent)["tg:1"] == "blocked"
     assert load_route(agent.route_file).answers == {"gemini": 0, "backup": 0}
 
 
-def test_without_the_backup_a_refusal_is_v5_13s_silence_with_his_line_waiting(tmp_path, monkeypatch):
+def test_without_the_backup_a_refusal_is_v5_13s_silence_with_his_line_blocked(tmp_path, monkeypatch):
     agent = her(tmp_path, monkeypatch, Gemini(blocks=1))
     agent.fallback = agent.fallback_responder = None
     agent.private_line(ASKED, ms(17), "telegram", "tg:1")
     assert asyncio.run(agent.private_reply()) is False
-    assert marks(agent)["tg:1"] == "waiting" and not agent.route_file.exists()
+    assert marks(agent)["tg:1"] == "blocked" and not agent.route_file.exists()
 
 
 def test_a_fact_the_backup_asks_her_to_keep_waits(tmp_path, monkeypatch):
@@ -242,7 +266,7 @@ def test_geminis_history_is_the_last_lines_open_to_it_the_backups_every_line(tmp
 def test_geminis_transcript_says_when_the_talk_was_and_how_long_the_pause_lasted(tmp_path, monkeypatch):
     """The owner, 2026-11-01 — the days between were closed to Gemini, so Tuesday's «I'm off to Kyiv tomorrow» sat
     right before Saturday's lines and read as tonight's: her transcript now says when, and how long the pause was;
-    the history's data (the probe's ids, the judge's items) stays lines only."""
+    the history's data stays lines only."""
     gemini = Gemini()
     agent = her(tmp_path, monkeypatch, gemini)
     day = 86_400_000

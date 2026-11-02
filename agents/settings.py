@@ -178,13 +178,12 @@ SCHEMA: tuple[Setting, ...] = (
     _s("TALK_PROMPT_WORDS", "int", "4000", "memory", "cap:talk", None, "Слів підсумків розмови в її запиті (0 — без них)",
        "words", 0, 8000),
     # v5.14 — the backup for her private chat (`fallback`): GLM-4.6 on NovelAI when Gemini blocks or refuses; empty
-    # model: off. The window after a block, the day cap of blocks, the backup's prompt budget and its history length
+    # model: off. The window after a block, the backup's prompt budget and its history length (v5.21: the day cap went;
+    # the judge (v5.15) and the probe (v5.16) went with their settings)
     _s("FALLBACK_MODEL", "choice", "", "fallback", "cap:fallback", None, "Резервна модель (порожньо — вимкнено)",
        choices=("", "glm-4-6")),
     _s("FALLBACK_WINDOW_S", "int", "300", "fallback", "cap:fallback", None, "Скільки після блоку відповідає резерв",
        "s", 60, 3600),
-    _s("FALLBACK_DAY_MAX", "int", "10", "fallback", "cap:fallback", None,
-       "Скільки блоків на день, після чого резерв до кінця дня", "", 1, 100),
     # v5.21 (the owner, 2026-11-02): more than this many blocks in the last 60 minutes — the backup for the next hour
     _s("FALLBACK_HOUR_MAX", "int", "10", "fallback", "cap:fallback", None,
        "Скільки блоків за годину, після чого резерв на годину", "", 1, 50),
@@ -194,12 +193,6 @@ SCHEMA: tuple[Setting, ...] = (
        36000),
     _s("FALLBACK_HISTORY_N", "int", "60", "fallback", "cap:fallback", None, "Скільки рядків історії бачить резерв",
        "", 10, 300),
-    # v5.15 — the judge of the backup's talk (OpenRouter; on with `OPENROUTER_API_KEY` in her kira.env): its model and
-    # its timeout, longer than an answer's
-    _s("CLASSIFIER_MODEL", "choice", "google/gemma-4-31b-it", "fallback", "cap:fallback", None,
-       "Модель-суддя розмови через резерв", choices=("google/gemma-4-31b-it", "openai/gpt-oss-safeguard-20b",
-                                                     "openai/gpt-oss-120b")),
-    _s("CLASSIFIER_TIMEOUT_S", "int", "30", "fallback", "cap:fallback", None, "Скільки чекати на суддю", "s", 5, 120),
     # v5.17 — her photos in Telegram (`photos`): Google's image model, the size, and a day's cap that only guards
     # against a fault (the owner: as many as she wants)
     _s("PHOTO_MODEL", "choice", "gemini-nano-banana-2.1", "private", "cap:photos", None, "Модель її фото",
@@ -219,10 +212,6 @@ SCHEMA: tuple[Setting, ...] = (
        0, 3000),
     _s("VIDEO_DAY_MAX", "int", "40", "private", "cap:videos", None, "Скільки відео на день щонайбільше (запобіжник)",
        "", 0, 200),
-    # v5.16 — after a prompt-stage block Gemini is asked which parts of her prompt it blocks: calls per block and per
-    # day (0 for either: off)
-    _s("PROBE_CALLS", "int", "12", "fallback", "cap:fallback", None, "Скільки перевірок Gemini на один блок", "", 0, 50),
-    _s("PROBE_DAY_CALLS", "int", "60", "fallback", "cap:fallback", None, "Скільки перевірок Gemini на день", "", 0, 500),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
        choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),
