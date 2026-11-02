@@ -164,6 +164,22 @@ Notes on the table:
 
 **At `medium` and `high` it does think, and it gets slow.** It thought for 680–1,260 tokens per answer and took 9–16 s. That is as slow as 3.1 Pro at `low`, which took 10–13 s for 880–1,170 thinking tokens on the same prompt. So with thinking on, 3.8 Flash is no faster than 3.1 Pro. It is fast at `low` only because it does not think there.
 
+### Gemini 4 Argon at higher thinking levels
+
+**Question (the owner):** how fast is Argon if its thinking is raised?
+
+**Method.** The same as for 3.8 Flash above: the canon alone, 3 calls per level, thoughts requested, only the parts counted.
+
+| Level | Time per call (s) | Thinking tokens | Thought parts | Output tokens |
+|---|---|---|---|---|
+| `low` | 4.5 · 3.5 · 4.2 | 0 | 0 | 66–96 |
+| `medium` | 4.6 · 4.1 · 3.7 | 0 | 0 | 66–104 |
+| `high` | 16.4 · 18.5 · 19.4 | 786–1,025 | 1 in each call | 63–77 |
+
+**At `low` and `medium` Argon does not think.** The two levels give the same answers in the same 4–5 s.
+
+**At `high` it thinks, and it is the slowest of all.** It thought for 790–1,030 tokens and took 16–19 s. 3.8 Flash at `high` and 3.1 Pro at `low` think about as much and take 14–16 s and 10–13 s on the same prompt. So Argon is fast only when it does not think.
+
 ## Open questions before a switch
 
 - **Quality.** Her language and character on a Flash model compared with 3.1 Pro. The owner judges this in a real conversation.
