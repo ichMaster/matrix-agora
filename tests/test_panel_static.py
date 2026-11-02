@@ -404,8 +404,9 @@ def test_the_charts_are_inline_svg_with_tooltips_and_css_colours_only():
     assert js.count("<title>") >= 4 and "class=\"an-hit\"" in js        # a tooltip on every mark or day column
     assert not re.search(r"#[0-9a-fA-F]{6}\b", js)                       # no colour in the script: CSS variables
     assert "const svgColor" not in js and "var(--viz-${SERVICES[s]?.[1] || 8})" in js
-    for chart in ("Cost a day", "Running total", "Activity a day", "Shares", "Agents"):
+    for chart in ("Running total", "Shares", "Agents"):
         assert f'card("{chart}"' in js, chart
+    assert 'hourly ? "Cost an hour" : "Cost a day"' in js and 'card(hourly ? "Activity an hour" : "Activity a day"' in js
     assert "7-day average" in js and "Previous period" in js and 'data-act="an-metric"' in js
 
 
@@ -457,6 +458,16 @@ def test_the_speed_the_prompts_and_the_media_views():
     assert "pathGaps(s.values.map((v, i) => v == null ? null : [ax.x(i), ax.y(v)]))" in js
     assert "esc(agentName(g.agent))" in js and "<td>${esc(m.model)}</td>" in js and "esc(k.kind)" in js
     assert 'const MEDIA_COLOR = {photos: "var(--viz-1)", videos: "var(--viz-2)"};' in js
+
+
+def test_one_day_is_drawn_by_the_hour_against_the_day_before():
+    """v5.22 (the owner, 2026-11-02: «за сьогодні і за вчора по годинах»): Today and Yesterday draw the Cost view's
+    charts by the hour, the running total against the day before; no moving average for hours."""
+    js = js_text()
+    assert "const hourly = Boolean(d.by_hour && d.hour_series?.length);" in js
+    assert "ds = hourly ? d.hour_series : d.day_series" in js and "prevCum = hourly ? d.previous_hour_cumulative" in js
+    assert '"this day against the day before, hour by hour"' in js and "line: hourly ? [] : ds.map((x) => x.cost_avg7)" in js
+    assert "hourly && d.since === panelToday() && i > new Date().getHours() ? null : x.cost_cumulative" in js  # no future
 
 
 def test_the_csv_header_and_its_escaping():

@@ -293,3 +293,22 @@ def test_no_data_gives_empty_blocks_and_a_corrupt_answer_line_is_skipped():
     good = ans("2026-11-02T10:00:00+02:00", 9000)
     records, bad = parse_answers([json.dumps(good), "{torn", json.dumps({**good, "answered": "bot"}), ""])
     assert records == [good] and bad == 2
+
+
+def test_one_day_has_its_cost_calls_and_tokens_by_the_hour_beside_the_day_before():
+    """v5.22 (the owner, 2026-11-02: «за сьогодні і за вчора по годинах»): a one-day period's `hour_series` — each
+    hour's cost by service, calls and tokens and the running total — and the day before's running total by the hour;
+    a longer period has none."""
+    lines = [{**gem("2026-11-02"), "ts": "2026-11-02T08:15:00+02:00"},
+             {**gem("2026-11-02"), "ts": "2026-11-02T10:40:00+02:00"},
+             video_note_usage_line("2026-11-02T10:50:00+02:00", "kira", "veed/fabric-1.0", 20_000, True),
+             {**gem("2026-11-01"), "ts": "2026-11-01T09:00:00+02:00"}]
+    r = analyze(lines, date(2026, 11, 2), date(2026, 11, 2), "kira", PRICES)
+    hs = r["hour_series"]
+    assert len(hs) == 24 and [h["hour"] for h in hs[:2]] == ["00", "01"]
+    assert hs[8]["calls"] == 1 and hs[8]["cost"] == pytest.approx(3.2) and hs[9]["calls"] == 0
+    assert hs[10]["calls_by_service"] == {"gemini": 1, "fal": 1} and hs[10]["cost_by_service"]["fal"] == pytest.approx(1.6)
+    assert hs[-1]["cost_cumulative"] == pytest.approx(3.2 + 3.2 + 1.6)
+    assert r["previous_hour_cumulative"][8] == 0 and r["previous_hour_cumulative"][9] == pytest.approx(3.2)
+    longer = analyze(lines, date(2026, 11, 1), date(2026, 11, 2), "kira", PRICES)
+    assert longer["hour_series"] == [] and longer["previous_hour_cumulative"] == []

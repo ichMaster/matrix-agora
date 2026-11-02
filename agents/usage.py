@@ -776,6 +776,38 @@ def analyze(records: list[dict], since: date, until: date, agent: str | None = N
         p_running += by_day_cost.get(d, 0.0)
         previous_cumulative.append(round(p_running, 6))
 
+    # v5.22 (the owner, 2026-11-02: «за сьогодні і за вчора по годинах»): a one-day period's cost, calls and tokens by
+    # the hour, each atom priced alone as a day's, and the day before's running total by the hour beside it
+    hour_series: list[dict] = []
+    previous_hour_cumulative: list[float] = []
+    if n == 1:
+        def by_hour(day: str) -> dict[tuple[str, str], tuple[Row, float | None]]:
+            atoms: dict[tuple, Row] = defaultdict(Row)
+            for r in lines:
+                ts = str(r["ts"])
+                if ts[:10] == day:
+                    _add_line(atoms[(ts[11:13], str(r.get("agent", "?")), _engine(r), str(r.get("model") or "?"),
+                                     str(r.get("kind", "?")))], r)
+            return {k: (row, _atom_cost(row, prices)) for k, row in atoms.items()}
+
+        today_atoms, before_atoms = by_hour(since.isoformat()), by_hour(p_since.isoformat())
+        running = p_running = 0.0
+        for h in (f"{x:02d}" for x in range(24)):
+            mine = {k: v for k, v in today_atoms.items() if k[0] == h}
+            svc: dict[str, _Sum] = defaultdict(_Sum)
+            for (_, _, service, _, _), (row, c) in mine.items():
+                svc[service].add(row, c)
+            cost_h = sum(x.cost for x in svc.values())
+            running += cost_h
+            hour_series.append({"hour": h, "cost": round(cost_h, 6), "calls": sum(x.row.calls for x in svc.values()),
+                                "tokens": sum(x.row.total for x in svc.values()),
+                                "cost_by_service": {k: round(x.cost, 6) for k, x in svc.items() if x.priced},
+                                "calls_by_service": {k: x.row.calls for k, x in svc.items()},
+                                "tokens_by_service": {k: x.row.total for k, x in svc.items()},
+                                "cost_cumulative": round(running, 6)})
+            p_running += sum(c or 0.0 for k, (_, c) in before_atoms.items() if k[0] == h)
+            previous_hour_cumulative.append(round(p_running, 6))
+
     agents = [] if agent is not None else [
         {"agent": a, **s.totals(), "previous": prev_by["agent"][a].brief(),
          "services": [svc for svc, _ in sorted(_group({k: r for k, r in now.items() if k[1] == a}, costs,
@@ -795,6 +827,7 @@ def analyze(records: list[dict], since: date, until: date, agent: str | None = N
         "previous": {"since": p_since.isoformat(), "until": p_until.isoformat(), **prev.totals()},
         "services": services, "kinds": kinds, "day_series": day_series,
         "previous_cumulative": previous_cumulative,
+        "hour_series": hour_series, "previous_hour_cumulative": previous_hour_cumulative,
         "trend": {**trend([x["cost"] for x in lived]),
                   "month_at_rate": round(per_day * 30, 6) if per_day is not None else None},
         "agents": agents, "subscriptions": subscriptions,

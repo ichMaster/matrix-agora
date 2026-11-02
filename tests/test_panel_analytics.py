@@ -20,7 +20,8 @@ TOKEN = "t" * 32
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
 KEYS = {"available", "priced", "corrupt_lines", "since", "until", "days", "agent", "total", "previous", "services",
         "kinds", "day_series", "previous_cumulative", "trend", "agents", "subscriptions", "unpriced", "rows",
-        "buckets", "by_hour", "speed", "answers", "prompts", "media"}  # v5.22
+        "buckets", "by_hour", "speed", "answers", "prompts", "media",  # v5.22
+        "hour_series", "previous_hour_cumulative"}
 
 
 def gem(day, agent="kira", model="gemini-3.1-pro-preview"):

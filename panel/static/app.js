@@ -729,30 +729,35 @@ function anTilesHtml(d) {
     <div class="an-tile-value">${esc(v)}</div><div class="muted an-tile-sub">${esc(sub)}</div></div>`).join("")}</div>`;
 }
 function anChartsHtml(d) {
-  const W = chartW(), days = d.day_series.map((x) => x.day), ds = d.day_series;
+  // v5.22 (the owner: «за сьогодні і за вчора по годинах»): one day is drawn by the hour, against the day before
+  const hourly = Boolean(d.by_hour && d.hour_series?.length);
+  const W = chartW(), ds = hourly ? d.hour_series : d.day_series, days = ds.map((x) => hourly ? x.hour : x.day);
+  const at = (i) => hourly ? tipBucket(ds[i].hour) : ds[i].day, prevCum = hourly ? d.previous_hour_cumulative : d.previous_cumulative;
   const priced = d.services.filter((s) => s.cost).map((s) => s.service);
   const card = (title, sub, inner, extra = "") => `<section class="card an-chart"><div class="usage-head"><h3 class="card-title">${esc(title)}</h3>
     <span class="muted" style="font-size:12px">${esc(sub)}</span>${extra}</div>${inner}</section>`;
-  const cost = priced.length ? card("Cost a day", "by service, with the 7-day moving average",
-    svgStackedBars({days, keys: priced, parts: ds.map((x) => x.cost_by_service), line: ds.map((x) => x.cost_avg7), fmt: fmtCost, W,
-                    tip: (i) => [`${ds[i].day} · ${fmtCost(ds[i].cost)}`, ...priced.filter((k) => ds[i].cost_by_service[k]).map((k) => `${svcName(k)} ${fmtCost(ds[i].cost_by_service[k])}`),
-                                 `7-day average ${fmtCost(ds[i].cost_avg7)}`].join("\n")}) +
-    legend([...priced.map((k) => [svcName(k), svcColor(k)]), ["7-day average", "var(--color-text)", "ln"]]))
-    : card("Cost a day", "nothing priced in this period", "");
-  const prevTotal = d.previous_cumulative.at(-1);
-  const running = card("Running total", "this period against the previous one, day by day",
+  const costTitle = hourly ? "Cost an hour" : "Cost a day";
+  const cost = priced.length ? card(costTitle, hourly ? "by service" : "by service, with the 7-day moving average",
+    svgStackedBars({days, keys: priced, parts: ds.map((x) => x.cost_by_service), line: hourly ? [] : ds.map((x) => x.cost_avg7), fmt: fmtCost, W,
+                    tip: (i) => [`${at(i)} · ${fmtCost(ds[i].cost)}`, ...priced.filter((k) => ds[i].cost_by_service[k]).map((k) => `${svcName(k)} ${fmtCost(ds[i].cost_by_service[k])}`),
+                                 ...(hourly ? [] : [`7-day average ${fmtCost(ds[i].cost_avg7)}`])].join("\n")}) +
+    legend([...priced.map((k) => [svcName(k), svcColor(k)]), ...(hourly ? [] : [["7-day average", "var(--color-text)", "ln"]])]))
+    : card(costTitle, "nothing priced in this period", "");
+  const prevTotal = prevCum.at(-1);
+  const running = card("Running total", hourly ? "this day against the day before, hour by hour" : "this period against the previous one, day by day",
     svgLines({days, fmt: fmtCost, W, series: [
-      {label: "This period", color: "var(--color-accent)", values: ds.map((x) => x.cost_cumulative)},
-      {label: "Previous period", color: "var(--muted)", dashed: true, values: d.previous_cumulative}],
-    tip: (i) => `${ds[i].day} · this period ${fmtCost(ds[i].cost_cumulative)} · previous ${fmtCost(d.previous_cumulative[i])}`}) +
+      // today's hours to come are no line: it stops at the current hour
+      {label: "This period", color: "var(--color-accent)", values: ds.map((x, i) => hourly && d.since === panelToday() && i > new Date().getHours() ? null : x.cost_cumulative)},
+      {label: "Previous period", color: "var(--muted)", dashed: true, values: prevCum}],
+    tip: (i) => `${at(i)} · this period ${fmtCost(ds[i].cost_cumulative)} · previous ${fmtCost(prevCum[i])}`}) +
     legend([[`This period · ${fmtCost(ds.at(-1).cost_cumulative)}`, "var(--color-accent)", "ln"],
             [`Previous period · ${fmtCost(prevTotal)}`, "var(--muted)", "ln dash"]]));
   const metric = S.an.metric, all = d.services.map((s) => s.service), field = metric === "tokens" ? "tokens_by_service" : "calls_by_service";
   const toggle = `<div class="seg" role="group" aria-label="Activity" style="margin-left:auto">${[["calls", "Calls"], ["tokens", "Tokens"]].map(([k, l]) =>
     `<button data-act="an-metric" data-id="${k}" aria-pressed="${metric === k}">${l}</button>`).join("")}</div>`;
-  const activity = card("Activity a day", `${metric} by service`, svgLines({days, fmt: (v) => fmtM(Math.round(v)), W,
+  const activity = card(hourly ? "Activity an hour" : "Activity a day", `${metric} by service`, svgLines({days, fmt: (v) => fmtM(Math.round(v)), W,
     series: all.map((k) => ({label: svcName(k), color: svcColor(k), values: ds.map((x) => x[field][k] || 0)})),
-    tip: (i) => [`${ds[i].day}`, ...all.filter((k) => ds[i][field][k]).map((k) => `${svcName(k)} ${fmtInt(ds[i][field][k])}`)].join("\n")}) +
+    tip: (i) => [`${at(i)}`, ...all.filter((k) => ds[i][field][k]).map((k) => `${svcName(k)} ${fmtInt(ds[i][field][k])}`)].join("\n")}) +
     legend(all.map((k) => [svcName(k), svcColor(k), "ln"])), toggle);
   const shares = card("Shares", "of the cost (priced services) and of the calls (every service)", svgShare({W, rows: [
     {label: "Cost", fmt: fmtCost, parts: d.services.filter((s) => s.cost).map((s) => ({key: s.service, value: s.cost}))},
