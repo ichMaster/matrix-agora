@@ -2825,8 +2825,7 @@ Gemini's history (4bbb4e4) and a capped probe that closes only what it proved (e
 
 ### v5.21 — Blocked for good: the backup without the judge, its talk gone after a day
 
-**Status:** ⏳ planned (the owner, 2026-11-02). The logic as it runs before this phase, and this design in plain
-words: [features/private-messages.md](features/private-messages.md) (Ukrainian copy `private-messages-UA.md`).
+**Status:** ⏳ planned (the owner, 2026-11-02).
 
 **Goal:** one closed mark, `blocked`, for good. Whatever a Gemini block touches, and everything the backup says or
 answers, is `blocked`: the backup reads it as its history, and nothing else ever reads it; after a day it is deleted.
