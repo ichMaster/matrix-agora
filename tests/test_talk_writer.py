@@ -49,8 +49,8 @@ class Pro(EmbedLLM):
 def talking(tmp_path, monkeypatch, llm=None):
     agent = kira(tmp_path, monkeypatch, llm or Pro())
     agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "capabilities": agent.cfg.capabilities | {"talk"}})
-    agent.talk_hour_days, agent.talk_4h_days = 2, 14
-    agent.talk_words, agent.talk_prompt_words = {"hour": 60, "4h": 100, "week": 150}, 4000
+    agent.talk_hour_days, agent.talk_day_days = 3, 7
+    agent.talk_words, agent.talk_prompt_words = {"hour": 60, "day": 150}, 4000
     agent.clock = lambda: NOW
     return agent
 
@@ -73,7 +73,7 @@ def test_the_request_is_her_own_memory_without_a_date_or_a_word_of_what_she_is()
     assert "Без дат, без годин" in system and contents == "Розмова:\nIch: Привіт\nКіра: Привіт!"
     for word in ("модел", "бот", "штучн"):
         assert word not in system.lower()
-    _, folded = talk_request("4h", "Кіра", "Канон.", [("hour", "Ми гуляли."), ("hour", "Пили чай.")], 100, True)
+    _, folded = talk_request("day", "Кіра", "Канон.", [("hour", "Ми гуляли."), ("hour", "Пили чай.")], 150, True)
     assert folded == "Що ти пам'ятаєш про ці години, по черзі:\n- Ми гуляли.\n- Пили чай."
 
 
@@ -81,37 +81,40 @@ def test_the_backfill_writes_every_band_oldest_first_on_pro_and_never_reads_a_cl
                                                                                          caplog):
     caplog.set_level(logging.INFO)
     agent = talking(tmp_path, monkeypatch)
-    say(agent, "tg:w", ms(2026, 10, 15, 10), "Ich", "Тиждень тому про гори")
-    say(agent, "tg:b", ms(2026, 10, 20, 15), "Ich", "Про сеанс у планетарії")
+    say(agent, "tg:w", ms(2026, 10, 20, 15), "Ich", "Давно, про гори")            # older than 7 days: never written
+    say(agent, "tg:b", ms(2026, 10, 28, 15), "Ich", "Про сеанс у планетарії")
     say(agent, "tg:h1", ms(2026, 11, 2, 10, 5), "Ich", "Як спалось?")
     say(agent, "tg:h2", ms(2026, 11, 2, 10, 6), "Кіра", "Чудово")
     say(agent, "tg:c", ms(2026, 11, 2, 10, 7), "Ich", "закрите слово", mark="censored")
     drain(agent)
     rows = agent.archive.talk_rows()
-    assert [(r.level, r.start_ms) for r in rows] == [("week", ms(2026, 10, 12)), ("4h", ms(2026, 10, 20, 12)),
-                                                     ("hour", ms(2026, 11, 2, 10))]
+    assert [(r.level, r.start_ms) for r in rows] == [("day", ms(2026, 10, 28)), ("hour", ms(2026, 11, 2, 10))]
     assert all(c["model"] == "gemini-3.1-pro-preview" and c["kind"] == "talk_summary" for c in agent.llm.thought)
     assert not any("закрите слово" in c["contents"] for c in agent.llm.thought)
     hour = rows[-1]
     assert (hour.open_lines, hour.closed_lines, hour.left_out) == (2, 1, 0) and hour.text
-    assert len(agent.llm.thought) == 3                                     # each period once, never again
+    assert len(agent.llm.thought) == 2                                     # each period once, never again
     assert "Як спалось" not in caplog.text and "talk: hour 2026-11-02T10:00 — 2 open, 1 closed" in caplog.text
 
 
-def test_a_block_is_written_from_its_hours_when_they_cover_it_and_the_hours_stay(tmp_path, monkeypatch):
+def test_a_day_is_written_from_its_hours_when_they_cover_it_and_the_hours_stay(tmp_path, monkeypatch):
+    """v5.23: a day from its hours' summaries, at most `TALK_WORDS_DAY` words; a day with no hours (the first
+    backfill's days 4–7) from its own open lines; never a four-hour block or a week again."""
     agent = talking(tmp_path, monkeypatch)
-    say(agent, "tg:1", ms(2026, 10, 31, 9, 10), "Ich", "Перший рядок")
-    say(agent, "tg:2", ms(2026, 10, 31, 10, 40), "Кіра", "Другий рядок")
-    for t in (ms(2026, 10, 31, 9), ms(2026, 10, 31, 10)):
+    agent.talk_words["day"] = 3
+    say(agent, "tg:1", ms(2026, 10, 28, 9, 10), "Ich", "Перший рядок")
+    say(agent, "tg:2", ms(2026, 10, 28, 10, 40), "Кіра", "Другий рядок")
+    for t in (ms(2026, 10, 28, 9), ms(2026, 10, 28, 10)):
         agent.archive.talk_put("hour", t, t + 3_600_000, f"Година {t}.", 1, 0, 0, t)
     drain(agent)
-    block = agent.archive.talk_rows("4h")[0]
-    assert (block.start_ms, block.end_ms) == period_of("4h", ms(2026, 10, 31, 9, 10), "Europe/Kyiv")
+    day = agent.archive.talk_rows("day")[0]
+    assert (day.start_ms, day.end_ms) == period_of("day", ms(2026, 10, 28, 9, 10), "Europe/Kyiv")
     assert agent.llm.thought[-1]["contents"].startswith("Що ти пам'ятаєш про ці години")
-    assert len(agent.archive.talk_rows("hour")) == 2                       # the finer rows stay
-    say(agent, "tg:3", ms(2026, 10, 30, 9, 30), "Ich", "Рядок без години")  # no hour rows cover it: from its lines
+    assert len(day.text.split()) <= 3 and len(agent.archive.talk_rows("hour")) == 2    # the cap; the finer rows stay
+    say(agent, "tg:3", ms(2026, 10, 27, 9, 30), "Ich", "Рядок без години")  # no hour rows cover it: from its lines
     drain(agent)
     assert agent.llm.thought[-1]["contents"] == "Розмова:\nIch: Рядок без години"
+    assert agent.archive.talk_rows("4h") == [] and agent.archive.talk_rows("week") == []
 
 
 def test_a_blocked_period_is_halved_and_what_still_blocks_is_left_out_and_counted(tmp_path, monkeypatch):
@@ -210,9 +213,9 @@ def test_her_private_prompt_to_gemini_holds_the_summaries_before_the_window_and_
     say(agent, "tg:old", ms(2026, 10, 31, 9, 10), "Ich", "Давній рядок")
     say(agent, "tg:1", ms(2026, 11, 2, 11, 1), "Ich", "Новий рядок")
     say(agent, "tg:2", ms(2026, 11, 2, 11, 2), "Кіра", "І мій")
-    agent.archive.talk_put("4h", ms(2026, 10, 31, 8), ms(2026, 10, 31, 12), "Ми говорили про поїзд.", 1, 0, 0, 1)
+    agent.archive.talk_put("day", ms(2026, 10, 31), ms(2026, 11, 1), "Ми говорили про поїзд.", 1, 0, 0, 1)
     prompt = asyncio.run(agent._gemini_private_prompt(PRIVATE_BRIEF))
-    assert TALK_TITLE in prompt and "- позавчора вранці: Ми говорили про поїзд." in prompt
+    assert TALK_TITLE in prompt and "- позавчора: Ми говорили про поїзд." in prompt
     agent.fallback, agent.fallback_responder = Backup(), FallbackResponder(Backup())
     agent.fallback_context, agent.fallback_history_n = 32000, 60
     assert TALK_TITLE not in asyncio.run(agent._backup_private_prompt(PRIVATE_BRIEF))[0]
@@ -229,7 +232,7 @@ def test_the_owners_switches_his_new_lines_only_and_no_summaries(tmp_path, monke
     agent = talking(tmp_path, monkeypatch)
     for i, (who, text) in enumerate([("Ich", "Давнє"), ("Кіра", "Моє"), ("Ich", "Нове 1"), ("Ich", "Нове 2")]):
         say(agent, f"tg:{i}", ms(2026, 11, 2, 11, i), who, text)
-    agent.archive.talk_put("4h", ms(2026, 10, 31, 8), ms(2026, 10, 31, 12), "Ми говорили про поїзд.", 1, 0, 0, 1)
+    agent.archive.talk_put("day", ms(2026, 10, 31), ms(2026, 11, 1), "Ми говорили про поїзд.", 1, 0, 0, 1)
     assert [x.text for x in agent._gemini_lines()] == ["Давнє", "Моє", "Нове 1", "Нове 2"]
     agent.private_history_n = 1
     assert [x.text for x in agent._gemini_lines()] == ["Нове 1", "Нове 2"]     # never below his unanswered lines

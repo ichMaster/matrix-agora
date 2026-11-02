@@ -510,16 +510,16 @@ class Agent:
         # her own key (taken above), never Claude's state; the seam: tests pass canned fetches
         self.reading_sources = Sources(reading_key)
         # v5.20 — her layered memory of the private chat (`talk`): the hours' and blocks' bands, a summary's words
-        self.talk_hour_days, self.talk_4h_days, self.talk_words, self.talk_prompt_words = 0, 0, {}, 0
+        self.talk_hour_days, self.talk_day_days, self.talk_words, self.talk_prompt_words = 0, 0, {}, 0
         self._talk_lock, self._talk_check_ms, self._talk_retry_ms = asyncio.Lock(), 0, 0
         self._talk_fails: dict[tuple[str, int], int] = {}  # code review v5.20 #2: a period's unblocked failures
         self._talk_probed: bool | None = None  # the last probe's verdict in a tick (None: it failed or none ran)
         if cfg.can("talk"):
-            self.talk_hour_days = int(os.environ.get("TALK_HOUR_DAYS", "2"))
-            self.talk_4h_days = int(os.environ.get("TALK_4H_DAYS", "14"))
+            # v5.23 (the owner): 3 days by the hour, then a day each up to 7 days, nothing older in her prompt
+            self.talk_hour_days = int(os.environ.get("TALK_HOUR_DAYS", "3"))
+            self.talk_day_days = int(os.environ.get("TALK_DAY_DAYS", "7"))
             self.talk_words = {"hour": int(os.environ.get("TALK_WORDS_HOUR", "60")),
-                               "4h": int(os.environ.get("TALK_WORDS_4H", "100")),
-                               "week": int(os.environ.get("TALK_WORDS_WEEK", "150"))}
+                               "day": int(os.environ.get("TALK_WORDS_DAY", "150"))}
             self.talk_prompt_words = int(os.environ.get("TALK_PROMPT_WORDS", "4000"))
         # v5.14 — the backup for her private chat: on with `fallback`, a model and the token; its settings
         self.fallback: FallbackClient | None = None
@@ -1396,7 +1396,7 @@ class Agent:
             if self.talk_prompt_words <= 0:  # the owner's switch: no summaries in her prompt
                 return None
             return talk_section(self.archive.talk_rows(), lines[0].ts_ms if lines else self.clock(), now, self.tz,
-                                self.talk_prompt_words)
+                                self.talk_prompt_words, self.talk_day_days)
         except Exception as exc:  # noqa: BLE001
             log.error("talk: the summaries were not read (%s)", type(exc).__name__)
             return None
@@ -3173,7 +3173,7 @@ class Agent:
     async def _talk_tick(self) -> None:
         held = {(r.level, r.start_ms) for r in self.archive.talk_rows()}
         due = periods_due(self.clock(), self.tz, self.archive.private_open_times(), held, self.talk_hour_days,
-                          self.talk_4h_days)
+                          self.talk_day_days)
         if not due:
             return
         level, start, end = due[0]

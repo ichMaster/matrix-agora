@@ -1,5 +1,5 @@
-"""v5.20 — Кіра's layered memory of the private chat: the periods (an hour, a local four-hour block, a week) and which
-are due, pure over an injected clock; the archive's `talk` table and its readers (made-up lines only)."""
+"""v5.20 — Кіра's layered memory of the private chat: the periods (v5.23: an hour, a local day) and which are due, pure
+over an injected clock; the archive's `talk` table and its readers (made-up lines only)."""
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -15,35 +15,39 @@ def ms(*a):
     return int(datetime(*a, tzinfo=KYIV).timestamp() * 1000)
 
 
-def test_a_period_is_a_clock_hour_a_local_block_or_a_week_from_monday():
+def test_a_period_is_a_clock_hour_or_a_local_day():
+    import pytest
     assert period_of("hour", ms(2026, 11, 1, 13, 20), TZ) == (ms(2026, 11, 1, 13), ms(2026, 11, 1, 14))
-    assert period_of("4h", ms(2026, 11, 1, 13, 20), TZ) == (ms(2026, 11, 1, 12), ms(2026, 11, 1, 16))
-    assert period_of("4h", ms(2026, 11, 1, 23, 59), TZ) == (ms(2026, 11, 1, 20), ms(2026, 11, 2, 0))
-    assert period_of("week", ms(2026, 11, 1, 23, 0), TZ) == (ms(2026, 10, 26), ms(2026, 11, 2))   # Sunday → Monday
+    assert period_of("day", ms(2026, 11, 1, 23, 59), TZ) == (ms(2026, 11, 1), ms(2026, 11, 2))
+    for gone in ("4h", "week"):                                          # v5.23: never written again
+        with pytest.raises(ValueError):
+            period_of(gone, ms(2026, 11, 1, 13), TZ)
 
 
-def test_on_the_dst_day_a_block_and_a_week_have_their_true_length():
-    start, end = period_of("4h", ms(2026, 10, 25, 2, 30), TZ)           # 04:00 EEST became 03:00 EET that night
-    assert (start, end) == (ms(2026, 10, 25, 0), ms(2026, 10, 25, 4)) and end - start == 5 * 3_600_000
-    start, end = period_of("week", ms(2026, 10, 21, 12), TZ)
-    assert end - start == 7 * 86_400_000 + 3_600_000
+def test_on_the_dst_day_a_day_has_its_true_length():
+    start, end = period_of("day", ms(2026, 10, 25, 2, 30), TZ)          # 04:00 EEST became 03:00 EET that night
+    assert (start, end) == (ms(2026, 10, 25), ms(2026, 10, 26)) and end - start == 25 * 3_600_000
 
 
-def test_the_bands_oldest_first_and_never_a_period_held_or_not_over():
-    now = ms(2026, 11, 2, 12, 0)                                         # the hours' band from 10-31 12:00, blocks' 10-19 12:00
-    lines = [ms(2026, 10, 15, 10), ms(2026, 10, 20, 15), ms(2026, 10, 31, 9), ms(2026, 10, 31, 13, 10),
-             ms(2026, 11, 2, 9, 5), ms(2026, 11, 2, 10, 15), ms(2026, 11, 2, 11, 59)]
-    due = periods_due(now, TZ, lines, {("hour", ms(2026, 11, 2, 9))}, hour_days=2, fourh_days=14)
+def test_the_bands_three_days_by_the_hour_then_days_to_seven_oldest_first_and_nothing_older():
+    """v5.23 (the owner: «далі за попередні 2 доби по годині і потім 4 дні підсумок дня а решта вже РАГ»): the hours of
+    the last 3 days, the days ended before them and within 7 days, never a period held or not over, nothing older."""
+    now = ms(2026, 11, 5, 12, 0)                                         # the hours' band from 11-02 12:00, days' 10-29 12:00
+    lines = [ms(2026, 10, 27, 10), ms(2026, 10, 29, 10), ms(2026, 10, 30, 15), ms(2026, 11, 1, 9),
+             ms(2026, 11, 2, 9), ms(2026, 11, 2, 13, 10), ms(2026, 11, 5, 9, 5), ms(2026, 11, 5, 10, 15),
+             ms(2026, 11, 5, 11, 59)]
+    due = periods_due(now, TZ, lines, {("hour", ms(2026, 11, 5, 9))}, hour_days=3, day_days=7)
     assert due == [
-        ("week", ms(2026, 10, 12), ms(2026, 10, 19)),                    # wholly before the blocks' band
-        ("4h", ms(2026, 10, 20, 12), ms(2026, 10, 20, 16)),              # within it, before the hours'
-        ("4h", ms(2026, 10, 31, 8), ms(2026, 10, 31, 12)),               # ends right at the hours' band
-        ("hour", ms(2026, 10, 31, 13), ms(2026, 10, 31, 14)),
-        ("hour", ms(2026, 11, 2, 10), ms(2026, 11, 2, 11)),              # 09:00 is held
-        ("hour", ms(2026, 11, 2, 11), ms(2026, 11, 2, 12)),              # over at 12:00 sharp
-    ]
-    assert periods_due(ms(2026, 11, 2, 11, 45), TZ, [ms(2026, 11, 2, 11, 30)], set(), 2, 14) == []   # not over
-    assert periods_due(now, TZ, [], set(), 2, 14) == []                  # no open line, nothing due
+        ("day", ms(2026, 10, 29), ms(2026, 10, 30)),                     # ended after the days' edge (10-29 12:00)
+        ("day", ms(2026, 10, 30), ms(2026, 10, 31)),
+        ("day", ms(2026, 11, 1), ms(2026, 11, 2)),                       # ends before the hours' band
+        ("hour", ms(2026, 11, 2, 13), ms(2026, 11, 2, 14)),              # 11-02 09:00 is before the hours' band, and
+        ("hour", ms(2026, 11, 5, 10), ms(2026, 11, 5, 11)),              # its day is not over before it: not yet due
+        ("hour", ms(2026, 11, 5, 11), ms(2026, 11, 5, 12)),              # 09:00 is held; over at 12:00 sharp
+    ]                                                                    # 10-27: older than 7 days, never due
+    assert periods_due(ms(2026, 11, 2, 11, 45), TZ, [ms(2026, 11, 2, 11, 30)], set(), 3, 7) == []   # not over
+    assert periods_due(now, TZ, [], set(), 3, 7) == []                   # no open line, nothing due
+    assert not any(level in ("4h", "week") for level, _, _ in due)
 
 
 def test_the_talk_table_lives_beside_the_lines_and_a_row_is_written_once(tmp_path):
@@ -79,35 +83,38 @@ def row(level, start, end, text):
     return TalkRow(level, start, end, text, 1, 0, 0, end)
 
 
-def test_her_prompt_shows_each_period_at_its_coarsest_level_before_the_window_oldest_first():
+def test_her_prompt_shows_the_hours_and_the_days_before_the_window_oldest_first_and_nothing_older():
+    """v5.23: only `hour` and `day` rows ended within 7 days; a day with text hides its hours; an old four-hour block
+    or week is never shown; a day labelled by `ago` alone, an hour with its part of the day."""
     from agents.talk import TALK_TITLE, talk_section
-    now = datetime(2026, 11, 2, 12, 0, tzinfo=KYIV)                     # a Monday
-    rows = [row("hour", ms(2026, 11, 2, 11), ms(2026, 11, 2, 12), "Пізніше, у вікні."),
-            row("hour", ms(2026, 11, 2, 10), ms(2026, 11, 2, 11), "Кава."),
-            row("hour", ms(2026, 11, 1, 21), ms(2026, 11, 1, 22), "Вечір."),
-            row("hour", ms(2026, 11, 1, 22), ms(2026, 11, 1, 23), ""),   # all blocked: skipped
-            row("hour", ms(2026, 10, 31, 9), ms(2026, 10, 31, 10), "Деталь ранку."),
-            row("4h", ms(2026, 10, 31, 8), ms(2026, 10, 31, 12), "Ранок."),
-            row("4h", ms(2026, 10, 20, 12), ms(2026, 10, 20, 16), "Планетарій."),
-            row("week", ms(2026, 10, 12), ms(2026, 10, 19), "Гори.")]
-    section = talk_section(rows, before_ms=ms(2026, 11, 2, 10, 30), now=now, tz=TZ)
+    now = datetime(2026, 11, 5, 12, 0, tzinfo=KYIV)                     # a Thursday
+    rows = [row("hour", ms(2026, 11, 5, 11), ms(2026, 11, 5, 12), "Пізніше, у вікні."),
+            row("hour", ms(2026, 11, 4, 21), ms(2026, 11, 4, 22), "Вечір."),
+            row("hour", ms(2026, 11, 4, 22), ms(2026, 11, 4, 23), ""),   # all blocked: skipped
+            row("hour", ms(2026, 11, 1, 9), ms(2026, 11, 1, 10), "Деталь неділі."),
+            row("day", ms(2026, 11, 1), ms(2026, 11, 2), "Неділя."),
+            row("day", ms(2026, 10, 30), ms(2026, 10, 31), "Планетарій."),
+            row("day", ms(2026, 10, 27), ms(2026, 10, 28), "Давнє."),  # ended more than 7 days ago: her recall's
+            row("4h", ms(2026, 11, 2, 8), ms(2026, 11, 2, 12), "Блок."),
+            row("week", ms(2026, 10, 26), ms(2026, 11, 2), "Тиждень.")]
+    section = talk_section(rows, before_ms=ms(2026, 11, 5, 10, 30), now=now, tz=TZ)
     assert section == (f"{TALK_TITLE}\n"
-                       "- минулого місяця: Гори.\n"
-                       "- минулого місяця, вдень: Планетарій.\n"
-                       "- позавчора вранці: Ранок.\n"                   # its hour under it is not shown
-                       "- вчора ввечері: Вечір.\n"
-                       "- сьогодні вранці: Кава.")                      # the window's own hour is left to the window
+                       "- у п'ятницю: Планетарій.\n"                  # a day of the last week by its weekday
+                       "- у неділю: Неділя.\n"                          # its hour under it is not shown
+                       "- вчора ввечері: Вечір.")                       # the window's own hour is left to the window
     assert talk_section(rows, before_ms=ms(2026, 10, 1), now=now, tz=TZ) is None
-    budgeted = talk_section(rows, before_ms=ms(2026, 11, 2, 10, 30), now=now, tz=TZ, words_budget=9)
-    assert budgeted.splitlines()[1:] == ["- вчора ввечері: Вечір.", "- сьогодні вранці: Кава."]  # the oldest go first
+    budgeted = talk_section(rows, before_ms=ms(2026, 11, 5, 10, 30), now=now, tz=TZ, words_budget=8)
+    assert budgeted.splitlines()[1:] == ["- у неділю: Неділя.", "- вчора ввечері: Вечір."]  # the oldest go first
+    wider = talk_section(rows, before_ms=ms(2026, 11, 5, 10, 30), now=now, tz=TZ, day_days=10)
+    assert "- минулого тижня: Давнє." in wider                           # older than a week: by `ago`
 
 
 def test_an_empty_coarser_row_hides_nothing_so_its_hours_stay():
-    """Code review v5.20 #3: a block folded from its hours and blocked whole is written empty — its hours' own
-    summaries are still shown."""
+    """Code review v5.20 #3: a period folded from its hours and blocked whole is written empty — its hours' own
+    summaries are still shown (v5.23: a day)."""
     from agents.talk import TALK_TITLE, talk_section
     now = datetime(2026, 11, 4, 12, 0, tzinfo=KYIV)
-    rows = [row("4h", ms(2026, 11, 2, 8), ms(2026, 11, 2, 12), ""),
+    rows = [row("day", ms(2026, 11, 2), ms(2026, 11, 3), ""),
             row("hour", ms(2026, 11, 2, 9), ms(2026, 11, 2, 10), "Кава."),
             row("hour", ms(2026, 11, 2, 10), ms(2026, 11, 2, 11), "Прогулянка.")]
     assert talk_section(rows, before_ms=ms(2026, 11, 4, 11), now=now, tz=TZ) == (
@@ -118,3 +125,15 @@ def test_the_recheck_is_gone():
     """v5.21 (the owner, 2026-11-02): nothing reopens a closed line — the v5.20 re-check went."""
     from agents import talk
     assert not hasattr(talk, "sift") and not hasattr(talk, "main") and not hasattr(talk, "RECHECK_GROUP")
+
+
+def test_the_settings_are_three_days_by_the_hour_and_days_to_seven_and_the_old_levels_are_gone():
+    """v5.23: the bands' and the words' settings; v5.20's four-hour and week settings are gone — a saved override of
+    one is dropped at the next save and ignored at start (v5.21 code review #2)."""
+    from agents.settings import BY_NAME, validate
+    assert (BY_NAME["TALK_HOUR_DAYS"].default, BY_NAME["TALK_DAY_DAYS"].default, BY_NAME["TALK_WORDS_DAY"].default) == (
+        "3", "7", "150")
+    assert validate("TALK_DAY_DAYS", "2")[0] is None and validate("TALK_DAY_DAYS", "30")[0] == "30"
+    assert (BY_NAME["PRIVATE_HISTORY_HOURS"].default, BY_NAME["PRIVATE_HISTORY_MIN"].default) == ("24", "20")
+    for gone in ("TALK_4H_DAYS", "TALK_WORDS_4H", "TALK_WORDS_WEEK"):
+        assert gone not in BY_NAME

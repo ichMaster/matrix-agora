@@ -1,9 +1,11 @@
-"""v5.20 — Кіра's layered memory of the private chat (ROADMAP §v5.20, ARCHITECTURE §Memory).
+"""v5.20 — Кіра's layered memory of the private chat (ROADMAP §v5.20, §v5.23, ARCHITECTURE §Memory).
 
-On top of her private prompt stay the last `HISTORY_N` messages word for word. Below them, summaries of the open talk
-older than that window: by the hour for the last `TALK_HOUR_DAYS` days, by local four-hour blocks (00, 04, 08, 12, 16,
-20) up to `TALK_4H_DAYS`, by the week (Monday 00:00) after that. Gemini 3.1 Pro writes each one once, from the lines
-open to it; the rows live in her archive's `talk` table and are never rewritten. The closed talk is never summarized
+On top of her private prompt stays her last day of talk word for word (v5.23: the window by time). Below it, summaries
+of the open talk older than that window — v5.23 (the owner, 2026-11-02: «далі за попередні 2 доби по годині і потім
+4 дні підсумок дня а решта вже РАГ»): by the hour for the last `TALK_HOUR_DAYS` (3) days, by the local day up to
+`TALK_DAY_DAYS` (7), and nothing older (her recall brings it back). Gemini 3.1 Pro writes each one once, from the
+lines open to it; the rows live in her archive's `talk` table and are never rewritten — v5.20's four-hour blocks and
+weeks stay there, never written again and never shown. The closed talk is never summarized
 for Gemini: it is counted per period (v5.21: its text is emptied after a day, and nothing reopens it — the re-check
 went).
 
@@ -17,7 +19,7 @@ from zoneinfo import ZoneInfo
 
 from agents.world import PART_ADVERB, ago, part_of_day
 
-LEVELS = ("hour", "4h", "week")
+LEVELS = ("hour", "day")  # v5.23; the older rows' `4h` and `week` are kept, never due or shown
 DAY_MS = 86_400_000
 HOUR_MS = 3_600_000
 
@@ -27,47 +29,41 @@ def _ms(dt: datetime) -> int:
 
 
 def period_of(level: str, ts_ms: int, tz: str) -> tuple[int, int]:
-    """The local period of `level` that holds `ts_ms`: (start_ms, end_ms). An hour is an hour of the clock; a block and
-    a week start and end at local wall-clock times, so on a DST day they have their true length."""
-    zone = ZoneInfo(tz)
-    t = datetime.fromtimestamp(ts_ms / 1000, zone)
+    """The local period of `level` that holds `ts_ms`: (start_ms, end_ms). An hour is an hour of the clock; a day
+    (v5.23) starts and ends at local midnight, so a DST day has its true length."""
     if level == "hour":
         start = (ts_ms // HOUR_MS) * HOUR_MS  # Kyiv's offsets are whole hours
         return start, start + HOUR_MS
-    if level == "4h":
-        first = datetime(t.year, t.month, t.day, t.hour - t.hour % 4, tzinfo=zone)
-        nxt = first.replace(tzinfo=None) + timedelta(hours=4)
-        return _ms(first), _ms(datetime(nxt.year, nxt.month, nxt.day, nxt.hour, tzinfo=zone))
-    if level == "week":
-        monday = (t - timedelta(days=t.weekday())).date()
-        after = monday + timedelta(days=7)
-        return (_ms(datetime(monday.year, monday.month, monday.day, tzinfo=zone)),
+    if level == "day":
+        zone = ZoneInfo(tz)
+        day = datetime.fromtimestamp(ts_ms / 1000, zone).date()
+        after = day + timedelta(days=1)
+        return (_ms(datetime(day.year, day.month, day.day, tzinfo=zone)),
                 _ms(datetime(after.year, after.month, after.day, tzinfo=zone)))
     raise ValueError(f"unknown level {level!r}")
 
 
 def periods_due(now_ms: int, tz: str, open_times: list[int], held: set[tuple[str, int]], hour_days: int,
-                fourh_days: int) -> list[tuple[str, int, int]]:
+                day_days: int) -> list[tuple[str, int, int]]:
     """The periods to summarize, oldest first, as (level, start_ms, end_ms): each holds at least one line open to
     Gemini (`open_times`), is over, and is not `held` ((level, start_ms) already written).
     - `hour`: starting within the last `hour_days` days;
-    - `4h`: ended before the hours' band, and not wholly before the blocks' band (`fourh_days`);
-    - `week`: ended before the blocks' band."""
-    hour_cut, fourh_cut = now_ms - hour_days * DAY_MS, now_ms - fourh_days * DAY_MS
+    - `day` (v5.23): ended before the hours' band and within the last `day_days` days;
+    - nothing older (v5.23: her recall brings it back)."""
+    hour_cut, day_cut = now_ms - hour_days * DAY_MS, now_ms - day_days * DAY_MS
     due: dict[tuple[str, int], int] = {}
     for ts in open_times:
         for level in LEVELS:
             start, end = period_of(level, ts, tz)
             if (level, start) in held or (level, start) in due or end > now_ms:
                 continue
-            if (level == "hour" and start >= hour_cut) or (level == "4h" and fourh_cut < end <= hour_cut) or (
-                    level == "week" and end <= fourh_cut):
+            if (level == "hour" and start >= hour_cut) or (level == "day" and day_cut < end <= hour_cut):
                 due[(level, start)] = end
     return sorted(((lv, s, e) for (lv, s), e in due.items()), key=lambda p: (p[1], LEVELS.index(p[0])))
 
 
-SPAN = {"hour": "цієї години", "4h": "цих кількох годин", "week": "цього тижня"}
-FINER = {"4h": "hour", "week": "4h"}  # a block is written from its hours, a week from its blocks, when they cover it
+SPAN = {"hour": "цієї години", "day": "цього дня"}
+FINER = {"day": "hour"}  # v5.23: a day is written from its hours when they cover it, else from its lines
 TALK_SPLIT_MIN = 4   # a blocked part this small is left out, never halved again
 TALK_CALLS_MAX = 12  # a period's calls, halvings included
 TALK_FAILS_MAX = 3   # code review v5.20 #2: a period whose call keeps failing, unblocked at the prompt stage, is
@@ -103,25 +99,34 @@ TALK_TITLE = "Що було між вами раніше (твоя пам'ять
 TALK_PROMPT_WORDS = 4000  # her prompt's summaries at most: past it the oldest go first
 
 
+WEEKDAY_ON = ("у понеділок", "у вівторок", "у середу", "у четвер", "у п'ятницю", "у суботу", "у неділю")
+
+
 def _label(row, now: datetime, tz: str) -> str:
-    """When a period was, as a person remembers it (`ago`), with the part of the day for an hour or a block — never a
-    date or an hour."""
+    """When a period was, as a person remembers it (`ago`), with the part of the day for an hour — never a date or an
+    hour. v5.23: a day of the last week by its weekday («у неділю»: `ago` would call the four of them «минулого
+    тижня» alike), else by `ago` alone."""
     then = datetime.fromtimestamp(row.start_ms / 1000, ZoneInfo(tz))
     when = ago(then, now)
-    if row.level == "week" or when.startswith("сьогодні"):
+    if row.level == "day":
+        return WEEKDAY_ON[then.weekday()] if 2 < (now.date() - then.date()).days < 7 else when
+    if when.startswith("сьогодні"):
         return when
     part = PART_ADVERB[part_of_day(then.hour)]
     return f"{when} {part}" if when in ("вчора", "позавчора") else f"{when}, {part}"
 
 
-def talk_section(rows: list, before_ms: int, now: datetime, tz: str, words_budget: int = TALK_PROMPT_WORDS) -> str | None:
-    """Her private prompt's summaries (pure): each period shown at the coarsest level written for it — a row is left
-    out when a coarser row with text covers its start — only those that began before `before_ms` (the first line of Gemini's
-    history window), oldest first, an empty one skipped, labelled as she remembers it; past `words_budget` words the
-    oldest go first. None when nothing is left."""
-    coarser = {"hour": ("4h", "week"), "4h": ("week",), "week": ()}
-    shown = [r for r in rows if r.text and r.start_ms < before_ms and not any(  # an empty coarser row hides nothing
-        o.text and o.level in coarser[r.level] and o.start_ms <= r.start_ms < o.end_ms for o in rows)]  # (review #3)
+def talk_section(rows: list, before_ms: int, now: datetime, tz: str, words_budget: int = TALK_PROMPT_WORDS,
+                 day_days: int = 7) -> str | None:
+    """Her private prompt's summaries (pure): v5.23 — only the `hour` and `day` rows, those ended within the last
+    `day_days` days (nothing older: her recall brings it back), each period at the coarsest level written for it — an
+    hour is left out when a day with text covers its start (an empty one hides nothing) — only those that began
+    before `before_ms` (the first line of Gemini's history window), oldest first, an empty one skipped, labelled as
+    she remembers it; past `words_budget` words the oldest go first. None when nothing is left."""
+    cut = int(now.timestamp() * 1000) - day_days * DAY_MS
+    kept = [r for r in rows if r.level in LEVELS and r.end_ms > cut]
+    shown = [r for r in kept if r.text and r.start_ms < before_ms and not (r.level == "hour" and any(
+        o.text and o.level == "day" and o.start_ms <= r.start_ms < o.end_ms for o in kept))]  # (review v5.20 #3)
     shown.sort(key=lambda r: r.start_ms)
     lines = [f"- {_label(r, now, tz)}: {r.text}" for r in shown]
     while lines and sum(len(x.split()) for x in lines) > words_budget:
