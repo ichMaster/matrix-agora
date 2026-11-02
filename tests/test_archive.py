@@ -350,7 +350,7 @@ def test_a_censored_line_is_read_by_no_gemini_reader_and_never_embedded_again(ar
 
 
 # --- v5.14: the mark `waiting` and the backup's readers ------------------------------------------------------------------
-def test_v5_13s_censored_lines_wait_once_and_the_judges_censored_stay(tmp_path):
+def test_v5_13s_censored_lines_migrate_once_to_blocked_and_stay(tmp_path):
     path = tmp_path / "kira.archive.db"
     a = Archive(path)
     a.append("a", 1, "private", "telegram", "Ich", "рядок")
@@ -360,13 +360,14 @@ def test_v5_13s_censored_lines_wait_once_and_the_judges_censored_stay(tmp_path):
     a.close()
     a = Archive(path)
     try:
-        assert a.db.execute("SELECT mark FROM lines").fetchone() == ("waiting",)  # v5.13 review #3
-        a.mark(["a"], "censored")  # v5.15's judge: for good
+        # v5.13 review #3 made it `waiting`; v5.21 made every closed mark `blocked` — both steps once, in order
+        assert a.db.execute("SELECT mark FROM lines").fetchone() == ("blocked",) and a.migrated == 1
+        assert a.mark(["a"], "censored") == 0 and a.mark(["a"], "gemini") == 0  # a blocked line never changes
     finally:
         a.close()
     a = Archive(path)
     try:
-        assert a.db.execute("SELECT mark FROM lines").fetchone() == ("censored",)  # never migrated again
+        assert a.db.execute("SELECT mark FROM lines").fetchone() == ("blocked",) and a.migrated == 0  # never again
     finally:
         a.close()
 
@@ -388,8 +389,8 @@ def test_a_waiting_line_is_for_the_backup_only(arc):
         == ["a", "b"]
     assert arc.lines([ids[1]]) == {} and arc.lines([ids[1]], gemini=False)[ids[1]].mark == "waiting"
     assert ids[1] not in arc.vectors(("private",))[0] and ids[1] not in [i for i, _ in arc.unembedded(10)]
-    arc.mark(["b"], "gemini")  # opened again (v5.15's judge, clean): embedded again on the next tick
-    assert ids[1] in [i for i, _ in arc.unembedded(10)]
+    assert arc.mark(["b"], "gemini") == 0 and arc.mark(["b"], "clean") == 0  # v5.21: nothing opens a closed line
+    assert ids[1] not in [i for i, _ in arc.unembedded(10)]
 
 
 def test_a_facts_mark_reaches_the_archive_mirror(arc):
@@ -402,7 +403,8 @@ def test_a_facts_mark_reaches_the_archive_mirror(arc):
 # --- v5.15: the judge's marks ----------------------------------------------------------------------------------------------
 def test_the_marks_and_the_judges_readers(tmp_path):
     from agents.archive import GEMINI_CLOSED, MARKS
-    assert MARKS == ("gemini", "waiting", "censored", "clean", "reopened") and GEMINI_CLOSED == ("censored", "waiting", "reopened")
+    assert MARKS == ("gemini", "waiting", "censored", "clean", "reopened", "blocked")
+    assert GEMINI_CLOSED == ("blocked", "waiting", "censored", "reopened")  # v5.21: the older three stay closed
     a = Archive(tmp_path / "kira.archive.db")
     for i, mark in enumerate(("waiting", "gemini", "waiting", "clean", "censored")):
         a.append(f"k{i}", ms(17, i), "private", "telegram", "Ich", f"рядок номер {i}")
@@ -412,3 +414,24 @@ def test_the_marks_and_the_judges_readers(tmp_path):
     assert {line.key for line in a.by_keys(["k1", "k4", "nope"])} == {"k1", "k4"}  # every mark, by key
     assert {line.key for line in a.latest("private", 10)} == {"k1", "k3"}       # Gemini reads gemini and clean
     assert {i for i, _ in a.unembedded(10)} == {line.id for line in a.by_keys(["k1", "k3"])}
+
+
+# --- v5.21: one closed mark, `blocked`, for good -------------------------------------------------------------------------
+def test_a_blocked_line_is_closed_to_gemini_and_an_emptied_one_leaves_her_history(tmp_path, monkeypatch):
+    """v5.21 (the owner, 2026-11-02: «все що створено в бекап має назавжди бути закрито»): Gemini's readers never
+    return a `blocked` line, it is never embedded, it never changes, and a row emptied after a day (AGORA-181) is not
+    in the history the backup reads."""
+    agent = kira(tmp_path, monkeypatch, EmbedLLM())
+    a = agent.archive
+    a.append("k0", ms(17, 0), "private", "telegram", "Ich", "відкритий рядок")
+    a.append("k1", ms(17, 1), "private", "telegram", "Ich", "закритий рядок")
+    a.append("k2", ms(17, 2), "private", "telegram", "Кіра", "спорожнілий рядок")
+    assert a.mark(["k1", "k2"], "blocked") == 2 and a.mark(["k1"], "blocked") == 0
+    assert a.mark(["k1"], "clean") == 0 and a.mark(["k1"], "waiting") == 0          # never changes
+    a.db.execute("UPDATE lines SET text = '' WHERE key = 'k2'")
+    a.db.commit()
+    assert [x.key for x in a.latest("private", 10)] == ["k0"]
+    assert [x.key for x in a.private_between(0, ms(18, 0))] == ["k0"]
+    assert {i for i, _ in a.unembedded(10)} == {a.by_keys(["k0"])[0].id}
+    agent.seed_private_from_archive()
+    assert agent.private_history == [("Ich", "відкритий рядок"), ("Ich", "закритий рядок")]

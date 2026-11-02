@@ -459,16 +459,31 @@ def test_the_extraction_never_sees_a_closed_fact(tmp_path, monkeypatch):
 # --- v5.15: a fact follows the judge's verdict ----------------------------------------------------------------------------
 def test_a_facts_mark_is_set_in_place_by_the_verdict(tmp_path):
     from agents.facts import CLOSED_MARKS, FACT_MARKS, add_fact, load_facts, set_mark
-    assert FACT_MARKS == ("gemini", "waiting", "censored", "clean", "reopened")
-    assert CLOSED_MARKS == ("waiting", "censored", "reopened")  # v5.15.4: the backup's, never Gemini's
+    assert FACT_MARKS == ("gemini", "waiting", "censored", "clean", "reopened", "blocked")
+    assert CLOSED_MARKS == ("blocked", "waiting", "censored", "reopened")  # v5.21: the older three stay closed
     folder = tmp_path / "kira.facts"
+    opened = add_fact(folder, "Любить каву", 1, "asked", "2026-10-28", 50, 240)
+    assert set_mark(folder, opened, "clean")                              # open stays open
     waits = add_fact(folder, "Живе біля парку", 2, "asked", "2026-10-28", 50, 240, mark="waiting")
-    assert set_mark(folder, waits, "clean")
+    assert not set_mark(folder, waits, "clean")                           # v5.21: nothing opens a closed fact
+    assert set_mark(folder, waits, "blocked")
     raw = (folder / f"{waits}.md").read_text(encoding="utf-8")
-    assert "mark: clean" in raw and "pin: 2" in raw and "added: 2026-10-28" in raw and "source: asked" in raw
-    assert [(f.text, f.mark) for f in load_facts(folder)] == [("Живе біля парку", "clean")]
+    assert "mark: blocked" in raw and "pin: 2" in raw and "added: 2026-10-28" in raw and "source: asked" in raw
+    assert not set_mark(folder, waits, "censored") and not set_mark(folder, waits, "gemini")  # blocked never changes
+    assert sorted((f.text, f.mark) for f in load_facts(folder)) == [("Живе біля парку", "blocked"),
+                                                                      ("Любить каву", "clean")]
     assert not set_mark(folder, waits, "whatever") and not set_mark(folder, "../x", "clean")
     assert not set_mark(folder, "f-missing", "clean")
+
+
+def test_the_older_closed_marks_of_the_facts_become_blocked_once(tmp_path):
+    """v5.21: `waiting`, `censored` and `reopened` facts become `blocked` once; `clean` and `gemini` stay open."""
+    from agents.facts import add_fact, load_facts, migrate_marks
+    folder = tmp_path / "kira.facts"
+    for i, mark in enumerate(("gemini", "waiting", "censored", "clean", "reopened")):
+        add_fact(folder, f"Факт номер {i}", 1, "asked", "2026-10-28", 50, 240, mark=mark)
+    assert migrate_marks(folder) == 3 and migrate_marks(folder) == 0
+    assert sorted(f.mark for f in load_facts(folder)) == ["blocked", "blocked", "blocked", "clean", "gemini"]
 
 
 def test_a_new_text_drops_the_judges_clean_and_a_closed_fact_stays_closed(tmp_path):

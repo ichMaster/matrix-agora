@@ -109,6 +109,9 @@ from agents.facts import (
     split_marker,
 )
 from agents.facts import (
+    migrate_marks as migrate_fact_marks,
+)
+from agents.facts import (
     set_mark as set_fact_mark,
 )
 from agents.fallback import TOKEN_VAR as FALLBACK_TOKEN_VAR
@@ -684,6 +687,8 @@ class Agent:
         if cfg.can("recall"):
             try:  # v5.8 review #4: a bad archive never stops her start — she answers without recall
                 self.archive = Archive(self.memory_file.parent / f"{cfg.localpart}.archive.db")
+                if self.archive.migrated:  # v5.21: the older closed marks became `blocked` once
+                    log.warning("archive: %d closed lines are blocked now (v5.21)", self.archive.migrated)
             except Exception as exc:  # noqa: BLE001
                 log.error("archive: unreadable (%s) — running without it", type(exc).__name__)
             self.recall_n = int(os.environ.get("RECALL_N", "6"))
@@ -701,6 +706,12 @@ class Agent:
             self.facts_max = int(os.environ.get("FACTS_MAX", "100"))
             self.facts_in_prompt = int(os.environ.get("FACTS_IN_PROMPT", "25"))
             self.fact_max_chars = int(os.environ.get("FACT_MAX_CHARS", "240"))
+            try:  # v5.21, once: the older closed marks of her facts are `blocked`
+                moved = migrate_fact_marks(self.facts_dir)
+                if moved:
+                    log.warning("facts: %d closed facts are blocked now (v5.21)", moved)
+            except OSError as exc:
+                log.error("facts: the marks were not migrated (%s)", type(exc).__name__)
         # v5.3 — its own voice (VOICE_ID: the agent's <NAME>_VOICE_ID unless the panel says otherwise), how often it
         # speaks in it, and the speakers' monthly budget; read only by an agent with `voice`
         self.voice_id, self.voice_reply_p, self.voice_monthly_chars = "", 0.0, 0
@@ -1838,6 +1849,7 @@ class Agent:
         except Exception as exc:  # noqa: BLE001 — v5.8 review #4: the homeserver's history stays
             log.error("archive: the private history was not read (%s)", type(exc).__name__)
             return
+        lines = [line for line in lines if line.text]  # v5.21: a `blocked` line emptied after a day is gone
         if not lines:
             return
         self.private_history = [(line.speaker, line.text) for line in lines]

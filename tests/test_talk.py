@@ -157,7 +157,8 @@ def test_the_recheck_command_reopens_what_passes_and_prints_counts_only(tmp_path
     monkeypatch.setattr(llm_mod, "GeminiClient", Client)
     assert main(["recheck", "--since", "2026-11-01", "--until", "2026-11-01"]) == 0
     out = capsys.readouterr().out
-    assert out.strip() == "recheck: 2 censored · reopened 1 · still closed 1 · calls 3"
+    # v5.21: the archive opens no closed line, so what passes stays closed too (the command goes in AGORA-181)
+    assert out.strip() == "recheck: 2 censored · reopened 0 · still closed 1 · calls 3"
     arc = Archive(tmp_path / "state" / "kira.archive.db")
     marks = dict(arc.db.execute("SELECT key, mark FROM lines").fetchall())
-    assert marks == {"tg:0": "clean", "tg:1": "censored", "tg:2": "reopened", "tg:3": "censored"}
+    assert marks == {"tg:0": "censored", "tg:1": "censored", "tg:2": "reopened", "tg:3": "censored"}

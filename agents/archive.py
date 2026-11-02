@@ -43,15 +43,18 @@ AGORA_NOW_TITLE = "Що сьогодні говорять в Агорі:"
 # rates it) and `censored` (the judge's verdict, for good); v5.15 adds `clean` (the judge rated it clean: Gemini's
 # again, embedded at the next tick) and `reopened` (a line of the backup's talk the judge rated clean; v5.15.4, the
 # owner, 2026-10-31: closed to Gemini for good, like `waiting` — Gemma twice rated clean what Gemini's prohibited-content
-# filter blocks, and the reflection wrote thoughts from such lines). Gemini's readers never return a line whose mark is
-# in `GEMINI_CLOSED`, and it is never embedded; the backup's readers (`gemini=False`) return every one. `/purge` deletes
-# `BACKUP_MARKS`.
-MARKS = ("gemini", "waiting", "censored", "clean", "reopened")
-GEMINI_CLOSED = ("censored", "waiting", "reopened")
-BACKUP_MARKS = ("waiting", "censored", "reopened")  # the backup's talk, whatever the judge said
+# filter blocks, and the reflection wrote thoughts from such lines). v5.21 (the owner, 2026-11-02: «все що створено в
+# бекап має назавжди бути закрито і ніколи не відкрито»): one closed mark, `blocked`, for good — whatever a Gemini block
+# touches and everything the backup says or answers; the three older closed marks became `blocked` once (`PRAGMA
+# user_version` 2) and stay closed if one is left. Gemini's readers never return a line whose mark is in
+# `GEMINI_CLOSED`, and it is never embedded; the backup's readers (`gemini=False`) return every one. `/purge` deletes
+# `BACKUP_MARKS`. Nothing opens a closed line: `mark()` never sets an open mark on one, and never changes a `blocked` one.
+MARKS = ("gemini", "waiting", "censored", "clean", "reopened", "blocked")
+GEMINI_CLOSED = ("blocked", "waiting", "censored", "reopened")
+BACKUP_MARKS = GEMINI_CLOSED  # the backup's talk and whatever Gemini blocked
 _OPEN = f"mark NOT IN ({','.join(repr(m) for m in GEMINI_CLOSED)})"
 _COLS = "id, key, ts_ms, place, channel, speaker, text, mark"
-SCHEMA_VERSION = 1  # v5.14: v5.13's `censored` lines (Gemini's verdict alone) became `waiting` once (review #3)
+SCHEMA_VERSION = 2  # v5.14: v5.13's `censored` lines became `waiting` once (review #3); v5.21: every closed one `blocked`
 
 
 def _open_to(gemini: bool, alias: str = "") -> str:
@@ -184,13 +187,19 @@ class Archive:
             os.close(os.open(path, os.O_WRONLY | os.O_CREAT, 0o600))
         os.chmod(path, 0o600)
         self.db = sqlite3.connect(path)
+        self.migrated = 0  # v5.21: lines moved to `blocked` at this open (logged by the agent)
         self.db.executescript(SCHEMA)
         if "mark" not in {r[1] for r in self.db.execute("PRAGMA table_info(lines)")}:  # v5.13: migrated in place
             with self.db:
                 self.db.execute("ALTER TABLE lines ADD COLUMN mark TEXT NOT NULL DEFAULT 'gemini'")
-        if self.db.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:  # v5.14, once (v5.13 review #3)
+        version = self.db.execute("PRAGMA user_version").fetchone()[0]
+        if version < SCHEMA_VERSION:  # each step once, in order
             with self.db:
-                self.db.execute("UPDATE lines SET mark = 'waiting' WHERE mark = 'censored'")
+                if version < 1:  # v5.14 (v5.13 review #3)
+                    self.db.execute("UPDATE lines SET mark = 'waiting' WHERE mark = 'censored'")
+                # v5.21: the older closed marks are `blocked`, for good; `clean` and `gemini` stay open (the owner)
+                self.migrated = self.db.execute("UPDATE lines SET mark = 'blocked', emb = NULL WHERE mark IN "
+                                                "('waiting', 'censored', 'reopened')").rowcount
                 self.db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         # v5.8 review #5: the embedded vectors, read once and kept normalised in memory — (ids, places, matrix) —
         # appended as lines are embedded; a recall never reads them all from the file again
@@ -224,14 +233,16 @@ class Archive:
 
     def mark(self, keys: Iterable[str], mark: str) -> int:
         """v5.14 — set these lines' mark; a mark closed to Gemini drops their vectors (they are never embedded again).
-        How many."""
+        v5.21: a `blocked` line never changes, and an open mark is never set on a closed line — nothing opens it. How
+        many changed."""
         keys = [k for k in keys if k]
         if not keys or mark not in MARKS:
             return 0
         closed = mark in GEMINI_CLOSED
+        guard = "mark != 'blocked'" if closed else _OPEN
         with self.db:
             cur = self.db.execute(f"UPDATE lines SET mark = ?{', emb = NULL' if closed else ''} WHERE key IN "
-                                  f"({','.join('?' * len(keys))})", (mark, *keys))
+                                  f"({','.join('?' * len(keys))}) AND {guard}", (mark, *keys))
         if closed:
             self._cache = None  # their vectors leave the matrix: read again at the next recall
         return cur.rowcount

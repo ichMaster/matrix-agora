@@ -39,7 +39,7 @@ def next_mark(was: str | None, verdict: str | None) -> str | None:
     (`gemini`, `clean`) — the backup's talk stays closed as `reopened`, a censored one stays censored; unrated, or an
     item gone, changes nothing. A closed mark never becomes an open one (the owner, 2026-10-31: a build without
     `reopened` had made four of the backup's facts `clean`, in every prompt of hers to Gemini)."""
-    if verdict not in (CLEAN, FLAGGED) or was is None or was == "censored":
+    if verdict not in (CLEAN, FLAGGED) or was is None or was in ("censored", "blocked"):  # v5.21: `blocked` too
         return None
     new = "censored" if verdict == FLAGGED else "reopened" if was in BACKUPS else "clean"
     return None if new == was else new

@@ -85,10 +85,11 @@ def off_limits(text: str) -> str | None:
 
 # v5.14 — a fact's mark, as an archive line's: `gemini` (the default, never written), or `waiting` — kept from the
 # backup's «запам'ятай», closed to Gemini until v5.15's judge rates it — or `censored`; v5.15 `clean` (rated clean) and
-# `reopened` (the backup's, rated clean; v5.15.4: closed to Gemini for good, as an archive line's)
-FACT_MARKS = ("gemini", "waiting", "censored", "clean", "reopened")
-CLOSED_MARKS = ("waiting", "censored", "reopened")
-BACKUP_FACT_MARKS = ("waiting", "censored", "reopened")  # what `/purge` deletes
+# `reopened` (the backup's, rated clean; v5.15.4: closed to Gemini for good, as an archive line's); v5.21 `blocked`, the
+# one closed mark for good (the older three became it once, `migrate_marks`). Nothing opens a closed fact.
+FACT_MARKS = ("gemini", "waiting", "censored", "clean", "reopened", "blocked")
+CLOSED_MARKS = ("blocked", "waiting", "censored", "reopened")
+BACKUP_FACT_MARKS = CLOSED_MARKS  # what `/purge` deletes
 
 
 @dataclass(frozen=True)
@@ -214,15 +215,28 @@ def set_pin(folder: Path, fact_id: str, pin: int) -> bool:
 
 def set_mark(folder: Path, fact_id: str, mark: str) -> bool:
     """v5.15 — a fact's mark after the judge's verdict (`clean` or `censored`), written in place: its text, pin, date
-    and source unchanged. Whether it was written."""
+    and source unchanged. v5.21: a `blocked` fact never changes, and a closed one is never opened. Whether it was
+    written."""
     path = fact_path(folder, fact_id)
     if path is None or mark not in FACT_MARKS:
         return False
     old = parse_fact(fact_id, path.read_text(encoding="utf-8"))
-    if old is None:
+    if old is None or old.mark == "blocked" or (old.mark in CLOSED_MARKS and mark not in CLOSED_MARKS):
         return False
     _write(path, Fact(fact_id, old.pin, old.added, old.source, old.text, mark))
     return True
+
+
+def migrate_marks(folder: Path) -> int:
+    """v5.21, once at her start — the older closed marks (`waiting`, `censored`, `reopened`) become `blocked`, for
+    good; `clean` and `gemini` stay open (the owner). How many (never a name: a fact's file name is its text's slug)."""
+    moved = 0
+    for fact in load_facts(folder):
+        path = fact_path(folder, fact.id)
+        if fact.mark in ("waiting", "censored", "reopened") and path is not None:
+            _write(path, Fact(fact.id, fact.pin, fact.added, fact.source, fact.text, "blocked"))
+            moved += 1
+    return moved
 
 
 def purge_closed_facts(folder: Path) -> int:
