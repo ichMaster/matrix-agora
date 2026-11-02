@@ -275,15 +275,15 @@ def test_the_skill_never_says_a_video_is_made():
 
 
 def test_her_next_video_waits_out_the_pause_after_her_last(tmp_path, monkeypatch, media):
-    """v5.22 (the owner, 2026-11-02: «те саме постав для відео але більше паузу … 2 години»): after a video, no video
+    """v5.22 (the owner, 2026-11-02: «те саме постав для відео але більше паузу»): after a video, no video
     skill until `VIDEO_GAP_S` has passed — read from today's kept videos' names."""
     agent = kira(tmp_path, monkeypatch, "Ось")
-    agent.video_gap_s = 7200
+    agent.video_gap_s = 6000
     videos_dir(agent).mkdir(parents=True)
     (videos_dir(agent) / "170000.mp4").write_bytes(b"MP4")                                  # her last video, at 17:00
     agent.clock = lambda: ms(18, 30)
     assert agent._video_closed("telegram", "note") == "pause" and agent._video_kinds("telegram") == ()
-    agent.clock = lambda: ms(19, 1)
+    agent.clock = lambda: ms(18, 41)
     assert agent._video_closed("telegram", "note") is None and "note" in agent._video_kinds("telegram")
 
 

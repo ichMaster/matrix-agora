@@ -201,8 +201,9 @@ SCHEMA: tuple[Setting, ...] = (
     _s("PHOTO_DAY_MAX", "int", "40", "private", "cap:photos", None, "Скільки фото на день щонайбільше (запобіжник)",
        "", 0, 200),
     # v5.22 (the owner, 2026-11-02: «Кіра висилає фото з кожним меседжем»; «щоб виходило макс 40 на день, бо вона
-    # використає все за ранок»; «став 30 хв»): her next photo no sooner than this after the last (0: none)
-    _s("PHOTO_GAP_S", "int", "1800", "private", "cap:photos", None, "Пауза між її фото (0 — без паузи)", "s", 0, 86400),
+    # використає все за ранок»; «рахуй … скільки у неї там час»): her next photo no sooner than this after the last —
+    # her active day (08–01, 17 h) / the day's 40 ≈ 25 min (0: none)
+    _s("PHOTO_GAP_S", "int", "1500", "private", "cap:photos", None, "Пауза між її фото (0 — без паузи)", "s", 0, 86400),
     # v5.18 — her videos in Telegram (`videos`): her clips' model and size, her кружечок's model and length, and a
     # day's cap for both together (the owner: as free as her photos — a safeguard only; a video costs $0.5–2; 0: off)
     _s("VIDEO_MODEL", "choice", "gemini-omni-1.1-flash", "private", "cap:videos", None, "Модель її відео",
@@ -216,8 +217,8 @@ SCHEMA: tuple[Setting, ...] = (
     _s("VIDEO_DAY_MAX", "int", "40", "private", "cap:videos", None, "Скільки відео на день щонайбільше (запобіжник)",
        "", 0, 200),
     # v5.22 (the owner, 2026-11-02: «те саме постав для відео але більше паузу»): her next video no sooner than this
-    # after the last — «і 2 години» (0: none)
-    _s("VIDEO_GAP_S", "int", "7200", "private", "cap:videos", None, "Пауза між її відео (0 — без паузи)", "s", 0, 86400),
+    # after the last — her active day (17 h) / her day's 10 ≈ 1 h 40 min (0: none)
+    _s("VIDEO_GAP_S", "int", "6000", "private", "cap:videos", None, "Пауза між її відео (0 — без паузи)", "s", 0, 86400),
     # only models that run with thinking off — every call sends thinking_budget=0 (v4.7 review #1: 2.5 Pro cannot)
     _s("GEMINI_MODEL", "choice", "gemini-2.5-flash", "model", "engine:gemini", None, "Модель Gemini",
        choices=("gemini-2.5-flash", "gemini-2.5-flash-lite")),

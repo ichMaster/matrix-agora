@@ -537,7 +537,7 @@ class Agent:
         self._pending_shot: Shot | None = None
         if cfg.can("photos"):
             self.photo_day_max = int(os.environ.get("PHOTO_DAY_MAX", "40"))
-            self.photo_gap_s = int(os.environ.get("PHOTO_GAP_S", "1800"))  # v5.22: the pause between her photos
+            self.photo_gap_s = int(os.environ.get("PHOTO_GAP_S", "1500"))  # v5.22: the pause between her photos
             faces = load_faces(Path("agents/canon") / f"{cfg.localpart}.face")
             if isinstance(self.llm, GeminiClient):
                 self.photos = photo_maker(os.environ.get("PHOTO_MODEL", "gemini-nano-banana-2.1").strip() or PHOTO_MODEL,
@@ -559,7 +559,7 @@ class Agent:
         self.voice_hold_miss: str | None = None
         if cfg.can("videos"):
             self.video_day_max = int(os.environ.get("VIDEO_DAY_MAX", "40"))
-            self.video_gap_s = int(os.environ.get("VIDEO_GAP_S", "7200"))
+            self.video_gap_s = int(os.environ.get("VIDEO_GAP_S", "6000"))
             self.video_note_max_s = int(os.environ.get("VIDEO_NOTE_MAX_S", "30"))
             self.video_note_lead_ms = int(os.environ.get("VIDEO_NOTE_LEAD_MS", "1000"))  # Telegram cuts her first sound
             if isinstance(self.llm, GeminiClient):
