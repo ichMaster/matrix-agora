@@ -1,5 +1,5 @@
 """v5.14, v5.21 — the owner's Telegram commands for her route: `/status`, `/gemini` (back to Gemini now), `/backup` (by
-hand until `/gemini`), `/purge` and the list; a service line, never voiced, never a trace in her talk (a fake bot; no
+hand until `/gemini`), v5.22's `/unblock` (the pair before a block closed), `/purge` and the list; a service line, never voiced, never a trace in her talk (a fake bot; no
 network)."""
 
 import asyncio
@@ -128,7 +128,7 @@ def test_the_command_list_is_set_for_the_owners_chat_only(monkeypatch):
     assert asyncio.run(bot.set_commands(OWNER_TG)) is True
     method, body = calls[0]
     assert method == "setMyCommands" and body["scope"] == {"type": "chat", "chat_id": OWNER_TG}
-    assert [c["command"] for c in body["commands"]] == ["status", "gemini", "backup", "purge"]  # v5.21: no /auto
+    assert [c["command"] for c in body["commands"]] == ["status", "gemini", "backup", "unblock", "purge"]  # no /auto
 
 
 def test_a_saved_window_shows_in_status(tmp_path, monkeypatch):
@@ -184,3 +184,55 @@ def test_purge_yes_without_asking_or_too_late_only_asks(tmp_path, monkeypatch):
     agent.clock = lambda: ms(18, 3)                                        # more than two minutes later
     run_batch(agent, tg(2, "/purge yes", at=ms(18, 3)))
     assert agent.archive.closed_count() == 3 and "/purge yes" in texts_sent(agent)[-1]
+
+
+# --- v5.22 /unblock: the pair before a block closed, one pair a command (the owner, 2026-11-02) -------------------------
+def with_block(tmp_path, monkeypatch):
+    from agents.archive import Archive
+    agent = with_backup(kira(tmp_path, monkeypatch))
+    agent.archive = Archive(tmp_path / "kira.archive.db")
+    for n, (speaker, text, mark) in enumerate((("Ich", "перше питання", "gemini"), ("Кіра", "перша відповідь", "gemini"),
+                                               ("Ich", "друге питання", "gemini"), ("Кіра", "друга відповідь", "gemini"),
+                                               ("Ich", "рядок у блоці", "blocked"),
+                                               ("Кіра", "відповідь backup", "blocked"))):
+        agent.archive.append(f"k{n}", ms(16, n), "private", "telegram", speaker, text)
+        agent.archive.mark([f"k{n}"], mark)
+        agent.private_history.append((speaker, text))
+        if mark == "blocked":
+            agent._closed.add((speaker, text))
+    agent.session.extend([("Ich (наодинці)", "друге питання"), ("Кіра (наодинці)", "друга відповідь")])
+    return agent
+
+
+def test_unblock_closes_the_pair_before_the_block_one_pair_a_command(tmp_path, monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
+    agent = with_block(tmp_path, monkeypatch)
+    route_before = agent.route_file.exists()
+    run_batch(agent, tg(1, "/unblock", at=ms(17, 30)))
+    answer = texts_sent(agent)[-1]
+    assert answer.startswith("⚙️ Закрито для gemini: Ich 16:02, Кіра 16:03\n⚙️ Маршрут — gemini")
+    assert agent.gemini_history() == [("Ich", "перше питання"), ("Кіра", "перша відповідь")]
+    assert agent.archive.closed_count() == 4 and ("Ich", "друге питання") in agent._closed
+    assert agent.session == [] and agent.route_file.exists() == route_before   # out of the session; the route as it is
+    assert agent.archive.search_words("друге", ("private",)) == []
+    run_batch(agent, tg(2, "/unblock", at=ms(17, 31)))                         # by hand, as often as he likes
+    assert "Ich 16:00, Кіра 16:01" in texts_sent(agent)[-1] and agent.gemini_history() == []
+    run_batch(agent, tg(3, "/unblock", at=ms(17, 32)))
+    assert texts_sent(agent)[-1] == "⚙️ Відкритих рядків немає: нічого не закрито"
+    assert agent.telegram.send_voice.await_count == 0
+    assert "unblock: 2 line(s) marked blocked" in caplog.text and "питання" not in caplog.text
+
+
+def test_unblock_never_takes_his_line_still_waiting_for_her_answer(tmp_path, monkeypatch):
+    agent = with_block(tmp_path, monkeypatch)
+    agent.archive.append("k9", ms(16, 9), "private", "telegram", "Ich", "нове питання")
+    agent._unanswered = [("k9", "нове питання")]
+    run_batch(agent, tg(1, "/unblock", at=ms(17, 30)))
+    assert "Ich 16:02, Кіра 16:03" in texts_sent(agent)[-1]
+    assert agent.gemini_history()[-1] == ("Ich", "нове питання")
+
+
+def test_unblock_names_another_days_date(tmp_path, monkeypatch):
+    agent = with_block(tmp_path, monkeypatch)
+    agent.clock = lambda: ms(16) + 86_400_000
+    assert agent.unblock_answer().startswith("⚙️ Закрито для gemini: Ich 20.10 16:02, Кіра 20.10 16:03\n")

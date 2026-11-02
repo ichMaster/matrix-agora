@@ -1714,7 +1714,8 @@ class Agent:
 
     async def telegram_command(self, text: str) -> None:
         """v5.14 — the owner's command: `/status`, v5.21's `/gemini` (back to Gemini now: the backup mode ends and the
-        hour's count is emptied) and `/backup` (the backup until `/gemini`), `/purge`; anything else, the list.
+        hour's count is emptied) and `/backup` (the backup until `/gemini`), v5.22's `/unblock` (the pair before a
+        block closed), `/purge`; anything else, the list.
         One ⚙️ service line, sent as text, never voiced; never in her history, the archive, the facts, the session or a
         prompt, and never a reset of her writing-first timer. Logged by the command's name only."""
         name = command_of(text)
@@ -1726,6 +1727,8 @@ class Agent:
             answer = self.status_answer()
         elif name == "status":
             answer = self.status_answer()
+        elif name == "unblock":
+            answer = self.unblock_answer()
         elif name == "purge":
             answer = self.purge_answer(command_args(text))
         else:
@@ -1733,6 +1736,36 @@ class Agent:
         log.info("telegram: command %s", name if name in known else "unknown")
         if not await self.telegram.send_message(self.telegram_owner, answer):
             log.warning("telegram: the command's answer was not delivered")
+
+    def unblock_answer(self) -> str:
+        """v5.22 (the owner, 2026-11-02: «просто закриває попередню пару до початку блоку … я руками зроблю стільки раз
+        скільки хочу») — `/unblock`: the last line of his and the last line of hers that Gemini's window still holds
+        (after a block every line is `blocked` already, so the pair before it) become `blocked`, for good — out of her
+        prompt, her recall and the session. His line still waiting for her answer is never taken; the route is left
+        as it is. Each `/unblock` closes one pair more. Speakers and times only, never a text."""
+        lines = self._gemini_lines()
+        if lines is None:
+            return "⚙️ Архів недоступний: нічого не закрито"
+        waiting = {key for key, _ in self._unanswered}
+        pair = [line for line in (next((x for x in reversed(lines) if x.speaker == who and x.key not in waiting), None)
+                                  for who in ("Ich", self.cfg.name)) if line is not None]
+        if not pair:
+            return "⚙️ Відкритих рядків немає: нічого не закрито"
+        try:
+            closed = self.archive.mark([line.key for line in pair], "blocked")
+        except Exception as exc:  # noqa: BLE001
+            log.error("unblock: the lines were not marked (%s)", type(exc).__name__)
+            return "⚙️ Не закрито: архів не відповів"
+        self.close_lines([(line.speaker, line.text) for line in pair])
+        log.warning("unblock: %d line(s) marked blocked", closed)
+        today = local_now(self.clock(), self.tz).date()
+
+        def when(ms: int) -> str:
+            at = local_now(ms, self.tz)
+            return at.strftime("%H:%M" if at.date() == today else "%d.%m %H:%M")
+
+        named = ", ".join(f"{line.speaker} {when(line.ts_ms)}" for line in sorted(pair, key=lambda x: (x.ts_ms, x.id)))
+        return f"⚙️ Закрито для gemini: {named}\n{self.status_answer()}"
 
     def purge_answer(self, args: list[str]) -> str:
         """v5.14 — `/purge` asks first (how much would go; `/purge yes` within `PURGE_CONFIRM_S` confirms), then

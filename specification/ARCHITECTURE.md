@@ -120,7 +120,11 @@ The invariants every reply path must honor:
    `FALLBACK_HOUR_MAX`; her private chat's closed (`blocked`) lines; today's answers by gemini and by backup — the
    day's counts from her usage lines, `day_counts`), `/gemini` (v5.21: back to Gemini now — the backup mode ends and
    the hour's count is emptied), `/backup` (the backup until `/gemini`; both through `route_step`; `/auto` went in
-   v5.21), and
+   v5.21), **`/unblock`** (v5.22, the owner, 2026-11-02: «просто закриває попередню пару до початку блоку»;
+   `unblock_answer`: the last line of his and the last line of hers still in Gemini's window — after a block, the
+   pair before it — are marked `blocked` for good and leave the session; his line still waiting for her answer is
+   never taken, the route is left as it is, and each `/unblock` closes one pair more; the answer names the speakers
+   and the times, then the `/status` lines), and
    any other the list (`COMMAND_HELP`); without the backup a pin says it is off. **`/purge`** (the owner, 2026-10-30)
    answers with how many lines and facts would go and waits for `/purge yes` within `PURGE_CONFIRM_S` (120 s); then
    `purge_backup_talk` deletes the backup's talk — v5.21 `Archive.empty_blocked` (every closed line, `BACKUP_MARKS`,
