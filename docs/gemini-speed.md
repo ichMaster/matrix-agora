@@ -100,6 +100,54 @@ Gemini's history comes after the instruction, so the common start would hold the
 
 **What the cache does buy is price, not speed.** Google bills cached input tokens at a fraction of the normal input price, and an explicit cache adds a storage charge per hour.
 
+## The canon alone
+
+**Measured:** 2026-11-02, after the cache test, on the server, inside Кіра's container.
+**Question (the owner):** the canon alone, with no dynamic content, with a cache and without.
+
+### Method
+
+- **The prompt.** The instruction is her canon and the rules line only: `build_instruction` with no other section. It has no place-and-time line, no today block, no mood, thoughts, facts, recall or talk summaries, no style line, and no history window. That is 8,400 characters, 3,089 tokens.
+- **The calls.** Each model got 4 calls, carrying the same made-up lines as the cache test: 1, 3, 5 and then 7 of them, his line last.
+- **Without a cache.** The instruction was sent whole with each call.
+- **With a cache.** The instruction went into an explicit cache once (`caches.create`, TTL 600 s), and each call sent only the made-up lines. The cache was deleted afterwards. Argon has no explicit cache, so it is in the first run only.
+- **What was recorded.** The wall time, the token counts and the cached tokens. No answer's text was read or kept.
+
+### Results
+
+Each cell lists the 4 calls, with 1, 3, 5 and 7 lines. The last column is the same model with her whole prompt (about 42,000 tokens) and no cache, from the first test.
+
+| Model | Thinking | No cache (s) | Explicit cache (s) | Thinking tokens (no cache · cache) | Her whole prompt (s) |
+|---|---|---|---|---|---|
+| `gemini-3.1-pro-preview` | `low` | 13.2 · 9.8 · 11.9 · 10.0 | 9.0 · 11.2 · 10.9 · 7.1 | 880–1,167 · 523–1,026 | 12.9 · 14.4 · 13.3 |
+| `gemini-3.8-flash` | `low` | 2.1 · 1.9 · 2.3 · 2.8 | 3.1 · 2.9 · 2.6 · 2.3 | 0 · 0 | 4.3 · 4.5 · 4.4 |
+| `gemini-3.7-flash` | `low` | 2.6 · 2.6 · 2.8 · 2.5 | 2.3 · 2.5 · 2.4 · 2.5 | 0 · 0 | 3.3 · 4.1 · 3.9 |
+| `gemini-3.5-flash` | `low` | 3.9 · 5.0 · 4.7 · 5.1 | 1.7 · 6.0 · 5.5 · 4.4 | 410–620 · 0–666 | 5.4 · 7.3 · 8.6 |
+| `gemini-3-flash-preview` | `minimal` | 1.1 · 1.6 · 1.2 · 1.5 | 1.3 · 1.5 · 1.4 · 1.2 | 0 · 0 | 3.1 · 3.6 · 3.1 |
+| `gemini-2.5-flash` | off | 0.8 · 0.9 · 0.7 · 0.9 | 0.8 · 0.8 · 0.8 · 0.8 | 0 · 0 | 2.0 · 1.7 · 1.8 |
+| `gemini-4-argon` | `low` | 4.2 · 3.8 · 4.7 · 3.8 | — | 0 | 6.7 · 5.2 · 5.5 |
+
+Notes on the table:
+- **No implicit cache.** Without an explicit cache, no call had a cached token, on any model.
+- **The explicit cache** took 1.2–1.4 s to create and was accepted at 3,089 tokens on every model that has one, 3.1 Pro included.
+- **No blocks.** None of the 52 calls was blocked, Argon's included.
+- **Shorter answers.** The answers were 21–112 tokens, against 57–330 with her whole prompt. A shorter answer takes less time to write, so part of the gain below comes from that.
+
+### What the canon-alone numbers say
+
+**With a prompt this small, the cache makes no difference.** On every model the times with and without the cache lie within the same range, about ±0.5 s.
+
+**The size of the prompt does make a difference.** Going from about 42,000 tokens to 3,000 saved:
+- about 1–2 s on the Flash models, roughly half their time;
+- about 1–2 s on Argon;
+- about 2–3 s on 3.1 Pro.
+
+**On 3.1 Pro the thinking is still most of the time.** It thought for 520–1,170 tokens before each answer, and its times follow those counts. Its fastest call (7.1 s) had its smallest count (523). With no history and no dynamic sections it still took 7–13 s.
+
+**3.5 Flash's thinking comes and goes.** At `low` it thought for 410–666 tokens in most calls and for 0 in one, and its time follows that: 1.7 s with no thinking, 4–6 s with it.
+
+**The canon is a small part of her prompt.** It is about 3,000 of her 42,000 tokens. The rest is the dynamic sections and Gemini's history window. So caching the static start of her prompt (the canon) would save no time that can be measured, and little on the price.
+
 ## Open questions before a switch
 
 - **Quality.** Her language and character on a Flash model compared with 3.1 Pro. The owner judges this in a real conversation.
