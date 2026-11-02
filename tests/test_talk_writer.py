@@ -144,6 +144,42 @@ def test_a_failure_writes_nothing_and_backs_off(tmp_path, monkeypatch, caplog):
     assert not agent.talk_is_due() and "tried again later" in caplog.text
 
 
+class Stuck(Pro):
+    """A summary blocked at the answer stage: `think` gives None, and `probe` says the prompt passes."""
+
+    async def think(self, contents, system_instruction, model="", max_output_tokens=0, kind="", level=None):
+        self.thought.append({"contents": contents, "kind": kind})
+        return None if "застрягле" in contents else f"Пам'ятаю {contents.count(chr(10))} речей."
+
+    async def probe(self, transcript, system_instruction, kind="probe"):
+        self.probed.append(transcript)
+        return False
+
+
+def test_a_period_that_keeps_failing_unblocked_is_left_empty_and_the_next_one_is_written(tmp_path, monkeypatch):
+    """Code review v5.20 #2: an answer-stage block is no prompt-stage block — after three tries the period is written
+    empty, its lines counted as left out, and the writer moves on to the next one."""
+    agent = talking(tmp_path, monkeypatch, Stuck())
+    say(agent, "tg:1", ms(2026, 11, 2, 9, 1), "Ich", "застрягле")
+    say(agent, "tg:2", ms(2026, 11, 2, 10, 1), "Ich", "Привіт")
+    for tick in range(2):
+        drain(agent, 1)
+        assert agent.archive.talk_rows() == [], tick                  # tried again later, twice
+    drain(agent, 1)
+    stuck = [r for r in agent.archive.talk_rows() if r.start_ms == ms(2026, 11, 2, 9)]
+    assert len(stuck) == 1 and stuck[0].text == "" and stuck[0].left_out == 1
+    drain(agent, 1)
+    assert any(r.start_ms == ms(2026, 11, 2, 10) and r.text for r in agent.archive.talk_rows())
+
+
+def test_an_outage_never_leaves_a_period_empty(tmp_path, monkeypatch):
+    """Code review v5.20 #2: a failed call whose probe failed too is an outage — tried again, never given up."""
+    agent = talking(tmp_path, monkeypatch, Pro(down=True))
+    say(agent, "tg:1", ms(2026, 11, 2, 10, 1), "Ich", "Привіт")
+    drain(agent, 6)
+    assert agent.archive.talk_rows() == []
+
+
 def test_a_summary_naming_what_she_is_is_written_again_then_left_empty(tmp_path, monkeypatch):
     agent = talking(tmp_path, monkeypatch, Pro(banned=1))
     say(agent, "tg:1", ms(2026, 11, 2, 10, 1), "Ich", "Привіт")

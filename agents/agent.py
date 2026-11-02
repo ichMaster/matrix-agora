@@ -250,6 +250,7 @@ from agents.talk import (
     FINER,
     TALK_CALLS_MAX,
     TALK_CHECK_MS,
+    TALK_FAILS_MAX,
     TALK_SPLIT_MIN,
     covered,
     iso_hour,
@@ -502,6 +503,8 @@ class Agent:
         # v5.20 — her layered memory of the private chat (`talk`): the hours' and blocks' bands, a summary's words
         self.talk_hour_days, self.talk_4h_days, self.talk_words, self.talk_prompt_words = 0, 0, {}, 0
         self._talk_lock, self._talk_check_ms, self._talk_retry_ms = asyncio.Lock(), 0, 0
+        self._talk_fails: dict[tuple[str, int], int] = {}  # code review v5.20 #2: a period's unblocked failures
+        self._talk_probed: bool | None = None  # the last probe's verdict in a tick (None: it failed or none ran)
         if cfg.can("talk"):
             self.talk_hour_days = int(os.environ.get("TALK_HOUR_DAYS", "2"))
             self.talk_4h_days = int(os.environ.get("TALK_4H_DAYS", "14"))
@@ -3293,11 +3296,20 @@ class Agent:
         from_summaries = covered([x.ts_ms for x in lines], finer)
         items = ([(r.level, r.text) for r in finer if r.text] if from_summaries
                  else [(x.speaker, history_entry(x.text)) for x in lines])
+        self._talk_probed = None
         text, left_out = (await self._talk_text(level, items, from_summaries, [0])) if items else ("", 0)
-        if text is None:  # a failure, not a block: the period stays due
-            self._talk_retry_ms = self.clock() + 600_000
-            log.warning("talk: %s %s not written — the call failed (tried again later)", level, iso_hour(start, self.tz))
-            return
+        if text is None:  # a failure, not a prompt-stage block: the period stays due — for a while
+            fails = self._talk_fails.get((level, start), 0) + (self._talk_probed is False)  # an outage never counts
+            if fails < TALK_FAILS_MAX:
+                self._talk_fails[(level, start)] = fails
+                self._talk_retry_ms = self.clock() + 600_000
+                log.warning("talk: %s %s not written — the call failed (tried again later)", level,
+                            iso_hour(start, self.tz))
+                return
+            self._talk_fails.pop((level, start), None)  # code review v5.20 #2: never the oldest due for good
+            text, left_out = "", len(items)
+            log.warning("talk: %s %s left empty — %d failures with no prompt-stage block", level,
+                        iso_hour(start, self.tz), fails)
         self.archive.talk_put(level, start, end, text, open_n, closed_n, left_out, self.clock())
         log.info("talk: %s %s — %d open, %d closed, %d left out, %d words%s", level, iso_hour(start, self.tz), open_n,
                  closed_n, left_out, len(text.split()), " (from the finer summaries)" if from_summaries else "")
@@ -3321,7 +3333,8 @@ class Agent:
         if text is not None:
             return cap_words(text, self.talk_words[level]), 0
         probe = getattr(self.llm, "probe", None)
-        if probe is None or await probe(contents, system) is not True:
+        self._talk_probed = await probe(contents, system) if probe is not None else None
+        if self._talk_probed is not True:
             return None, 0
         if len(items) <= TALK_SPLIT_MIN or calls[0] >= TALK_CALLS_MAX:
             return "", len(items)

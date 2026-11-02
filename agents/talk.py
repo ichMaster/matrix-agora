@@ -69,6 +69,8 @@ SPAN = {"hour": "цієї години", "4h": "цих кількох годин
 FINER = {"4h": "hour", "week": "4h"}  # a block is written from its hours, a week from its blocks, when they cover it
 TALK_SPLIT_MIN = 4   # a blocked part this small is left out, never halved again
 TALK_CALLS_MAX = 12  # a period's calls, halvings included
+TALK_FAILS_MAX = 3   # code review v5.20 #2: a period whose call keeps failing, unblocked at the prompt stage, is
+                     # then written empty — else, always the oldest due, it stalls every later one
 TALK_CHECK_MS = 30_000  # how often the idle watcher looks for a period due: a backfill of 60 takes half an hour
 
 
