@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 from collections.abc import Callable
 from contextvars import ContextVar
 from typing import Any
@@ -63,7 +64,14 @@ LAST_BLOCK: ContextVar[tuple[str, str, str | None] | None] = ContextVar("gemini_
 _REFUSAL_RE = re.compile(r"(?<!\w)(?:" + "|".join(re.escape(m) for m in REFUSAL_MARKERS) + r")(?!\w)")
 
 
+# v5.22 — when this task's call began, on the client's monotonic clock: a call's usage line holds its time. A
+# context variable, as `LAST_BLOCK`: concurrent calls in other tasks never share it.
+_CALL_T0: ContextVar[float | None] = ContextVar("gemini_call_t0", default=None)
+
+
 class GeminiClient:
+    _mono = staticmethod(time.monotonic)  # v5.22: the calls' clock — a test sets its own
+
     def __init__(self, sink: UsageSink | None = None) -> None:
         self._client = genai.Client()  # reads GEMINI_API_KEY from the environment
         self._sink = sink
@@ -77,13 +85,19 @@ class GeminiClient:
                 block: tuple[str, str, str | None] | None = None) -> None:
         if self._sink is None:
             return
+        t0 = _CALL_T0.get()
+        latency = round((self._mono() - t0) * 1000) if t0 is not None else None  # v5.22: from the call's start
         try:
-            if block:  # v5.13: only a block passes its stage, so a four-argument sink keeps working
-                self._sink(kind, model or self.model, usage, ok, blocked=block[0])
+            if block:  # v5.13: only a block passes its stage
+                self._sink(kind, model or self.model, usage, ok, blocked=block[0], latency_ms=latency)
             else:
-                self._sink(kind, model or self.model, usage, ok)
+                self._sink(kind, model or self.model, usage, ok, latency_ms=latency)
         except Exception:
             log.exception("usage accounting failed")
+
+    def _start(self) -> None:
+        """v5.22 — a call begins: its usage line measures from here."""
+        _CALL_T0.set(self._mono())
 
     def _empty(self, resp: Any, kind: str, model: str, usage: Any, line: str) -> None:
         """v5.13 — an empty answer: a block is reported with its stage and logged by stage, reason and category (never
@@ -122,6 +136,7 @@ class GeminiClient:
         (v5.8) overrides `GEMINI_MODEL` for this call — a model that runs with thinking off."""
         LAST_BLOCK.set(None)
         model = model or self.model
+        self._start()
         try:
             resp = await self._client.aio.models.generate_content(
                 model=model,
@@ -160,6 +175,7 @@ class GeminiClient:
             return await self.complete(transcript, system_instruction, max_output_tokens, kind, self.reply_model,
                                        refusal=True)  # v5.13: an answer — a refusal in it is a block
         model = self.reply_model
+        self._start()
         try:
             resp = await self._client.aio.models.generate_content(
                 model=model,
@@ -194,6 +210,7 @@ class GeminiClient:
         model = self.reply_model
         thinking = (types.ThinkingConfig(include_thoughts=False, thinking_level=types.ThinkingLevel.LOW)
                     if model in THINKING_MODELS else types.ThinkingConfig(thinking_budget=0))
+        self._start()
         try:
             resp = await self._client.aio.models.generate_content(
                 model=model,
@@ -221,6 +238,7 @@ class GeminiClient:
         lines, `RETRIEVAL_QUERY` for a recall's question. None on failure or a short answer (logged by type)."""
         if not texts:
             return []
+        self._start()
         try:
             resp = await self._client.aio.models.embed_content(
                 model=EMBED_MODEL, contents=texts,
@@ -240,6 +258,7 @@ class GeminiClient:
     async def search(self, question: str, max_output_tokens: int = 800, kind: str = "sky") -> str | None:
         """A grounded answer — Gemini with Google Search, as Lumi's web lookup (core/weblookup.py): the question is
         asked of the live internet; the sources stay out of the answer. None on failure (logged by type)."""
+        self._start()
         try:
             resp = await self._client.aio.models.generate_content(
                 model=self.model,
@@ -265,6 +284,7 @@ class GeminiClient:
         """v5.1 — one call with thinking on (a Pro model rejects a zero budget): the answer is the non-thought text;
         the usage line names this call's model. `level` (`low`, …) bounds the thinking — the chat with the owner
         answers in seconds, the digest thinks at the model's default. None on failure or an empty answer."""
+        self._start()
         try:
             resp = await self._client.aio.models.generate_content(
                 model=model,

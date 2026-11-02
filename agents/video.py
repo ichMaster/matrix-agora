@@ -21,7 +21,9 @@ import base64
 import logging
 import os
 import tempfile
+import time
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -160,8 +162,20 @@ class _Blocked(Exception):
     pass
 
 
+# v5.22 — when this task's video call began, on the maker's monotonic clock (from the submit to the result), read by
+# `_report`; a context variable, as each video is made in a task of its own
+_T0: ContextVar[float | None] = ContextVar("video_call_t0", default=None)
+
+
+def _took(mono: Callable[[], float]) -> int | None:
+    t0 = _T0.get()
+    return round((mono() - t0) * 1000) if t0 is not None else None
+
+
 class ClipMaker:
     """Gemini Omni Flash through the SDK (`client.aio.interactions`, in the background, polled), from her frame."""
+
+    _mono = staticmethod(time.monotonic)  # v5.22: the calls' clock — a test sets its own
 
     def __init__(self, client, model: str = MODEL, resolution: str = "720p", sink: Callable | None = None,
                  poll_s: float = POLL_S, timeout_s: float = TIMEOUT_S,
@@ -175,9 +189,9 @@ class ClipMaker:
             return
         try:
             if blocked:
-                self._sink("video", self.model, usage, ok, blocked=blocked)
+                self._sink("video", self.model, usage, ok, blocked=blocked, latency_ms=_took(self._mono))
             else:
-                self._sink("video", self.model, usage, ok)
+                self._sink("video", self.model, usage, ok, latency_ms=_took(self._mono))
         except Exception:
             log.exception("usage accounting failed")
 
@@ -187,6 +201,7 @@ class ClipMaker:
         request = clip_request(shot, moment)
         for attempt in (1, 2):
             submitted: list = []
+            _T0.set(self._mono())  # v5.22: each attempt is its own call
             try:
                 done = await asyncio.wait_for(self._run(request, frame, mime, submitted), self._timeout_s)
             except Exception as exc:  # noqa: BLE001 — any provider failure: no clip, never a crash
@@ -266,6 +281,8 @@ class NoteMaker:
         self.model = model if model in NOTE_MODELS else NOTE_MODEL
         self._sink, self._poll_s, self._timeout_s, self._sleep = sink, poll_s, timeout_s, sleep
 
+    _mono = staticmethod(time.monotonic)  # v5.22: the calls' clock — a test sets its own
+
     def __repr__(self) -> str:  # never the key
         return f"NoteMaker(model={self.model!r})"
 
@@ -273,7 +290,7 @@ class NoteMaker:
         if self._sink is None:
             return
         try:
-            self._sink(self.model, video_ms, ok, blocked)
+            self._sink(self.model, video_ms, ok, blocked, latency_ms=_took(self._mono))
         except Exception:
             log.exception("usage accounting failed")
 
@@ -284,6 +301,7 @@ class NoteMaker:
         files = ((frame, frame_mime), (mp3, "audio/mpeg"))
         for attempt in (1, 2):
             submitted: list = []
+            _T0.set(self._mono())  # v5.22: from the submit to the result
             try:
                 return await asyncio.wait_for(self._run(files, seconds, submitted), self._timeout_s)
             except (_Retry, TimeoutError, aiohttp.ClientConnectionError) as exc:

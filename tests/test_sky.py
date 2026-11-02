@@ -105,6 +105,6 @@ def test_the_gemini_search_is_grounded_by_google_search(monkeypatch):
 
     monkeypatch.setattr(llm_mod.genai, "Client", lambda: SimpleNamespace(aio=SimpleNamespace(models=Models())))
     usage = []
-    out = asyncio.run(llm_mod.GeminiClient(sink=lambda *a: usage.append(a)).search("питання"))
+    out = asyncio.run(llm_mod.GeminiClient(sink=lambda *a, **k: usage.append(a)).search("питання"))
     assert out == "Сонце — Терези 18°" and seen["contents"] == "питання"
     assert seen["config"].tools[0].google_search is not None and usage[0][0] == "sky"

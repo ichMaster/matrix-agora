@@ -22,10 +22,18 @@ KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
          "judge",                             # v5.15: the judge rating her backup's talk (OpenRouter)
          "probe",                             # v5.16: Gemini asked whether it blocks a part of a blocked prompt
          "photo",                             # v5.17: Google's image model, her photo in Telegram
-         "video", "video_note")               # v5.18: her clip (Omni Flash) and her кружечок (Fabric 1.0 on fal)
+         "video", "video_note",               # v5.18: her clip (Omni Flash) and her кружечок (Fabric 1.0 on fal)
+         "frame")                             # v5.22: the image model drawing a video's first frame
 # v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan; v5.1 also the ElevenLabs
 # plan's credits), `external` (Lumi's own)
 BILLING = ("api", "subscription", "external")
+
+
+def _ms(value: Any) -> int | None:
+    """v5.22 — a call's time as whole milliseconds, or null (never negative, never a bool)."""
+    if isinstance(value, bool) or not isinstance(value, int | float) or not math.isfinite(value):
+        return None
+    return max(0, round(value))
 
 
 def _count(usage: Any, field: str) -> int | None:
@@ -42,10 +50,11 @@ def _output(usage: Any) -> int | None:
 
 
 def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: bool,
-               blocked: str | None = None) -> dict:
+               blocked: str | None = None, latency_ms: int | None = None) -> dict:
     """One record per Gemini call (v2 since v4.4: engine, billing, cache tokens; v3 since v5.1: `characters`, null
     here, and the thinking counted in the output; v5 since v5.13: `blocked`, the stage of a safety block — `prompt`
-    or `answer` — or null). Missing metadata → nulls. Never any text."""
+    or `answer` — or null; v7 since v5.22: `latency_ms`, the call's wall time on a monotonic clock, on every kind of
+    line). Missing metadata → nulls. Never any text."""
     return {
         "ts": ts_iso,
         "agent": agent,
@@ -64,10 +73,12 @@ def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: b
         "audio_ms": None,
         "blocked": blocked,
         "video_ms": None,  # v6 (v5.18): a video's length, on a `video_note` line only
+        "latency_ms": _ms(latency_ms),  # v7 (v5.22): how long the call took
     }
 
 
-def tts_usage_line(ts_iso: str, agent: str, model: str, characters: int, ok: bool) -> dict:
+def tts_usage_line(ts_iso: str, agent: str, model: str, characters: int, ok: bool,
+                   latency_ms: int | None = None) -> dict:
     """v5.1 — one record per text-to-speech call (ElevenLabs): counted in characters, paid from the plan's credits
     (`subscription`, never priced); no tokens. Never any text."""
     return {
@@ -79,10 +90,12 @@ def tts_usage_line(ts_iso: str, agent: str, model: str, characters: int, ok: boo
         "audio_ms": None,
         "blocked": None,  # v5.13: one line shape — only a Gemini call is ever blocked
         "video_ms": None,
+        "latency_ms": _ms(latency_ms),
     }
 
 
-def fallback_usage_line(ts_iso: str, agent: str, kind: str, model: str, ok: bool) -> dict:
+def fallback_usage_line(ts_iso: str, agent: str, kind: str, model: str, ok: bool,
+                        latency_ms: int | None = None) -> dict:
     """v5.14 — one record per call of Кіра's backup model (GLM-4.6 on NovelAI): the subscription pays it, so it is
     never priced, and the stream reports no token counts. Never any text."""
     return {
@@ -90,12 +103,12 @@ def fallback_usage_line(ts_iso: str, agent: str, kind: str, model: str, ok: bool
         "prompt_tokens": None, "output_tokens": None, "total_tokens": None, "ok": bool(ok),
         "engine": "novelai", "billing": "subscription",
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
-        "characters": None, "audio_ms": None, "blocked": None, "video_ms": None,
+        "characters": None, "audio_ms": None, "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
     }
 
 
 def judge_usage_line(ts_iso: str, agent: str, model: str, prompt_tokens: int | None, output_tokens: int | None,
-                     ok: bool, reported_cost: float | None = None) -> dict:
+                     ok: bool, reported_cost: float | None = None, latency_ms: int | None = None) -> dict:
     """v5.15 — one record per call of the judge (Gemma 4 31B on OpenRouter, `agents/judge.py`): the kind `judge`,
     paid per token (`api`, priced by `PRICE_MODELS` under the model's id); OpenRouter's own cost of the call, when it
     sends one, kept beside it. Never any text."""
@@ -105,11 +118,12 @@ def judge_usage_line(ts_iso: str, agent: str, model: str, prompt_tokens: int | N
         "prompt_tokens": prompt_tokens, "output_tokens": output_tokens, "total_tokens": total, "ok": bool(ok),
         "engine": "openrouter", "billing": "api",
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": reported_cost,
-        "characters": None, "audio_ms": None, "blocked": None, "video_ms": None,
+        "characters": None, "audio_ms": None, "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
     }
 
 
-def stt_usage_line(ts_iso: str, agent: str, model: str, audio_ms: int | None, ok: bool) -> dict:
+def stt_usage_line(ts_iso: str, agent: str, model: str, audio_ms: int | None, ok: bool,
+                   latency_ms: int | None = None) -> dict:
     """v5.2 — one record per speech-to-text call (Deepgram): counted by the audio's length (usage line v4,
     `audio_ms`), paid from the plan's credits (`subscription`, never priced); no tokens. Never any text."""
     return {
@@ -118,12 +132,12 @@ def stt_usage_line(ts_iso: str, agent: str, model: str, audio_ms: int | None, ok
         "engine": "deepgram", "billing": "subscription",
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
         "characters": None, "audio_ms": int(audio_ms) if isinstance(audio_ms, int) else None,
-        "blocked": None, "video_ms": None,
+        "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
     }
 
 
 def video_note_usage_line(ts_iso: str, agent: str, model: str, video_ms: int | None, ok: bool,
-                          blocked: str | None = None) -> dict:
+                          blocked: str | None = None, latency_ms: int | None = None) -> dict:
     """v5.18 — one record per call of her кружечок's model on fal (`agents/video.py`): paid per second of
     video (`api`, priced by `PRICE_SECONDS` under the model's id), counted by the video's length (usage line v6,
     `video_ms`); no tokens. Never any text."""
@@ -134,6 +148,7 @@ def video_note_usage_line(ts_iso: str, agent: str, model: str, video_ms: int | N
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
         "characters": None, "audio_ms": None, "blocked": blocked,
         "video_ms": int(video_ms) if isinstance(video_ms, int) and not isinstance(video_ms, bool) else None,
+        "latency_ms": _ms(latency_ms),
     }
 
 
@@ -143,7 +158,7 @@ def _int(d: dict, key: str) -> int | None:
 
 
 def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict | None, ok: bool,
-                   reported_cost: float | None = None) -> dict:
+                   reported_cost: float | None = None, latency_ms: int | None = None) -> dict:
     """v4.4 — one record per Claude Agent SDK call: always `claude-sdk` / `subscription` (the Max plan, never an API
     key); the SDK's `total_cost_usd` is a client-side estimate, kept as reported and never billed."""
     usage = usage or {}
@@ -164,11 +179,12 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
         "audio_ms": None,
         "blocked": None,
         "video_ms": None,
+        "latency_ms": _ms(latency_ms),
     }
 
 
 COUNT_FIELDS = ("prompt_tokens", "output_tokens", "total_tokens", "cache_read_tokens", "cache_write_tokens",
-                "characters", "audio_ms", "video_ms")
+                "characters", "audio_ms", "video_ms", "latency_ms")  # v5.22: the call's time
 
 
 def _valid(rec: Any) -> bool:

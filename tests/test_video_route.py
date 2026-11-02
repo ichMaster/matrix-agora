@@ -125,6 +125,7 @@ def test_a_kruzhechok_holds_her_voice_and_follows_her_words_in_her_voice(tmp_pat
     assert agent.sent[1:] == [("note", b"SQUARE-RAW", 12, 640)]
     assert agent.photos.shots == [Shot("selfie", f"я на балконі ввечері {SECRET}")]
     assert agent.photos.frames == [("1:1", FRAME_LINES["note"])]
+    assert agent.photos.kinds == ["frame"]                       # v5.22: a frame is never counted as a photo
     assert agent.notes.calls == [(b"SMALL-JPEG", "image/jpeg", b"MP3")]               # 640×640 to fal
     assert any(c.args[1] == "record_video_note" for c in agent.telegram.send_chat_action.call_args_list)
     assert her_lines(agent) == ["Ось я тут", "[кружечок: ...]"]                         # never what is in it

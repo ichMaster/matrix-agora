@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from collections.abc import Callable
 
 import aiohttp
@@ -97,6 +98,8 @@ def assemble(lines: list[str]) -> tuple[str, str]:
 class FallbackClient:
     """GLM-4.6 on NovelAI, one streamed call per answer; `reply` mirrors `GeminiClient.reply`."""
 
+    _mono = staticmethod(time.monotonic)  # v5.22: the calls' clock — a test sets its own
+
     def __init__(self, token: str, model: str, sink: UsageSink | None = None, timeout_s: float = TIMEOUT_S) -> None:
         self._token = token
         self.model = model
@@ -106,11 +109,11 @@ class FallbackClient:
     def __repr__(self) -> str:  # never the token
         return f"FallbackClient(model={self.model!r})"
 
-    def _report(self, kind: str, ok: bool) -> None:
+    def _report(self, kind: str, ok: bool, t0: float | None = None) -> None:
         if self._sink is None:
             return
-        try:
-            self._sink(kind, self.model, ok)
+        try:  # v5.22: the whole stream's time
+            self._sink(kind, self.model, ok, latency_ms=round((self._mono() - t0) * 1000) if t0 is not None else None)
         except Exception:
             log.exception("usage accounting failed")
 
@@ -118,21 +121,22 @@ class FallbackClient:
                     kind: str = "private") -> tuple[str, str] | None:
         headers = {"Authorization": f"Bearer {self._token}", "User-Agent": USER_AGENT,
                    "Accept": "text/event-stream", "Content-Type": "application/json"}
+        t0 = self._mono()
         try:
             async with ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout_s)) as session, \
                     session.post(URL, json=body(self.model, system_instruction, transcript, max_output_tokens),
                                  headers=headers) as resp:
                 if resp.status != 200:
                     log.error("backup: HTTP %s", resp.status)
-                    self._report(kind, False)
+                    self._report(kind, False, t0)
                     return None
                 lines = [raw.decode("utf-8", "replace") async for raw in resp.content]
         except Exception as exc:  # noqa: BLE001 — any failure is silence, named by its type only
             log.error("backup failed: %s", type(exc).__name__)
-            self._report(kind, False)
+            self._report(kind, False, t0)
             return None
         text, finish = assemble(lines)
-        self._report(kind, bool(text))
+        self._report(kind, bool(text), t0)
         if not text:
             log.error("backup returned an empty answer")
             return None

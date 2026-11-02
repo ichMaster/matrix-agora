@@ -204,7 +204,7 @@ class Models:
 def client_with(monkeypatch, models):
     monkeypatch.setattr(llm_mod.genai, "Client", lambda: SimpleNamespace(aio=SimpleNamespace(models=models)))
     usage = []
-    return llm_mod.GeminiClient(sink=lambda *a: usage.append(a)), usage
+    return llm_mod.GeminiClient(sink=lambda *a, **k: usage.append(a)), usage
 
 
 def test_think_keeps_thinking_on_and_returns_only_the_answer(monkeypatch):

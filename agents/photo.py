@@ -19,7 +19,9 @@ import asyncio
 import logging
 import random
 import re
+import time
 from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -182,8 +184,15 @@ def _image_of(resp) -> tuple[bytes, str] | None:
     return None
 
 
+# v5.22 — when this task's image call began (on the maker's monotonic clock), and for what: her photo, or a video's
+# first frame (`frame`) — read by `_report`; a context variable, so a frame made in the background never mixes in
+_CALL: ContextVar[tuple[float, str] | None] = ContextVar("photo_call", default=None)
+
+
 class PhotoMaker:
     """Google's image model through the Gemini SDK (`client.aio.models.generate_content`), her faces for a selfie."""
+
+    _mono = staticmethod(time.monotonic)  # v5.22: the calls' clock — a test sets its own
 
     def __init__(self, client, model: str = MODEL, size: str = "1K", faces: list | None = None,
                  sink: Callable | None = None, rng: Callable[[], float] | None = None,
@@ -195,17 +204,21 @@ class PhotoMaker:
     def _report(self, usage, ok: bool, blocked: str | None = None) -> None:
         if self._sink is None:
             return
+        t0, kind = _CALL.get() or (None, "photo")
+        latency = round((self._mono() - t0) * 1000) if t0 is not None else None  # v5.22: the call's time
         try:
             if blocked:
-                self._sink("photo", self.model, usage, ok, blocked=blocked)
+                self._sink(kind, self.model, usage, ok, blocked=blocked, latency_ms=latency)
             else:
-                self._sink("photo", self.model, usage, ok)
+                self._sink(kind, self.model, usage, ok, latency_ms=latency)
         except Exception:
             log.exception("usage accounting failed")
 
-    async def make(self, shot: Shot, moment: Moment, aspect: str = "3:4", extra: str | None = None) -> Made:
+    async def make(self, shot: Shot, moment: Moment, aspect: str = "3:4", extra: str | None = None,
+                   kind: str = "photo") -> Made:
         """The photo, or why there is none: one retry on a server error or a timeout; a block is final. v5.18: a
-        video's first frame takes its own `aspect` and a frame line (`extra`)."""
+        video's first frame takes its own `aspect` and a frame line (`extra`); v5.22: and its usage line's `kind` is
+        `frame`, so the `photo` lines are the photos she sent."""
         refs = pick_faces(self.faces, self._rng) if shot.kind == "selfie" else []
         if shot.kind == "selfie" and not refs:
             log.warning("photo: no faces for a selfie")
@@ -217,6 +230,7 @@ class PhotoMaker:
             image_config=types.ImageConfig(aspect_ratio=aspect, image_size=self.size),
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
         for attempt in (1, 2):
+            _CALL.set((self._mono(), kind))  # v5.22: each attempt is its own call, with its own time
             try:
                 resp = await asyncio.wait_for(
                     self._client.aio.models.generate_content(model=self.model, contents=contents, config=config),

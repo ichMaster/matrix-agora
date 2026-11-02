@@ -128,7 +128,7 @@ class Files:
 
 def clips(creates, gets=(), files=None):
     seen = []
-    sink = lambda kind, model, usage, ok, **kw: seen.append((kind, model, usage, ok, kw))
+    sink = lambda kind, model, usage, ok, **kw: seen.append((kind, model, usage, ok, {k: v for k, v in kw.items() if k != "latency_ms"}))
     inter, files = Interactions(creates, gets), files or Files()
     client = SimpleNamespace(aio=SimpleNamespace(interactions=inter, files=files))
     return ClipMaker(client, sink=sink, sleep=no_sleep), inter, files, seen
@@ -286,7 +286,7 @@ def notes(monkeypatch, *replies):
     queue = list(replies)
     FakeSession.uploads, FakeSession.fail_uploads = [], 0
     monkeypatch.setattr(vd, "ClientSession", lambda **kw: FakeSession(queue, seen))
-    sink = lambda model, video_ms, ok, blocked: sinks.append((model, video_ms, ok, blocked))
+    sink = lambda model, video_ms, ok, blocked, **kw: sinks.append((model, video_ms, ok, blocked))
     return NoteMaker(KEY, sink=sink, sleep=no_sleep), seen, sinks
 
 

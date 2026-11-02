@@ -388,7 +388,7 @@ class Herald:
             return "monthly cap"
         name = f"hermes-{local_now(now, self.tz):%Y%m%d-%H%M}.ogg"
         content, why = await voice_message(self.client, self.tts, text, name,  # v5.3: the shared pipeline
-                                           on_synth=lambda ok: self.record_tts(len(text), ok))
+                                           on_synth=lambda ok, ms=None: self.record_tts(len(text), ok, ms))
         if content is None:
             return why
         return None if await self.send_private(content) else "send failed"
@@ -514,8 +514,9 @@ class Herald:
                     tts = self._tts_for(voice_id)
                     if tts is None or used + len(line) > budget:
                         return None
+                    t0 = time.monotonic()
                     pcm = await tts.synth(line)
-                    self.record_tts(len(line), pcm is not None)
+                    self.record_tts(len(line), pcm is not None, round((time.monotonic() - t0) * 1000))
                     if pcm is None:
                         return None
                     used, spoken = used + len(line), spoken + 1
@@ -602,9 +603,10 @@ class Herald:
             log.error("hear: the audio could not be downloaded (%s)", where)
             return None
         mime = info.get("mimetype") if isinstance(info, dict) and isinstance(info.get("mimetype"), str) else "audio/ogg"
+        t0 = time.monotonic()
         text, ms = await self.stt.transcribe(audio, mime)
         self.record_stt(ms if ms is not None else info.get("duration") if isinstance(info.get("duration"), int)
-                        else None, ms is not None or text is not None)
+                        else None, ms is not None or text is not None, round((time.monotonic() - t0) * 1000))
         if not text:
             log.info("hear: nothing heard (%s)", where)
             return None
@@ -722,14 +724,15 @@ class Herald:
                 log.exception("digest watcher failed (he keeps running)")
 
     # --- usage ------------------------------------------------------------------------------------------------------
-    def record_usage(self, kind: str, model: str, usage, ok: bool, blocked: str | None = None) -> None:
-        self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked))
+    def record_usage(self, kind: str, model: str, usage, ok: bool, blocked: str | None = None,
+                     latency_ms: int | None = None) -> None:
+        self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked, latency_ms))
 
-    def record_stt(self, audio_ms: int | None, ok: bool) -> None:
-        self._append_usage(lambda ts: stt_usage_line(ts, self.cfg.localpart, STT_MODEL, audio_ms, ok))
+    def record_stt(self, audio_ms: int | None, ok: bool, latency_ms: int | None = None) -> None:
+        self._append_usage(lambda ts: stt_usage_line(ts, self.cfg.localpart, STT_MODEL, audio_ms, ok, latency_ms))
 
-    def record_tts(self, characters: int, ok: bool) -> None:
-        self._append_usage(lambda ts: tts_usage_line(ts, self.cfg.localpart, TTS_MODEL, characters, ok))
+    def record_tts(self, characters: int, ok: bool, latency_ms: int | None = None) -> None:
+        self._append_usage(lambda ts: tts_usage_line(ts, self.cfg.localpart, TTS_MODEL, characters, ok, latency_ms))
 
     def _append_usage(self, build) -> None:
         try:

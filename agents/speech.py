@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import logging
+import time
 from collections.abc import Callable, Iterable
 
 from nio import UploadResponse
@@ -42,13 +43,15 @@ def speakers_month_chars(records: Iterable[dict], month: str, heralds: Iterable[
 
 
 async def voice_message(client, tts, text: str, filename: str, reply_to: str | None = None,
-                        on_synth: Callable[[bool], None] | None = None,
-                        caption: bool = False) -> tuple[dict | None, str | None]:
+                        on_synth: Callable[..., None] | None = None,
+                        caption: bool = False, mono: Callable[[], float] = time.monotonic) -> tuple[dict | None, str | None]:
     """synth → OGG/Opus → upload → the `m.audio` content, not yet sent: (content, None), or (None, why it stays
-    text). `reply_to` relates it to the owner's voice it answers; `on_synth(ok)` records the paid call."""
+    text). `reply_to` relates it to the owner's voice it answers; `on_synth(ok, ms)` records the paid call and
+    (v5.22) how long it took, on `mono`."""
+    t0 = mono()
     pcm = await tts.synth(text)
     if on_synth is not None:
-        on_synth(pcm is not None)
+        on_synth(pcm is not None, round((mono() - t0) * 1000))
     if pcm is None:
         return None, "tts failed"
     ogg = await encode_opus(pcm)

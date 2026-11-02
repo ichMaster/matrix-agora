@@ -39,9 +39,10 @@ class Maker:
     def __init__(self, made=None):
         self.made, self.shots = made or Made(b"JPEG", "image/jpeg", "ok"), []
 
-    async def make(self, shot, moment, aspect="3:4", extra=None):
+    async def make(self, shot, moment, aspect="3:4", extra=None, kind="photo"):
         self.shots.append(shot)
         self.frames = [*getattr(self, "frames", []), (aspect, extra)]
+        self.kinds = [*getattr(self, "kinds", []), kind]  # v5.22: her photo, or a video's frame
         return self.made
 
 
@@ -93,6 +94,7 @@ def test_a_selfie_goes_after_her_voice_with_her_words_under_it_and_is_kept(tmp_p
     agent.private_line("скинь своє фото", ms(17), "telegram", "tg:1")
     assert asyncio.run(agent.private_reply()) is True
     assert agent.photos.shots == [Shot("selfie", f"я під куполом уночі {SECRET}")]
+    assert agent.photos.kinds == ["photo"]                                          # v5.22: her photo
     assert agent.sent == ["voice", ("photo", "Ось я під куполом 🙂")]                  # no separate text message
     assert PHOTO_SKILL in agent.llm.calls[0][0]                                        # offered to Gemini in Telegram
     assert any(c.args[1] == "upload_photo" for c in agent.telegram.send_chat_action.call_args_list)

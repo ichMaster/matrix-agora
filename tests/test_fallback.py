@@ -68,7 +68,7 @@ def client(monkeypatch, response):
     FakeSession.seen = []
     monkeypatch.setattr(fb, "ClientSession", lambda **kw: FakeSession(response, **kw))
     usage = []
-    return FallbackClient(TOKEN, "glm-4-6", sink=lambda kind, model, ok: usage.append((kind, model, ok))), usage
+    return FallbackClient(TOKEN, "glm-4-6", sink=lambda kind, model, ok, **kw: usage.append((kind, model, ok))), usage
 
 
 # --- the request and the stream ----------------------------------------------------------------------------------------

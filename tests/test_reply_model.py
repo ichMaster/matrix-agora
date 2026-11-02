@@ -41,7 +41,7 @@ def client(monkeypatch, models, reply_model="", level=None):
         monkeypatch.delenv("GEMINI_THINKING_LEVEL", raising=False)
     monkeypatch.setattr(llm_mod.genai, "Client", lambda: SimpleNamespace(aio=SimpleNamespace(models=models)))
     usage = []
-    return GeminiClient(sink=lambda kind, model, meta, ok: usage.append((kind, model, ok))), usage
+    return GeminiClient(sink=lambda kind, model, meta, ok, **kw: usage.append((kind, model, ok))), usage
 
 
 def flash_response(text="Привіт."):

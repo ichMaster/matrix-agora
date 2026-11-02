@@ -260,6 +260,8 @@ def _hook_matchers(hooks: Mapping[str, list]) -> dict[str, list]:
 class ClaudeSdkResponder:
     """One stateless `query()` per reply on the subscription; silent when blocked, muted or failed."""
 
+    _mono = staticmethod(time.monotonic)  # v5.22: the calls' clock — a test sets its own
+
     def __init__(self, *, model: str, max_output_tokens: int, config_dir: str, status_file: Path,
                  usage_sink: Callable[[str, str, dict | None, bool, float | None], None],
                  clock: Callable[[], int] = lambda: int(time.time() * 1000), query=None, options=None,
@@ -393,7 +395,7 @@ class ClaudeSdkResponder:
         saw_init = over_limit = False
         refused: str | None = None
         tools_used: list[str] = []  # names only — what a slow call was doing (never an input or a text)
-        started = time.monotonic()
+        started = self._mono()
 
         async def consume() -> None:
             nonlocal result, saw_init, over_limit, refused
@@ -425,18 +427,19 @@ class ClaudeSdkResponder:
         except TimeoutError:
             log.error("claude query timed out after %.0fs — silent (%d tool calls: %s)", self.timeout_s,
                       len(tools_used), ", ".join(tools_used) or "none")
-            self.usage_sink(turn.kind, self.model, None, False, None)
+            self.usage_sink(turn.kind, self.model, None, False, None, latency_ms=round((self._mono() - started) * 1000))
             self._failed("timeout")
             return None
         except Exception as exc:  # noqa: BLE001 — any SDK or CLI failure means silence
             log.error("claude query failed: %s", type(exc).__name__)
-            self.usage_sink(turn.kind, self.model, None, False, None)
+            self.usage_sink(turn.kind, self.model, None, False, None, latency_ms=round((self._mono() - started) * 1000))
             self._failed(type(exc).__name__)
             return None
         # one usage line per call, ok only for a checked, successful one
         ok = (result is not None and not getattr(result, "is_error", True) and self.blocked is None and saw_init
               and not over_limit and refused is None)
-        self.usage_sink(turn.kind, self.model, getattr(result, "usage", None), ok, getattr(result, "total_cost_usd", None))
+        self.usage_sink(turn.kind, self.model, getattr(result, "usage", None), ok, getattr(result, "total_cost_usd", None),
+                        latency_ms=round((self._mono() - started) * 1000))  # v5.22: the query to its result
         if self.blocked or refused:
             return None
         if over_limit:

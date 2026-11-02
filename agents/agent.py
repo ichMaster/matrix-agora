@@ -602,6 +602,7 @@ class Agent:
         self.idle_ms = int(float(os.environ.get("SESSION_IDLE_S", "900")) * 1000)
         self.summary_max_words = int(os.environ.get("SUMMARY_MAX_WORDS", "200"))
         self.clock = lambda: int(time.time() * 1000)  # injectable
+        self.mono = time.monotonic  # v5.22: a call's and an answer's time — injectable
         self.last_activity_ms: int | None = None
         self.last_attempt_ms: int | None = None
         self._summary_lock = asyncio.Lock()
@@ -1818,9 +1819,11 @@ class Agent:
             log.error("telegram: the voice note could not be downloaded")
             await self.telegram.send_message(self.telegram_owner, PRIVATE_NOT_HEARD)
             return
+        t0 = self.mono()
         heard, audio_ms = await self.stt.transcribe(audio, update.mime or "audio/ogg")
+        took = round((self.mono() - t0) * 1000)  # v5.22: the call's time
         self._append_usage(lambda ts: stt_usage_line(ts, self.cfg.localpart, STT_MODEL, audio_ms,
-                                                     audio_ms is not None))
+                                                     audio_ms is not None, took))
         if not heard:
             log.info("telegram: nothing heard")
             await self.telegram.send_message(self.telegram_owner, PRIVATE_NOT_HEARD)
@@ -1883,7 +1886,7 @@ class Agent:
     async def _make_video(self, shot: Shot, pcm: bytes | None) -> Video:
         """v5.18 — her video: its first frame (her photo), then her кружечок (her voice as mp3, fal, the square cut)
         or her clip (Omni Flash); any step that fails is the reason."""
-        frame = await self._make_photo(frame_shot(shot), FRAME_ASPECT[shot.kind], FRAME_LINES[shot.kind])
+        frame = await self._make_photo(frame_shot(shot), FRAME_ASPECT[shot.kind], FRAME_LINES[shot.kind], "frame")
         if frame.why != "ok" or not frame.image:
             return Video(None, why=frame.why if frame.why != "ok" else "failed")
         if shot.kind == "clip":
@@ -1993,10 +1996,12 @@ class Agent:
                 log.error("photo: the weather was not read (%s)", type(exc).__name__)
         return Moment(now, weather)
 
-    async def _make_photo(self, shot: Shot, aspect: str = "3:4", extra: str | None = None) -> Made:
-        """v5.17 — her photo for this moment; v5.18: a video's first frame takes its aspect and frame line."""
+    async def _make_photo(self, shot: Shot, aspect: str = "3:4", extra: str | None = None,
+                          kind: str = "photo") -> Made:
+        """v5.17 — her photo for this moment; v5.18: a video's first frame takes its aspect and frame line (v5.22: and
+        its usage line is the kind `frame`)."""
         try:
-            return await self.photos.make(shot, self._moment(), aspect, extra)
+            return await self.photos.make(shot, self._moment(), aspect, extra, kind)
         except Exception as exc:  # noqa: BLE001 — her answer without it, never a crash
             log.warning("photo: failed (%s)", type(exc).__name__)
             return Made(None, why="failed")
@@ -2045,8 +2050,9 @@ class Agent:
             elif self._speakers_month_used() + len(speech) > self.voice_monthly_chars:
                 why = "monthly cap"
             else:
+                t0 = self.mono()
                 pcm = await self.tts.synth(speech)
-                self.record_tts(len(speech), pcm is not None)
+                self.record_tts(len(speech), pcm is not None, round((self.mono() - t0) * 1000))
                 if hold_voice_s is not None and pcm is not None:
                     if duration_ms(pcm) <= hold_voice_s * 1000:
                         self.voice_held, pcm = pcm, None  # sent later as her кружечок, or as this voice note
@@ -2095,7 +2101,7 @@ class Agent:
                 name = f"{self.cfg.localpart}-{local_now(self.clock(), self.tz):%Y%m%d-%H%M%S}.ogg"
                 # never a reply (the owner, 2026-10-18: «забери ці реплаї») — it is voiced, not quoted
                 content, why = await voice_message(self.client, self.tts, speech, name,
-                                                   on_synth=lambda ok: self.record_tts(len(speech), ok))
+                                                   on_synth=lambda ok, ms=None: self.record_tts(len(speech), ok, ms))
                 if content is not None:
                     try:
                         await self.client.room_send(room_id=room_id, message_type="m.room.message", content=content)
@@ -2120,9 +2126,9 @@ class Agent:
                 continue
         return speakers_month_chars(records, local_now(self.clock(), self.tz).strftime("%Y-%m"), self.heralds)
 
-    def record_tts(self, characters: int, ok: bool) -> None:
+    def record_tts(self, characters: int, ok: bool, latency_ms: int | None = None) -> None:
         model = getattr(self.tts, "model", None) or TTS_MODEL  # v5.9: the model this voice ran on
-        self._append_usage(lambda ts: tts_usage_line(ts, self.cfg.localpart, model, characters, ok))
+        self._append_usage(lambda ts: tts_usage_line(ts, self.cfg.localpart, model, characters, ok, latency_ms))
 
     async def on_audio(self, room: MatrixRoom, event: RoomMessageAudio) -> None:
         """v5.2 — no agent answers audio: the owner's voice in the room is remembered, so Hermes's transcript of it
@@ -2450,23 +2456,27 @@ class Agent:
     def usage_file(self) -> Path:
         return self.memory_file.parent / f"{self.cfg.localpart}.usage.jsonl"
 
-    def record_usage(self, kind: str, model: str, usage, ok: bool, blocked: str | None = None) -> None:
+    def record_usage(self, kind: str, model: str, usage, ok: bool, blocked: str | None = None,
+                     latency_ms: int | None = None) -> None:
         """One JSON line per Gemini call (v3.1) — no texts; a write error never blocks. `blocked` (v5.13): the stage
-        of a safety block."""
-        self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked))
+        of a safety block; `latency_ms` (v5.22): how long the call took."""
+        self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked, latency_ms))
 
-    def record_video_note_usage(self, model: str, video_ms: int | None, ok: bool, blocked: str | None = None) -> None:
+    def record_video_note_usage(self, model: str, video_ms: int | None, ok: bool, blocked: str | None = None,
+                                latency_ms: int | None = None) -> None:
         """v5.18 — one line per call of her кружечок's model on fal: `fal`, priced per second by `PRICE_SECONDS`, no text."""
-        self._append_usage(lambda ts: video_note_usage_line(ts, self.cfg.localpart, model, video_ms, ok, blocked))
+        self._append_usage(lambda ts: video_note_usage_line(ts, self.cfg.localpart, model, video_ms, ok, blocked,
+                                                            latency_ms))
 
-    def record_fallback_usage(self, kind: str, model: str, ok: bool) -> None:
+    def record_fallback_usage(self, kind: str, model: str, ok: bool, latency_ms: int | None = None) -> None:
         """v5.14 — one line per call of her backup model: `novelai`, the subscription, never priced, no text."""
-        self._append_usage(lambda ts: fallback_usage_line(ts, self.cfg.localpart, kind, model, ok))
+        self._append_usage(lambda ts: fallback_usage_line(ts, self.cfg.localpart, kind, model, ok, latency_ms))
 
     def record_sdk_usage(self, kind: str, model: str, usage: dict | None, ok: bool,
-                         reported_cost: float | None) -> None:
+                         reported_cost: float | None, latency_ms: int | None = None) -> None:
         """v4.4 — one line per Claude Agent SDK call: always `subscription`, never priced."""
-        self._append_usage(lambda ts: sdk_usage_line(ts, self.cfg.localpart, kind, model, usage, ok, reported_cost))
+        self._append_usage(lambda ts: sdk_usage_line(ts, self.cfg.localpart, kind, model, usage, ok, reported_cost,
+                                                     latency_ms))
 
     def _append_usage(self, build) -> None:
         try:

@@ -221,7 +221,7 @@ def test_the_embedding_call(monkeypatch, caplog, embeddings, fail, out, ok):
     models = SimpleNamespace(embed_content=embed_content)
     monkeypatch.setattr(llm_mod.genai, "Client", lambda: SimpleNamespace(aio=SimpleNamespace(models=models)))
     usage = []
-    client = llm_mod.GeminiClient(sink=lambda kind, model, meta, good: usage.append((kind, model, good)))
+    client = llm_mod.GeminiClient(sink=lambda kind, model, meta, good, **kw: usage.append((kind, model, good)))
     assert asyncio.run(client.embed([f"рядок {SECRET}", "інший"], task="RETRIEVAL_QUERY")) == out
     assert seen["model"] == "gemini-embedding-001" and seen["config"].output_dimensionality == 768
     assert seen["config"].task_type == "RETRIEVAL_QUERY" and usage == [("embed", "gemini-embedding-001", ok)]

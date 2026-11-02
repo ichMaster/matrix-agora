@@ -76,7 +76,7 @@ def responder(tmp_path, sdk, now_s=1_000_000):
     usage = []
     r = ClaudeSdkResponder(model="opus", max_output_tokens=300, config_dir="/tmp/claude",
                            status_file=tmp_path / "claude.ratelimit.json",
-                           usage_sink=lambda *a: usage.append(a), clock=lambda: now_s * 1000,
+                           usage_sink=lambda *a, **k: usage.append(a), clock=lambda: now_s * 1000,
                            query=sdk.query, options=lambda **kw: SimpleNamespace(**kw))
     return r, usage
 

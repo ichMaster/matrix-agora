@@ -24,12 +24,41 @@ def test_usage_line_shape_and_no_text():
                          "engine", "billing", "cache_read_tokens", "cache_write_tokens", "reported_cost_usd",
                          "characters", "audio_ms",  # v2; v3 (v5.1) `characters`; v4 (v5.2) `audio_ms`
                          "blocked",  # v5 (v5.13): a safety block's stage
-                         "video_ms"}  # v6 (v5.18): a video's length
+                         "video_ms",  # v6 (v5.18): a video's length
+                         "latency_ms"}  # v7 (v5.22): the call's time
     assert line["characters"] is None and line["audio_ms"] is None and line["blocked"] is None
-    assert line["video_ms"] is None
+    assert line["video_ms"] is None and line["latency_ms"] is None
     assert (line["engine"], line["billing"]) == ("gemini", "api")
     assert (line["prompt_tokens"], line["output_tokens"], line["total_tokens"], line["ok"]) == (1200, 80, 1280, True)
     assert usage_line("2026-10-28T14:00:00", "kira", "private", "m", None, False, "prompt")["blocked"] == "prompt"
+
+
+def test_every_line_holds_its_calls_time_and_an_older_line_parses_without_it():
+    """v5.22 — usage line v7: `latency_ms` on every kind of line, whole ms, never negative; a line from before it
+    parses (null); a non-int is corrupt."""
+    from agents.usage import (
+        fallback_usage_line,
+        parse_lines,
+        sdk_usage_line,
+        stt_usage_line,
+        tts_usage_line,
+        video_note_usage_line,
+    )
+    ts = "2026-11-02T14:00:00+02:00"
+    lines = [usage_line(ts, "kira", "private", "m", META, True, latency_ms=2345.6),
+             tts_usage_line(ts, "kira", "m", 10, True, latency_ms=900),
+             stt_usage_line(ts, "kira", "m", 4000, True, latency_ms=700),
+             fallback_usage_line(ts, "kira", "private", "glm", True, latency_ms=8000),
+             video_note_usage_line(ts, "kira", "veed/fabric-1.0", 21000, True, latency_ms=95000),
+             sdk_usage_line(ts, "claude", "reply", "opus", None, True, latency_ms=12000)]
+    assert [x["latency_ms"] for x in lines] == [2346, 900, 700, 8000, 95000, 12000]
+    assert usage_line(ts, "a", "reply", "m", None, True, latency_ms=-3)["latency_ms"] == 0
+    assert usage_line(ts, "a", "reply", "m", None, True, latency_ms=True)["latency_ms"] is None
+    old = {"ts": ts, "agent": "ada", "kind": "reply", "model": "m", "prompt_tokens": 1, "output_tokens": 1,
+           "total_tokens": 2, "ok": True}
+    records, bad = parse_lines([json.dumps(old), json.dumps({**old, "latency_ms": 1500})])
+    assert (len(records), bad) == (2, 0) and records[0].get("latency_ms") is None
+    assert parse_lines([json.dumps({**old, "latency_ms": "slow"})]) == ([], 1)
 
 
 def test_an_older_line_without_blocked_still_parses():
@@ -59,7 +88,8 @@ def test_kind_list_is_the_contract():
                      "judge",                              # v5.15: the judge of her backup's talk
                      "probe",                              # v5.16: Gemini checks the parts of a blocked prompt
                      "photo",                              # v5.17: her photos in Telegram
-                     "video", "video_note")                # v5.18: her clips and her кружечки
+                     "video", "video_note",                # v5.18: her clips and her кружечки
+                     "frame")                              # v5.22: a video's first frame
 
 
 def test_the_judges_line_is_priced_by_its_model_and_holds_no_text():
@@ -95,7 +125,7 @@ class FakeModels:
 def test_seam_reports_ok_empty_and_failed_calls(monkeypatch, behaviour, ok, result):
     monkeypatch.setattr(llm_mod.genai, "Client", lambda: SimpleNamespace(aio=SimpleNamespace(models=FakeModels(behaviour))))
     seen = []
-    client = llm_mod.GeminiClient(sink=lambda *a: seen.append(a))
+    client = llm_mod.GeminiClient(sink=lambda *a, **k: seen.append(a))
     out = asyncio.run(client.generate("c", "s", kind="digest"))
     assert out == result
     assert seen == [("digest", llm_mod.MODEL, None if behaviour == "raise" else META, ok)]
@@ -104,7 +134,7 @@ def test_seam_reports_ok_empty_and_failed_calls(monkeypatch, behaviour, ok, resu
 def test_a_failing_sink_never_breaks_the_call(monkeypatch):
     monkeypatch.setattr(llm_mod.genai, "Client", lambda: SimpleNamespace(aio=SimpleNamespace(models=FakeModels("ok"))))
 
-    def bad_sink(*a):
+    def bad_sink(*a, **k):
         raise OSError("disk full")
 
     assert asyncio.run(llm_mod.GeminiClient(sink=bad_sink).generate("c", "s")) == "текст"
@@ -239,7 +269,7 @@ def test_the_gemini_model_is_a_setting(monkeypatch):
     monkeypatch.setenv("GEMINI_MODEL", "gemini-2.5-pro")
     monkeypatch.setattr(llm_mod.genai, "Client", lambda: SimpleNamespace(aio=SimpleNamespace(models=Capture("ok"))))
     usage = []
-    asyncio.run(llm_mod.GeminiClient(sink=lambda *a: usage.append(a)).generate("c", "s"))
+    asyncio.run(llm_mod.GeminiClient(sink=lambda *a, **k: usage.append(a)).generate("c", "s"))
     assert seen["model"] == "gemini-2.5-pro" and usage[0][1] == "gemini-2.5-pro"
 
 

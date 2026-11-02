@@ -14,6 +14,11 @@ from agents.llm import BLOCK_FINISH, GeminiClient, blocked_reason
 SECRET = "ТАЄМНИЙ ТЕКСТ"
 
 
+
+def _no_time(kw: dict) -> dict:
+    """The sink's keywords without the call's time (v5.22): these tests pin the block, not the time."""
+    return {k: v for k, v in kw.items() if k != "latency_ms"}
+
 def rating(category, probability="NEGLIGIBLE", blocked=None):
     return SimpleNamespace(category=SimpleNamespace(name=category), probability=SimpleNamespace(name=probability),
                            blocked=blocked)
@@ -92,7 +97,7 @@ def client(monkeypatch, resp, reply_model=""):
     monkeypatch.setenv("GEMINI_REPLY_MODEL", reply_model)
     monkeypatch.setattr(llm_mod.genai, "Client", lambda: SimpleNamespace(aio=SimpleNamespace(models=Models(resp))))
     seen = []
-    return GeminiClient(sink=lambda kind, model, meta, ok, **kw: seen.append((kind, model, ok, kw))), seen
+    return GeminiClient(sink=lambda kind, model, meta, ok, **kw: seen.append((kind, model, ok, _no_time(kw)))), seen
 
 
 @pytest.mark.parametrize("call", ["complete", "reply", "reply_pro", "think"])
@@ -238,7 +243,7 @@ def prober(monkeypatch, resp, reply_model="gemini-3.1-pro-preview"):
     monkeypatch.setenv("GEMINI_REPLY_MODEL", reply_model)
     monkeypatch.setattr(llm_mod.genai, "Client", lambda: SimpleNamespace(aio=SimpleNamespace(models=models)))
     seen = []
-    return GeminiClient(sink=lambda kind, model, meta, ok, **kw: seen.append((kind, model, ok, kw))), seen, models
+    return GeminiClient(sink=lambda kind, model, meta, ok, **kw: seen.append((kind, model, ok, _no_time(kw)))), seen, models
 
 
 def test_a_probe_blocked_at_the_prompt_stage_is_true_and_counted_as_probe(monkeypatch, caplog):

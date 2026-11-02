@@ -127,7 +127,7 @@ def blocked(prompt=True):
 def maker(*outcomes, faces=None):
     models = Models(*outcomes)
     seen = []
-    sink = lambda kind, model, usage, ok, **kw: seen.append((kind, model, ok, kw))
+    sink = lambda kind, model, usage, ok, **kw: seen.append((kind, model, ok, {k: v for k, v in kw.items() if k != "latency_ms"}))
     faces = faces if faces is not None else [(n, n.encode(), "image/png") for n in ("kira.png", "a", "b", "c", "d")]
     return PhotoMaker(SimpleNamespace(aio=SimpleNamespace(models=models)), faces=faces, sink=sink,
                       rng=scripted(0.0, 0.0, 0.0)), models, seen
