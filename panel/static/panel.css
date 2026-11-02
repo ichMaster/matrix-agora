@@ -370,3 +370,8 @@ code, .mono { font-family: var(--mono); }
 .an-caret { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0 4px 0 0; vertical-align: -1px; }
 .an-sub td:first-child { padding-left: 34px; color: var(--muted); font-family: var(--mono); font-size: 12px; }
 .an-spark { display: block; }
+/* v5.22: the Prompt tab's boxes grow with their text — the drawer scrolls, never the box */
+.prompt-box { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+/* v5.22: the drawer widens to what overflows it (`fitDrawer`), never past the window; a phone keeps the whole width */
+.drawer { max-width: 94%; }
+@media (max-width: 759px) { .drawer { max-width: none; } }

@@ -990,7 +990,8 @@ function drawerHtml() {
     body = logHtml(`last 200 lines · docker logs ${dr.id}`);
   }
   const settled = S.drawerFresh ? "" : "settled";  // re-renders by polling never replay the entrance
-  return `<div class="scrim ${settled}" data-act="close"></div><aside class="drawer ${settled}" role="dialog" aria-modal="true">
+  const fit = S.drawerFit?.key === drawerKey(dr) ? ` style="width:${S.drawerFit.w}px"` : "";  // its width, kept by poll
+  return `<div class="scrim ${settled}" data-act="close"></div><aside class="drawer ${settled}"${fit} role="dialog" aria-modal="true">
     <div class="drawer-head">${head}<button class="btn btn-ghost btn-icon" style="width:34px;height:34px;color:var(--muted)" data-act="close" aria-label="Close">${icon("x", 18)}</button></div>
     ${tabs}${body}</aside>`;
 }
@@ -1489,11 +1490,36 @@ function promptTabHtml(a) {
   if (!P.system) return `<p class="muted">No prompt yet — ${esc(a.display)}'s next private answer to Gemini is kept here.</p>`;
   const words = (t) => (t || "").split(/\s+/).filter(Boolean).length;
   const outcome = P.outcome === "blocked" && P.block ? `Blocked · ${P.block.slice(0, 2).filter(Boolean).join(" · ")}` : P.outcome === "answered" ? "Answered" : "No answer";
-  const block = (title, text) => `<div class="section-label" style="margin:14px 0 6px">${esc(title)} · ${words(text)} words</div>
-    <pre class="mono" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;margin:0;max-height:480px;overflow:auto">${esc(text || "")}</pre>`;
+  // the owner, 2026-11-02: each box as tall as its text (the drawer scrolls, never the box), and a copy button each
+  const block = (title, part, text) => `<div style="display:flex;align-items:center;gap:8px;margin:14px 0 6px">
+      <div class="section-label">${esc(title)} · ${words(text)} words</div>
+      <button class="btn btn-ghost" style="margin-left:auto" data-act="prompt-copy" data-id="${part}">Copy</button></div>
+    <pre class="mono prompt-box">${esc(text || "")}</pre>`;
   return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <span class="kind-tag">${esc(outcome)}</span><span class="muted" style="font-size:12.5px">${esc(new Date(P.at).toLocaleString("en-GB"))} · ${esc(P.model || "")}</span>
-      <button class="btn btn-ghost" data-act="prompt-reload">Reload</button></div>${block("System instruction", P.system)}${block("Transcript", P.transcript)}`;
+      <span style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-ghost" data-act="prompt-copy" data-id="all">Copy all</button>
+      <button class="btn btn-ghost" data-act="prompt-reload">Reload</button></span></div>${block("System instruction", "system", P.system)}${block("Transcript", "transcript", P.transcript)}`;
+}
+// the panel is plain http on the LAN, where a page gets no Clipboard API: the old way (a hidden field, «copy») then
+async function copyText(text) {
+  try {
+    if (window.isSecureContext && navigator.clipboard) { await navigator.clipboard.writeText(text); return true; }
+  } catch { /* the old way below */ }
+  const area = document.createElement("textarea");
+  area.value = text; area.setAttribute("readonly", ""); area.style.position = "fixed"; area.style.opacity = "0";
+  document.body.appendChild(area); area.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch { ok = false; }
+  area.remove();
+  return ok;
+}
+async function copyPrompt(part) {
+  const P = S.prompt;
+  if (!P?.system) return;
+  const text = part === "system" ? P.system : part === "transcript" ? P.transcript || "" : `${P.system}\n\n${P.transcript || ""}`;
+  const label = part === "system" ? "System instruction" : part === "transcript" ? "Transcript" : "The whole prompt";
+  if (await copyText(text)) showToast("ok", `${label} copied`);
+  else showToast("err", "Could not copy — select the text and copy it by hand");
 }
 async function loadFiles(agent) {
   try {
@@ -1585,7 +1611,21 @@ function filePicker() {
   return pickerEl;
 }
 
+// the owner, 2026-11-02 («ширину панелі з пропертями автоматичною, щоб не було скрола вправо»): the drawer widens to
+// what does not fit — its tabs, a table, its body, a log line — by just that much, never past 94% of the window; the
+// width is the drawer's, kept across its tabs so it never jumps (a phone has the whole width already)
+const drawerKey = (dr) => dr ? `${dr.kind}:${dr.id}` : "";
+function fitDrawer() {
+  const d = $(".drawer"), key = drawerKey(S.drawer);
+  if (!d || window.innerWidth < 760) return;
+  const over = Math.max(0, ...[...d.querySelectorAll(".tabs, .drawer-body, .table-scroll, pre")].map((el) => el.scrollWidth - el.clientWidth));
+  if (over <= 1) return;
+  const want = Math.min(Math.floor(window.innerWidth * 0.94), Math.ceil(d.getBoundingClientRect().width + over + 2));
+  const now = S.drawerFit?.key === key ? S.drawerFit.w : 0;
+  if (want > now + 1) { S.drawerFit = {key, w: want}; d.style.width = `${want}px`; }
+}
 function afterDrawerRender() {
+  fitDrawer();
   const log = $("#log");
   if (log && S.log.follow) log.scrollTop = log.scrollHeight;
   if (log) log.addEventListener("scroll", () => {
@@ -1674,6 +1714,7 @@ document.addEventListener("click", (e) => {
   else if (act === "set-save") { if (pendingSettings().names.length) { S.dialog = {action: "save", kind: "settings", fresh: true}; render(); } }
   else if (act === "close") { S.drawer = null; S.settings = null; render(); }
   else if (act === "prompt-reload") loadPrompt(S.drawer.id);
+  else if (act === "prompt-copy") copyPrompt(id);
   else if (act === "tab") { S.drawer.tab = id; S.log = {lines: [], available: true, follow: true, seen: 0}; render(); if (id === "log") loadLog(); if (id === "files") loadFiles(S.drawer.id); if (id === "prompt") loadPrompt(S.drawer.id); if (id === "settings") openAgentSettings(S.drawer.id); }
   else if (act === "file-open") openFile(S.drawer.id, id);
   else if (act === "file-close") { S.files.open = null; render(); }

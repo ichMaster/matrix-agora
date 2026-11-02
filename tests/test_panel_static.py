@@ -514,5 +514,27 @@ def test_the_prompt_tab_loads_when_opened_and_shows_the_outcome_and_both_texts_e
     assert 'if (id === "prompt") loadPrompt(S.drawer.id);' in js
     assert "S.prompt = (await api(`/api/agents/${encodeURIComponent(agent)}/prompt`)).prompt;" in js
     assert 'P.outcome === "blocked" && P.block ? `Blocked · ${P.block.slice(0, 2).filter(Boolean).join(" · ")}`' in js
-    assert '${esc(text || "")}</pre>' in js and 'block("System instruction", P.system)' in js
-    assert 'block("Transcript", P.transcript)' in js and 'if (tab === "prompt") return promptTabHtml(a);' in js
+    assert '${esc(text || "")}</pre>' in js and 'block("System instruction", "system", P.system)' in js
+    assert 'block("Transcript", "transcript", P.transcript)' in js and 'if (tab === "prompt") return promptTabHtml(a);' in js
+
+
+def test_the_prompt_boxes_grow_with_their_text_and_each_copies():
+    """The owner, 2026-11-02: the Prompt tab's boxes as tall as their text, and a copy button each — on plain http,
+    where a page gets no Clipboard API, the old way."""
+    js, css = js_text(), (STATIC_DIR / "panel.css").read_text(encoding="utf-8")
+    assert '<pre class="mono prompt-box">' in js and "max-height:480px" not in js
+    box = css[css.index(".prompt-box {"):].split("}")[0]
+    assert "max-height" not in box and "overflow:" not in box and "white-space: pre-wrap" in box
+    assert 'data-act="prompt-copy" data-id="${part}">Copy</button>' in js and 'data-id="all">Copy all</button>' in js
+    assert 'else if (act === "prompt-copy") copyPrompt(id);' in js
+    assert "if (window.isSecureContext && navigator.clipboard)" in js and 'document.execCommand("copy")' in js
+
+
+def test_the_drawer_widens_to_what_overflows_it_and_never_past_the_window():
+    """The owner, 2026-11-02: no scroll to the right in the drawer where it can be helped."""
+    js, css = js_text(), (STATIC_DIR / "panel.css").read_text(encoding="utf-8")
+    assert "function fitDrawer()" in js and "fitDrawer();" in js
+    assert "Math.min(Math.floor(window.innerWidth * 0.94)" in js and "S.drawerFit?.key === drawerKey(dr)" in js
+    assert 'd.querySelectorAll(".tabs, .drawer-body, .table-scroll, pre")' in js           # her tabs in one row too
+    assert "const drawerKey = (dr) => dr ? `${dr.kind}:${dr.id}` : \"\";" in js            # one width across its tabs
+    assert ".drawer { max-width: 94%; }" in css and "@media (max-width: 759px) { .drawer { max-width: none; } }" in css
