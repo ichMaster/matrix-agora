@@ -57,6 +57,32 @@ def test_summary_request_carries_previous_session_and_cap_and_no_banned_words():
     assert "Попередня" not in build_summary_request("Ада", "К.", None, [("Ich", "x")], 50)[1]
 
 
+def test_a_persons_summary_says_it_is_a_humans_own_memory():
+    """v5.23 (the owner, 2026-11-03: «на самарі додавай додатковий системний промпт щоб було зрозуміло що вона людина»)."""
+    from agents.memory import HUMAN_MEMORY
+    human, _ = build_summary_request("Кіра", "Канон.", None, [("Ich", "привіт")], 200, human=True)
+    plain, _ = build_summary_request("Кіт", "Канон.", None, [("Ich", "кис")], 200)
+    assert human.endswith(HUMAN_MEMORY) and HUMAN_MEMORY not in plain
+    assert not BANNED.search(HUMAN_MEMORY)                                 # said as what she is, never what she is not
+
+
+def test_summarize_tells_a_person_and_never_a_creature(tmp_path):
+    from agents.memory import HUMAN_MEMORY
+
+    class Sees(FakeLLM):
+        async def generate(self, transcript, system_instruction, max_output_tokens=400, kind="reply"):
+            self.system = system_instruction
+            return "нотатка"
+    for kind, told in (("persona", True), ("creature", False)):
+        llm = Sees()
+        agent = make(tmp_path / kind, llm=llm)
+        agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "type": kind})
+        agent.memory_file = tmp_path / f"{kind}.memory.md"
+        agent.session = [("Ich", "привіт")]
+        asyncio.run(agent.summarize())
+        assert (HUMAN_MEMORY in llm.system) is told
+
+
 # --- the agent's summarize / timeline cap / shutdown ---
 def make(tmp_path, llm=None):
     agent = Agent(CFG, llm=llm or FakeLLM("ми говорили про каву і погоду"))

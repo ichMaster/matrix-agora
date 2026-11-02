@@ -17,6 +17,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from agents.memory import HUMAN_MEMORY
 from agents.world import PART_ADVERB, ago, part_of_day
 
 LEVELS = ("hour", "day")  # v5.23; the older rows' `4h` and `week` are kept, never due or shown
@@ -87,7 +88,8 @@ def talk_request(level: str, name: str, canon: str, items: list[tuple[str, str]]
     system = (f"{canon}\n\nТи — {name}. Запиши для себе коротку пам'ять про вашу розмову наодинці з Ich {SPAN[level]} — "
               f"від першої особи, мовою розмови, не більше {max_words} слів: про що говорили, що вирішили, що Ich "
               "розповів про себе, що ви одне одному пообіцяли, що ти відчувала. Тільки те, що є нижче, нічого не "
-              "вигадуй. Без дат, без годин і без слів про те, коли це було (вчора, сьогодні, вранці).")
+              "вигадуй. Без дат, без годин і без слів про те, коли це було (вчора, сьогодні, вранці).\n\n"
+              f"{HUMAN_MEMORY}")  # v5.23 (the owner): a human's own memory
     if from_summaries:
         return system, "Що ти пам'ятаєш про ці години, по черзі:\n" + "\n".join(f"- {text}" for _, text in items)
     return system, "Розмова:\n" + "\n".join(f"{who}: {text}" for who, text in items)

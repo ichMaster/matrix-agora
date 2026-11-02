@@ -73,6 +73,9 @@ def test_the_request_is_her_own_memory_without_a_date_or_a_word_of_what_she_is()
     assert "Без дат, без годин" in system and contents == "Розмова:\nIch: Привіт\nКіра: Привіт!"
     for word in ("модел", "бот", "штучн"):
         assert word not in system.lower()
+    from agents.logic import BANNED_RE
+    from agents.memory import HUMAN_MEMORY
+    assert system.endswith(HUMAN_MEMORY) and not BANNED_RE.search(system)   # v5.23: a human's own memory
     _, folded = talk_request("day", "Кіра", "Канон.", [("hour", "Ми гуляли."), ("hour", "Пили чай.")], 150, True)
     assert folded == "Що ти пам'ятаєш про ці години, по черзі:\n- Ми гуляли.\n- Пили чай."
 

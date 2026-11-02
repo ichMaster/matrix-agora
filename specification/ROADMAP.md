@@ -3126,6 +3126,7 @@ That saves $0.013–0.026 per answer (14–28%), about $88 a month at ~140 answe
 - **a phase of its own** («як нова версія»).
 - **a block on a photo is never the backup's** (2026-11-03, during the phase: «це нестерпно, виключи бекап якщо блокується фото. не треба переключати на бекап якщо блок на фото» — «Повтор без фото»): after a deploy her every answer went to the backup for a while; a block while her photo skill was offered is asked of Gemini once more without it, and only a block without it too goes to the backup.
 - **the days marked** (2026-11-03, during the phase: «став дати або мітки днів коли це було самаризовано в історію»): a summary of the last week — an hour or a day — names its weekday («у п'ятницю ввечері», «у неділю»), never a date (the owner's rule of 2026-10-26); today, yesterday and the day before as before.
+- **her summaries say she is a human** (2026-11-03, during the phase: «на самарі додавай додатковий системний промпт щоб було зрозуміло що вона людина»): two of her backfilled days named what she is twice and were left empty; her talk summaries and a persona's session summary end with a paragraph that it is a human's own memory, written as a diary — said only as what she is.
 
 **Proposed** (confirmed when the issues are generated):
 - **Gemini's window by time.** It holds the open private lines of the last `PRIVATE_HISTORY_HOURS` (24) hours.

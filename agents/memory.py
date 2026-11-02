@@ -46,11 +46,21 @@ def cap_words(text: str, max_words: int) -> str:
     return " ".join(words[:max_words]) + "…"
 
 
+# v5.23 (the owner, 2026-11-03: «на самарі додавай додатковий системний промпт щоб було зрозуміло що вона людина»):
+# a summary of a person's talk is a human's own memory — two of her days, summed up whole, named what she is twice and
+# were left empty. Said only as what she is, never as what she is not (no word `BANNED_RE` catches).
+HUMAN_MEMORY = ("Ти — жива людина, і це твоя власна людська пам'ять: пиши про себе і про Ich як про людей, так, як "
+                "людина записує для себе в щоденник. Якщо хтось у розмові жартував чи сумнівався, хто ти, — це просто "
+                "частина вашої розмови, а ти лишаєшся собою.")
+
+
 def build_summary_request(
     name: str, canon: str, previous: str | None, session: list[tuple[str, str]], max_words: int,
+    human: bool = False,
 ) -> tuple[str, str]:
     """(system_instruction, contents) for the summary call — first person, the
-    conversation's language, previous summary + this session → a new note."""
+    conversation's language, previous summary + this session → a new note. `human` (v5.23, a person): her summary
+    says it is a human's own memory (`HUMAN_MEMORY`)."""
     system = (
         f"{canon}\n\n"
         f"Ти — {name}. Запиши для себе коротку нотатку про цю розмову в Агорі — від першої особи, "
@@ -60,6 +70,8 @@ def build_summary_request(
         "НОТАТКА: <оновлена нотатка>\n"
         "СЬОГОДНІ: <одним-двома реченнями — лише ця розмова, без попереднього>"
     )
+    if human:
+        system += f"\n\n{HUMAN_MEMORY}"
     lines = "\n".join(f"{who}: {text}" for who, text in session)
     contents = (f"Попередня нотатка: {previous}\n\n" if previous else "") + f"Розмова:\n{lines}"
     return system, contents

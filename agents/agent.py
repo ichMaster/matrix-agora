@@ -3810,6 +3810,7 @@ class Agent:
             self.last_attempt_ms = self.clock()
             system, contents = build_summary_request(
                 self.cfg.name, self.cfg.canon, self.summary, snapshot, self.summary_max_words,
+                human=self.cfg.type == "persona",  # v5.23 (the owner): a person's summary is a human's own memory
             )
             text = await self.llm.generate(contents, system, max_output_tokens=self.summary_max_words * 3,
                                            kind="summary")
