@@ -1164,7 +1164,7 @@ def analyze_detail(records: list[dict], answers: list[dict], since: date, until:
             _add_line(acc, r)
         if not rows:
             return 0.0
-        c = cost(acc, prices.price_in, prices.price_out, prices.models, prices.seconds)
+        c = _atom_cost(acc, prices)  # code review v5.22 #7: Cost's own rule — nothing billable is $0, never «—»
         return round(c, 6) if c is not None else None
 
     per = grouped(ok_photo + ok_video, lambda r: bucket(str(r["ts"])))

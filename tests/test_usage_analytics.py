@@ -282,6 +282,16 @@ def test_photos_and_videos_in_all_by_hour_and_an_hour_on_average_and_a_frame_is_
     assert m["series"][8] == {"bucket": "08", "photos": 1, "videos": 0} and m["series"][9]["videos"] == 1
 
 
+def test_a_failed_photo_with_no_counts_costs_nothing_in_media_as_in_cost():
+    """Code review v5.22 #7: Media priced its rows with `cost()`, so a failed call with no counts — the image model
+    priced, the default pair unset — read «—» where Cost read $0."""
+    from agents.usage import analyze_detail
+    lines = [timed("2026-11-02T08:20:00+02:00", "photo", model="gemini-nano-banana-2.1", ok=False)]
+    prices = PriceBook(models={"gemini-nano-banana-2.1": (1.50, 30.0)})
+    m = analyze_detail(lines, [], date(2026, 11, 2), date(2026, 11, 2), prices=prices)["media"]
+    assert m["cost"]["photos"] == 0.0 and m["photos"] == 0
+
+
 def test_no_data_gives_empty_blocks_and_a_corrupt_answer_line_is_skipped():
     import json
 
