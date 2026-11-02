@@ -1,6 +1,7 @@
 name = "Кіра"
 user_id = "@kira:agora.lan"
 canon = "agents/canon/kira.md"
+canon_private = "agents/canon/kira.private.md"  # v5.22: her whole canon alone with him, shorter (private canon)
 life = "agents/canon/kira.life.md"
 life_private = "agents/canon/kira.life.private.md"  # v5.22: the shorter story, her private prompt only (private canon)
 simulation = "agora"

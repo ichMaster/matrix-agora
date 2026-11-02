@@ -141,6 +141,35 @@ def test_alone_with_him_her_shorter_life_story_in_agora_the_whole_one(tmp_path, 
     assert "редакторкою" in agent.build_prompt(private=PRIVATE_NUDGE)
 
 
+def test_alone_with_him_her_shorter_canon_in_agora_the_whole_one(tmp_path, monkeypatch):
+    """v5.22 (the owner, 2026-11-02: «чи можна скоротити ще канон?» — «роби»): `canon_private` is her private prompt's
+    whole canon, in place of common + personal; Agora keeps the whole one."""
+    from tests.test_archive import kira
+    agent = kira(tmp_path, monkeypatch)
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "canon": "СПІЛЬНЕ. ПОВНИЙ КАНОН.", "canon_private": "КОРОТКИЙ."})
+    for private in (f"{PRIVATE_BRIEF}\n\nЯК ЦЬОГО РАЗУ", PRIVATE_NUDGE):
+        assert agent.build_prompt(private=private).startswith("КОРОТКИЙ.\n\n")
+    assert agent.build_prompt().startswith("СПІЛЬНЕ. ПОВНИЙ КАНОН.\n\n")
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "canon_private": ""})  # none in her canon: the whole one
+    assert agent.build_prompt(private=PRIVATE_NUDGE).startswith("СПІЛЬНЕ. ПОВНИЙ КАНОН.")
+
+
+@pytest.mark.canon
+def test_her_private_canon_is_read_or_refuses_to_start(tmp_path):
+    from pathlib import Path
+
+    from agents.config import ConfigError, load_config
+    from tests.test_thoughts import ENV
+    cfg = load_config("agents/kira.toml", env=ENV)
+    assert cfg.canon_private.startswith("# Кіра") and len(cfg.canon_private) < len(cfg.canon)
+    assert not BANNED_RE.search(cfg.canon_private)
+    src = Path("agents/kira.toml").read_text(encoding="utf-8")
+    toml = tmp_path / "kira.toml"
+    toml.write_text(src.replace('"agents/canon/kira.private.md"', f'"{tmp_path}/none.md"'), encoding="utf-8")
+    with pytest.raises(ConfigError, match="canon not found"):
+        load_config(toml, env=ENV)
+
+
 @pytest.mark.canon
 def test_her_private_life_story_is_read_or_named_when_missing(tmp_path):
     from pathlib import Path

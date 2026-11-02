@@ -47,6 +47,9 @@ class AgentConfig:
     # v5.22 (the owner, 2026-11-02: «окрему коротку версію лише для приватного промпту»): a shorter life story,
     # the private chat's prompt only (private canon); None: the whole story there too
     life_private: LifeStory | None = None
+    # v5.22 (the owner, 2026-11-02: «чи можна скоротити ще канон?» — «роби»): her whole canon for the private chat's
+    # prompt only, in place of common + personal (private canon); "": the same canon there too
+    canon_private: str = ""
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -119,6 +122,9 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
     if member.can("canon"):  # a herald's canon is his own file only (v5.1): common.md speaks to the room's speakers
         personal = Path(str(data["canon"]))
         canon = load_canon(personal) if member.type == "herald" else load_canon(COMMON_CANON, personal)
+    canon_private = ""
+    if member.can("canon") and member.can("private") and str(data.get("canon_private", "")).strip():
+        canon_private = load_canon(Path(str(data["canon_private"])))  # missing or empty: refuses to start
     life = None
     if member.can("life"):
         life_path = Path(str(data["life"]))
@@ -201,6 +207,7 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         name=str(data["name"]).strip(),
         user_id=user_id,
         canon=canon,
+        canon_private=canon_private,
         homeserver=_require(env, sim.endpoints["homeserver"]),
         room_id=_require(env, sim.endpoints["room"]),
         owner=_require(env, "OWNER"),

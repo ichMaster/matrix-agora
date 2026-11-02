@@ -2457,7 +2457,10 @@ class Agent:
         story = self.cfg.life_private if private is not None and self.cfg.life_private else self.cfg.life
         life = life_section(story, now.date()) if can("life") and story else None
         return {
-            "name": self.cfg.name, "canon": self.cfg.canon if can("canon") else "",
+            # v5.22 (the owner): alone with him her shorter canon, when she has one (`canon_private`)
+            "name": self.cfg.name,
+            "canon": (self.cfg.canon_private if private is not None and self.cfg.canon_private else self.cfg.canon)
+            if can("canon") else "",
             "summary": self.summary if can("summary") else None, "life": life, "world": world,
             "memories": self.memories_section(now, skip_layers) if can("chronicle") else None,
             "plans": self.plans_section(now) if can("plans") else None,
