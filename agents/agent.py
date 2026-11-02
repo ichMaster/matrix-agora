@@ -678,6 +678,7 @@ class Agent:
         self._closed: set[tuple[str, str]] = set()
         self._purge_asked_ms: int | None = None  # v5.14: when the owner asked `/purge`, to confirm within PURGE_CONFIRM_S
         self.last_private_ms: int | None = None
+        self._his_last_ms: int | None = None  # code review v5.22 #3: his latest private line's own time
         self._private_pending = self._private_again = False
         # v5.8 — the archive (`recall`): every line she sees, both rooms and both doors, searchable; filled from the
         # chats at its first start, embedded by the idle watcher
@@ -1014,7 +1015,7 @@ class Agent:
         key = key or f"ich:{channel}:{ts_ms}"
         self._archive(key, ts_ms, "private", channel, "Ich", body)
         self._unanswered.append((key, body))  # v5.13
-        self.last_private_ms = ts_ms
+        self.last_private_ms = self._his_last_ms = ts_ms
         self.last_activity_ms = self.clock()  # a private talk is a conversation too: no summary mid-way
         if self.cfg.can("summary"):
             self.session.append((private_label("Ich"), body))
@@ -1057,7 +1058,8 @@ class Agent:
         if door is None:
             return False
         action = None
-        asked_ms = None if nudge else self.last_private_ms  # v5.22: his latest line's own time
+        # v5.22: his latest line's own time — never hers (code review #3: her answer moves `last_private_ms`)
+        asked_ms = None if nudge else self._his_last_ms
         delay_ms, self._private_delay_ms = (None if nudge else self._private_delay_ms), 0
         self._pending_shot = None
         self._offer_photo = self._photo_open(door)  # v5.17: her photo skill, for Gemini's prompt only

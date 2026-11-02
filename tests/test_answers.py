@@ -94,3 +94,14 @@ def test_her_answer_through_the_backup_is_named_so_and_writing_first_answers_not
     backup, first = lines(agent)
     assert backup["by"] == "backup" and backup["answered"] == "owner" and backup["wait_ms"] == 3_600_000
     assert first["answered"] == "none" and first["wait_ms"] is None and first["delay_ms"] is None
+
+
+def test_his_line_while_she_answers_waits_from_its_own_time_never_from_her_answer(tmp_path, monkeypatch):
+    """Code review v5.22 #3: her answer moved `last_private_ms`, so his next line's wait counted from her answer."""
+    agent = route_her(tmp_path, monkeypatch, Gemini(), Backup())
+    agent.private_line(ASKED, ms(17), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True                       # her answer at the fixture's ms(18)
+    agent.private_line("а ще?", ms(17) + 1_800_000, "telegram", "tg:2")     # sent while she was answering
+    assert asyncio.run(agent.private_reply()) is True
+    first, second = lines(agent)
+    assert first["wait_ms"] == 3_600_000 and second["wait_ms"] == 1_800_000
