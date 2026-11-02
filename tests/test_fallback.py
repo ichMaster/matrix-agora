@@ -119,10 +119,6 @@ def test_a_failure_is_silence_named_by_type_or_status_never_the_token_or_a_text(
     ("Так" + "!" * 12, "run"),
     ("Я — велика мовна модель, навчена Google.", "self"),
     ("Я бот, але дуже милий.", "self"),
-    # 2026-11-02 (the owner): the backup's way out, in her voice — made-up lines of its kind
-    ("Ох, мої системи сьогодні геть перевантажені. Просто обійми мене.", "self"),
-    ("[softly] Знаєш, я зараз не зможу розповідати історії. Давай помовчимо.", "self"),
-    ("Мабуть, у моїх алгоритмах щось зламалось 😅", "self"),
 ])
 def test_an_answer_that_is_not_hers_is_dropped(text, why):
     assert backup_check(text) == why
@@ -133,8 +129,6 @@ def test_an_answer_that_is_not_hers_is_dropped(text, why):
     "Ти думаєш, я бот? 😄",                                    # her own question, in character
     "Слухала вчора Coldplay, і так добре стало.",
     "Ого. Серйозно? Це ж просто я після скель, розпатлана вся.",
-    "Моя нервова система сьогодні не витримує, ха.",          # a person's words
-    "Я не зможу прийти завтра, вибач. Розповім усе ввечері.",
 ])
 def test_her_own_answer_is_kept(text):
     assert backup_check(text) is None

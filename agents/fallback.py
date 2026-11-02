@@ -4,8 +4,7 @@ When Gemini blocks or refuses her private answer (v5.13), the same prompt goes h
 endpoint (verified with the owner's token, 2026-10-28) streams the answer in deltas only and reports no token counts;
 Cloudflare refuses a client's default User-Agent (403 «error code: 1010»), so the request sends its own. Any failure
 is None — silence, logged by type or status, never the token or a text. `backup_check` drops an answer that is not
-her: Russian letters, a Latin majority, another script, a run of one symbol, or her calling herself a model (from
-2026-11-02 also a machine's words for herself — «мої системи» — and its way out of a scene).
+her: Russian letters, a Latin majority, another script, a run of one symbol, or her calling herself a model.
 """
 
 from __future__ import annotations
@@ -38,10 +37,6 @@ CYRILLIC_RE = re.compile(r"[А-Яа-яІіЇїЄєҐґ]")
 OTHER_SCRIPT_RE = re.compile(r"[֐-׿؀-ۿ぀-ヿ㐀-䶿一-鿿가-힯]")
 RUN_RE = re.compile(r"(.)\1{10,}", re.DOTALL)
 SELF_OPENINGS = ("я бот", "я чат бот", "я чатбот")  # with v5.13's refusal phrases: she never calls herself a model
-# 2026-11-02 (the owner, from an answer of the backup in her voice): a machine's words for herself — a person has no
-# «системи» or «алгоритми», in any case — and its way out of a scene; anywhere in the answer
-SELF_RE = re.compile(r"(?<!\w)(?:мо(?:ї|їх|їм|їми) (?:систем|алгоритм|протокол)\w*|мій код|мого коду"
-                     r"|не (?:зможу|можу) розповідати історії)(?!\w)")
 
 UsageSink = Callable[[str, str, bool], None]  # (kind, model, ok)
 ClientSession = aiohttp.ClientSession  # the seam: a test passes its own (tests/conftest.py guards the network)
@@ -59,8 +54,7 @@ def backup_check(text: str) -> str | None:
         return "script"
     if RUN_RE.search(text):
         return "run"
-    plain = " ".join(re.sub(r"[^\w']+", " ", words.lower().replace("’", "'")).split())
-    if refusal_marker(words) or opening(words, SELF_OPENINGS) or SELF_RE.search(plain):
+    if refusal_marker(words) or opening(words, SELF_OPENINGS):
         return "self"
     return None
 
