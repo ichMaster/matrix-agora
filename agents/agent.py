@@ -1270,6 +1270,17 @@ class Agent:
         prompt, lines = await self._backup_private_prompt(brief)
         return await self._compose(prompt, lines=lines, kind=kind, responder=self.fallback_responder)
 
+    async def _gemini_answer(self, brief: str, kind: str):
+        """`_gemini_text`, and v5.23 (the owner, 2026-11-03: «не треба переключати на бекап якщо блок на фото» —
+        «Повтор без фото»): a block while her photo skill was offered is tried once more without it, so a block the
+        photo made goes neither to the backup nor to his lines; one that blocks without it too is a block, as ever."""
+        text, block = await self._gemini_text(brief, kind)
+        if text is None and block is not None and self._offer_photo:
+            log.info("private: blocked with her photo skill — once more without it")
+            self._offer_photo, self._pending_shot = False, None
+            text, block = await self._gemini_text(brief, kind)
+        return text, block
+
     async def _gemini_text(self, brief: str, kind: str):
         """Gemini's line, and its block or refusal (v5.13's `LAST_BLOCK`, read in this task) when it gave none."""
         LAST_BLOCK.set(None)
@@ -1310,7 +1321,7 @@ class Agent:
         his lines are `blocked` and the backup answers. Her line through the backup is made `blocked` once it is sent."""
         kind = "private_nudge" if nudge else "private"
         if not self.backup_open():
-            text, block = await self._gemini_text(brief, kind)
+            text, block = await self._gemini_answer(brief, kind)
             if block is not None and not nudge:  # v5.13: what Gemini refused never reaches it again
                 self.mark_unanswered(block[0], seen)
             return text, "gemini"
@@ -1322,7 +1333,7 @@ class Agent:
             if text is not None:
                 self.route_step("backup")
             return text, "backup"
-        text, block = await self._gemini_text(brief, kind)
+        text, block = await self._gemini_answer(brief, kind)
         if text is not None:
             self.route_step("gemini")
             return text, "gemini"

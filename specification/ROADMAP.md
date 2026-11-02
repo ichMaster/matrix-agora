@@ -3124,6 +3124,7 @@ That saves $0.013–0.026 per answer (14–28%), about $88 a month at ~140 answe
 - **`RECALL_N` 10** («збільши RECALL_N до 10»). Set at once in the panel as her agent setting, not in code. A recall
   picks 10 lines instead of 6, each with its neighbours;
 - **a phase of its own** («як нова версія»).
+- **a block on a photo is never the backup's** (2026-11-03, during the phase: «це нестерпно, виключи бекап якщо блокується фото. не треба переключати на бекап якщо блок на фото» — «Повтор без фото»): after a deploy her every answer went to the backup for a while; a block while her photo skill was offered is asked of Gemini once more without it, and only a block without it too goes to the backup.
 
 **Proposed** (confirmed when the issues are generated):
 - **Gemini's window by time.** It holds the open private lines of the last `PRIVATE_HISTORY_HOURS` (24) hours.

@@ -250,3 +250,46 @@ def test_no_faces_at_start_is_a_warning(tmp_path, monkeypatch, caplog):
     monkeypatch.setattr(agent_mod, "load_faces", lambda folder: [("kira.png", b"x", "image/png")])
     agent_mod.Agent(cfg, llm=GeminiClient())
     assert "photos: 1 faces" in caplog.text and "no faces" not in caplog.text
+
+
+class ShyOfPhotos(Says):
+    """Gemini blocks a private prompt that offers her photo skill (`always`: every one), answers one that does not."""
+
+    def __init__(self, always=False):
+        super().__init__()
+        self.always = always
+
+    async def generate(self, transcript, system_instruction, max_output_tokens=400, kind="reply"):
+        from agents.llm import LAST_BLOCK
+        self.calls.append((system_instruction, kind))
+        if kind == "private" and (self.always or PHOTO_SKILL in system_instruction):
+            LAST_BLOCK.set(("prompt", "prohibited_content", None))
+            return None
+        return "Без фото цього разу 🙂"
+
+
+def test_a_block_with_her_photo_skill_is_tried_once_more_without_it_never_the_backup(tmp_path, monkeypatch, ogg):
+    """v5.23 (the owner, 2026-11-03: «не треба переключати на бекап якщо блок на фото» — «Повтор без фото»): Gemini
+    answers without the photo skill; the backup is not asked, his line stays open, the route stays Gemini's."""
+    from agents.fallback import FallbackResponder
+    from agents.responder import responder_for
+    from tests.test_private_route import Backup
+
+    def gemini(llm):
+        agent.llm, agent.responder = llm, responder_for("gemini", llm)
+    agent = her(tmp_path, monkeypatch)
+    gemini(ShyOfPhotos())
+    agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "capabilities": agent.cfg.capabilities | {"fallback"}})
+    agent.fallback = Backup()
+    agent.fallback_responder = FallbackResponder(agent.fallback)
+    agent.private_line("скинь фото", ms(17), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    first, again = [c[0] for c in agent.llm.calls if c[1] == "private"]
+    assert PHOTO_SKILL in first and PHOTO_SKILL not in again and agent.fallback.calls == []
+    assert agent.sent[-1] == ("text", "Без фото цього разу 🙂") and agent.photos.shots == []
+    assert [x.mark for x in agent.archive.latest("private", 10, gemini=False) if x.key == "tg:1"] != ["blocked"]
+    # blocked without the photo skill too: a block, as ever — the backup answers
+    gemini(ShyOfPhotos(always=True))
+    agent.private_line("а так?", ms(17) + 60_000, "telegram", "tg:2")
+    assert asyncio.run(agent.private_reply()) is True
+    assert len(agent.fallback.calls) == 1
