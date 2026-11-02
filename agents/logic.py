@@ -282,6 +282,7 @@ def build_instruction(
     recalled: str | None = None,
     talk: str | None = None,
     voice: str | None = None,
+    can_pass: bool = True,
 ) -> str:
     """The system instruction, in contract order (ARCHITECTURE §Prompt assembly):
     canon → life so far → place and time → memories → plans → today →
@@ -289,7 +290,8 @@ def build_instruction(
     (v5.8) the facts about the owner (private only) → (v5.8) Agora today (private only) → (v5.8) what she recalls →
     (v5.20) what happened between them before the window (private, to Gemini) → last-session memory → (v5.6) the private chat's situation → (v4.6) the persona's move → (v5.3) its own
     questions of this session → (v5.9) her palette of voice tags → rules (v5.6: with the discretion line in Agora). Empty sections are skipped. Nothing
-    here may say a persona is a model or a bot."""
+    here may say a persona is a model or a bot. `can_pass` False (v5.22: her answer to him alone) leaves PASS out of
+    the rules."""
     parts = [canon]
     parts += [s for s in (life, world, memories, plans, today, mood, thoughts, pastlife, nudge) if s]  # «Настрій дня», …
     parts += [s for s in (facts, agora_now, recalled) if s]  # v5.8: what she knows, Agora today, what she recalls
@@ -305,10 +307,9 @@ def build_instruction(
         parts.append(asked)  # v5.3: what it already asked in this conversation — never again
     if voice:
         parts.append(voice)  # v5.9: her palette of tags for her voice, just before the rules
-    rules = (
-        f"Ти — {name}. Відповідай лише від себе, коротко, без префікса з іменем. "
-        "Якщо тобі нема чого додати — відповідай рівно PASS."
-    )
+    rules = f"Ти — {name}. Відповідай лише від себе, коротко, без префікса з іменем."
+    if can_pass:
+        rules += " Якщо тобі нема чого додати — відповідай рівно PASS."
     rules = " ".join(r for r in (rules, rules_extra, discretion) if r)  # v5.6: the discretion line, in Agora
     parts.append(rules)
     return "\n\n".join(parts)
