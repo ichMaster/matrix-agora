@@ -90,8 +90,10 @@ def test_instruction_order_canon_memory_rules():
 
 
 def persona_files(tomls: dict[str, dict]) -> list[str]:
-    """The files the human-belief rule covers (v4.2: persona agents only) — each persona's canon and life story."""
-    return [t[k] for t in tomls.values() if t.get("type", "persona") == "persona" for k in ("canon", "life") if k in t]
+    """The files the human-belief rule covers (v4.2: persona agents only) — each persona's canon and life story, and
+    (code review v5.22 #8) the shorter ones her private prompt reads instead."""
+    keys = ("canon", "life", "canon_private", "life_private")
+    return [t[k] for t in tomls.values() if t.get("type", "persona") == "persona" for k in keys if k in t]
 
 
 def _registry_tomls() -> dict[str, dict]:
@@ -111,6 +113,7 @@ def test_no_persona_prompt_or_canon_calls_the_agent_a_model_or_bot():
     from agents.logic import BANNED_RE, build_instruction
     files = persona_files(_registry_tomls())
     assert "agents/canon/ada.md" in files and "agents/canon/bruno.life.md" in files
+    assert {"agents/canon/kira.private.md", "agents/canon/kira.life.private.md"} <= set(files)  # review v5.22 #8
     texts = [build_instruction("Ада", "Канон.", "підсумок"), Path("agents/canon/common.md").read_text(encoding="utf-8")]
     texts += [Path(f).read_text(encoding="utf-8") for f in files]
     for text in texts:
