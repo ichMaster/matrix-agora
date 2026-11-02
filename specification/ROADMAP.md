@@ -2933,7 +2933,7 @@ midnight.
   - **`/purge`** stays: it deletes every `blocked` at once.
   - **The rule:** CLAUDE.md's and ARCHITECTURE's «nothing lived is deleted» gains this exception.
 - **The re-check command** (v5.20, AGORA-174) goes.
-- **The data, once the code is live:** a copy comes first, and only counts, times and marks are read.
+- **The data, once the code is live:** only counts, times and marks are read, and no copy is kept (the owner).
   - `waiting`, `censored` and `reopened` become `blocked`.
   - Her lines that the log names as the backup's (279 since 2026-10-28), and his lines that they answered, become
     `blocked`.
