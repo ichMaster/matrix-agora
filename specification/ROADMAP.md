@@ -2866,6 +2866,8 @@ midnight.
   night's re-check were laid out for him to read). This replaces his earlier «clean … теж переведи в блокед» and «все
   відкрите переведи в блокед і стери потім».
 - No archive copy is kept: «не потрібно архіву якщо це стирається».
+- The probe and its limits go: «старих рядків які блокують вже ніколи не буде, бо вони всі пройшли через
+  джемені»; «якщо щось буде блокувати то ми знайдемо це і просто видалимо». The hour's 10 blocks stay.
 - Gemini's own filter now plays the judge's part, at once rather than afterwards. The risk of a ban by Google
   grows, so the owner switches to the backup by hand (`/backup`) when the talk turns to what should not reach
   Gemini («користувач має розуміти … має сам в ручному режимі перейти в бекап мережу»).
@@ -2896,8 +2898,11 @@ midnight.
   - `/status` shows the mode, its end and the blocks in the last hour;
   - `/auto` goes;
   - `/backup` stays (the owner): the backup mode until `/gemini`, for when he sees the talk turn explicit.
-- **The probe (v5.16) stays** (`PROBE_CALLS` 30, `PROBE_DAY_CALLS` 200 for her). What it proves becomes `blocked`.
-  When it proves nothing, nothing else runs.
+- **The probe (v5.16) goes**, with `PROBE_CALLS` and `PROBE_DAY_CALLS`.
+  - With nothing reopened, every open line has passed through Gemini.
+  - The 756 `clean` lines that the night's re-check opened had not. If an old line blocks again, it is found by
+    hand and deleted.
+  - The talk writer's single check of a failed summary stays.
 - **The judge goes:**
   - `agents/judge.py` and its settings;
   - her watcher's rating;
@@ -2964,7 +2969,7 @@ midnight.
   - a Matrix private line re-read at a start stays `blocked`;
   - the index and the in-memory history follow;
   - counts only in the log.
-- **Gone:** no judge call, no `reopened` or `clean` written, no re-check command.
+- **Gone:** no judge call, no probe after a block, no `reopened` or `clean` written, no re-check command.
 
 **Not in this phase:**
 - Agora;
