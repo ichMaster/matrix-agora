@@ -531,13 +531,14 @@ class Agent:
         # v5.17 — her photos in Telegram: Google's image model, her face from the owner's reference photos (next to her
         # private canon); offered to Gemini only, in Telegram, under the day's cap
         self.photos: PhotoMaker | None = None
-        self.photo_day_max, self.photo_gap_s = 0, 0
+        self.photo_day_max, self.photo_window_max, self.photo_window_s = 0, 0, 1800
         self.photo_sent = False
         self._offer_photo = False
         self._pending_shot: Shot | None = None
         if cfg.can("photos"):
             self.photo_day_max = int(os.environ.get("PHOTO_DAY_MAX", "40"))
-            self.photo_gap_s = int(os.environ.get("PHOTO_GAP_S", "1500"))  # v5.22: the pause between her photos
+            self.photo_window_max = int(os.environ.get("PHOTO_WINDOW_MAX", "3"))  # v5.22: at most so many in any
+            self.photo_window_s = int(os.environ.get("PHOTO_WINDOW_S", "1800"))   # window of this length
             faces = load_faces(Path("agents/canon") / f"{cfg.localpart}.face")
             if isinstance(self.llm, GeminiClient):
                 self.photos = photo_maker(os.environ.get("PHOTO_MODEL", "gemini-nano-banana-2.1").strip() or PHOTO_MODEL,
@@ -552,14 +553,15 @@ class Agent:
         self.notes: NoteMaker | None = None
         self.clips: ClipMaker | None = None
         self.video_day_max, self.video_note_max_s, self.video_note_lead_ms = 0, 30, NOTE_LEAD_MS
-        self.video_gap_s = 0  # v5.22: the pause between her videos
+        self.video_window_max, self.video_window_s = 0, 7200  # v5.22: at most so many in any window of this length
         self._offer_video: tuple[str, ...] = ()
         self._video_busy = False
         self.voice_held: bytes | None = None
         self.voice_hold_miss: str | None = None
         if cfg.can("videos"):
             self.video_day_max = int(os.environ.get("VIDEO_DAY_MAX", "40"))
-            self.video_gap_s = int(os.environ.get("VIDEO_GAP_S", "6000"))
+            self.video_window_max = int(os.environ.get("VIDEO_WINDOW_MAX", "2"))
+            self.video_window_s = int(os.environ.get("VIDEO_WINDOW_S", "7200"))
             self.video_note_max_s = int(os.environ.get("VIDEO_NOTE_MAX_S", "30"))
             self.video_note_lead_ms = int(os.environ.get("VIDEO_NOTE_LEAD_MS", "1000"))  # Telegram cuts her first sound
             if isinstance(self.llm, GeminiClient):
@@ -1865,32 +1867,41 @@ class Agent:
         except OSError:
             return 0
 
-    def last_photo_ms(self, kind: str = "photos") -> int | None:
-        """v5.22 — when her last photo (or, `videos`, video) was kept: the latest `HHMMSS` of today's folder, on her
-        clock (None: none)."""
-        day = local_now(self.clock(), self.tz)
-        try:
-            names = [p.stem for p in (self._dir(kind) / day.date().isoformat()).iterdir() if p.is_file()]
-        except OSError:
-            return None
-        stamps = [n for n in names if len(n) == 6 and n.isdigit()]
-        if not stamps:
-            return None
-        h, m, sec = (int(x) for x in (max(stamps)[:2], max(stamps)[2:4], max(stamps)[4:]))
-        return int(day.replace(hour=h, minute=m, second=sec, microsecond=0).timestamp() * 1000)
+    def media_times(self, kind: str = "photos") -> list[int]:
+        """v5.22 — when her photos (or, `videos`, videos) were kept today and yesterday: each file's `HHMMSS` in its
+        day's folder, on her clock — so a window across midnight counts, and a restart keeps it."""
+        today = local_now(self.clock(), self.tz)
+        out = []
+        for day in (today - timedelta(days=1), today):
+            try:
+                names = [p.stem for p in (self._dir(kind) / day.date().isoformat()).iterdir() if p.is_file()]
+            except OSError:
+                continue
+            for n in names:
+                if len(n) == 6 and n.isdigit():
+                    t = day.replace(hour=int(n[:2]), minute=int(n[2:4]), second=int(n[4:]), microsecond=0)
+                    out.append(int(t.timestamp() * 1000))
+        return out
+
+    def _window_full(self, kind: str, most: int, window_s: int) -> bool:
+        """v5.22 — `most` of her photos or videos already went in the last `window_s` (0: no such cap)."""
+        if most <= 0:
+            return False
+        now = self.clock()
+        return sum(1 for t in self.media_times(kind) if 0 <= now - t < window_s * 1000) >= most
 
     def _photo_closed(self, door: str | None) -> str | None:
         """Why her answer may not carry a photo now (None: it may) — v5.17: not Telegram, the image model off, the day's
-        cap; v5.22: her last photo less than `PHOTO_GAP_S` ago (the owner, 2026-11-02: «з кожним меседжем»)."""
+        cap; v5.22: `PHOTO_WINDOW_MAX` photos already in the last `PHOTO_WINDOW_S` (the owner, 2026-11-02: «з кожним
+        меседжем … ліпше кількість на 30 хв»)."""
         if door != "telegram":
             return "element"
         if self.photos is None or self.photo_day_max <= 0:
             return "off"
         if self.photos_today() >= self.photo_day_max:
             return "cap"
-        last = self.last_photo_ms() if self.photo_gap_s > 0 else None
-        if last is not None and self.clock() - last < self.photo_gap_s * 1000:
-            return "pause"
+        if self._window_full("photos", self.photo_window_max, self.photo_window_s):
+            return "window"
         return None
 
     def _photo_open(self, door: str | None) -> bool:
@@ -1924,9 +1935,8 @@ class Agent:
             return "off"
         if self.videos_today() >= self.video_day_max:
             return "cap"
-        last = self.last_photo_ms("videos") if self.video_gap_s > 0 else None  # v5.22: the pause after her last
-        if last is not None and self.clock() - last < self.video_gap_s * 1000:
-            return "pause"
+        if self._window_full("videos", self.video_window_max, self.video_window_s):  # v5.22: «2 за 2 години»
+            return "window"
         return "busy" if self._video_busy else None
 
     def _video_kinds(self, door: str | None) -> tuple[str, ...]:

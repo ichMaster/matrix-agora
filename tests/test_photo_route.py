@@ -143,23 +143,25 @@ def test_an_echoed_empty_note_draws_her_answer_again_without_a_photo(tmp_path, m
     assert "photo: dropped (no description)" in caplog.text and not photos_dir(agent).exists()
 
 
-def test_her_next_photo_waits_out_the_pause_after_her_last(tmp_path, monkeypatch, ogg, caplog):
-    """v5.22 (the owner, 2026-11-02: «Кіра висилає фото з кожним меседжем … ліміт фото на 10 хв»): after a photo,
-    no photo skill until `PHOTO_GAP_S` has passed — a photo line in the meantime is dropped as `pause`."""
+def test_at_most_so_many_photos_in_any_window(tmp_path, monkeypatch, ogg, caplog):
+    """v5.22 (the owner, 2026-11-02: «Кіра висилає фото з кожним меседжем … ліпше кількість на 30 хв, тоді вона може
+    висилати нерівномірно»): at most `PHOTO_WINDOW_MAX` photos in any `PHOTO_WINDOW_S` — read from the kept photos'
+    names — then no skill, and a photo line meanwhile is dropped as `window`."""
     caplog.set_level(logging.INFO)
-    agent = her(tmp_path, monkeypatch, "Ось я 🙂\nСЕЛФІ: я на балконі", "А ось і ще\nСЕЛФІ: я з чаєм", "Тримай\nФОТО: чашка")
-    agent.photo_gap_s = 600
-    agent.private_line("скинь селфі", ms(17), "telegram", "tg:1")
-    assert asyncio.run(agent.private_reply()) is True                                   # 18:00, kept as 180000.jpg
+    agent = her(tmp_path, monkeypatch, "А ось і ще\nСЕЛФІ: я з чаєм", "Тримай\nФОТО: чашка")
+    agent.photo_window_max, agent.photo_window_s = 3, 1800
+    photos_dir(agent).mkdir(parents=True)
+    for name in ("174000", "175000", "175500"):                                 # three in the last half hour
+        (photos_dir(agent) / f"{name}.jpg").write_bytes(b"JPEG")
     agent.clock = lambda: ms(18, 5)
-    agent.private_line("а ще?", ms(18, 4), "telegram", "tg:2")
+    agent.private_line("а ще?", ms(18, 4), "telegram", "tg:1")
     assert asyncio.run(agent.private_reply()) is True
-    assert PHOTO_SKILL not in agent.llm.calls[1][0] and len(agent.photos.shots) == 1
-    assert "photo: dropped (pause)" in caplog.text and agent.sent[-1] == ("text", "А ось і ще")
-    agent.clock = lambda: ms(18, 11)
-    agent.private_line("а тепер?", ms(18, 10), "telegram", "tg:3")
+    assert PHOTO_SKILL not in agent.llm.calls[0][0] and agent.photos.shots == []
+    assert "photo: dropped (window)" in caplog.text and agent.sent[-1] == ("text", "А ось і ще")
+    agent.clock = lambda: ms(18, 11)                                            # 17:40 has left the window: two in it
+    agent.private_line("а тепер?", ms(18, 10), "telegram", "tg:2")
     assert asyncio.run(agent.private_reply()) is True
-    assert PHOTO_SKILL in agent.llm.calls[2][0] and agent.photos.shots[-1] == Shot("photo", "чашка")
+    assert PHOTO_SKILL in agent.llm.calls[1][0] and agent.photos.shots == [Shot("photo", "чашка")]
 
 
 def test_a_failed_redraw_sends_her_first_words_without_the_line(tmp_path, monkeypatch, ogg):

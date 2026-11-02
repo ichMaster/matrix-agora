@@ -274,16 +274,17 @@ def test_the_skill_never_says_a_video_is_made():
 
 
 
-def test_her_next_video_waits_out_the_pause_after_her_last(tmp_path, monkeypatch, media):
-    """v5.22 (the owner, 2026-11-02: «те саме постав для відео але більше паузу»): after a video, no video
-    skill until `VIDEO_GAP_S` has passed — read from today's kept videos' names."""
+def test_at_most_so_many_videos_in_any_window(tmp_path, monkeypatch, media):
+    """v5.22 (the owner, 2026-11-02: «те саме … для відео … 2 за 2 години»): at most `VIDEO_WINDOW_MAX` videos in any
+    `VIDEO_WINDOW_S`, read from today's and yesterday's kept videos' names."""
     agent = kira(tmp_path, monkeypatch, "Ось")
-    agent.video_gap_s = 6000
+    agent.video_window_max, agent.video_window_s = 2, 7200
     videos_dir(agent).mkdir(parents=True)
-    (videos_dir(agent) / "170000.mp4").write_bytes(b"MP4")                                  # her last video, at 17:00
+    for name in ("170000", "180000"):
+        (videos_dir(agent) / f"{name}.mp4").write_bytes(b"MP4")
     agent.clock = lambda: ms(18, 30)
-    assert agent._video_closed("telegram", "note") == "pause" and agent._video_kinds("telegram") == ()
-    agent.clock = lambda: ms(18, 41)
+    assert agent._video_closed("telegram", "note") == "window" and agent._video_kinds("telegram") == ()
+    agent.clock = lambda: ms(19, 1)                                             # 17:00 has left the window
     assert agent._video_closed("telegram", "note") is None and "note" in agent._video_kinds("telegram")
 
 

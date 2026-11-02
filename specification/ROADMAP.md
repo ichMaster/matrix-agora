@@ -3013,7 +3013,7 @@ its time — nor how long he waits for an answer, how the prompts grow, or how m
 - phase v5.22, after v5.21's release.
 - **one day by the hour** (2026-11-02, during the phase: «за сьогодні і за вчора по годинах»): Today and Yesterday draw the Cost view by the hour too — the cost an hour by service, the running total against the day before's, the calls or tokens an hour.
 - **the prompt's structure and its dynamics** (2026-11-02, during the phase: «аналіз структури промпта … скільки що займає в токенах — канон, історія, РАГ … і динаміка»): each answer call's usage line keeps its prompt's parts in characters, shared out over its own prompt tokens; Prompts shows each part's tokens a call by day or by hour, its share and its change.
-- **a pause between her photos** (2026-11-02, during the phase: «Кіра зараз висилає фото з кожним меседжем … ліміт … рахуй … скільки у неї там час»): `PHOTO_GAP_S` 25 minutes and `VIDEO_GAP_S` 1 h 40 min by default — her active day (08–01, 17 hours) over the day's 40 photos and 10 videos, so they last the whole day; agent settings in the panel.
+- **caps per window on her photos and videos** (2026-11-02, during the phase: «Кіра зараз висилає фото з кожним меседжем … ліпше кількість на 30 хв, тоді вона може висилати нерівномірно»): at most 3 photos in any 30 minutes and 2 videos in any 2 hours (`PHOTO_WINDOW_MAX`/`_S`, `VIDEO_WINDOW_MAX`/`_S`), beside the day's caps; agent settings in the panel.
 
 **What the data holds now:** a usage line has the tokens, characters, audio and video seconds, `ok` and `blocked`,
 but no time; an answer leaves no record at all. A video's first frame is made by the image model as a `photo` line,
