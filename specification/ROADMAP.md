@@ -2857,14 +2857,15 @@ midnight.
   - they are needed only in the backup's history, within 300 messages — never in the summaries, the thoughts or
     anything else;
   - once a day, those older than 24 hours are deleted.
-- `clean` goes to `blocked` too («бо від цього всі проблеми»).
 - A phase of its own, v5.21.
 - His messages in the backup mode are `blocked` too.
 - `/backup` stays: «я сам можу перейти в бекап коли бачу що повідомлення відверті».
 - The backup never keeps a fact.
 - The deletion runs every day at 05:00.
-- Every line opened before (`clean`: the night's re-check and the judge's) goes to `blocked` and is then deleted
-  («все відкрите переведи в блокед і стери потім»).
+- For now the `clean` lines and facts stay open; if they cause trouble, it is decided then («давай можливо наразі
+  залишимо clean меседжі і факти якщо будуть з ними проблеми то будемо вирішувати», after the 1,068 lines of the
+  night's re-check were laid out for him to read). This replaces his earlier «clean … теж переведи в блокед» and «все
+  відкрите переведи в блокед і стери потім».
 - No archive copy is kept: «не потрібно архіву якщо це стирається».
 - Gemini's own filter now plays the judge's part, at once rather than afterwards. The risk of a ban by Google
   grows, so the owner switches to the backup by hand (`/backup`) when the talk turns to what should not reach
@@ -2873,7 +2874,8 @@ midnight.
 **Proposed** (the owner's answers of 2026-11-02 included; the points still marked *to confirm* are decided when the
 issues are generated):
 - **The marks:** `gemini` (open) and `blocked` (closed for good). The archive's and the facts' mark functions never
-  turn `blocked` into anything else, and a test pins every path.
+  turn `blocked` into anything else, and a test pins every path. `clean` is never written again; the lines and facts
+  that have it keep it and stay open, so they can still be found if they cause trouble.
 - **A block** is any of these:
   - a block at the prompt stage;
   - a block at the answer stage;
@@ -2923,10 +2925,9 @@ issues are generated):
   - `waiting`, `censored` and `reopened` become `blocked`.
   - Her lines that the log names as the backup's (279 since 2026-10-28), and his lines that they answered, become
     `blocked`.
-  - Every `clean` line (1,418: the night's re-check opened 1,068, the judge 350) becomes `blocked` (the owner). Her
-    history for Gemini then ends on 28.10.
-  - The 100 facts marked `clean` become `gemini` (*to confirm*).
-  - The talk summaries already written stay (*to confirm*).
+  - The `clean` lines and facts stay as they are, open (the owner) — except the lines of the point above: 312 of the
+    night's 1,068 are the backup's (152 of hers, 160 of his it answered), and they become `blocked` by the rule.
+  - The talk summaries already written stay.
   - Then the first deletion runs.
   - No copy is kept (the owner). The archive and facts copies on the host (`~/matrix-agora/canon-backup/` folders
     of 2026-10-31 – 11-02 holding `kira.archive.db` or `kira.facts`) are deleted; the canon copies there stay.
@@ -2936,7 +2937,7 @@ issues are generated):
 
 **Owner steps:**
 - Confirm or waive v5.20's live checks (#173–#175), so that v5.20.0 is released first.
-- Answer the three points still *to confirm*.
+- Answer the point still *to confirm* (`/gemini` and the hour's count).
 - The deploy and the checks below.
 
 **DoD:**

@@ -242,7 +242,7 @@ The phase is [ROADMAP.md §v5.21](../ROADMAP.md). This part is the same design i
     - `/purge` still deletes every `blocked` line at once.
 11. **What goes:**
     - the judge (Gemma 4 31B on OpenRouter) with its settings;
-    - `waiting`, `reopened` and `clean`;
+    - `waiting` and `reopened` (the lines that have `clean` keep it and stay open, but nothing writes it again);
     - the day cap `FALLBACK_DAY_MAX`;
     - the window's end by the rating;
     - the v5.20 re-check command.
@@ -270,15 +270,14 @@ A copy comes first. Only counts, times and marks are read.
 
 - `waiting`, `censored` and `reopened` become `blocked`.
 - Her 279 lines that the log names as the backup's, and his lines that they answered, become `blocked`.
-- Every `clean` line (1,418) becomes `blocked`, and the deletion then removes its text. Her history for Gemini then
-  ends on 28.10, because 29.10–01.11 are entirely lines that the night's re-check opened.
-- The 100 facts marked `clean` become `gemini` (*to confirm*). They are Gemini's facts about him that the judge
-  confirmed.
-- The talk summaries already written stay (*to confirm*). Without them she knows nothing of 29.10–01.11.
+- The `clean` lines and facts stay open, as they are: the owner decided to keep them for now and to decide if they
+  cause trouble. `clean` is never written again, so they can still be found. The exception is the backup's own lines
+  among them: 152 of hers that the backup wrote and 160 of his that it answered become `blocked` by the rule.
+- The talk summaries already written stay.
 - Then the first deletion runs, and every `blocked` line older than 24 hours loses its text.
 - No copy is kept. The archive and facts copies on the host are deleted; the copies of her canon stay.
 
 ### Before the phase starts
 
-v5.20 is released first, once the owner confirms or waives its live checks (#173–#175). Three points are still
-*to confirm*: whether `/gemini` resets the hour's count, the 100 `clean` facts, and the talk summaries.
+v5.20 is released first, once the owner confirms or waives its live checks (#173–#175). One point is still
+*to confirm*: whether `/gemini` resets the hour's count.
