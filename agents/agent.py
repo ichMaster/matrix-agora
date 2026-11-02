@@ -506,14 +506,14 @@ class Agent:
         self.fallback: FallbackClient | None = None
         self.fallback_responder: FallbackResponder | None = None
         self.fallback_window_s, self.fallback_hour_max, self.fallback_lock_s = 300, 10, 3600
-        self.fallback_context, self.fallback_history_n = 32000, 60
+        self.fallback_context, self.fallback_history_n = 32000, 300
         if cfg.can("fallback"):
             model = os.environ.get("FALLBACK_MODEL", "").strip()
             self.fallback_window_s = int(float(os.environ.get("FALLBACK_WINDOW_S", "300")))
             self.fallback_hour_max = int(os.environ.get("FALLBACK_HOUR_MAX", "10"))  # v5.21: the hour's blocks
             self.fallback_lock_s = int(os.environ.get("FALLBACK_LOCK_S", "3600"))    # v5.21: then the backup this long
             self.fallback_context = int(os.environ.get("FALLBACK_CONTEXT", "32000"))
-            self.fallback_history_n = int(os.environ.get("FALLBACK_HISTORY_N", "60"))
+            self.fallback_history_n = int(os.environ.get("FALLBACK_HISTORY_N", "300"))  # v5.21: the owner
             if model and fallback_token:
                 self.fallback = FallbackClient(fallback_token, model, sink=self.record_fallback_usage)
                 self.fallback_responder = FallbackResponder(self.fallback)
@@ -1169,15 +1169,16 @@ class Agent:
         return self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts, talk=True)
 
     async def _backup_private_prompt(self, brief: str) -> tuple[str, list[tuple[str, str]]]:
-        """Her private instruction and history for the backup: every line and fact, the recall by words only (its
-        query never goes to Gemini's embeddings), `FALLBACK_HISTORY_N` lines, fitted to `FALLBACK_CONTEXT` — the month
+        """Her private instruction and history for the backup (v5.21, the owner, 2026-11-02: a `blocked` line is the
+        backup's only as history, within `FALLBACK_HISTORY_N` (300) lines of every mark): the open facts, the recall of
+        open lines by words only (its query never goes to Gemini's embeddings), fitted to `FALLBACK_CONTEXT` — the month
         digests, the week digests, «Agora today», then the oldest lines (never fewer than 10) left out."""
-        history = self.private_history[-max(self.fallback_history_n, 1):]
-        facts = self.facts_now(gemini=False)
+        history = [line for line in self.private_history[-max(self.fallback_history_n, 1):] if line[1]]
+        facts = self.facts_now()
         recalled = agora_now = None
         if self.archive is not None:
             query = next((t for s, t in reversed(history) if s == "Ich"), "")
-            recalled = await self.recall_section(query, self.private_places, set(history), gemini=False)
+            recalled = await self.recall_section(query, self.private_places, set(history), meaning=False)
             agora_now = self.agora_now_section()
         built: dict[tuple[str, ...], str] = {}
 
@@ -1195,10 +1196,9 @@ class Agent:
                      len(history))
         return instruction(cuts), history[-n:]
 
-    async def _backup_text(self, brief: str, kind: str, fact_mark: str = "waiting"):
+    async def _backup_text(self, brief: str, kind: str):
         prompt, lines = await self._backup_private_prompt(brief)
-        return await self._compose(prompt, lines=lines, kind=kind, responder=self.fallback_responder,
-                                   fact_mark=fact_mark)
+        return await self._compose(prompt, lines=lines, kind=kind, responder=self.fallback_responder)
 
     async def _gemini_text(self, brief: str, kind: str):
         """Gemini's line, and its block or refusal (v5.13's `LAST_BLOCK`, read in this task) when it gave none."""
@@ -1478,10 +1478,12 @@ class Agent:
         log.info("private chat: %d lines of history from the archive", len(lines))
 
     async def recall_section(self, query: str, places: tuple[str, ...], exclude: set,
-                             gemini: bool = True, used: list | None = None, drawn: list | None = None) -> str | None:
+                             gemini: bool = True, meaning: bool = True) -> str | None:
         """What she recalls before an answer: the message she answers is the query — the word search and (when its
         embedding comes back) the meaning search within `places`, fused; the best `RECALL_N` lines not already in the
-        prompt's window, each with its neighbours. A failure is no section, never a blocked answer."""
+        prompt's window, each with its neighbours. `gemini=False` reads closed lines too; `meaning=False` is words
+        only (v5.21: the backup's recall — open lines only, and its query never goes to Gemini's embeddings). A failure
+        is no section, never a blocked answer."""
         if self.archive is None or self.recall_n <= 0 or not (query or "").strip():
             return None
         try:
@@ -1489,7 +1491,7 @@ class Agent:
             meaning_ids: list[int] = []
             try:  # v5.8 review #10: the meaning search fails on its own — the words' results stay
                 # v5.14: the backup's recall is words only — its query never goes to Gemini's embeddings
-                embed = getattr(self.llm, "embed", None) if gemini else None
+                embed = getattr(self.llm, "embed", None) if gemini and meaning else None
                 vector = await embed([query], task="RETRIEVAL_QUERY") if embed else None
                 if vector:
                     ids, matrix = self.archive.vectors(places)
@@ -1507,10 +1509,6 @@ class Agent:
                          if n.id not in seen and (n.speaker, n.text) not in exclude]
                 seen.update(n.id for n in group)
                 groups.append(group)
-                if used is not None:  # v5.15: the lines this prompt recalled, for the judge at a block
-                    used.extend(group)
-                if drawn is not None:  # v5.16: its groups as drawn, for the probe
-                    drawn.append(group)
             if picked:
                 log.info("recall: %d lines (%s)", len(picked), "+".join(places))
             return render_recalled(groups, self.tz, local_now(self.clock(), self.tz))
@@ -1557,8 +1555,8 @@ class Agent:
                 log.error("archive: the facts were not mirrored (%s)", type(exc).__name__)
         return facts_section(facts, self.facts_in_prompt, self.fact_max_chars, gemini)
 
-    def remember(self, text: str, source: str, pin: int = 1, mark: str = "gemini") -> bool:
-        """One fact kept — never its words in a log. `mark` (v5.14): `waiting` for one the backup's answer asked for."""
+    def remember(self, text: str, source: str, pin: int = 1) -> bool:
+        """One fact kept — never its words in a log (v5.21: never one the backup asked for)."""
         if self.facts_dir is None:
             return False
         why = off_limits(text)  # v5.8 review #3: an asked fact is the model's words, so the same filter holds
@@ -1566,8 +1564,7 @@ class Agent:
             log.info("facts: not kept (%s, %s)", why, source)
             return False
         today = local_now(self.clock(), self.tz).date().isoformat()
-        kept = add_fact(self.facts_dir, text, pin, source, today, self.facts_max, self.fact_max_chars,
-                        mark) is not None
+        kept = add_fact(self.facts_dir, text, pin, source, today, self.facts_max, self.fact_max_chars) is not None
         log.info("facts: %s (%s)", "kept one" if kept else "not kept (empty, too long, known or full)", source)
         return kept
 
@@ -3295,7 +3292,7 @@ class Agent:
 
     async def _compose(self, prompt: str, max_words: int | None = None, lines: list | None = None,
                        effort: str | None = None, toolset: str | None = None, kind: str = "reply",
-                       responder=None, fact_mark: str = "gemini", shots: list | None = None) -> str | None:
+                       responder=None, shots: list | None = None) -> str | None:
         """One model call → the line as it would be sent, or None (logged): never half a sentence, never another's
         words, PASS honoured, the creature's word cap applied (`max_words` overrides it: a telegram's joke)."""
         reply = await (responder or self.responder).respond(Turn(list(self.history if lines is None else lines), prompt,
@@ -3303,14 +3300,17 @@ class Agent:
         if reply is None:
             return None  # already logged
         text = reply.text
+        backup = responder is not None and responder is self.fallback_responder
         if self.facts_dir is not None:  # v5.8: the «ЗАПАМ'ЯТАЙ: …» line is kept, never sent — on every path
             text, asked = split_marker(text)
             for fact in asked:
-                self.remember(fact, "asked", mark=fact_mark)  # v5.14: one the backup asked for waits
+                if backup:  # v5.21 (the owner, 2026-11-02): the backup never keeps a fact
+                    log.info("facts: dropped (backup)")
+                else:
+                    self.remember(fact, "asked")
             if not text:
                 log.info("silent: only a line to remember")
                 return None
-        backup = responder is not None and responder is self.fallback_responder
         if shots is not None or backup:  # v5.17: only her private answers — Agora's lines are never cut (review #1)
             text, shot = split_photo(text)  # a photo's line is never sent — Gemini's private answer keeps its shot
             if shot is not None:

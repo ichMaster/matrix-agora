@@ -211,14 +211,37 @@ def test_without_the_backup_a_refusal_is_v5_13s_silence_with_his_line_blocked(tm
     assert marks(agent)["tg:1"] == "blocked" and not agent.route_file.exists()
 
 
-def test_a_fact_the_backup_asks_her_to_keep_waits(tmp_path, monkeypatch):
+def test_the_backup_never_keeps_a_fact_and_sends_the_rest(tmp_path, monkeypatch, caplog):
+    """v5.21 (the owner, 2026-11-02): «ніколи» — a «ЗАПАМ'ЯТАЙ» from the backup is dropped, never kept or sent."""
+    caplog.set_level(logging.INFO)
     agent = her(tmp_path, monkeypatch, Gemini(), Backup("Звісно. ЗАПАМ'ЯТАЙ: Ich любить грозу"))
     agent.facts_dir = tmp_path / "kira.facts"
     agent.facts_max, agent.fact_max_chars, agent.facts_in_prompt = 50, 240, 10
     save_route(agent.route_file, Route(window_until_ms=ms(18, 5)))
     agent.private_line("Запам'ятай, я люблю грозу", ms(17, 59), "telegram", "tg:1")
-    asyncio.run(agent.private_reply())
-    assert "грозу" in (agent.facts_now(gemini=False) or "") and "грозу" not in (agent.facts_now() or "")
+    assert asyncio.run(agent.private_reply()) is True
+    assert agent.facts_now(gemini=False) is None and not (tmp_path / "kira.facts").exists()
+    assert agent.private_history[-1] == ("Кіра", "Звісно.") and "facts: dropped (backup)" in caplog.text
+
+
+def test_the_backups_prompt_holds_blocked_lines_only_as_history_never_in_its_recall_or_facts(tmp_path, monkeypatch):
+    """v5.21: the backup reads `blocked` lines as its history (300 of every mark), its recall and facts are open
+    ones only, by words (no embedding of its query), and an emptied line never shows."""
+    from agents.facts import add_fact
+    agent = her(tmp_path, monkeypatch)
+    agent.facts_dir, agent.facts_in_prompt, agent.fact_max_chars = tmp_path / "kira.facts", 10, 240
+    add_fact(agent.facts_dir, "Відкритий факт про грозу", 1, "private", "2026-11-01", 50, 240)
+    add_fact(agent.facts_dir, "Закритий факт про грозу", 1, "asked", "2026-11-01", 50, 240, mark="blocked")
+    agent.archive.append("tg:old", ms(9), "private", "telegram", "Ich", "давня гроза відкрита")
+    agent.archive.append("tg:shut", ms(10), "private", "telegram", "Ich", "давня гроза закрита")
+    agent.archive.mark(["tg:shut"], "blocked")
+    agent.private_history = [("Ich", "свіжий закритий рядок"), ("Ich", ""), ("Ich", "а гроза?")]
+    embedded = len(agent.llm.embedded)
+    prompt, lines = asyncio.run(agent._backup_private_prompt("БРИФ"))
+    assert lines == [("Ich", "свіжий закритий рядок"), ("Ich", "а гроза?")]           # history: every mark, none empty
+    assert "Відкритий факт" in prompt and "Закритий факт" not in prompt
+    assert "давня гроза відкрита" in prompt and "давня гроза закрита" not in prompt
+    assert len(agent.llm.embedded) == embedded                                           # words only
 
 
 # --- the backup's prompt and its budget --------------------------------------------------------------------------------
@@ -243,7 +266,7 @@ def test_the_backups_prompt_reads_every_line_and_fits_its_budget(tmp_path, monke
     agent._closed.add(("Ich", agent.private_history[-1][1]))
     agent.fallback_context = 4000
     prompt, lines = asyncio.run(agent._backup_private_prompt("БРИФ"))
-    assert 10 <= len(lines) < 60 and lines[-1] == agent.private_history[-1]   # the closed line too
+    assert 10 <= len(lines) < 80 and lines[-1] == agent.private_history[-1]   # the closed line too
     assert len(prompt) + sum(len(f"{s}: {t}") + 1 for s, t in lines) <= 4000 * 2 or len(lines) == 10
     assert "the prompt fitted" in caplog.text and "Канон." in prompt and SECRET not in caplog.text
 

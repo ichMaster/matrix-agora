@@ -191,7 +191,7 @@ SCHEMA: tuple[Setting, ...] = (
        "s", 300, 14400),
     _s("FALLBACK_CONTEXT", "int", "32000", "fallback", "cap:fallback", None, "Бюджет промпту резерву", "tokens", 4000,
        36000),
-    _s("FALLBACK_HISTORY_N", "int", "60", "fallback", "cap:fallback", None, "Скільки рядків історії бачить резерв",
+    _s("FALLBACK_HISTORY_N", "int", "300", "fallback", "cap:fallback", None, "Скільки рядків історії бачить резерв",
        "", 10, 300),
     # v5.17 — her photos in Telegram (`photos`): Google's image model, the size, and a day's cap that only guards
     # against a fault (the owner: as many as she wants)
