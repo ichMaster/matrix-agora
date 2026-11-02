@@ -106,17 +106,17 @@ WEEKDAY_ON = ("у понеділок", "у вівторок", "у середу",
 
 
 def _label(row, now: datetime, tz: str) -> str:
-    """When a period was, as a person remembers it (`ago`), with the part of the day for an hour — never a date or an
-    hour. v5.23: a day of the last week by its weekday («у неділю»: `ago` would call the four of them «минулого
-    тижня» alike), else by `ago` alone."""
+    """When a period was, as a person remembers it, never a date or an hour (the owner, 2026-10-26: «26 жовтня» gives
+    her away): today, yesterday and the day before by `ago`; a day of the last week by its weekday (v5.23, the owner,
+    2026-11-03: «став дати або мітки днів» — `ago` would call them all «цього тижня» or «минулого тижня»); older by
+    `ago`. An hour adds its part of the day («у п'ятницю ввечері», «позавчора вранці»)."""
     then = datetime.fromtimestamp(row.start_ms / 1000, ZoneInfo(tz))
-    when = ago(then, now)
-    if row.level == "day":
-        return WEEKDAY_ON[then.weekday()] if 2 < (now.date() - then.date()).days < 7 else when
-    if when.startswith("сьогодні"):
+    diff = (now.date() - then.date()).days
+    when = WEEKDAY_ON[then.weekday()] if 2 < diff < 7 else ago(then, now)
+    if row.level == "day" or when.startswith("сьогодні"):
         return when
     part = PART_ADVERB[part_of_day(then.hour)]
-    return f"{when} {part}" if when in ("вчора", "позавчора") else f"{when}, {part}"
+    return f"{when} {part}" if when in ("вчора", "позавчора") or 2 < diff < 7 else f"{when}, {part}"
 
 
 def talk_section(rows: list, before_ms: int, now: datetime, tz: str, words_budget: int = TALK_PROMPT_WORDS,

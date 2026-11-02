@@ -90,6 +90,7 @@ def test_her_prompt_shows_the_hours_and_the_days_before_the_window_oldest_first_
     now = datetime(2026, 11, 5, 12, 0, tzinfo=KYIV)                     # a Thursday
     rows = [row("hour", ms(2026, 11, 5, 11), ms(2026, 11, 5, 12), "Пізніше, у вікні."),
             row("hour", ms(2026, 11, 4, 21), ms(2026, 11, 4, 22), "Вечір."),
+            row("hour", ms(2026, 11, 2, 13), ms(2026, 11, 2, 14), "Обід."),  # three days back: its weekday
             row("hour", ms(2026, 11, 4, 22), ms(2026, 11, 4, 23), ""),   # all blocked: skipped
             row("hour", ms(2026, 11, 1, 9), ms(2026, 11, 1, 10), "Деталь неділі."),
             row("day", ms(2026, 11, 1), ms(2026, 11, 2), "Неділя."),
@@ -101,10 +102,11 @@ def test_her_prompt_shows_the_hours_and_the_days_before_the_window_oldest_first_
     assert section == (f"{TALK_TITLE}\n"
                        "- у п'ятницю: Планетарій.\n"                  # a day of the last week by its weekday
                        "- у неділю: Неділя.\n"                          # its hour under it is not shown
+                       "- у понеділок вдень: Обід.\n"                   # an hour of the last week by its weekday
                        "- вчора ввечері: Вечір.")                       # the window's own hour is left to the window
     assert talk_section(rows, before_ms=ms(2026, 10, 1), now=now, tz=TZ) is None
-    budgeted = talk_section(rows, before_ms=ms(2026, 11, 5, 10, 30), now=now, tz=TZ, words_budget=8)
-    assert budgeted.splitlines()[1:] == ["- у неділю: Неділя.", "- вчора ввечері: Вечір."]  # the oldest go first
+    budgeted = talk_section(rows, before_ms=ms(2026, 11, 5, 10, 30), now=now, tz=TZ, words_budget=9)
+    assert budgeted.splitlines()[1:] == ["- у понеділок вдень: Обід.", "- вчора ввечері: Вечір."]  # the oldest go
     wider = talk_section(rows, before_ms=ms(2026, 11, 5, 10, 30), now=now, tz=TZ, day_days=10)
     assert "- минулого тижня: Давнє." in wider                           # older than a week: by `ago`
 
