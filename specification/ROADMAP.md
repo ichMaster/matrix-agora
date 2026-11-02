@@ -2866,6 +2866,8 @@ midnight.
   night's re-check were laid out for him to read). This replaces his earlier «clean … теж переведи в блокед» and «все
   відкрите переведи в блокед і стери потім».
 - No archive copy is kept: «не потрібно архіву якщо це стирається».
+- The backup mark carries the time the backup mode is on until («зараз вже позначаються меседжі з бекапу то
+  просто додай туди годину до якої він включений»).
 - The probe and its limits go: «старих рядків які блокують вже ніколи не буде, бо вони всі пройшли через
   джемені»; «якщо щось буде блокувати то ми знайдемо це і просто видалимо». The hour's 10 blocks stay.
 - Gemini's own filter now plays the judge's part, at once rather than afterwards. The risk of a ban by Google
@@ -2883,7 +2885,7 @@ midnight.
 
   What happens:
   - his unanswered lines become `blocked`;
-  - the backup answers, and her line is `blocked` (still marked «⚙️ backup» in the chat);
+  - the backup answers, and her line is `blocked`, marked in the chat with the time the backup mode ends;
   - the backup mode starts for `FALLBACK_WINDOW_S` (300 s).
 - **The backup mode:**
   - Gemini is not asked;
@@ -2896,6 +2898,9 @@ midnight.
 - **The commands:**
   - `/gemini` returns to Gemini now: it ends the 5 minutes or the hour and resets the hour's count (the owner);
   - `/status` shows the mode, its end and the blocks in the last hour;
+  - **the mark:** each of her lines through the backup carries, above her words, «⚙️ backup до HH:MM» — the end of
+    the 5 minutes or of the hour, in her `TIMEZONE`. Under `/backup`, which has no end, it is «⚙️ backup · вручну».
+    No separate notice is sent;
   - `/auto` goes;
   - `/backup` stays (the owner): the backup mode until `/gemini`, for when he sees the talk turn explicit.
 - **The probe (v5.16) goes**, with `PROBE_CALLS` and `PROBE_DAY_CALLS`.
@@ -2949,7 +2954,8 @@ midnight.
   - after 5 minutes his next message goes to Gemini, and she answers through Gemini with no block from the backup's
     talk;
   - `/gemini` returns at once.
-- (Manual, owner) More than 10 blocks in an hour switch to the backup for an hour; `/gemini` ends it.
+- (Manual, owner) More than 10 blocks in an hour switch to the backup for an hour; her backup lines say «⚙️ backup
+  до HH:MM» with the hour's end; `/gemini` ends it.
 - (Manual, owner) The next day, no `blocked` line older than 24 hours has its text (counts in the panel or `/status`).
 
 **Tests:**
@@ -2959,7 +2965,8 @@ midnight.
   - more than 10 blocks in 60 minutes give an hour;
   - `/gemini` ends either one;
   - no day cap;
-  - a pin left from before is read as Gemini.
+  - a pin left from before is read as Gemini;
+  - the mark names the end of the 5 minutes or of the hour, or «вручну» under `/backup`.
 - **The prompts:**
   - Gemini's never holds a `blocked` line or fact;
   - the backup's holds `blocked` lines only in its history, never in its recall or facts.
