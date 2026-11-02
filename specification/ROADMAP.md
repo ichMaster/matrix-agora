@@ -3091,6 +3091,112 @@ so the photo lines also count the frames.
 - a trace of one answer's calls;
 - a chart library.
 
+### v5.23 — Кіра's memory by time: a day word for word, two days by the hour, four by the day, the rest by recall
+
+**Status:** ⏳ planned (the owner, 2026-11-02), after v5.22's release.
+
+**Goal:** her private prompt to Gemini holds the talk by time, not by a count of lines.
+- The last 24 hours: word for word.
+- The 2 days before: one summary per hour.
+- The 4 days before those: one summary per day.
+- Anything older: no summary in the prompt. Only her recall brings it back.
+
+**Why** (2026-11-02, [docs/gemini-cost.md](../docs/gemini-cost.md)): 88% of the cost of one of her answers on
+3.1 Pro (about $0.093) is its input, about 41,000 tokens. Two parts are 57% of that input:
+- **The window:** 300 lines covering about 32 hours, 45,800 characters.
+- **The summaries:** 48 records, 3,776 words, back to 2026-10-20.
+
+Measured on her archive the same evening, the new shape takes these two parts from about 25,700 tokens to:
+- 12,500 tokens on a day like 2026-11-02 (149 open lines);
+- 15,200 on an average day (~178);
+- 19,300 on a busy one (245).
+
+That saves $0.013–0.026 per answer (14–28%), about $88 a month at ~140 answers a day.
+
+**Owner decisions** (2026-11-02):
+- **the last day word for word** («залишити всі меседжі за добу»);
+- **the 2 days before by the hour** («далі за попередні 2 доби по годині»);
+- **then 4 days by the day** («потім 4 дні підсумок дня»);
+- **the rest by recall only** («а решта вже РАГ»);
+- **`RECALL_N` 10** («збільши RECALL_N до 10»). Set at once in the panel as her agent setting, not in code. A recall
+  picks 10 lines instead of 6, each with its neighbours;
+- **a phase of its own** («як нова версія»).
+
+**Proposed** (confirmed when the issues are generated):
+- **Gemini's window by time.** It holds the open private lines of the last `PRIVATE_HISTORY_HOURS` (24) hours.
+  - `HISTORY_N` (300) stays the most it reads, and `PRIVATE_HISTORY_N` stays the owner's cap.
+  - It never holds fewer than his lines since her last one, as now.
+  - `PRIVATE_HISTORY_HOURS` 0 is the window by lines, as before.
+  - The time lines (`history_times`) are unchanged, and so is the backup's view (300 lines of every mark).
+- **Open: a floor.** Without one, after a pause of over a day the window holds only his new lines, and their last talk
+  reaches her only as summaries. The option is a floor of the last lines whatever their time (e.g. 20, about 1,000
+  tokens). It was asked of the owner and is decided when the issues are generated.
+- **The levels.**
+  - `hour`: each past hour starting within the last `TALK_HOUR_DAYS` days (now 3, was 2).
+  - A new `day`: each local day, midnight to midnight and DST-safe like the week, ended before the hours' band and
+    within `TALK_DAY_DAYS` (7) days.
+  - Nothing older is written.
+  - A day is written from its hours' summaries when they cover it. Otherwise it is written from its lines, as in the
+    first backfill, whose hours were never written.
+  - `TALK_WORDS_DAY` (150) caps a day's words.
+- **The four-hour blocks and the weeks.** No new rows. The rows already written stay in the archive and in the panel's
+  **Talk** tab (nothing is deleted), but no longer reach her prompt.
+- **Her prompt's section.**
+  - Only `hour` and `day` rows, those that began before the window's first line and within `TALK_DAY_DAYS` days.
+  - A day hides its hours, as a block hid them before.
+  - Oldest first.
+  - Labelled as she remembers it: a day by `ago` alone, an hour with the part of the day.
+  - `TALK_PROMPT_WORDS` stays the cap.
+- **Older than `TALK_DAY_DAYS`.** Only her recall (`RECALL_N`), as now for every line outside the window.
+- **Settings** (her agent settings): `PRIVATE_HISTORY_HOURS` (24), `TALK_HOUR_DAYS` (3), `TALK_DAY_DAYS` (7) and
+  `TALK_WORDS_DAY` (150). `TALK_4H_DAYS`, `TALK_WORDS_4H` and `TALK_WORDS_WEEK` go; a save drops them (v5.21, review
+  #2).
+- **The panel:** the **Talk** tab shows the `day` level beside the others.
+- **ARCHITECTURE:**
+  - §Memory: the window by time, the levels;
+  - §Contracts: the `talk` table's levels and the private prompt's section;
+  - §Configuration: the settings.
+
+**Owner steps:** the deploy; the live checks.
+
+**DoD:**
+- (Manual, owner) After the deploy and the backfill, her **Prompt** tab shows, in this order:
+  1. the last 24 hours word for word;
+  2. before them, the hours of the 2 days before;
+  3. before those, 4 days by the day;
+  4. nothing older.
+
+  She still knows what happened when.
+- (Manual, owner) In Analytics → Prompts, the mean prompt of her private answers falls by the measured amount (the
+  window and the summaries from ~25,700 tokens to ~12,500–19,300).
+
+**Tests:**
+- **The window:**
+  - its edge at 24 hours in `TIMEZONE`;
+  - his unanswered lines kept;
+  - the caps;
+  - 0 is the window by lines;
+  - the backup's view unchanged.
+- **What is due:**
+  - the hours' band at 3 days, the days' band to 7, across midnight and a DST switch;
+  - nothing older is due;
+  - no new four-hour block or week.
+- **The writer:** a day from its hours, a day from its lines when it has none, `TALK_WORDS_DAY`.
+- **Her prompt:**
+  - `hour` and `day` rows only;
+  - a day hides its hours;
+  - nothing older than 7 days;
+  - a four-hour block or a week never shown;
+  - a day labelled without a date or an hour.
+- **Settings:** the new names and defaults pinned, the old ones gone.
+- **Never:** no text in a log; never a closed line in a summary's prompt.
+
+**Not in this phase:**
+- the prompt ordered for a cache ([docs/gemini-cost.md](../docs/gemini-cost.md), step 3);
+- the summaries on another model;
+- deleting the four-hour blocks or the weeks;
+- Agora's talk.
+
 ## v6 — Лілі: the Lumi bridge
 
 Лілі — Lumi's prod brain — joins the room through a bridge that is one of our agents: first when named, then under
