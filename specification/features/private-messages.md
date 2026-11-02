@@ -216,7 +216,7 @@ The phase is [ROADMAP.md §v5.21](../ROADMAP.md). This part is the same design i
 3. **During the backup mode:**
    - Gemini is not asked;
    - everything she says there is `blocked`;
-   - his messages there are `blocked` too (*to confirm*).
+   - his messages there are `blocked` too.
 4. **After the 5 minutes,** his next message goes straight to Gemini. Nothing rates it first: there is no judge.
 5. **More than 10 blocks in the last hour** start the backup mode for the next hour. There is no "until midnight"
    any more.
@@ -224,7 +224,8 @@ The phase is [ROADMAP.md §v5.21](../ROADMAP.md). This part is the same design i
    (*to confirm*).
    - `/status` shows the mode.
    - `/auto` goes.
-   - Whether `/backup` stays is *to confirm*.
+   - `/backup` stays: the owner switches to the backup himself when he sees the talk turn explicit, until
+     `/gemini`.
 7. **The probe stays.** After a prompt-stage block, Gemini gets the blocked prompt in parts (30 calls a block, 200 a
    day). The old lines it proves block become `blocked` too. This is what lets her leave the backup when an old line
    in her history is the cause.
@@ -234,8 +235,8 @@ The phase is [ROADMAP.md §v5.21](../ROADMAP.md). This part is the same design i
    - the recall (RAG), the facts or her thoughts;
    - the session note, the day journal or the talk summaries;
    - the backup's own recall or facts.
-9. **The backup keeps no facts:** a «запам'ятай» from the backup is dropped (*to confirm*).
-10. **Once a day,** at 05:00 (*to confirm*), every `blocked` line older than 24 hours loses its text for good:
+9. **The backup never keeps a fact:** a «запам'ятай» from the backup is dropped.
+10. **Once a day,** at 05:00, every `blocked` line older than 24 hours loses its text for good:
     - The row keeps its key, time, speaker and mark, so that a Matrix private line re-read at a restart does not come
       back open.
     - `/purge` still deletes every `blocked` line at once.
@@ -252,17 +253,15 @@ A copy comes first. Only counts, times and marks are read.
 
 - `waiting`, `censored` and `reopened` become `blocked`.
 - Her 279 lines that the log names as the backup's, and his lines that they answered, become `blocked`.
-- **`clean` (1,418 private lines), to confirm:**
-  - All of them become `blocked` (the owner's words). Then her history for Gemini ends on 28.10: 29.10–01.11 are
-    entirely lines the night's re-check opened.
-  - Or the night's 1,068 become `blocked`, and the 350 lines that Gemini answered (the judge only confirmed them)
-    become `gemini`. This is Claude's advice: it keeps 28.10 and today's talk.
+- Every `clean` line (1,418) becomes `blocked`, and the deletion then removes its text. Her history for Gemini then
+  ends on 28.10, because 29.10–01.11 are entirely lines that the night's re-check opened.
 - The 100 facts marked `clean` become `gemini` (*to confirm*). They are Gemini's facts about him that the judge
   confirmed.
 - The talk summaries already written stay (*to confirm*). Without them she knows nothing of 29.10–01.11.
 - Then the first deletion runs, and every `blocked` line older than 24 hours loses its text.
+- No copy is kept. The archive and facts copies on the host are deleted; the copies of her canon stay.
 
 ### Before the phase starts
 
-v5.20 is released first. Its live checks (#173–#175) are confirmed or waived by the owner, and the *to confirm*
-points above are answered when the v5.21 issues are generated.
+v5.20 is released first, once the owner confirms or waives its live checks (#173–#175). Three points are still
+*to confirm*: whether `/gemini` resets the hour's count, the 100 `clean` facts, and the talk summaries.

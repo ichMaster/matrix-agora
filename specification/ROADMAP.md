@@ -2859,8 +2859,16 @@ midnight.
   - once a day, those older than 24 hours are deleted.
 - `clean` goes to `blocked` too («бо від цього всі проблеми»).
 - A phase of its own, v5.21.
+- His messages in the backup mode are `blocked` too.
+- `/backup` stays: «я сам можу перейти в бекап коли бачу що повідомлення відверті».
+- The backup never keeps a fact.
+- The deletion runs every day at 05:00.
+- Every line opened before (`clean`: the night's re-check and the judge's) goes to `blocked` and is then deleted
+  («все відкрите переведи в блокед і стери потім»).
+- No archive copy is kept: «не потрібно архіву якщо це стирається».
 
-**Proposed** (each point marked *to confirm* is decided when the issues are generated):
+**Proposed** (the owner's answers of 2026-11-02 included; the points still marked *to confirm* are decided when the
+issues are generated):
 - **The marks:** `gemini` (open) and `blocked` (closed for good). The archive's and the facts' mark functions never
   turn `blocked` into anything else, and a test pins every path.
 - **A block** is any of these:
@@ -2875,7 +2883,7 @@ midnight.
 - **The backup mode:**
   - Gemini is not asked;
   - her lines are `blocked`;
-  - his lines are `blocked` too (*to confirm*);
+  - his lines are `blocked` too (the owner);
   - when it ends, the next message goes to Gemini, with no rating first.
 - **The hour:** more than `FALLBACK_HOUR_MAX` (10) blocks in the last 60 minutes start the backup mode for
   `FALLBACK_LOCK_S` (3,600 s) from that block. `FALLBACK_DAY_MAX` goes.
@@ -2883,7 +2891,7 @@ midnight.
   - `/gemini` returns to Gemini now: it ends the 5 minutes or the hour and resets the hour's count (*to confirm*);
   - `/status` shows the mode, its end and the blocks in the last hour;
   - `/auto` goes;
-  - `/backup` stays or goes (*to confirm*).
+  - `/backup` stays (the owner): the backup mode until `/gemini`, for when he sees the talk turn explicit.
 - **The probe (v5.16) stays** (`PROBE_CALLS` 30, `PROBE_DAY_CALLS` 200 for her). What it proves becomes `blocked`.
   When it proves nothing, nothing else runs.
 - **The judge goes:**
@@ -2896,11 +2904,11 @@ midnight.
   - its history is the last `FALLBACK_HISTORY_N` lines of every mark, with the default 300, fitted to
     `FALLBACK_CONTEXT`;
   - its recall and its facts are open ones only, so a `blocked` line reaches it only as history;
-  - it keeps no facts: a «запам'ятай» from the backup is dropped (*to confirm*).
+  - it never keeps a fact: a «запам'ятай» from the backup is dropped (the owner).
 - **Never elsewhere:** a `blocked` line or fact never reaches Gemini's history, the recall, the facts, her thoughts, the
   session note, the day journal or the talk summaries.
 - **The deletion:**
-  - **When:** once a day at 05:00 (*to confirm*), every `blocked` line and fact older than 24 hours is deleted.
+  - **When:** once a day at 05:00 (the owner), every `blocked` line and fact older than 24 hours is deleted.
   - **The row stays:** its key, time, speaker and mark remain and its text is emptied, so that a Matrix private line
     re-read at a restart never comes back open.
   - **What follows it:** the in-memory history and the search index.
@@ -2912,20 +2920,20 @@ midnight.
   - `waiting`, `censored` and `reopened` become `blocked`.
   - Her lines that the log names as the backup's (279 since 2026-10-28), and his lines that they answered, become
     `blocked`.
-  - What becomes of `clean` is *to confirm*:
-    - all 1,418 lines become `blocked` (the owner's words); or
-    - the night's 1,068 become `blocked` and the 350 lines Gemini answered, which the judge only confirmed, become
-      `gemini` (Claude's advice).
+  - Every `clean` line (1,418: the night's re-check opened 1,068, the judge 350) becomes `blocked` (the owner). Her
+    history for Gemini then ends on 28.10.
   - The 100 facts marked `clean` become `gemini` (*to confirm*).
   - The talk summaries already written stay (*to confirm*).
   - Then the first deletion runs.
+  - No copy is kept (the owner). The archive and facts copies on the host (`~/matrix-agora/canon-backup/` folders
+    of 2026-10-31 – 11-02 holding `kira.archive.db` or `kira.facts`) are deleted; the canon copies there stay.
 - **The panel:** the settings follow (the judge's go, the new ones come); the Talk tab's closed counts read `blocked`.
 - **ARCHITECTURE:** §Contracts (the marks, the route file, the settings), the private route, the backup's prompt, the
   deletion.
 
 **Owner steps:**
 - Confirm or waive v5.20's live checks (#173–#175), so that v5.20.0 is released first.
-- Answer the *to confirm* points.
+- Answer the three points still *to confirm*.
 - The deploy and the checks below.
 
 **DoD:**
