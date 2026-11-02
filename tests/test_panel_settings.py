@@ -108,6 +108,23 @@ def test_a_reset_drops_the_override_a_stopped_agent_is_skipped_and_no_change_res
     assert saved(state)["services"] == {}
 
 
+def test_a_setting_the_code_no_longer_knows_is_dropped_by_a_save_or_a_reset(room):
+    """Code review v5.21 #2: v5.21 removed PROBE_CALLS; an override of it stayed, warned at every start, and its
+    reset was refused (422). Any save of the scope drops it, a reset of it is accepted, and it restarts nobody."""
+    client, state, _, compose = room
+    (state / "settings.json").write_text(json.dumps({"services": {}, "agents": {"ada": {
+        "PROBE_CALLS": "30", "PROBE_DAY_CALLS": "200", "MEMORY_DAYS": "5"}}}), encoding="utf-8")
+    out = put(client, "/api/agents/ada/settings", {"reset": ["PROBE_CALLS"]}).json()
+    assert out["saved"] == ["PROBE_CALLS", "PROBE_DAY_CALLS"] and out["restarted"] == [] and compose.calls == []
+    assert saved(state)["agents"] == {"ada": {"MEMORY_DAYS": "5"}}
+    (state / "settings.json").write_text(json.dumps({"services": {}, "agents": {"ada": {"PROBE_CALLS": "30"}}}),
+                                         encoding="utf-8")
+    out = put(client, "/api/agents/ada/settings", {"set": {"MEMORY_DAYS": 10}}).json()
+    assert out["saved"] == ["MEMORY_DAYS", "PROBE_CALLS"] and out["restarted"] == ["ada"]
+    assert saved(state)["agents"] == {"ada": {"MEMORY_DAYS": "10"}}
+    assert put(client, "/api/agents/ada/settings", {"reset": ["PROBE_CALLS"]}).status_code == 422  # not stored now
+
+
 def test_a_cross_origin_save_is_refused(room):
     client, *_ = room
     r = client.put(SIM, headers={**AUTH, "origin": "http://evil.example"}, json={"set": {}})

@@ -103,14 +103,17 @@ def _save(state_dir: Path, part: str, owner: str, sim_kind: str | None, agents: 
             errors[str(name)] = why
         else:
             clean[str(name)] = value
-    for name in to_reset:
-        if str(name) not in allowed:
+    overrides = load_overrides(state_dir / OVERRIDES_FILE)
+    stored = overrides[part].get(owner, {})
+    for name in to_reset:  # code review v5.21 #2: a stored name the code no longer knows may be reset
+        if str(name) not in allowed and not (str(name) not in BY_NAME and str(name) in stored):
             errors[str(name)] = "not a setting here" if str(name) in BY_NAME else "unknown setting"
     if errors:
         raise SettingsError(422, {"invalid": errors})
-    overrides = load_overrides(state_dir / OVERRIDES_FILE)
     mine = overrides[part].setdefault(owner, {})
-    changed = []
+    changed = [n for n in list(mine) if n not in BY_NAME]  # and any save drops them: they restart nobody
+    for name in changed:
+        del mine[name]
     for name, value in clean.items():
         if mine.get(name) != value:
             mine[name] = value
@@ -124,7 +127,7 @@ def _save(state_dir: Path, part: str, owner: str, sim_kind: str | None, agents: 
     overrides[part] = {k: v for k, v in overrides[part].items() if v}
     save_json(state_dir / OVERRIDES_FILE, overrides)
     log.info("settings saved (%s %s): %s", part, owner, ", ".join(sorted(changed)))
-    concerned = [a for a in agents if any(concerns(BY_NAME[n], a) for n in changed)]
+    concerned = [a for a in agents if any(concerns(BY_NAME[n], a) for n in changed if n in BY_NAME)]
     restarted, skipped = [], []
     for a in concerned:
         state = state_of(a.container)
