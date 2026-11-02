@@ -1245,13 +1245,15 @@ function thoughtsTabHtml(a, mem) {
   }).join("")).join("");
 }
 
-// v5.20 — her private chat in layers: the summaries by level, newest first, each with its closed lines' count only
-const TALK_LEVELS = [["hour", "Hours"], ["4h", "Four hours"], ["week", "Weeks"]];
+// v5.20 — her private chat in layers: the summaries by level, newest first, each with its closed lines' count only;
+// v5.23 — the hours and the days are what her prompt reads; v5.20's four-hour blocks and weeks are kept, never read
+const TALK_LEVELS = [["hour", "Hours"], ["day", "Days"], ["4h", "Four hours (older, not in her prompt)"],
+  ["week", "Weeks (older, not in her prompt)"]];
 function talkSpan(r) {
   const s = new Date(r.start), e = new Date(r.end);
   const day = s.toLocaleDateString("en-US", {weekday: "short", month: "short", day: "numeric"});
   const hm = (d) => d.toTimeString().slice(0, 5);
-  return r.level === "week" ? `week of ${day}` : `${day} · ${hm(s)}–${hm(e)}`;
+  return r.level === "week" ? `week of ${day}` : r.level === "day" ? day : `${day} · ${hm(s)}–${hm(e)}`;
 }
 function talkTabHtml(a, mem) {
   const rows = mem.talk;

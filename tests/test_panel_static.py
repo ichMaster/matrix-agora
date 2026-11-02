@@ -500,7 +500,9 @@ def test_the_talk_tab_shows_the_levels_and_the_closed_counts_escaped():
     """v5.20: her private chat in layers, read-only — the hours, the four-hour blocks and the weeks, each period's
     summary and, when it has any, its closed lines' count; never a closed line's text."""
     js = js_text()
-    assert 'const TALK_LEVELS = [["hour", "Hours"], ["4h", "Four hours"], ["week", "Weeks"]];' in js
+    assert ('const TALK_LEVELS = [["hour", "Hours"], ["day", "Days"], ["4h", "Four hours (older, not in her prompt)"],\n'
+            '  ["week", "Weeks (older, not in her prompt)"]];') in js        # v5.23: the days; the old levels named so
+    assert 'r.level === "day" ? day :' in js                               # v5.23: a day reads «Mon, Nov 2»
     assert 'if (tab === "talk") return talkTabHtml(a, mem);' in js
     assert '${r.text ? esc(r.text) : `<span class="muted">—</span>`}' in js
     assert 'r.closed_lines ? `${r.closed_lines} closed` : ""' in js and "esc(notes.join(" in js
