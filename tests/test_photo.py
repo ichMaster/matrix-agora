@@ -44,7 +44,7 @@ def test_the_marker_lines_are_cut_and_the_last_one_names_the_shot():
     two = split_photo("перше\nФОТО: чашка\nдруге\nСЕЛФІ: я на скелі")
     assert two == ("перше\nдруге", Shot("selfie", "я на скелі"))                   # the last one counts
     assert split_photo("СЕЛФІ: [laughs] я з кавою")[1] == Shot("selfie", "я з кавою")  # no voice tag in a shot
-    assert split_photo("Ось.\nФОТО:   ") == ("Ось.", None)                          # an empty one names nothing
+    assert split_photo("Ось.\nФОТО:   ") == ("Ось.", Shot("photo", ""))             # an empty one: no description
     assert split_photo("Я не люблю фотографуватися, чесно.") == ("Я не люблю фотографуватися, чесно.", None)
     assert split_photo("Фото з Единбурга в мене десь є") == ("Фото з Единбурга в мене десь є", None)  # no colon
 
@@ -56,14 +56,17 @@ def test_her_kept_note_echoed_anywhere_in_any_case_is_cut_and_names_the_shot():
     assert split_photo("ну [фото] і що") == ("ну [фото] і що", None)                  # no colon: not a note
 
 
-def test_her_kept_note_holds_no_description_and_echoed_names_no_shot():
+def test_her_kept_note_holds_no_description_and_echoed_names_an_empty_shot():
     # the owner, 2026-11-02: her selfies' descriptions in her history made Gemini block her whole private prompt
     note = photo_note("Ось я", Shot("selfie", f"я на балконі {SECRET}"))
     assert note == "Ось я\n[селфі: ...]" and SECRET not in note
     assert photo_note("", Shot("photo", "чашка")).strip() == "[фото: ...]"
-    assert split_photo("Ось я знову [селфі: ...] 🙂") == ("Ось я знову 🙂", None)      # cut, never a shot of nothing
-    assert split_photo("Дивись\n[фото: …]") == ("Дивись", None)
-    assert split_photo("Тримай\nСЕЛФІ: ...") == ("Тримай", None)
+    # code review v5.21 #1: cut, and a shot with no description — her words may promise it
+    assert split_photo("Ось я знову [селфі: ...] 🙂") == ("Ось я знову 🙂", Shot("selfie", ""))
+    assert split_photo("Дивись\n[фото: …]") == ("Дивись", Shot("photo", ""))
+    assert split_photo("Тримай\nСЕЛФІ: ...") == ("Тримай", Shot("selfie", ""))
+    assert split_photo("Ось [селфі: ...]\nСЕЛФІ: я на балконі")[1] == Shot("selfie", "я на балконі")  # described wins
+    assert split_photo("СЕЛФІ: я на балконі\n[фото: ...]")[1] == Shot("selfie", "я на балконі")
 
 
 def test_the_request_holds_her_words_her_moment_and_the_look_and_the_face_only_for_a_selfie():

@@ -1066,6 +1066,14 @@ class Agent:
             text, by = await self._private_text(brief, nudge, seen)
             shot, self._pending_shot = (self._pending_shot if by == "gemini" else None), None
             self._offer_photo, self._offer_video = False, ()
+            if shot is not None and not shot.description:  # code review v5.21 #1: a photo line that names nothing
+                log.info("photo: dropped (no description)")
+                shot = None
+                if text is not None:  # her words may promise it: never «дивись» with nothing
+                    again, _ = await self._gemini_text(f"{brief}\n\n{PHOTO_FAILED}", kind)
+                    self._pending_shot = None
+                    if again is not None:
+                        text = again
             made: Made | None = None
             video: Shot | None = None
             if shot is not None and shot.kind in VIDEO_KINDS:  # v5.18: her video goes after her answer, never a photo

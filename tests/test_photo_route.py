@@ -128,6 +128,19 @@ def test_a_photo_that_does_not_come_out_draws_her_answer_again_without_it(tmp_pa
     assert not photos_dir(agent).exists() and f"photo: {why} — her answer without it" in caplog.text
 
 
+def test_an_echoed_empty_note_draws_her_answer_again_without_a_photo(tmp_path, monkeypatch, ogg, caplog):
+    # code review v5.21 #1: «[селфі: ...]» echoed from her history names nothing — never «лови» with nothing
+    caplog.set_level(logging.INFO)
+    agent = her(tmp_path, monkeypatch, "Ось, лови 🙂 [селфі: ...]", "Фото потім, зараз світла нема.")
+    agent.private_line("скинь селфі", ms(17), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    assert agent.photos.shots == []                                                       # nothing drawn
+    redraw = agent.llm.calls[1][0]
+    assert PHOTO_FAILED in redraw and PHOTO_SKILL not in redraw
+    assert agent.sent == ["voice", ("text", "Фото потім, зараз світла нема.")]
+    assert "photo: dropped (no description)" in caplog.text and not photos_dir(agent).exists()
+
+
 def test_a_failed_redraw_sends_her_first_words_without_the_line(tmp_path, monkeypatch, ogg):
     agent = her(tmp_path, monkeypatch, "Дивись!\nФОТО: туман над Тустанню", None, made=Made(None, why="blocked"))
     agent.private_line("що там?", ms(17), "telegram", "tg:1")

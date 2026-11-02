@@ -92,7 +92,9 @@ class Made:
 
 
 def split_photo(text: str) -> tuple[str, Shot | None]:
-    """Her line without its photo markers, and the shot the last one names — a marker is never sent."""
+    """Her line without its photo markers, and the shot the last one names — a marker is never sent. One that names
+    nothing — an empty line, her kept `[селфі: ...]` echoed — gives a shot with no description, unless a described one
+    is there too (code review v5.21 #1: her words may promise it, so it is a photo that did not come out)."""
     lines, shot = [], None
     for line in (text or "").split("\n"):
         m = MARK_LINE_RE.match(line) or MARK_ANY_RE.search(line)
@@ -102,8 +104,11 @@ def split_photo(text: str) -> tuple[str, Shot | None]:
             continue
         found = m or note
         description = split_tags(found.group("shot"))[0].strip(" \t«»\"'*_()[]")  # no voice tag in a shot
-        if description.strip(" .…"):  # her kept `[селфі: ...]`, echoed, names no shot
-            shot = Shot(KINDS[found.group("kind").upper()], description)
+        kind = KINDS[found.group("kind").upper()]
+        if description.strip(" .…"):
+            shot = Shot(kind, description)
+        elif shot is None or not shot.description:  # her kept `[селфі: ...]`, echoed, or an empty line
+            shot = Shot(kind, "")
         kept = (line[:m.start()] if m is not None
                 else re.sub(r"[ \t]{2,}", " ", line[:note.start()] + line[note.end():])).rstrip()
         if kept:
