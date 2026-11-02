@@ -200,9 +200,9 @@ SCHEMA: tuple[Setting, ...] = (
     _s("PHOTO_SIZE", "choice", "1K", "private", "cap:photos", None, "Розмір її фото", choices=("1K", "2K")),
     _s("PHOTO_DAY_MAX", "int", "40", "private", "cap:photos", None, "Скільки фото на день щонайбільше (запобіжник)",
        "", 0, 200),
-    # v5.22 (the owner, 2026-11-02: «Кіра висилає фото з кожним меседжем … ліміт фото на … 30 хв»): her next photo no
+    # v5.22 (the owner, 2026-11-02: «Кіра висилає фото з кожним меседжем … ліміт фото на 10 хв»): her next photo no
     # sooner than this after the last (0: no pause)
-    _s("PHOTO_GAP_S", "int", "1800", "private", "cap:photos", None, "Пауза між її фото (0 — без паузи)", "s", 0, 86400),
+    _s("PHOTO_GAP_S", "int", "600", "private", "cap:photos", None, "Пауза між її фото (0 — без паузи)", "s", 0, 86400),
     # v5.18 — her videos in Telegram (`videos`): her clips' model and size, her кружечок's model and length, and a
     # day's cap for both together (the owner: as free as her photos — a safeguard only; a video costs $0.5–2; 0: off)
     _s("VIDEO_MODEL", "choice", "gemini-omni-1.1-flash", "private", "cap:videos", None, "Модель її відео",

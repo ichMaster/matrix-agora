@@ -144,20 +144,20 @@ def test_an_echoed_empty_note_draws_her_answer_again_without_a_photo(tmp_path, m
 
 
 def test_her_next_photo_waits_out_the_pause_after_her_last(tmp_path, monkeypatch, ogg, caplog):
-    """v5.22 (the owner, 2026-11-02: «Кіра висилає фото з кожним меседжем … ліміт фото на … 30 хв»): after a photo,
+    """v5.22 (the owner, 2026-11-02: «Кіра висилає фото з кожним меседжем … ліміт фото на 10 хв»): after a photo,
     no photo skill until `PHOTO_GAP_S` has passed — a photo line in the meantime is dropped as `pause`."""
     caplog.set_level(logging.INFO)
     agent = her(tmp_path, monkeypatch, "Ось я 🙂\nСЕЛФІ: я на балконі", "А ось і ще\nСЕЛФІ: я з чаєм", "Тримай\nФОТО: чашка")
-    agent.photo_gap_s = 1800
+    agent.photo_gap_s = 600
     agent.private_line("скинь селфі", ms(17), "telegram", "tg:1")
     assert asyncio.run(agent.private_reply()) is True                                   # 18:00, kept as 180000.jpg
-    agent.clock = lambda: ms(18, 10)
-    agent.private_line("а ще?", ms(18, 9), "telegram", "tg:2")
+    agent.clock = lambda: ms(18, 5)
+    agent.private_line("а ще?", ms(18, 4), "telegram", "tg:2")
     assert asyncio.run(agent.private_reply()) is True
     assert PHOTO_SKILL not in agent.llm.calls[1][0] and len(agent.photos.shots) == 1
     assert "photo: dropped (pause)" in caplog.text and agent.sent[-1] == ("text", "А ось і ще")
-    agent.clock = lambda: ms(18, 31)
-    agent.private_line("а тепер?", ms(18, 30), "telegram", "tg:3")
+    agent.clock = lambda: ms(18, 11)
+    agent.private_line("а тепер?", ms(18, 10), "telegram", "tg:3")
     assert asyncio.run(agent.private_reply()) is True
     assert PHOTO_SKILL in agent.llm.calls[2][0] and agent.photos.shots[-1] == Shot("photo", "чашка")
 

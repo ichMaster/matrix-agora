@@ -537,7 +537,7 @@ class Agent:
         self._pending_shot: Shot | None = None
         if cfg.can("photos"):
             self.photo_day_max = int(os.environ.get("PHOTO_DAY_MAX", "40"))
-            self.photo_gap_s = int(os.environ.get("PHOTO_GAP_S", "1800"))  # v5.22: the pause between her photos
+            self.photo_gap_s = int(os.environ.get("PHOTO_GAP_S", "600"))  # v5.22: the pause between her photos
             faces = load_faces(Path("agents/canon") / f"{cfg.localpart}.face")
             if isinstance(self.llm, GeminiClient):
                 self.photos = photo_maker(os.environ.get("PHOTO_MODEL", "gemini-nano-banana-2.1").strip() or PHOTO_MODEL,
