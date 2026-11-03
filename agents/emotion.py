@@ -54,23 +54,27 @@ class Spoken(str):
 
 # v5.23 (the owner, 2026-11-03: «щоб ставилась кома в кінці речення і що просто кінець рядку недостатньо, тому що
 # озвучка погано працює так»): a line of what the synthesiser gets that nothing ends gets a full stop after its last
-# word — before the emoji, the closing quotes and the voice tags after it, never inside a tag
+# word — after the signs attached to it, before the emoji and the voice tags after it, never inside a tag
 _END_RE = re.compile(r"[.!?…,:;]")
 _TAIL_TAGS_RE = re.compile(rf"(?:[ \t]*{TAG_RE.pattern})+[ \t]*$")
+_ATTACHED_BELOW = "\u2190"  # code review v5.23 #2: a sign attached to the word sits below the arrows — the closing
+                             # quotes and brackets, °, %, ₴, € — and an emoji above them
 
 
 def closed_line(row: str) -> str:
     """One line for the voice (pure): unchanged when a mark ends it or it has no word; else a full stop after its
-    last word."""
+    last word and the signs attached to it. A tag's words and marks never count (code review v5.23 #2: «даєш
+    [laughs] 😂» read «[laughs.]», «+5°» read «+5.°»)."""
     tags = _TAIL_TAGS_RE.search(row)
     body, tail_tags = (row[:tags.start()], row[tags.start():]) if tags else (row.rstrip(), row[len(row.rstrip()):])
+    words = TAG_RE.sub(lambda m: " " * len(m.group(0)), body)  # the tags blanked, every index kept
     last = None
-    for last in re.finditer(r"\w", body):
+    for last in re.finditer(r"\w", words):
         pass
-    if last is None or _END_RE.search(body[last.end():]):
+    if last is None or _END_RE.search(words[last.end():]):
         return row
     at = last.end()
-    while at < len(body) and body[at] in "»\"')”":  # after the closing quotes, before the emoji
+    while at < len(words) and not words[at].isspace() and words[at] < _ATTACHED_BELOW:
         at += 1
     return body[:at] + "." + body[at:] + tail_tags
 

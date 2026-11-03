@@ -238,3 +238,8 @@ def test_every_line_of_her_speech_ends_with_a_mark_never_inside_a_tag():
     assert closed_line("ну «добре»") == "ну «добре»." and closed_line("[whispers] я тут") == "[whispers] я тут."
     for done in ("кінець…", "правда?", "так!", "отже:", "[softly]", "🙂", ""):
         assert closed_line(done) == done
+    # code review v5.23 #2: a tag before her emoji, a tag's own comma, a quantity's sign
+    assert closed_line("Ну ти даєш [laughs] 😂") == "Ну ти даєш. [laughs] 😂"
+    assert closed_line("так [sighs, softly] 🙂") == "так. [sighs, softly] 🙂"
+    assert [closed_line(x) for x in ("Надворі +5°", "Знижка 50%", "Це 100₴ 🙂", "(у Львові)")] == [
+        "Надворі +5°.", "Знижка 50%.", "Це 100₴. 🙂", "(у Львові)."]
