@@ -7,6 +7,7 @@ The nio callbacks stay thin adapters; every decision lives in agents/logic.py.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import logging
 import os
@@ -185,8 +186,8 @@ from agents.photo import (
     Shot,
     load_faces,
     photo_maker,
-    photo_note,
     split_photo,
+    strip_notes,
 )
 from agents.plans import (
     HORIZONS,
@@ -1151,10 +1152,9 @@ class Agent:
                                               else None):  # v5.18: her voice held for her кружечок
                 log.warning("private: not delivered (telegram)")
                 return False
-            if made is not None and self.photo_sent:  # v5.17: kept as a file and named in her line
+            if made is not None and self.photo_sent:  # v5.17: kept as a file; v5.23 (the owner): never named in her line
                 self.keep_photo(made)
                 log.info("photo: sent (%s, telegram)", shot.kind)
-                text = photo_note(str(text), shot)
             self.private_history = append_history(self.private_history, self.cfg.name, text, max(self.history_n, 1))
             self.last_private_ms = self.clock()
             self._unanswered = [u for u in self._unanswered if u not in seen]  # v5.13: answered (review #2)
@@ -1241,7 +1241,8 @@ class Agent:
         backup's only as history, within `FALLBACK_HISTORY_N` (300) lines of every mark): the open facts, the recall of
         open lines by words only (its query never goes to Gemini's embeddings), fitted to `FALLBACK_CONTEXT` — the month
         digests, the week digests, «Agora today», then the oldest lines (never fewer than 10) left out."""
-        history = [line for line in self.private_history[-max(self.fallback_history_n, 1):] if line[1]]
+        history = [(who, strip_notes(t)) for who, t in self.private_history[-max(self.fallback_history_n, 1):]
+                   if strip_notes(t)]  # v5.23: never her kept note
         facts = self.facts_now()
         recalled = agora_now = None
         if self.archive is not None:
@@ -1361,7 +1362,7 @@ class Agent:
         lines = self._gemini_lines()
         if lines is None:
             return [(None, line) for line in self.private_history if line not in self._closed]
-        return [(f"line:{line.key}", (line.speaker, history_entry(line.text))) for line in lines]
+        return [(f"line:{line.key}", (line.speaker, history_entry(strip_notes(line.text)))) for line in lines]
 
     def _gemini_lines(self) -> list | None:
         """The archive's last `HISTORY_N` private lines open to Gemini — None without the archive or when it fails."""
@@ -1372,7 +1373,7 @@ class Agent:
         except Exception as exc:  # noqa: BLE001
             log.error("archive: Gemini's history was not read (%s) — her own", type(exc).__name__)
             return None
-        lines = [line for line in lines if (line.speaker, line.text) not in self._closed]
+        lines = [line for line in lines if (line.speaker, line.text) not in self._closed and strip_notes(line.text)]
         if self.private_history_hours > 0 and lines:  # v5.23: the last day, at least the floor, his new lines always
             his = next((n for n, x in enumerate(reversed(lines)) if x.speaker == self.cfg.name), len(lines))
             lines = lines[window_start([x.ts_ms for x in lines], self.clock(), self.private_history_hours,
@@ -1394,7 +1395,7 @@ class Agent:
         for i, line in enumerate(lines):
             if i in times:
                 out.append((None, ("", times[i])))
-            out.append((f"line:{line.key}", (line.speaker, history_entry(line.text))))
+            out.append((f"line:{line.key}", (line.speaker, history_entry(strip_notes(line.text)))))
         return out
 
     def talk_now(self, now) -> str | None:
@@ -1596,6 +1597,9 @@ class Agent:
                 groups.append(group)
             if picked:
                 log.info("recall: %d lines (%s)", len(picked), "+".join(places))
+            groups = [[dataclasses.replace(n, text=strip_notes(n.text)) for n in g if strip_notes(n.text)]  # v5.23
+                      for g in groups]
+            groups = [g for g in groups if g]
             return render_recalled(groups, self.tz, local_now(self.clock(), self.tz))
         except Exception as exc:  # noqa: BLE001
             log.error("recall failed (%s) — answering without it", type(exc).__name__)
@@ -1679,7 +1683,8 @@ class Agent:
         if not any(who.startswith("Ich") for who, _ in session):
             return True  # nothing to learn: done
         held = [f for f in load_facts(self.facts_dir) if f.mark not in CLOSED_MARKS]  # v5.14: never a closed one
-        system, contents = extraction_request(self.cfg.name, session, held, self.fact_max_chars)
+        system, contents = extraction_request(self.cfg.name, [(who, strip_notes(t)) for who, t in session], held,
+                                              self.fact_max_chars)  # v5.23: never her kept note
         raw = await self.llm.generate(contents, system, max_output_tokens=1024, kind="facts")
         parsed = parse_extraction(raw or "", {f.id for f in held}, self.fact_max_chars)
         if parsed is None:
@@ -2085,8 +2090,7 @@ class Agent:
             took = round((self.clock() - began) / 1000)  # review #4: the DoD notes how long a video takes
             if sent:
                 self.keep_video(made)
-                log.info("video: sent (%s, telegram, %d s)", shot.kind, took)
-                self._own_private_line(photo_note("", shot).strip())
+                log.info("video: sent (%s, telegram, %d s)", shot.kind, took)  # v5.23: no note of it in her history
             elif shot.kind == "note":
                 log.warning("video: %s after %d s — her voice note instead", why, took)
                 ogg = await encode_opus(pcm) if pcm else None
@@ -3197,7 +3201,7 @@ class Agent:
                 from_summaries = True
                 break
         items = ([(r.level, r.text) for r in finer if r.text] if from_summaries
-                 else [(x.speaker, history_entry(x.text)) for x in lines])
+                 else [(x.speaker, history_entry(strip_notes(x.text))) for x in lines])
         self._talk_probed = None
         text, left_out = (await self._talk_text(level, items, from_summaries, [0])) if items else ("", 0)
         if text is None:  # a failure, not a prompt-stage block: the period stays due — for a while
@@ -3322,7 +3326,7 @@ class Agent:
                 continue
             system, contents = reflection_request(self.cfg.name, self.cfg.canon, self._mood_today(day),
                                                   self._recent_thoughts(day, private=place == "private"), place,
-                                                  [(line.speaker, line.text) for line in lines])
+                                                  [(line.speaker, strip_notes(line.text)) for line in lines])
             texts = await self._think(contents, system, REFLECTION_MAX_TOKENS, "reflection", reflection=True)
             if texts is None:  # review #1: a failed call keeps the mark — the same lines are read next time
                 log.info("reflection: the call on %s failed — tried again later", place)
@@ -3809,8 +3813,8 @@ class Agent:
                 return False
             self.last_attempt_ms = self.clock()
             system, contents = build_summary_request(
-                self.cfg.name, self.cfg.canon, self.summary, snapshot, self.summary_max_words,
-                human=self.cfg.type == "persona",  # v5.23 (the owner): a person's summary is a human's own memory
+                self.cfg.name, self.cfg.canon, self.summary, [(who, strip_notes(t)) for who, t in snapshot],
+                self.summary_max_words, human=self.cfg.type == "persona",  # v5.23 (the owner): a person's summary is a human's own memory
             )
             text = await self.llm.generate(contents, system, max_output_tokens=self.summary_max_words * 3,
                                            kind="summary")

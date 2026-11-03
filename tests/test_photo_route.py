@@ -98,7 +98,7 @@ def test_a_selfie_goes_after_her_voice_with_her_words_under_it_and_is_kept(tmp_p
     assert agent.sent == ["voice", ("photo", "Ось я під куполом 🙂")]                  # no separate text message
     assert PHOTO_SKILL in agent.llm.calls[0][0]                                        # offered to Gemini in Telegram
     assert any(c.args[1] == "upload_photo" for c in agent.telegram.send_chat_action.call_args_list)
-    assert her_line(agent) == "Ось я під куполом 🙂\n[селфі: ...]"                     # never what is in it
+    assert her_line(agent) == "Ось я під куполом 🙂"     # v5.23 (the owner): no note of the photo in her history
     assert agent.private_history[-1] == ("Кіра", her_line(agent))
     [kept] = list(photos_dir(agent).iterdir())
     assert kept.name == "180000.jpg" and kept.read_bytes() == b"JPEG"

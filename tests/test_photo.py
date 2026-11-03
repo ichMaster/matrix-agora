@@ -20,10 +20,10 @@ from agents.photo import (
     PhotoMaker,
     Shot,
     load_faces,
-    photo_note,
     photo_request,
     pick_faces,
     split_photo,
+    strip_notes,
 )
 from agents.roster import RosterError, parse_member
 
@@ -56,11 +56,13 @@ def test_her_kept_note_echoed_anywhere_in_any_case_is_cut_and_names_the_shot():
     assert split_photo("ну [фото] і що") == ("ну [фото] і що", None)                  # no colon: not a note
 
 
-def test_her_kept_note_holds_no_description_and_echoed_names_an_empty_shot():
-    # the owner, 2026-11-02: her selfies' descriptions in her history made Gemini block her whole private prompt
-    note = photo_note("Ось я", Shot("selfie", f"я на балконі {SECRET}"))
-    assert note == "Ось я\n[селфі: ...]" and SECRET not in note
-    assert photo_note("", Shot("photo", "чашка")).strip() == "[фото: ...]"
+def test_an_older_lines_kept_note_is_cut_out_and_echoed_names_an_empty_shot():
+    """v5.23 (the owner, 2026-11-03: «забери з тексту взагалі селфі чи фото воно в історії не потрібно»): no note is
+    kept any more; an older line's note — the photo's, the кружечок's, the clip's — is cut out before a prompt reads
+    it, a line that held only one is no line, and a line with none stays exactly as it is."""
+    assert strip_notes("Ось я\n[селфі: ...]") == "Ось я" and strip_notes("[кружечок: ...]") == ""
+    assert strip_notes("Тримай [фото: ...] 🙂\n[відео: ...]") == "Тримай 🙂"
+    assert strip_notes("рядок без нотатки ") == "рядок без нотатки " and strip_notes("ну [фото] і що") == "ну [фото] і що"
     # code review v5.21 #1: cut, and a shot with no description — her words may promise it
     assert split_photo("Ось я знову [селфі: ...] 🙂") == ("Ось я знову 🙂", Shot("selfie", ""))
     assert split_photo("Дивись\n[фото: …]") == ("Дивись", Shot("photo", ""))

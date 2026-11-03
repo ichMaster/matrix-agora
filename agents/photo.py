@@ -69,8 +69,6 @@ PHOTO_SKILL = (
     "скажи це своїми словами."
 )
 PHOTO_FAILED = "Фото цього разу не вийшло надіслати — не згадуй його й не обіцяй."
-NOTES = {"photo": "фото", "selfie": "селфі", "note": "кружечок", "clip": "відео"}
-HIDDEN = "..."  # the owner, 2026-11-02: what stands in her kept note for what was in the shot
 
 
 @dataclass(frozen=True)
@@ -118,11 +116,20 @@ def split_photo(text: str) -> tuple[str, Shot | None]:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip(), shot
 
 
-def photo_note(text: str, shot: Shot) -> str:
-    """Her line as she keeps it after a photo went out: the words, then `[селфі: ...]` or `[фото: ...]` — so her
-    history and her recall know that she sent one. Never what is in it (the owner, 2026-11-02): her selfies'
-    descriptions in her history made Gemini block her whole private prompt (`prohibited_content`)."""
-    return f"{text}\n[{NOTES[shot.kind]}: {HIDDEN}]"
+# v5.23 (the owner, 2026-11-03: «знайди нарешті що це блокує» — then «забери з тексту взагалі селфі чи фото воно в
+# історії не потрібно»): her kept note `[селфі: ...]` in a close scene made Gemini 3.1 Pro block her whole private
+# prompt (`prohibited_content`: five lines — her words under the blanket, the note, his «продовжуй» — blocked together,
+# and the same prompt without the notes passed). No note is kept any more, and an older line's note is cut out before
+# any prompt reads it.
+
+
+def strip_notes(text: str) -> str:
+    """Her line without its kept notes (pure): every `[селфі: ...]`, `[фото: ...]`, `[кружечок: ...]`, `[відео: ...]`
+    cut out, a line left empty dropped; "" when nothing else was in it."""
+    if not NOTE_RE.search(text or ""):
+        return text or ""  # a line with no note stays exactly as it is
+    lines = [re.sub(r"[ \t]{2,}", " ", NOTE_RE.sub("", line)).rstrip() for line in (text or "").split("\n")]
+    return "\n".join(line for line in lines if line.strip()).strip()
 
 
 def moment_line(moment: Moment) -> str:
