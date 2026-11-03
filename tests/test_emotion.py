@@ -225,3 +225,16 @@ def test_the_monthly_budget_counts_the_speech(tmp_path, monkeypatch):
     agent.voice_monthly_chars = len(WORDS) + 1                                 # the words fit, the speech does not
     asyncio.run(agent.send_line("!room", asyncio.run(agent._compose(agent.build_prompt())), "$t"))
     assert agent.tts.spoken == [] and [c["body"] for _, c in sent] == [WORDS]  # text only: her words
+
+
+def test_every_line_of_her_speech_ends_with_a_mark_never_inside_a_tag():
+    """v5.23 (the owner, 2026-11-03: «щоб ставилась кома в кінці речення і що просто кінець рядку недостатньо, тому що
+    озвучка погано працює так»): the voice gets a full stop after a line's last word when nothing ends it — before
+    the emoji and the tags after it, after the closing quotes; the text stays as she wrote it."""
+    from agents.emotion import closed_line, spoken
+    assert spoken("слухай, я тут подумала\nа давай у суботу?") == ("слухай, я тут подумала\nа давай у суботу?",
+                                                                    "слухай, я тут подумала.\nа давай у суботу?")
+    assert closed_line("ого 🙂") == "ого. 🙂" and closed_line("добре [laughs]") == "добре. [laughs]"
+    assert closed_line("ну «добре»") == "ну «добре»." and closed_line("[whispers] я тут") == "[whispers] я тут."
+    for done in ("кінець…", "правда?", "так!", "отже:", "[softly]", "🙂", ""):
+        assert closed_line(done) == done

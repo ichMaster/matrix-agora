@@ -52,14 +52,38 @@ class Spoken(str):
         return obj
 
 
+# v5.23 (the owner, 2026-11-03: «щоб ставилась кома в кінці речення і що просто кінець рядку недостатньо, тому що
+# озвучка погано працює так»): a line of what the synthesiser gets that nothing ends gets a full stop after its last
+# word — before the emoji, the closing quotes and the voice tags after it, never inside a tag
+_END_RE = re.compile(r"[.!?…,:;]")
+_TAIL_TAGS_RE = re.compile(rf"(?:[ \t]*{TAG_RE.pattern})+[ \t]*$")
+
+
+def closed_line(row: str) -> str:
+    """One line for the voice (pure): unchanged when a mark ends it or it has no word; else a full stop after its
+    last word."""
+    tags = _TAIL_TAGS_RE.search(row)
+    body, tail_tags = (row[:tags.start()], row[tags.start():]) if tags else (row.rstrip(), row[len(row.rstrip()):])
+    last = None
+    for last in re.finditer(r"\w", body):
+        pass
+    if last is None or _END_RE.search(body[last.end():]):
+        return row
+    at = last.end()
+    while at < len(body) and body[at] in "»\"')”":  # after the closing quotes, before the emoji
+        at += 1
+    return body[:at] + "." + body[at:] + tail_tags
+
+
 def spoken(line: str) -> tuple[str, str]:
     """(the words, what the synthesiser gets) of a line — a plain `str` is both; the synthesiser never gets a link
-    (v5.12 review #3: a news item she shares keeps its link in the text alone)."""
+    (v5.12 review #3: a news item she shares keeps its link in the text alone); v5.23: every line of the speech ends
+    with a mark (`closed_line`)."""
     speech = getattr(line, "speech", None) or str(line)
-    if not LINK_RE.search(speech):
-        return str(line), speech
-    speech = LINK_RE.sub("", speech)
-    return str(line), "\n".join(" ".join(row.split()) for row in speech.split("\n")).strip()
+    if LINK_RE.search(speech):
+        speech = LINK_RE.sub("", speech)
+        speech = "\n".join(" ".join(row.split()) for row in speech.split("\n")).strip()
+    return str(line), "\n".join(closed_line(row) for row in speech.split("\n"))
 
 
 def speech_for(model: str, text: str, speech: str) -> str:

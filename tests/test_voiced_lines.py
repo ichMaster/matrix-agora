@@ -73,7 +73,7 @@ def test_an_answer_to_the_owners_voice_is_a_labelled_voice_then_its_text(tmp_pat
     assert audio["body"] == "Голосове повідомлення" and "filename" not in audio   # a label: the words only once
     assert text == {"msgtype": "m.text", "body": f"Привіт, Ich! {SECRET}"}
     usage = json.loads((tmp_path / "ada.usage.jsonl").read_text().splitlines()[-1])
-    assert (usage["kind"], usage["characters"]) == ("tts", len(text["body"]))
+    assert (usage["kind"], usage["characters"]) == ("tts", len(text["body"]) + 1)   # v5.23: the voice's full stop
     assert all(SECRET not in r.getMessage() for r in caplog.records) and "voice: sent" in caplog.text
 
 
