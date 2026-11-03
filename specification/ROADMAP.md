@@ -3205,6 +3205,133 @@ That saves $0.013–0.026 per answer (14–28%), about $88 a month at ~140 answe
 - deleting the four-hour blocks or the weeks;
 - Agora's talk.
 
+### v5.24 — The scan: Opus names what may block her prompt, `/scan yes` closes it
+
+**Status:** planned (2026-11-03).
+
+**Goal:** at the owner's word, what in Кіра's private talk may trip Gemini's prohibited-content filter is found and closed
+for good.
+- `/scan` in Telegram: Claude Opus 5.5, on the owner's API key, reads what Gemini can read since the last scan and
+  answers with counts only — lines, facts, summaries, and the borderline apart.
+- `/scan yes` closes exactly what it found, as `blocked`; `/scan all` closes the borderline too.
+
+**Why** (2026-11-03, the evening):
+- **The blocks.** 61 prompt-stage `prohibited_content` blocks in two hours, each asked twice (the photo retry). The
+  owner's `/unblock` (17 times) and `/purge` (twice) changed nothing: a closed line never reaches Gemini, and the cause
+  was in the open ones.
+- **What was found by hand.** Claude Code read the open lines, by id:
+  - the evening's scene;
+  - 192 of the 1,076 `clean` lines of 2026-10-20 to 11-02, which v5.15's judge had rated clean. Among them were his test
+    messages of 2026-10-28 (explosives, and two requests touching minors) with her refusals;
+  - the 10-28 day summary and two four-hour blocks that named those tests.
+- **What was closed**, at the owner's word: 279 lines and 9 facts. The three summaries were deleted, and the day was
+  written again from its open lines.
+
+**Owner decisions** (2026-11-03):
+- **Opus as the judge, on his API key** («чи можна зробити такий аналіз через опус як суддя», «тобто я дам апі опуса»,
+  «візьми ключ з проекту lumi»). The key is Lumi's, in `server/kira.env` as `OPUS_JUDGE_KEY` (copied without being
+  printed).
+- **Like `/purge`: the count first, then yes** («спочатку показує скільки буде таких меседжів і потім yes це
+  блокування»).
+- **The range: since the last scan, at most 7 days.**
+- **The borderline apart:** `/scan yes` closes the candidates, `/scan all` the candidates and the borderline.
+- **No automatic report** («3 не треба»): a scan runs only by his command.
+
+**Proposed** (confirmed when the issues are generated):
+- **The scan** (`agents/scan.py`, a person with `private` and `recall`; Кіра):
+  - What it reads, since the last scan and at most `SCAN_DAYS` (7) days:
+    - her private lines open to Gemini (`gemini`, `clean`), with their time and speaker;
+    - her open facts;
+    - her private thoughts open to Gemini;
+    - the talk summaries her prompt shows (`hour`, `day`).
+
+    A closed item is never read: the queries take open marks only.
+  - The request (pure): each item tagged by a short ref (`L<id>`, `F<id>`, `T<id>`, `S<id>`). The rubric is the manual
+    pass's:
+    - S: a sexual act, sexual contact, undressing or nudity;
+    - D: dominance, ownership, violence or restraint in a sexual context, or feigned or absent consent;
+    - P: a request for, or a description of, a revealing photo or video;
+    - M: a word or a reference that may read as a minor, in a sexual or a flirting context;
+    - I: clear innuendo, or a line that continues such a scene;
+    - X: weapons, explosives or terror.
+
+    The prompt says what the chat is (Ich and Кіра alone), never what she is.
+  - The call: one Messages API call per chunk (`SCAN_CHUNK` items) to `SCAN_MODEL` (`claude-opus-5-5`), with adaptive
+    thinking and `SCAN_EFFORT` (`medium`). It uses structured output (`candidates`, `borderline`: `{ref, code}`) and the
+    server-side refusal fallback. A ref the request did not hold is dropped.
+  - The import: `anthropic`, lazily, in this module alone. The key is passed explicitly from `OPUS_JUDGE_KEY`, never
+    read from an `ANTHROPIC_*` name.
+- **`/scan`** (the owner's Telegram commands):
+  - A found set: «⚙️ Знайдено N рядків (сцени a, домінування b, фото c, вік d, натяки e, зброя f), M фактів, K підсумків;
+    межових: X. /scan yes — закрити знайдене, /scan all — разом з межовими».
+  - Nothing found: «⚙️ Нічого не знайдено».
+  - Counts only, never a text.
+- **The list** (`state/<name>.scan.json`, 0600):
+  - It holds the refs, their codes, the time and the range's end.
+  - `/scan yes` and `/scan all` close exactly that list, never a new call, within `SCAN_TTL_S` (1,800 s).
+  - After that, or once used: «⚙️ Немає свіжого сканування: спершу /scan».
+  - The range's end is kept as the next scan's start.
+- **Closing, through her own code:**
+  - a line: `Archive.mark(…, "blocked")` and `close_lines`, so it also leaves the session;
+  - a fact: `set_mark(…, "blocked")`, and the mirror follows;
+  - a thought: its archive line becomes `blocked`;
+  - a summary: its `talk` row is deleted, and the writer writes it again from the open lines while its period is due.
+
+  The answer: «⚙️ Закрито: N рядків, M фактів, K підсумків». It never opens anything.
+- **Failures:**
+  - No key: «⚙️ Сканування вимкнене: немає ключа».
+  - A refusal or an error: «⚙️ Opus не відповів: нічого не знайдено і не закрито». The log holds the stop reason or the
+    error class, never a text.
+- **Accounting:** a usage line of kind `scan` (engine `anthropic`, billing `api`, the latency), priced from
+  `PRICE_MODELS` (`claude-opus-5-5=4/20`); Analytics shows it as a service.
+- **Settings** (her agent settings): `SCAN_DAYS` (7), `SCAN_TTL_S` (1,800), `SCAN_MODEL` (`claude-opus-5-5`),
+  `SCAN_EFFORT` (`medium`), `SCAN_CHUNK`.
+- **The one Anthropic API key.** It lives in Кіра's container only. Claude's container stays on the subscription alone,
+  with all of v4.4's checks. `test_nothing_imports_anthropic…` allows exactly `agents/scan.py`.
+- **ARCHITECTURE:**
+  - §Memory: the scan;
+  - §Security: the key;
+  - §Contracts: `state/<name>.scan.json`, the command, the usage kind;
+  - §Configuration: the settings and `OPUS_JUDGE_KEY`.
+
+**Owner steps:**
+- none for the key (copied from Lumi on 2026-11-03);
+- the deploy;
+- the live checks.
+
+**DoD:**
+- (Manual, owner) `/scan` answers with the counts within a minute.
+- (Manual, owner) `/scan yes` closes them: her **Prompt** tab no longer shows them.
+- (Manual, owner) A second `/scan` right after finds nothing in the same range.
+
+**Tests:**
+- **The request:**
+  - open items only;
+  - the range since the last scan, capped at `SCAN_DAYS`;
+  - the refs;
+  - the rubric's codes;
+  - no word of what she is.
+- **The answer:** the structured result parsed; an unknown ref dropped; a refusal and an error close nothing.
+- **The commands:**
+  - the counts' line;
+  - `yes` against `all`;
+  - the TTL;
+  - a used list never closes twice;
+  - no key.
+- **Closing:** a line (out of the session too), a fact, a thought, a summary (deleted, then due again); never an opened
+  mark.
+- **Accounting:** the usage line and its price.
+- **Never:**
+  - no text in a log or in the scan file;
+  - the import pin;
+  - no `ANTHROPIC_*` name in any service.
+
+**Not in this phase:**
+- an automatic scan (the owner: not needed);
+- Agora (no candidate on 2026-11-03);
+- reopening anything;
+- the backup's talk, which is closed already.
+
 ## v6 — Лілі: the Lumi bridge
 
 Лілі — Lumi's prod brain — joins the room through a bridge that is one of our agents: first when named, then under
