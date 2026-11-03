@@ -1230,9 +1230,13 @@ class Agent:
             brief = f"{brief}\n\n{video_skill(self._offer_video)}"
         facts = self.facts_now()  # v5.8 review #6: mirrored before the recall, so a deleted fact is not recalled
         if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
-            query = next((t for s, t in reversed(self.gemini_history()) if s == "Ich"), "")  # v5.14: open only
-            recalled = await self.recall_section(query, self.private_places,
-                                                 set(self.private_history) | set(self.gemini_history()))
+            window, history = self._gemini_lines(), self.gemini_history()
+            query = next((t for s, t in reversed(history) if s == "Ich"), "")  # v5.14: open only
+            # code review v5.23 #1: recall skips Gemini's window alone (by the archive's own text) and the closed
+            # pairs — never the backup's last `HISTORY_N` lines, which since the 24-hour window hold lines no prompt shows
+            exclude = (set(self.private_history) if window is None
+                       else {(x.speaker, x.text) for x in window} | set(history) | self._closed)
+            recalled = await self.recall_section(query, self.private_places, exclude)
             agora_now = self.agora_now_section()
         return self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts, talk=True)
 

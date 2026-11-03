@@ -242,6 +242,32 @@ def test_her_private_prompt_to_gemini_holds_the_summaries_before_the_window_and_
     assert TALK_TITLE not in asyncio.run(plain._gemini_private_prompt(PRIVATE_BRIEF))
 
 
+def test_her_recall_reaches_a_line_outside_the_window_and_never_one_in_it(tmp_path, monkeypatch):
+    """Code review v5.23 #1: recall skips only Gemini's window — never the backup's last `HISTORY_N` lines, which since
+    the 24-hour window hold lines no prompt shows (40 hours back: in neither the window nor her recall)."""
+    from agents.private import PRIVATE_BRIEF
+    agent = talking(tmp_path, monkeypatch)
+    agent.private_history_hours, agent.private_history_min, agent.recall_n = 24, 2, 10
+    say(agent, "tg:a", ms(2026, 10, 31, 20, 0), "Ich", "Мій кіт Барсик любить сардини")
+    say(agent, "tg:b", ms(2026, 10, 31, 20, 1), "Кіра", "Ого, класний")
+    for i in range(4):
+        say(agent, f"tg:n{i}", ms(2026, 11, 2, 9, i), "Ich" if i % 2 == 0 else "Кіра", f"сьогодні рядок {i}")
+    say(agent, "tg:q", ms(2026, 11, 2, 11, 0), "Ich", "Як там Барсик і сардини?")
+    agent.seed_private_from_archive()
+    assert ("Ich", "Мій кіт Барсик любить сардини") in agent.private_history          # the backup's view holds it
+    assert "Мій кіт Барсик любить сардини" not in [x.text for x in agent._gemini_lines()]
+    seen, real = {}, agent.recall_section
+
+    async def spy(query, places, exclude, **kw):
+        seen["out"] = await real(query, places, exclude, **kw)
+        return seen["out"]
+
+    agent.recall_section = spy
+    asyncio.run(agent._gemini_private_prompt(PRIVATE_BRIEF))
+    assert "Мій кіт Барсик любить сардини" in seen["out"] and "Ого, класний" in seen["out"]  # with its neighbour
+    assert "Як там Барсик" not in seen["out"]                                         # in the window: never recalled
+
+
 
 def test_the_owners_switches_his_new_lines_only_and_no_summaries(tmp_path, monkeypatch):
     """2026-11-02 (the owner, «відключи всю історію … я маю на увазі 300 рядків»): `PRIVATE_HISTORY_N` 1 leaves Gemini
