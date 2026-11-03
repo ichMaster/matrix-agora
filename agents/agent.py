@@ -1364,8 +1364,9 @@ class Agent:
         """`gemini_history`, each line with its probe id (`line:<key>`; v5.16) — None for one without a key (her own
         history, when the archive is missing or fails)."""
         lines = self._gemini_lines()
-        if lines is None:
-            return [(None, line) for line in self.private_history if line not in self._closed]
+        if lines is None:  # code review v5.23 #4: her own history, never a kept note either
+            return [(None, (who, strip_notes(text))) for who, text in self.private_history
+                    if (who, text) not in self._closed and strip_notes(text)]
         return [(f"line:{line.key}", (line.speaker, history_entry(strip_notes(line.text)))) for line in lines]
 
     def _gemini_lines(self) -> list | None:

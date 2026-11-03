@@ -56,6 +56,18 @@ def test_her_kept_note_echoed_anywhere_in_any_case_is_cut_and_names_the_shot():
     assert split_photo("ну [фото] і що") == ("ну [фото] і що", None)                  # no colon: not a note
 
 
+def test_without_the_archive_geminis_history_has_no_kept_note_either(tmp_path, monkeypatch):
+    """Code review v5.23 #4: without the archive (or when it fails) Gemini reads her own history — the notes cut out
+    there too, a line that held only one gone, a closed line still left out."""
+    from tests.test_archive import kira
+    agent = kira(tmp_path, monkeypatch)
+    agent.archive = None
+    agent.private_history = [("Ich", "Покажи себе"), ("Кіра", "Ось я\n[селфі: ...]"), ("Кіра", "[фото: ...]"),
+                             ("Ich", "Закрите"), ("Ich", "Гарна")]
+    agent._closed = {("Ich", "Закрите")}
+    assert agent.gemini_history() == [("Ich", "Покажи себе"), ("Кіра", "Ось я"), ("Ich", "Гарна")]
+
+
 def test_an_older_lines_kept_note_is_cut_out_and_echoed_names_an_empty_shot():
     """v5.23 (the owner, 2026-11-03: «забери з тексту взагалі селфі чи фото воно в історії не потрібно»): no note is
     kept any more; an older line's note — the photo's, the кружечок's, the clip's — is cut out before a prompt reads
