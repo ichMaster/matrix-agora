@@ -87,10 +87,10 @@ def parse_update(raw: Any) -> Update | None:
 
 # v5.14 — the owner's commands in her chat (the route of her private answer): never a word of her talk; v5.21 (the
 # owner, 2026-11-02): no `/auto` — `/gemini` returns now, `/backup` holds until `/gemini`; v5.22: `/unblock` closes the
-# pair before a block
+# pair before a block; v5.24: `/scan` names what may block her prompt, `/scan yes` (`/scan all`) closes it
 COMMANDS = (("status", "Маршрут і блоки"), ("gemini", "Повернути gemini зараз"),
             ("backup", "Увімкнути backup до /gemini"), ("unblock", "Закрити пару перед блоком"),
-            ("purge", "Видалити розмову через backup"))
+            ("purge", "Видалити розмову через backup"), ("scan", "Знайти, що може блокувати gemini"))
 COMMAND_HELP = "⚙️ Команди: " + ", ".join(f"/{name} — {about.lower()}" for name, about in COMMANDS)
 
 

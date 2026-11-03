@@ -10,11 +10,14 @@ name, so Claude's container stays on the subscription alone (v4.4). Never a text
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import os
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from agents.world import local_now
@@ -168,6 +171,33 @@ def counts_line(counts: dict[str, Any]) -> str:
     return (f"⚙️ Знайдено {total} рядків{f' ({by_code})' if by_code else ''}, {counts['facts']} фактів, "
             f"{counts['thoughts']} думок, {counts['summaries']} підсумків; межових: {counts['borderline']}. "
             "/scan yes — закрити знайдене, /scan all — разом з межовими")
+
+
+def fact_hash(fact_id: str) -> str:
+    """A fact by the sha256 of its id in the scan file — never the id, which is its text's slug."""
+    return hashlib.sha256((fact_id or "").encode("utf-8")).hexdigest()
+
+
+def load_scan(path: Path) -> dict[str, Any]:
+    """The scan file (`state/<name>.scan.json`): the last list and the next scan's start; {} when missing or bad."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_scan(path: Path, data: dict[str, Any]) -> None:
+    """Atomic, private from birth (0600) — refs, codes, hashes, times and counts, never a text."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, json.dumps(data, ensure_ascii=False).encode("utf-8"))
+    finally:
+        os.close(fd)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
 
 
 UsageSink = Callable[..., None]  # (model, prompt_tokens, output_tokens, ok, latency_ms, cache_read, cache_write)

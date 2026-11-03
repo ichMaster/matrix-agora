@@ -427,6 +427,12 @@ class Archive:
             return False
         return True
 
+    def talk_delete(self, level: str, start_ms: int) -> int:
+        """v5.24 — a summary the scan found, deleted at the owner's `/scan yes`: the writer writes it again from the open
+        lines while its period is due. How many rows went (0 or 1)."""
+        with self.db:
+            return self.db.execute("DELETE FROM talk WHERE level = ? AND start_ms = ?", (level, int(start_ms))).rowcount
+
     def talk_rows(self, level: str | None = None, since_ms: int | None = None,
                   until_ms: int | None = None) -> list[TalkRow]:
         """The summaries (of one level, or all) starting in [since_ms, until_ms), oldest first."""

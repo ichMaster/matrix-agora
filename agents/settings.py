@@ -231,6 +231,17 @@ SCHEMA: tuple[Setting, ...] = (
     _s("VIDEO_WINDOW_MAX", "int", "2", "private", "cap:videos", None, "Скільки відео щонайбільше за вікно (0 — без ліміту)",
        "", 0, 100),
     _s("VIDEO_WINDOW_S", "int", "7200", "private", "cap:videos", None, "Вікно для ліміту відео", "s", 60, 86400),
+    # v5.24 (the owner, 2026-11-03) — the scan: Opus names what may block her prompt, `/scan yes` closes it
+    _s("SCAN_DAYS", "int", "7", "private", "cap:private", None,
+       "Найдавніше, що читає сканування (від минулого /scan)", "days", 1, 30),
+    _s("SCAN_TTL_S", "int", "1800", "private", "cap:private", None, "Скільки чекає /scan yes після /scan", "s", 60,
+       86400),
+    _s("SCAN_MODEL", "choice", "claude-opus-5-5", "private", "cap:private", None, "Модель сканування",
+       choices=("claude-opus-5-5",)),
+    _s("SCAN_EFFORT", "choice", "medium", "private", "cap:private", None, "Як ретельно думає сканування",
+       choices=("low", "medium", "high")),
+    _s("SCAN_CHUNK", "int", "400", "private", "cap:private", None, "Скільки рядків за один виклик сканування", "lines",
+       50, 2000),
     # v5.22 (the owner, 2026-11-02: «зроби можливість такий трейс включати на адмін панелі») — every network call's
     # result as a ⚙️ line to him in Telegram; a live switch (`LIVE`): it works at once, nobody restarts
     _s("TRACE_CALLS", "choice", "off", "switches", "cap:telegram", None,

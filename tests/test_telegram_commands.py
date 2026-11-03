@@ -139,7 +139,8 @@ def test_the_command_list_is_set_for_the_owners_chat_only(monkeypatch):
     assert asyncio.run(bot.set_commands(OWNER_TG)) is True
     method, body = calls[0]
     assert method == "setMyCommands" and body["scope"] == {"type": "chat", "chat_id": OWNER_TG}
-    assert [c["command"] for c in body["commands"]] == ["status", "gemini", "backup", "unblock", "purge"]  # no /auto
+    assert [c["command"] for c in body["commands"]] == ["status", "gemini", "backup", "unblock", "purge",  # no /auto
+                                                         "scan"]  # v5.24
 
 
 def test_a_saved_window_shows_in_status(tmp_path, monkeypatch):
