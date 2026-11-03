@@ -204,11 +204,16 @@ def test_an_allowed_event_lifts_the_mute(tmp_path):
 
 # --- layer 6: no API client in the code ------------------------------------------------------------------------------
 def test_nothing_imports_anthropic_and_only_the_responder_imports_the_sdk():
+    importers = []
     for path in Path("agents").rglob("*.py"):
         src = path.read_text(encoding="utf-8")
-        assert not re.search(r"^\s*(import|from)\s+anthropic\b", src, re.MULTILINE), path
+        if re.search(r"^\s*(import|from)\s+anthropic\b", src, re.MULTILINE):
+            importers.append(path.as_posix())
         if path.name != "claude_sdk.py":
             assert "claude_agent_sdk" not in src, path
+    # v5.24 (the owner, 2026-11-03: «я дам апі опуса»): the scan's judge alone, in Кіра's container, on its own key
+    assert importers == ["agents/scan.py"]
+    assert not re.search(r"['\"]ANTHROPIC_", Path("agents/scan.py").read_text(encoding="utf-8"))  # never read by name
 
 
 # --- the agent: refuses first, scrubs, builds no Gemini client --------------------------------------------------------
