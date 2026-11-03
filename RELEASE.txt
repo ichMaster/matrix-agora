@@ -1,3 +1,27 @@
+Version 5.23.0 (2026-11-03)
+---------------------------
+- Phase v5.23 (AGORA-188..191): Kira's memory by time - Gemini's window is
+  the last 24 hours word for word, never fewer than 20 lines
+  (`PRIVATE_HISTORY_HOURS`, `PRIVATE_HISTORY_MIN`); then her talk
+  summarized by the hour for 3 days (`TALK_HOUR_DAYS`) and by the local day
+  up to 7 (`TALK_DAY_DAYS`, `TALK_WORDS_DAY`), a day written from its hours
+  or its four-hour blocks; nothing older in her prompt, the rest by recall
+  (`RECALL_N` 10); the panel's Talk tab shows the days
+- The owner's live fixes during the phase: a block on a prompt that offered
+  her the photo skill is tried once more without it, never the backup; the
+  last week's summaries named by their weekday; every summary request says
+  it is a human's own memory (`HUMAN_MEMORY`); no `[селфі: ...]` note in
+  her history any more (`strip_notes`; the cause of the night's blocks);
+  every line of her voice ends with a mark (`closed_line`), and her canon
+  asks for a mark at each sentence's end and capitals for names
+- Code review v5.23: her recall skips only Gemini's window, never the
+  backup's 300 lines (#1); the voice's full stop never inside a tag or a
+  quantity (#2); an hour before the band whose day is not past it is still
+  due (#3); without the archive Gemini's history has no note either (#4);
+  the Talk tab's levels in ARCHITECTURE (#5)
+- The owner's manual checks (the Prompt tab's shape, Analytics -> Prompts
+  after a day of data) waived by the owner on 2026-11-03
+
 Version 5.22.0 (2026-11-03)
 ---------------------------
 - Phase v5.22 (AGORA-183..187): analytics - the answer time of every service
