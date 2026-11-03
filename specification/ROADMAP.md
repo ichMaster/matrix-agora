@@ -3096,7 +3096,7 @@ so the photo lines also count the frames.
 
 ### v5.23 — Кіра's memory by time: a day word for word, two days by the hour, four by the day, the rest by recall
 
-**Status:** ⏳ planned (the owner, 2026-11-02), after v5.22's release.
+**Status:** ✅ completed — released `v5.23.0` on 2026-11-03. The owner waived the live checks («релізь версію»). Grown during the phase: the owner's live fixes (the photo retry, the weekday labels, `HUMAN_MEMORY`, no photo note in her history, a mark at every line's end for her voice). Code review: five fixes (#1–#5), none deferred.
 
 **Goal:** her private prompt to Gemini holds the talk by time, not by a count of lines.
 - The last 24 hours: word for word.
