@@ -48,7 +48,8 @@ def periods_due(now_ms: int, tz: str, open_times: list[int], held: set[tuple[str
                 day_days: int) -> list[tuple[str, int, int]]:
     """The periods to summarize, oldest first, as (level, start_ms, end_ms): each holds at least one line open to
     Gemini (`open_times`), is over, and is not `held` ((level, start_ms) already written).
-    - `hour`: starting within the last `hour_days` days;
+    - `hour`: starting within the last `hour_days` days, or earlier in a day not yet past the band (code review v5.23
+      #3: else an hour not written in the band — a downtime, an outage — waits in neither level until its day passes);
     - `day` (v5.23): ended before the hours' band and within the last `day_days` days;
     - nothing older (v5.23: her recall brings it back)."""
     hour_cut, day_cut = now_ms - hour_days * DAY_MS, now_ms - day_days * DAY_MS
@@ -58,7 +59,8 @@ def periods_due(now_ms: int, tz: str, open_times: list[int], held: set[tuple[str
             start, end = period_of(level, ts, tz)
             if (level, start) in held or (level, start) in due or end > now_ms:
                 continue
-            if (level == "hour" and start >= hour_cut) or (level == "day" and day_cut < end <= hour_cut):
+            if (level == "hour" and (start >= hour_cut or period_of("day", start, tz)[1] > hour_cut)) or (
+                    level == "day" and day_cut < end <= hour_cut):
                 due[(level, start)] = end
     return sorted(((lv, s, e) for (lv, s), e in due.items()), key=lambda p: (p[1], LEVELS.index(p[0])))
 

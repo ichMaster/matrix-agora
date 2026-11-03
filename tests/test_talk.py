@@ -41,8 +41,9 @@ def test_the_bands_three_days_by_the_hour_then_days_to_seven_oldest_first_and_no
         ("day", ms(2026, 10, 29), ms(2026, 10, 30)),                     # ended after the days' edge (10-29 12:00)
         ("day", ms(2026, 10, 30), ms(2026, 10, 31)),
         ("day", ms(2026, 11, 1), ms(2026, 11, 2)),                       # ends before the hours' band
-        ("hour", ms(2026, 11, 2, 13), ms(2026, 11, 2, 14)),              # 11-02 09:00 is before the hours' band, and
-        ("hour", ms(2026, 11, 5, 10), ms(2026, 11, 5, 11)),              # its day is not over before it: not yet due
+        ("hour", ms(2026, 11, 2, 9), ms(2026, 11, 2, 10)),               # before the band, but its day is not past it:
+        ("hour", ms(2026, 11, 2, 13), ms(2026, 11, 2, 14)),              # due as an hour (code review v5.23 #3), and
+        ("hour", ms(2026, 11, 5, 10), ms(2026, 11, 5, 11)),              # its day is not due yet
         ("hour", ms(2026, 11, 5, 11), ms(2026, 11, 5, 12)),              # 09:00 is held; over at 12:00 sharp
     ]                                                                    # 10-27: older than 7 days, never due
     assert periods_due(ms(2026, 11, 2, 11, 45), TZ, [ms(2026, 11, 2, 11, 30)], set(), 3, 7) == []   # not over
