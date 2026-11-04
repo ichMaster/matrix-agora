@@ -234,16 +234,23 @@ class Archive:
 
     def mark(self, keys: Iterable[str], mark: str) -> int:
         """v5.14 — set these lines' mark; a mark closed to Gemini drops their vectors (they are never embedded again).
-        v5.21: a `blocked` line never changes, and an open mark is never set on a closed line — nothing opens it. How
-        many changed."""
+        v5.21: a `blocked` line never changes, and an open mark is never set on a closed line — nothing opens it. v5.25
+        (the owner, 2026-11-04: «закриті рядки не мають іти в підсумки»): an open private line closed takes with it, in
+        the same transaction, every summary whose period holds it — the writer writes them again from the open lines
+        while their period is due. How many lines changed."""
         keys = [k for k in keys if k]
         if not keys or mark not in MARKS:
             return 0
         closed = mark in GEMINI_CLOSED
         guard = "mark != 'blocked'" if closed else _OPEN
+        marks = ",".join("?" * len(keys))
         with self.db:
+            times = ([t for (t,) in self.db.execute(f"SELECT ts_ms FROM lines WHERE place = 'private' AND key IN "
+                                                     f"({marks}) AND {_OPEN}", keys)] if closed else [])
             cur = self.db.execute(f"UPDATE lines SET mark = ?{', emb = NULL' if closed else ''} WHERE key IN "
-                                  f"({','.join('?' * len(keys))}) AND {guard}", (mark, *keys))
+                                  f"({marks}) AND {guard}", (mark, *keys))
+            for t in sorted(set(times)):
+                self.db.execute("DELETE FROM talk WHERE start_ms <= ? AND end_ms > ?", (t, t))
         if closed:
             self._cache = None  # their vectors leave the matrix: read again at the next recall
         return cur.rowcount

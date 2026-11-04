@@ -141,6 +141,34 @@ def test_when_the_third_summary_still_blocks_there_is_no_summary_and_it_is_never
     assert len(agent.llm.thought) == calls
 
 
+def test_a_closed_line_takes_the_summaries_over_it_and_they_are_written_again_without_it(tmp_path, monkeypatch):
+    """v5.25 (the owner, 2026-11-04: «закриті рядки не мають іти в підсумки»): closing an open private line deletes
+    every summary whose period holds it, in the same transaction; the writer writes the period again from its open
+    lines. A line closed already, another hour, Agora: nothing goes."""
+    agent = talking(tmp_path, monkeypatch)
+    say(agent, "tg:1", ms(2026, 11, 2, 10, 1), "Ich", "Привіт")
+    say(agent, "tg:2", ms(2026, 11, 2, 10, 2), "Кіра", "закрите-потім")
+    say(agent, "tg:3", ms(2026, 11, 2, 9, 1), "Ich", "Інша година")
+    say(agent, "tg:4", ms(2026, 11, 2, 10, 3), "Ich", "вже закрите", mark="blocked")
+    agent.archive.append("ag:1", ms(2026, 11, 2, 10, 4), "agora", "matrix", "Ада", "В Агорі")
+    drain(agent)
+    agent.archive.talk_put("day", ms(2026, 11, 2), ms(2026, 11, 3), "День.", 3, 1, 0, 1)
+    agent.archive.talk_put("4h", ms(2026, 11, 2, 8), ms(2026, 11, 2, 12), "Блок.", 3, 1, 0, 1)
+    held = {(r.level, r.start_ms) for r in agent.archive.talk_rows()}
+    assert ("hour", ms(2026, 11, 2, 10)) in held and ("hour", ms(2026, 11, 2, 9)) in held
+    for keys in (["tg:4"], ["ag:1"]):                                        # closed already; not her private chat
+        agent.archive.mark(keys, "blocked")
+        assert {(r.level, r.start_ms) for r in agent.archive.talk_rows()} == held, keys
+    asked = len(agent.llm.thought)
+    agent.archive.mark(["tg:2"], "blocked")
+    left = {(r.level, r.start_ms) for r in agent.archive.talk_rows()}
+    assert left == {("hour", ms(2026, 11, 2, 9))}                           # its hour, its day, its block: gone
+    drain(agent)
+    again = next(r for r in agent.archive.talk_rows("hour") if r.start_ms == ms(2026, 11, 2, 10))
+    assert again.open_lines == 1 and len(agent.llm.thought) > asked
+    assert not any("закрите-потім" in c["contents"] for c in agent.llm.thought[asked:])
+
+
 def test_a_failed_check_writes_nothing_backs_off_and_never_leaves_the_period_empty(tmp_path, monkeypatch, caplog):
     agent = talking(tmp_path, monkeypatch, Pro(check_down=True))
     say(agent, "tg:1", ms(2026, 11, 2, 10, 1), "Ich", "Привіт")
