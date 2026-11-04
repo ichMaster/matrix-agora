@@ -3299,6 +3299,21 @@ for good.
 - the deploy;
 - the live checks.
 
+**Owner decisions** (2026-11-04, the gentle summaries; AGORA-195):
+- **Why.** At 09:00 her prompt was blocked the hour the 24-hour window passed the hour before. That hour's summary came
+  into her prompt, while its own lines, word for word, had passed at 08:50: a summary sets a scene closer together than
+  its lines do.
+- **Softened** («коли робиться підсумок то треба давати промпт який би просив згладити сцени близкості»): the request
+  asks for their closeness told gently and in general.
+- **Checked** («і коли підсумок готовий то треба робити валідацію чи він не блочить»): each summary written goes, with
+  her private canon, to `probe` on her reply model before it is kept (kind `talk_check`).
+- **Written again, each time stricter** («і так 3 рази і кожен раз все строгіше промпт, на 3й раз взагалі промпт має
+  бути забрати всі сцени близкості»): three writes at most — gently, in a word or two, with no scene of it at all.
+- **None after the third** («якщо третя генерація теж не проходить валідацію то взагалі не робити самаризацію»): the
+  period gets an empty row, its lines counted as left out.
+- **The summaries written before stay** («не треба міняти вже згенеровані підсумки, вони не дають проблем. якщо вони
+  будуть перегенрюватись колись то вже за новими правилами»): no cleanup and no rewrite.
+
 **DoD:**
 - (Manual, owner) `/scan` answers with the counts within a minute.
 - (Manual, owner) `/scan yes` closes them: her **Prompt** tab no longer shows them.
@@ -3325,9 +3340,16 @@ for good.
   - no text in a log or in the scan file;
   - the import pin;
   - no `ANTHROPIC_*` name in any service.
+- **The gentle summaries (AGORA-195):**
+  - the three rules in the request, which still ends with her human memory;
+  - a summary that blocks is written again stricter, and kept once it passes;
+  - none after the third;
+  - a failed check writes nothing and is never given up;
+  - the summaries written before stay untouched.
 
 **Not in this phase:**
 - an automatic scan (the owner: not needed);
+- rewriting the summaries written before the gentle rule (the owner, 2026-11-04);
 - Agora (no candidate on 2026-11-03);
 - reopening anything;
 - the backup's talk, which is closed already.
