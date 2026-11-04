@@ -3299,6 +3299,10 @@ for good.
 - the deploy;
 - the live checks.
 
+**Owner decisions** (2026-11-04, the rewrite's report; AGORA-203): «Підсумки над закритими рядками агент потім
+переписує у фоні, і про це в Telegram нічого не приходить. — зроби про це звіт в телеграм»: `/scan yes` says how many
+summaries it took, and once they are written again one ⚙️ line says how many hours and days came back.
+
 **Owner decisions** (2026-11-04, Gemini's last word; AGORA-202): «крім того коли вибираються рядки для закривання то
 не просто чи є там тема про зброю а чи вона буде блокувати промпт, тобто можна писати про зброю але це не є тема яка
 блокується джемені»; «Раджу обидві зміни. Робити? — так»:
