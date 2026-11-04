@@ -3325,6 +3325,20 @@ for good.
   short reaction or a joke; most answers get no send-off unless he says goodbye himself.
 - **A repeat counts by the word's stem**, so «звіти» and «звітів» are one word.
 
+**Owner decisions** (2026-11-04, the theme she keeps to; AGORA-197):
+- **Why** («глянь знову, далі є відчуття гіперфіксації»): after AGORA-196 her endings varied, but the same two themes,
+  his work and their evening, moved into the middle of her messages and her questions. In the prompt of her last answer
+  the day's window held 34 mentions of his work and 40 of the evening, the hour summaries 3 and 14, and 8 of the 25
+  facts about him were that evening's meeting.
+- **Лілі's advice**, which the owner brought («що ти думаєш про цю пораду»): what she said was heard; tiredness of her
+  own idea; desire that fades. The first becomes a line of her private brief; the second is the theme named by Flash
+  (to come, at the owner's word); the third is v8.2's.
+- **Confirmed** («2-4 підтверджую»):
+  - about one answer in three also brings something of her own, from her day, not from their talk;
+  - one-time arrangements and meetings are not facts: the extraction's prompt says so, and a fact that says a day's
+    event is dropped in code;
+  - her private brief: what she said or asked he heard; she does not say it again.
+
 **DoD:**
 - (Manual, owner) `/scan` answers with the counts within a minute.
 - (Manual, owner) `/scan yes` closes them: her **Prompt** tab no longer shows them.
@@ -3362,6 +3376,10 @@ for good.
   - the endings' shared words named once;
   - an ending drawn and most answers with no send-off;
   - her lines read from those open to Gemini, never a closed one named.
+- **Her own, the heard rule and the facts (AGORA-197):**
+  - something of her own now and then, only with a section of her day;
+  - the heard rule in her private brief;
+  - a day's event never kept as a fact, a habit kept.
 
 **Not in this phase:**
 - an automatic scan (the owner: not needed);
