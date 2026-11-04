@@ -3454,6 +3454,10 @@ something of her own now and then, what she said was heard, and no one-time arra
 - **Accounting:** a usage line of kind `topics`; Analytics shows it.
 - **ARCHITECTURE:** §Prompt assembly (the list), §Token accounting (the kind), §Configuration (the setting).
 
+- **Her answer survives a bad network** («роби обидва», 2026-11-04, after an answer lost at 19:24 to a Telegram
+  `TimeoutError` and one held 194 s by a Gemini call at 19:28): the answer's call to Gemini cut at 90 s and made once
+  more; a send to Telegram that fails on the network tried again after 2 s and 5 s (AGORA-204).
+
 **Owner steps:** the deploy (v5.24's checks and this phase's together) and the live check.
 
 **DoD:**
