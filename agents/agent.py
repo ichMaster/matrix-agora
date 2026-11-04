@@ -257,6 +257,7 @@ from agents.scan import (
     OpusJudge,
     ScanItem,
     counts_line,
+    days_lines,
     fact_hash,
     kind_of,
     load_scan,
@@ -1932,7 +1933,8 @@ class Agent:
                          "summaries": {r: summaries[r] for r in refs if r in summaries}})
         save_scan(self.scan_file, data)
         log.info("scan: %d read — %d found, %d borderline", len(items), len(found.candidates), len(found.borderline))
-        return counts_line(scan_counts(found))
+        line = counts_line(scan_counts(found))
+        return f"{line}\n\n{days_lines(items, found, self.tz)}" if found else line  # v5.24 (the owner): by day
 
     def scan_items(self, start_ms: int, end_ms: int, facts_seen: set[str] = frozenset()
                    ) -> tuple[list[ScanItem], dict, dict]:

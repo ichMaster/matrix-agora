@@ -18,6 +18,7 @@ from agents.scan import (
     OpusJudge,
     ScanItem,
     counts_line,
+    days_lines,
     kind_of,
     parse_scan,
     scan_counts,
@@ -185,3 +186,16 @@ def test_the_client_is_made_lazily_with_the_key_passed_explicitly(monkeypatch):
 
 def test_an_unknown_effort_is_medium():
     assert OpusJudge("k", effort="max").effort == "medium" and OpusJudge("k", effort="low").effort == "low"
+
+
+def test_the_answer_by_day_counts_what_closes_of_what_was_read():
+    """v5.24 (the owner, 2026-11-04: «я хочу бачити по днях скільки закриється зі всіх в цьому дні»): for each local
+    day and kind read, the candidates + the borderline of how many were read; counts only, never a text."""
+    from agents.world import local_now
+    found = Found({"L10": "S", "F0": "I"}, {"T5": "I"})
+    out = days_lines(items(), found, TZ)
+    today, before = local_now(NOW - 3_600_000, TZ).strftime("%d.%m"), local_now(NOW - 2 * DAY_MS, TZ).strftime("%d.%m")
+    assert out.splitlines() == ["По днях — закриє /scan yes + ще /scan all, з прочитаного:",
+                                f"{before}: підсумки 0 + 0 з 1",
+                                f"{today}: рядки 1 + 0 з 2, думки 0 + 1 з 1, факти 1 + 0 з 1"]
+    assert not any(i.text in out for i in items())

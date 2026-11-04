@@ -111,8 +111,10 @@ def test_scan_answers_at_once_runs_apart_and_sends_the_counts(tmp_path, monkeypa
     asyncio.run(agent.telegram_command("/scan"))
     assert texts_sent(agent)[-1] == "⚙️ Сканування вже йде" and len(spawned) == 1
     asyncio.run(spawned[0])
-    assert texts_sent(agent)[-1] == ("⚙️ Знайдено 1 рядків (сцени 1), 1 фактів, 1 думок, 1 підсумків; межових: 1. "
-                                     "/scan yes — закрити знайдене, /scan all — разом з межовими")
+    answer = texts_sent(agent)[-1]
+    assert answer.startswith("⚙️ Знайдено 1 рядків (сцени 1), 1 фактів, 1 думок, 1 підсумків; межових: 1. "
+                             "/scan yes — закрити знайдене, /scan all — разом з межовими\n\nПо днях — закриє")
+    assert SECRET not in answer and "сцена" not in answer                   # v5.24: by day, counts only
     assert agent._scan_running is False and agent.telegram.send_voice.await_count == 0
     assert "сцена" not in caplog.text and "натяк" not in caplog.text and SECRET not in caplog.text
 

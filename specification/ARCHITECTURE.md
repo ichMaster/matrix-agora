@@ -155,7 +155,11 @@ The invariants every reply path must honor:
    `parse_scan` drops a ref the request did not hold and a code outside the six, and a ref in both lists is a
    candidate; a refusal, an answer cut short or malformed, or any error is «⚙️ Opus не відповів: нічого не знайдено і
    не закрито». **The answer** (`counts_line`): «⚙️ Знайдено N рядків (сцени a, …), M фактів, K думок, L підсумків;
-   межових: X. /scan yes — закрити знайдене, /scan all — разом з межовими», or «⚙️ Нічого не знайдено» — counts only.
+   межових: X. /scan yes — закрити знайдене, /scan all — разом з межовими», or «⚙️ Нічого не знайдено» — counts only;
+   a scan that found something adds (the owner, 2026-11-04: «я хочу бачити по днях скільки закриється зі всіх в цьому
+   дні»; «так зроби статистику в телеграм теж») the breakdown by local day (`days_lines`, pure): for each kind read
+   that day, «рядки a + b з n» — what `/scan yes` closes, what `/scan all` adds, of how many were read — and the same
+   for thoughts, facts (by the day added) and summaries (by their period's day), the days in time order.
    **The list** (`state/<name>.scan.json`): the refs and codes, a fact by its id's sha256 (`fact_hash` — its id is its
    text's slug), a summary by `(level, start_ms)`, the range, `facts_read` and `facts_seen`, `last_end_ms` — a scan
    that found nothing moves it to its end, an unused list leaves it, so the next `/scan` reads the same lines again.

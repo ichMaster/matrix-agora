@@ -173,6 +173,28 @@ def counts_line(counts: dict[str, Any]) -> str:
             "/scan yes — закрити знайдене, /scan all — разом з межовими")
 
 
+DAY_KINDS = (("line", "рядки"), ("thought", "думки"), ("fact", "факти"), ("summary", "підсумки"))
+
+
+def days_lines(items: list[ScanItem], found: Found, tz: str) -> str:
+    """v5.24 (the owner, 2026-11-04: «я хочу бачити по днях скільки закриється зі всіх в цьому дні»; «так зроби
+    статистику в телеграм теж») — the answer's breakdown by local day (pure): for each kind read that day, how many
+    `/scan yes` closes, how many more `/scan all` does, of how many read; counts only, never a text."""
+    days: dict[str, dict[str, list[int]]] = {}
+    first: dict[str, int] = {}  # a day's earliest time, so the days go in order across a year's end
+    for item in items:
+        day = local_now(item.when_ms, tz).strftime("%d.%m")
+        first[day] = min(first.get(day, item.when_ms), item.when_ms)
+        row = days.setdefault(day, {}).setdefault(item.kind, [0, 0, 0])
+        row[0] += item.ref in found.candidates
+        row[1] += item.ref in found.borderline
+        row[2] += 1
+    order = sorted(days, key=first.__getitem__)
+    lines = [f"{day}: " + ", ".join(f"{name} {days[day][kind][0]} + {days[day][kind][1]} з {days[day][kind][2]}"
+                                    for kind, name in DAY_KINDS if kind in days[day]) for day in order]
+    return "По днях — закриє /scan yes + ще /scan all, з прочитаного:\n" + "\n".join(lines)
+
+
 def fact_hash(fact_id: str) -> str:
     """A fact by the sha256 of its id in the scan file — never the id, which is its text's slug."""
     return hashlib.sha256((fact_id or "").encode("utf-8")).hexdigest()
