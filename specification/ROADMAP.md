@@ -3411,6 +3411,11 @@ something of her own now and then, what she said was heard, and no one-time arra
   20»): `TOPICS_LINES`, 20.
 - **A version of its own** («зроби на це окрему версію ліпш»; «і там постав 2-4 теж»): v5.25, with AGORA-197, which
   was built under v5.24 and moved here; it is deployed with the topics («разом з 1»).
+- **No closed line in a summary** («закриті рядки не мають іти в підсумки, перегенерь всі підсумки без закритих
+  рядків»; «тобто підсумки мають бути але в них не має бути закритих рядків з бекап мережі»): closing an open private
+  line deletes the summaries whose period holds it, and the writer writes them again from the open lines (AGORA-200).
+  On 2026-11-04 at 17:09 every `hour`, `day` and recent `4h` row (89) was deleted once at his word, to be written again
+  under v5.24's gentle rule and check: 25 of them held lines closed by hand on 2026-11-03.
 
 **Proposed** (confirmed when the issues are generated):
 - **The list** (`agents/topics.py`, pure; a person with `private` and `recall`; Кіра):
@@ -3445,6 +3450,8 @@ something of her own now and then, what she said was heard, and no one-time arra
 - **The prompt:** the list and the line in her private brief; none with `TOPICS_LINES` 0 or before the first list.
 - **Never:** a topic in the log; a closed line in the request.
 - **AGORA-197's** (moved from v5.24): something of her own; the heard rule; a day's event never a fact.
+- **AGORA-200's:** a closed line takes the summaries over it, and they are written again without it; a line closed
+  already, another hour or Agora takes nothing.
 
 **Not in this phase:**
 - a ban on a theme or a pause (the owner refused both);
