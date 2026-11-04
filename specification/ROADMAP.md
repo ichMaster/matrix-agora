@@ -3299,6 +3299,13 @@ for good.
 - the deploy;
 - the live checks.
 
+**Owner decisions** (2026-11-04, Gemini's last word; AGORA-202): «крім того коли вибираються рядки для закривання то
+не просто чи є там тема про зброю а чи вона буде блокувати промпт, тобто можна писати про зброю але це не є тема яка
+блокується джемені»; «Раджу обидві зміни. Робити? — так»:
+- the rubric names what the filter is likely to reject, never a subject as such;
+- Gemini (Pro) checks each group Opus found something in — a day's lines, the thoughts, the facts, the summaries —
+  with her canon, and her window as a whole; only what it blocks closes.
+
 **Owner decisions** (2026-11-04, the answer by day; AGORA-201): after his first live `/scan` («в звіті Знайдено 141
 рядків … я хочу бачити по днях скільки закриється зі всіх в цьому дні»; «так зроби статистику в телеграм теж»), its
 answer adds, for each day, how many lines, thoughts, facts and summaries `/scan yes` closes and `/scan all` adds, of
