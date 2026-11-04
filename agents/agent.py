@@ -274,10 +274,12 @@ from agents.talk import (
     TALK_CALLS_MAX,
     TALK_CHECK_MS,
     TALK_FAILS_MAX,
+    TALK_GENTLE,
     TALK_SPLIT_MIN,
     covered,
     iso_hour,
     periods_due,
+    talk_check_request,
     talk_request,
     talk_section,
 )
@@ -3376,7 +3378,7 @@ class Agent:
         items = ([(r.level, r.text) for r in finer if r.text] if from_summaries
                  else [(x.speaker, history_entry(strip_notes(x.text))) for x in lines])
         self._talk_probed = None
-        text, left_out = (await self._talk_text(level, items, from_summaries, [0])) if items else ("", 0)
+        text, left_out = (await self._talk_written(level, start, items, from_summaries)) if items else ("", 0)
         if text is None:  # a failure, not a prompt-stage block: the period stays due — for a while
             fails = self._talk_fails.get((level, start), 0) + (self._talk_probed is False)  # an outage never counts
             if fails < TALK_FAILS_MAX:
@@ -3393,13 +3395,37 @@ class Agent:
         log.info("talk: %s %s — %d open, %d closed, %d left out, %d words%s", level, iso_hour(start, self.tz), open_n,
                  closed_n, left_out, len(text.split()), " (from the finer summaries)" if from_summaries else "")
 
-    async def _talk_text(self, level: str, items: list, from_summaries: bool, calls: list) -> tuple[str | None, int]:
+    async def _talk_written(self, level: str, start: int, items: list,
+                            from_summaries: bool) -> tuple[str | None, int]:
+        """v5.24 (the owner, 2026-11-04): the summary (`_talk_text`), checked before it is kept — her private canon and
+        the summary alone, on her reply model (`probe`, the kind `talk_check`). One that blocks is written again, each
+        time stricter (`TALK_GENTLE`); when the last still blocks, no summary at all, its items counted as left out.
+        None: a call or the check failed — the period stays due."""
+        probe = getattr(self.llm, "probe", None)
+        for strict in range(len(TALK_GENTLE)):
+            text, left_out = await self._talk_text(level, items, from_summaries, [0], strict)
+            if not text or probe is None:
+                return text, left_out
+            system, contents = talk_check_request(self.cfg.canon_private or self.cfg.canon, text)
+            blocked = await probe(contents, system, kind="talk_check")
+            if blocked is None:
+                self._talk_probed = None  # an outage: never counted toward leaving the period empty
+                return None, 0
+            if not blocked:
+                return text, left_out
+            log.warning("talk: %s %s — the summary blocks her prompt (written %d of %d)", level,
+                        iso_hour(start, self.tz), strict + 1, len(TALK_GENTLE))
+        return "", len(items)
+
+    async def _talk_text(self, level: str, items: list, from_summaries: bool, calls: list,
+                         strict: int = 0) -> tuple[str | None, int]:
         """(the summary — "" when everything blocked —, how many items a block left out); None for a failure to try
         again later. A prompt-stage block (`probe` says so after a failed call) halves the items; a part of at most
         `TALK_SPLIT_MIN`, or past `TALK_CALLS_MAX` calls, is left out. A summary that calls her a model or a bot is
-        written again once, then left empty (the persona rule)."""
+        written again once, then left empty (the persona rule). `strict` (v5.24): how gently it tells of their
+        closeness (`TALK_GENTLE`)."""
         system, contents = talk_request(level, self.cfg.name, self.cfg.canon, items, self.talk_words[level],
-                                        from_summaries)
+                                        from_summaries, strict)
         for _ in range(2):
             calls[0] += 1
             text = await self.llm.think(contents, system, model=getattr(self.llm, "reply_model", DIGEST_MODEL),
@@ -3418,8 +3444,8 @@ class Agent:
         if len(items) <= TALK_SPLIT_MIN or calls[0] >= TALK_CALLS_MAX:
             return "", len(items)
         half = len(items) // 2
-        first, first_out = await self._talk_text(level, items[:half], from_summaries, calls)
-        second, second_out = await self._talk_text(level, items[half:], from_summaries, calls)
+        first, first_out = await self._talk_text(level, items[:half], from_summaries, calls, strict)
+        second, second_out = await self._talk_text(level, items[half:], from_summaries, calls, strict)
         if first is None or second is None:
             return None, 0
         return cap_words(" ".join(t for t in (first, second) if t), self.talk_words[level]), first_out + second_out

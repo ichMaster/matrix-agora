@@ -24,13 +24,15 @@ NOW = ms(2026, 11, 2, 12, 0)
 
 class Pro(EmbedLLM):
     """Gemini 3.1 Pro: blocks a request holding `SECRET` (`think` gives None, `probe` says so), fails every call when
-    `down`, names what she is in the first `banned` answers; records each call."""
+    `down` (every check when `check_down`), names what she is in the first `banned` answers, puts `SECRET` in the
+    first `explicit` summaries (v5.24: their check blocks); records each call."""
 
     reply_model = "gemini-3.1-pro-preview"
 
-    def __init__(self, down=False, banned=0):
+    def __init__(self, down=False, banned=0, explicit=0, check_down=False):
         super().__init__()
         self.thought, self.probed, self.down, self.banned = [], [], down, banned
+        self.explicit, self.check_down, self.checks = explicit, check_down, []
 
     async def think(self, contents, system_instruction, model="", max_output_tokens=0, kind="", level=None):
         self.thought.append({"contents": contents, "system": system_instruction, "model": model, "kind": kind})
@@ -39,10 +41,17 @@ class Pro(EmbedLLM):
         if self.banned:
             self.banned -= 1
             return "Я лише модель, що пам'ятає."
+        if self.explicit:
+            self.explicit -= 1
+            return f"Пам'ятаю {SECRET}."
         return f"Пам'ятаю {contents.count(chr(10))} речей."
 
     async def probe(self, transcript, system_instruction, kind="probe"):
         self.probed.append(transcript)
+        if kind == "talk_check":
+            self.checks.append((transcript, system_instruction))
+            if self.check_down:
+                return None
         return None if self.down else SECRET in transcript
 
 
@@ -78,6 +87,71 @@ def test_the_request_is_her_own_memory_without_a_date_or_a_word_of_what_she_is()
     assert system.endswith(HUMAN_MEMORY) and not BANNED_RE.search(system)   # v5.23: a human's own memory
     _, folded = talk_request("day", "Кіра", "Канон.", [("hour", "Ми гуляли."), ("hour", "Пили чай.")], 150, True)
     assert folded == "Що ти пам'ятаєш про ці години, по черзі:\n- Ми гуляли.\n- Пили чай."
+
+
+def test_the_request_tells_of_their_closeness_gently_then_stricter_then_not_at_all():
+    """v5.24 (the owner, 2026-11-04): `TALK_GENTLE[strict]` in the request, still ending with her human memory; past
+    the last step, the last; the check is her canon and the summary as her prompt shows it."""
+    from agents.logic import BANNED_RE
+    from agents.memory import HUMAN_MEMORY
+    from agents.talk import TALK_GENTLE, TALK_TITLE, talk_check_request
+    assert len(TALK_GENTLE) == 3                                   # «якщо третя генерація теж не проходить …»
+    for strict, rule in enumerate(TALK_GENTLE):
+        system, _ = talk_request("hour", "Кіра", "Канон.", [("Ich", "Привіт")], 60, False, strict)
+        assert rule in system and system.endswith(HUMAN_MEMORY)
+        assert not BANNED_RE.search(rule) and "бот" not in rule.lower()
+    assert TALK_GENTLE[-1] in talk_request("hour", "Кіра", "Канон.", [("Ich", "Привіт")], 60, False, 9)[0]
+    assert talk_check_request("Канон.", "Ми гуляли.") == ("Канон.", f"{TALK_TITLE}\n- Ми гуляли.")
+
+
+def test_a_summary_that_blocks_her_prompt_is_written_again_stricter_and_kept_once_it_passes(tmp_path, monkeypatch,
+                                                                                            caplog):
+    from agents.talk import TALK_GENTLE, TALK_TITLE
+    agent = talking(tmp_path, monkeypatch, Pro(explicit=1))
+    agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "canon_private": "Короткий канон."})
+    say(agent, "tg:1", ms(2026, 11, 2, 10, 1), "Ich", "Привіт")
+    say(agent, "tg:2", ms(2026, 11, 2, 10, 2), "Кіра", "Привіт!")
+    drain(agent)
+    row = agent.archive.talk_rows("hour")[0]
+    assert (row.text, row.left_out) == ("Пам'ятаю 2 речей.", 0)
+    assert [TALK_GENTLE[0] in c["system"] for c in agent.llm.thought] == [True, False]
+    assert TALK_GENTLE[1] in agent.llm.thought[1]["system"]
+    assert [c[1] for c in agent.llm.checks] == ["Короткий канон.", "Короткий канон."]   # her private prompt's canon
+    assert all(c[0].startswith(TALK_TITLE) for c in agent.llm.checks)
+    assert "written 1 of 3" in caplog.text and SECRET not in caplog.text and "Привіт" not in caplog.text
+
+
+def test_when_the_third_summary_still_blocks_there_is_no_summary_and_it_is_never_asked_again(tmp_path, monkeypatch):
+    """«якщо третя генерація теж не проходить валідацію то взагалі не робити самаризацію» — an empty row, its lines
+    counted as left out; the summaries written before stay as they are."""
+    from agents.talk import TALK_GENTLE
+    agent = talking(tmp_path, monkeypatch, Pro(explicit=3))
+    agent.archive.talk_put("hour", ms(2026, 11, 2, 8), ms(2026, 11, 2, 9), "Ранок.", 1, 0, 0, 1)
+    say(agent, "tg:0", ms(2026, 11, 2, 8, 1), "Ich", "Ранок")
+    say(agent, "tg:1", ms(2026, 11, 2, 10, 1), "Ich", "Привіт")
+    say(agent, "tg:2", ms(2026, 11, 2, 10, 2), "Кіра", "Привіт!")
+    drain(agent)
+    row = next(r for r in agent.archive.talk_rows("hour") if r.start_ms == ms(2026, 11, 2, 10))
+    assert (row.text, row.left_out) == ("", 2)
+    assert [rule in c["system"] for c in agent.llm.thought for rule in TALK_GENTLE] == [
+        True, False, False, False, True, False, False, False, True]
+    assert len(agent.llm.checks) == 3 and agent.archive.talk_rows("hour")[0].text == "Ранок."
+    calls = len(agent.llm.thought)
+    drain(agent)
+    assert len(agent.llm.thought) == calls
+
+
+def test_a_failed_check_writes_nothing_backs_off_and_never_leaves_the_period_empty(tmp_path, monkeypatch, caplog):
+    agent = talking(tmp_path, monkeypatch, Pro(check_down=True))
+    say(agent, "tg:1", ms(2026, 11, 2, 10, 1), "Ich", "Привіт")
+    agent._talk_check_ms = 0
+    asyncio.run(agent.ensure_talk())
+    assert agent.archive.talk_rows() == [] and agent._talk_retry_ms == NOW + 600_000 and "tried again later" in caplog.text
+    drain(agent, 6)
+    assert agent.archive.talk_rows() == []                          # an outage: never given up
+    agent.llm.check_down = False
+    drain(agent, 1)
+    assert agent.archive.talk_rows()[0].text == "Пам'ятаю 1 речей."
 
 
 def test_the_backfill_writes_every_band_oldest_first_on_pro_and_never_reads_a_closed_line(tmp_path, monkeypatch,

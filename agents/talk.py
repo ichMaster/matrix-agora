@@ -77,20 +77,42 @@ TALK_FAILS_MAX = 3   # code review v5.20 #2: a period whose call keeps failing, 
 TALK_CHECK_MS = 30_000  # how often the idle watcher looks for a period due: a backfill of 60 takes half an hour
 
 
+# v5.24 (the owner, 2026-11-04: «коли робиться підсумок то треба давати промпт який би просив згладити сцени близкості
+# і коли підсумок готовий то треба робити валідацію чи він не блочить»; «якщо він блочить то знову корекція через
+# промпт і так 3 рази і кожен раз все строгіше промпт, на 3й раз взагалі промпт має бути забрати всі сцени
+# близкості»; «якщо третя генерація теж не проходить валідацію то взагалі не робити самаризацію»): how a summary tells
+# of their closeness — gently the first time, stricter the second, not at all the third; when the third still blocks,
+# no summary. On 11-04 at 09:00 an hour's summary blocked her prompt the hour it came in, while its own lines, word for
+# word, had passed. The summaries written before stay as they are (the owner: «не треба міняти вже згенеровані»).
+TALK_GENTLE = (
+    ("Близькість між вами згадуй м'яко і загально — тепло, ніжність, що ви були разом, — без подробиць тіла, дотиків і "
+     "дій, без відвертих слів, без сили, болю чи влади одного над одним."),
+    ("Близькість між вами — лише одним-двома загальними словами («були разом», «обіймалися»): жодних подробиць тіла, "
+     "дотиків, дій чи бажань, жодної сили чи влади, жодних фото чи відео одне одного. Головне — про що говорили, що "
+     "вирішили і що ти відчувала."),
+    ("Прибери всі сцени близькості повністю: ані слова про близькість, ліжко, ковдру, роздягання, тіло, дотики, "
+     "поцілунки, пристрасть, бажання, фантазії, фото чи відео одне одного, силу чи контроль. Пиши лише про інше: про що "
+     "говорили, події дня, плани, справи, людей. Якщо, крім близькості, нічого не було — одне речення: ви говорили "
+     "наодинці, і тобі було тепло."),
+)
+
+
 def iso_hour(ts_ms: int, tz: str) -> str:
     """A period's start for the log: the local ISO hour, never a text."""
     return datetime.fromtimestamp(ts_ms / 1000, ZoneInfo(tz)).strftime("%Y-%m-%dT%H:00")
 
 
 def talk_request(level: str, name: str, canon: str, items: list[tuple[str, str]], max_words: int,
-                 from_summaries: bool) -> tuple[str, str]:
+                 from_summaries: bool, strict: int = 0) -> tuple[str, str]:
     """(system instruction, contents) for a period's summary: her own memory of the talk alone with Ich, first person,
     from the lines (speaker, text) or, when they cover the period, the finer summaries — never a date, an hour or a
-    word of when it was, which her prompt adds as she remembers it (`talk_section`)."""
+    word of when it was, which her prompt adds as she remembers it (`talk_section`); their closeness told as
+    `TALK_GENTLE[strict]` says (v5.24: 0 the first time, each rewrite one step stricter)."""
     system = (f"{canon}\n\nТи — {name}. Запиши для себе коротку пам'ять про вашу розмову наодинці з Ich {SPAN[level]} — "
               f"від першої особи, мовою розмови, не більше {max_words} слів: про що говорили, що вирішили, що Ich "
               "розповів про себе, що ви одне одному пообіцяли, що ти відчувала. Тільки те, що є нижче, нічого не "
               "вигадуй. Без дат, без годин і без слів про те, коли це було (вчора, сьогодні, вранці).\n\n"
+              f"{TALK_GENTLE[min(max(strict, 0), len(TALK_GENTLE) - 1)]}\n\n"
               f"{HUMAN_MEMORY}")  # v5.23 (the owner): a human's own memory
     if from_summaries:
         return system, "Що ти пам'ятаєш про ці години, по черзі:\n" + "\n".join(f"- {text}" for _, text in items)
@@ -104,6 +126,12 @@ def covered(times: list[int], rows: list) -> bool:
 
 TALK_TITLE = "Що було між вами раніше (твоя пам'ять, а не те, що кажуть зараз):"
 TALK_PROMPT_WORDS = 4000  # her prompt's summaries at most: past it the oldest go first
+
+
+def talk_check_request(canon: str, text: str) -> tuple[str, str]:
+    """(system instruction, contents) for the check of a summary written (v5.24): her canon, as her private prompt has
+    it, and the summary as that prompt shows it — so what is checked is the summary alone."""
+    return canon, f"{TALK_TITLE}\n- {text}"
 
 
 WEEKDAY_ON = ("у понеділок", "у вівторок", "у середу", "у четвер", "у п'ятницю", "у суботу", "у неділю")
