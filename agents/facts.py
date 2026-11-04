@@ -44,7 +44,8 @@ MARK_LINE_RE = re.compile(r"^[ \t>*_\-–—•\d.)«\"'(\[]*" + _MARK, re.MULTI
 MARK_ANY_RE = re.compile(r"[«\"'(\[]*[ \t]*" + _MARK)
 # her private brief's skill (the owner, 2026-10-25): understood from the talk, never a keyword (as Hermes's skills)
 REMEMBER_SKILL = (
-    "Коли Ich просить тебе щось запам'ятати про нього чи про вас, відповідай як завжди, а в самому кінці додай окремий "
+    "Коли Ich просить тебе щось запам'ятати про нього чи про вас надовго (не разовий план чи зустріч — вони й так у "
+    "тебе в пам'яті), відповідай як завжди, а в самому кінці додай окремий "
     "останній рядок: слово ЗАПАМ'ЯТАЙ великими літерами, двокрапка і що саме, одним коротким реченням про Ich. Цей "
     "рядок лишиться тобі на згадку, він його не побачить."
 )
@@ -52,14 +53,17 @@ EXTRACT_SYSTEM = (
     "Ти — {name}. Перед тобою ваша розмова (рядки «наодинці» — ваша з Ich розмова сам на сам) і те, що ти вже знаєш "
     "про Ich, кожне з його id. Випиши лише довготривалі факти про нього — те, що буде правдою і через рік: хто він, "
     "звідки, його близькі, робота загальними словами, характер, звички, смаки, захоплення, мрії й довгі плани, ваші "
-    "домовленості. Не пиши подій окремого дня і того, що минеться за тижні: поїздок, справ і доручень, документів у "
-    "процесі, планів на найближчі дні, що він їв, як почувався, що його втомило, — це лишається у твоїх спогадах, а "
-    "не у фактах. Не повторюй відомого; якщо щось із відомого змінилось — заміни його за id. Факт — одне коротке "
+    "довгі домовленості — те, що ви пообіцяли одне одному надовго. Не пиши подій окремого дня і того, що минеться за "
+    "тижні: поїздок, справ і доручень, документів у процесі, планів на найближчі дні, разових домовленостей і "
+    "зустрічей (де й коли ви бачитесь), того, що він сказав, попросив чи зробив у цій розмові, що він їв, як "
+    "почувався, що його втомило, — це лишається у твоїх спогадах, а не у фактах. Не повторюй відомого; якщо щось із відомого змінилось — заміни його за id. Факт — одне коротке "
     "речення про Ich, до {max_chars} символів. pin 1 — небагато найголовнішого, що визначає його (ім'я, місто, "
     "близькі, головні захоплення), pin 2 — решта важливого. Відповідай лише JSON: "
     '{{"add": [{{"text": "…", "pin": 1}}], "replace": [{{"id": "…", "text": "…"}}]}}. Якщо нового нема — '
     '{{"add": [], "replace": []}}.'
-)  # the owner, 2026-10-25: «факти мають бути довготривалими» — a day's events live in the memories
+)  # the owner, 2026-10-25: «факти мають бути довготривалими» — a day's events live in the memories; v5.24 (the
+# owner, 2026-11-04): «ваші домовленості» had let in every meeting — 8 of 25 facts in her prompt were that day's
+# evening, so her talk kept returning to it
 # the owner, 2026-10-25: «не все потрібно Кірі, вона думає, що вона людина» — a model's own judgement leaks facts
 # about AI, agents and his servers, so a fact that names any of these is dropped in code, whatever the model answered
 OFF_LIMITS = (
@@ -74,12 +78,17 @@ OFF_LIMITS = (
                 re.IGNORECASE), "what she is"),
     (re.compile(r"(?<!\w)(?:вул\.|вулиц\w*|просп\w*|провул\w*|буд\.|будин\w*\s+\d|кв\.|квартир\w*\s+\d)",
                 re.IGNORECASE), "an address"),
+    # v5.24 (the owner, 2026-11-04): a one-time arrangement is a day's event, whatever the model answered — only the
+    # words that never say a habit («сьогодні», «на вечір», «до зустрічі»), so «увечері грає на гітарі» stays
+    (re.compile(r"(?<!\w)(?:сьогодн\w*|завтра\w*|післязавтра|вчора\w*|позавчора|цього\s+вечора|на\s+вечір|"
+                r"до\s+зустрічі|наш\w*\s+(?:сьогоднішн\w*\s+)?зустріч\w*|перетнемо\w*)(?!\w)", re.IGNORECASE),
+     "a day's event"),
 )
 
 
 def off_limits(text: str) -> str | None:
     """Why a fact may not reach a person who believes she is human — AI and tools, agents, models or servers, an
-    exact address — or None when it may."""
+    exact address — or, v5.24, may not be a fact at all — a day's event —; None when it may."""
     return next((why for pattern, why in OFF_LIMITS if pattern.search(text or "")), None)
 
 

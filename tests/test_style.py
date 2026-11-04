@@ -122,6 +122,19 @@ def test_how_she_ends_is_drawn_and_most_answers_have_no_send_off():
         assert not any(w in text.lower() for w in ("модел", "бот", "штучн", "інтелект", "ші "))
 
 
+def test_now_and_then_something_of_her_own_from_the_sections_of_her_day():
+    """v5.24 (the owner, 2026-11-04: «2-4 підтверджую»): about one answer in three, with the sections of her day
+    named; never without them."""
+    from agents.style import OWN
+    line = style_line(scripted(0.9, 0.9, 0.9, 0.0, 0.9, 0.1), [], tags=False, own="«Сьогодні» чи «Що ти сьогодні думала»")
+    assert f"{OWN} прочитала чи подумала (із «Сьогодні» чи «Що ти сьогодні думала»)." in line
+    rng = random.Random(9).random
+    lines = [style_line(rng, [], tags=False, own="«Сьогодні»") for _ in range(400)]
+    assert 80 <= sum(OWN in line for line in lines) <= 160
+    assert not any(OWN in style_line(random.Random(9).random, [], tags=False) for _ in range(50))
+    assert not any(w in OWN.lower() for w in ("модел", "бот", "штучн", "інтелект", "ші "))
+
+
 def test_her_private_prompt_carries_the_line_for_this_answer_from_her_open_lines_only(tmp_path, monkeypatch):
     """v5.24: her repeats are read from the lines open to Gemini — a word of a closed line is never named."""
     from tests.test_archive import kira
@@ -140,3 +153,10 @@ def test_her_private_prompt_carries_the_line_for_this_answer_from_her_open_lines
     system = agent.llm.calls[-1][1]
     assert "Як сказати цього разу: " in system and "Ти вже кілька разів казала «космос»" in system
     assert "закрите" not in system.lower()
+    from agents.private import PRIVATE_BRIEF
+    assert "він почув: не повторюй цього" in PRIVATE_BRIEF and PRIVATE_BRIEF in system   # v5.24: Лілі's first rule
+    assert "розкажи й щось своє" not in system                                       # no section of her day: never
+    agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "capabilities": agent.cfg.capabilities | {"thoughts"}})
+    agent.rng = lambda: 0.1                                                         # every draw taken
+    asyncio.run(agent.private_reply())
+    assert "розкажи й щось своє" in agent.llm.calls[-1][1] and "(із «Що ти сьогодні думала»)" in agent.llm.calls[-1][1]
