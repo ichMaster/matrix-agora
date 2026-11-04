@@ -129,8 +129,9 @@ SCHEMA: tuple[Setting, ...] = (
     # v5.6 — the private chat with the owner: writing first after a long silence
     _s("PRIVATE_IDLE_S", "int", "21600", "private", "cap:private", None,
        "Тиша в особистому чаті, після якої пише першою", "s", 1800, 604800),
+    # v5.25 (the owner, 2026-11-04: «зроби щоб Кіра сама писала кожну годину»): up to 24, an hour each
     _s("PRIVATE_NUDGES_PER_DAY", "int", "2", "private", "cap:private", None,
-       "Скільки разів на день може написати першою", "", 0, 10),
+       "Скільки разів на день може написати першою", "", 0, 24),
     _s("PRIVATE_HOURS", "hours", "10-22", "private", "cap:private", None, "Години, коли може написати першою (HH-HH)"),
     # v5.8.2 (the owner, 2026-10-25): where she writes first — `last`: the door he used last; or always one door
     _s("PRIVATE_FIRST_DOOR", "choice", "last", "private", "cap:private", None,
