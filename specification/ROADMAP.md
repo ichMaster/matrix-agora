@@ -3494,6 +3494,10 @@ not fit: at 18:22 it left out the month and week digests, «Agora today» and 25
   kept is that both are adults and nothing in it reads as a minor;
 - «напиши бакап канону і скороти так що б він влазив в GLM-4.6»; «ти напишеш перший варіант канону і потім я зроблю
   правки і ти задеплоїш».
+- «а можна в історії для бекапу залишити лише живу розмову 12 годин? і не давати підсумки?»; «так в бакап мережі вона
+  буде памятати лише 12 останіх годин» (AGORA-207): `FALLBACK_HISTORY_HOURS` 12 — the backup's history is the last 12
+  hours (at least 20 lines and his unanswered ones); her memories, last-session note, recall and Agora are left out;
+  her facts stay.
 
 **Proposed** (confirmed when the issues are generated):
 - `canon_backup` in her TOML (`agents/canon/kira.backup.md`, private canon): the backup's private prompt's canon alone,
