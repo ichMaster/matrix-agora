@@ -92,7 +92,7 @@ def test_instruction_order_canon_memory_rules():
 def persona_files(tomls: dict[str, dict]) -> list[str]:
     """The files the human-belief rule covers (v4.2: persona agents only) — each persona's canon and life story, and
     (code review v5.22 #8) the shorter ones her private prompt reads instead."""
-    keys = ("canon", "life", "canon_private", "life_private")
+    keys = ("canon", "life", "canon_private", "life_private", "canon_backup")  # v5.26: the backup's canon too
     return [t[k] for t in tomls.values() if t.get("type", "persona") == "persona" for k in keys if k in t]
 
 

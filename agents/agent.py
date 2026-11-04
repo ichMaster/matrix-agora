@@ -1311,7 +1311,7 @@ class Agent:
             if cuts not in built:
                 skip = frozenset().union(*(CUT_LAYERS.get(c, frozenset()) for c in cuts))
                 built[cuts] = self.build_prompt(private=brief, recalled=recalled, facts=facts, skip_layers=skip,
-                                                agora_now=None if "agora" in cuts else agora_now)
+                                                agora_now=None if "agora" in cuts else agora_now, backup=True)
             return built[cuts]
 
         cuts, n = fit_budget(lambda c, k: len(instruction(c)) + len(build_transcript(history[-k:])),
@@ -1321,7 +1321,7 @@ class Agent:
                      len(history))
         skip = frozenset().union(*(CUT_LAYERS.get(c, frozenset()) for c in cuts))  # v5.22: built once more, as sent,
         return self.build_prompt(private=brief, recalled=recalled, facts=facts, skip_layers=skip,  # for its parts
-                                 agora_now=None if "agora" in cuts else agora_now), history[-n:]
+                                 agora_now=None if "agora" in cuts else agora_now, backup=True), history[-n:]
 
     async def _backup_text(self, brief: str, kind: str):
         prompt, lines = await self._backup_private_prompt(brief)
@@ -2724,16 +2724,19 @@ class Agent:
 
     def build_prompt(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None,
                      private: str | None = None, recalled: str | None = None, agora_now: str | None = None,
-                     facts: str | None = None, skip_layers: frozenset = frozenset(), talk: bool = False) -> str:
+                     facts: str | None = None, skip_layers: frozenset = frozenset(), talk: bool = False,
+                     backup: bool = False) -> str:
         """The full system instruction for a reply, in contract order; `pastlife` is a chosen thesis, `nudge` a
         nudge's material and rule (v4.3), `move` a persona's move line (v4.6), `private` the private chat's situation
-        (v5.6; an Agora reply of a person with `private` closes its rules with the discretion line). An assistant
-        (v4.4, Claude) has no canon: its brief is the instruction."""
+        (v5.6; an Agora reply of a person with `private` closes its rules with the discretion line); `backup` (v5.26)
+        — the backup's prompt, with her backup canon when she has one. An assistant (v4.4, Claude) has no canon: its
+        brief is the instruction."""
         if self.cfg.type == "assistant":
             prompt = self.brief(CLAUDE_BRIEF_DIRECT)
             _LAST_PARTS.set((prompt, {"brief": len(prompt)}))
             return prompt
-        layers = self.prompt_layers(pastlife, nudge, move, private, recalled, agora_now, facts, skip_layers, talk)
+        layers = self.prompt_layers(pastlife, nudge, move, private, recalled, agora_now, facts, skip_layers, talk,
+                                    backup)
         prompt = build_instruction(**layers)
         # v5.22: its parts' sizes (the rules and the joins are what is left), for the answer call's usage line
         parts = {PART_NAMES.get(k, k): len(v) for k, v in layers.items() if k != "name" and isinstance(v, str) and v}
@@ -2743,10 +2746,12 @@ class Agent:
 
     def prompt_layers(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None,
                       private: str | None = None, recalled: str | None = None, agora_now: str | None = None,
-                      facts: str | None = None, skip_layers: frozenset = frozenset(), talk: bool = False) -> dict:
+                      facts: str | None = None, skip_layers: frozenset = frozenset(), talk: bool = False,
+                      backup: bool = False) -> dict:
         """v5.16 — the sections `build_prompt` hands to `build_instruction`, by name (a person's, never an
         assistant's), so her private prompt can be kept in parts and built again from what is kept. `talk` (v5.20):
-        her private prompt to Gemini gets the summaries of her private chat before its window."""
+        her private prompt to Gemini gets the summaries of her private chat before its window. `backup` (v5.26): the
+        backup's private prompt gets `canon_backup` in place of her private canon — never Gemini's."""
         can = self.cfg.can
         now = local_now(self.clock(), self.tz)
         world = None
@@ -2760,8 +2765,10 @@ class Agent:
         return {
             # v5.22 (the owner): alone with him her shorter canon, when she has one (`canon_private`)
             "name": self.cfg.name,
-            "canon": (self.cfg.canon_private if private is not None and self.cfg.canon_private else self.cfg.canon)
-            if can("canon") else "",
+            # v5.26 (the owner, 2026-11-04): the backup's own canon, for the backup's prompt alone
+            "canon": ((self.cfg.canon_backup if backup and private is not None and self.cfg.canon_backup
+                       else self.cfg.canon_private if private is not None and self.cfg.canon_private else self.cfg.canon)
+                      if can("canon") else ""),
             "summary": self.summary if can("summary") else None, "life": life, "world": world,
             "memories": self.memories_section(now, skip_layers) if can("chronicle") else None,
             "plans": self.plans_section(now) if can("plans") else None,

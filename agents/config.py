@@ -50,6 +50,7 @@ class AgentConfig:
     # v5.22 (the owner, 2026-11-02: «чи можна скоротити ще канон?» — «роби»): her whole canon for the private chat's
     # prompt only, in place of common + personal (private canon); "": the same canon there too
     canon_private: str = ""
+    canon_backup: str = ""  # v5.26: her canon for the backup's prompt only (`canon_backup`), never Gemini's
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -125,6 +126,9 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
     canon_private = ""
     if member.can("canon") and member.can("private") and str(data.get("canon_private", "")).strip():
         canon_private = load_canon(Path(str(data["canon_private"])))  # missing or empty: refuses to start
+    canon_backup = ""
+    if member.can("canon") and member.can("fallback") and str(data.get("canon_backup", "")).strip():
+        canon_backup = load_canon(Path(str(data["canon_backup"])))  # v5.26: missing or empty: refuses to start
     life = None
     if member.can("life"):
         life_path = Path(str(data["life"]))
@@ -208,6 +212,7 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         user_id=user_id,
         canon=canon,
         canon_private=canon_private,
+        canon_backup=canon_backup,
         homeserver=_require(env, sim.endpoints["homeserver"]),
         room_id=_require(env, sim.endpoints["room"]),
         owner=_require(env, "OWNER"),

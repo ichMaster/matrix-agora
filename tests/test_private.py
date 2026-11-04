@@ -1,6 +1,7 @@
 """v5.6 — the private chat with a person: the invite and filter rules, the prompt sections, the state, the
 initiative's decision (pure)."""
 
+import asyncio
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -277,3 +278,41 @@ IDLE, HOURS = 6 * 3600 * 1000, (10, 22)
 ])
 def test_writing_first_after_a_long_silence(now, last_msg, state, due):
     assert private_nudge_due(now, local(now), last_msg, state, IDLE, 2, HOURS) is due
+
+
+def test_the_backup_has_its_own_canon_and_gemini_never_sees_it(tmp_path, monkeypatch):
+    """v5.26 (the owner, 2026-11-04: «я хочу зробити змінений канон для Кіри для бакап мережі»): `canon_backup` is
+    the backup's private prompt's canon alone; Gemini's private prompt and Agora never have it; with none, the backup
+    keeps her private canon."""
+    from agents.fallback import FallbackResponder
+    from tests.test_archive import kira
+    from tests.test_private_route import Backup
+    agent = kira(tmp_path, monkeypatch)
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "canon": "СПІЛЬНЕ.", "canon_private": "КОРОТКИЙ.",
+                               "canon_backup": "РЕЗЕРВНИЙ."})
+    agent.fallback, agent.fallback_responder = Backup(), FallbackResponder(Backup())
+    agent.fallback_context, agent.fallback_history_n = 32000, 60
+    assert asyncio.run(agent._backup_private_prompt(PRIVATE_BRIEF))[0].startswith("РЕЗЕРВНИЙ.\n\n")
+    gemini = asyncio.run(agent._gemini_private_prompt(PRIVATE_BRIEF))
+    assert gemini.startswith("КОРОТКИЙ.\n\n") and "РЕЗЕРВНИЙ" not in gemini
+    assert "РЕЗЕРВНИЙ" not in agent.build_prompt() and agent.build_prompt(backup=True).startswith("СПІЛЬНЕ.")
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "canon_backup": ""})
+    assert asyncio.run(agent._backup_private_prompt(PRIVATE_BRIEF))[0].startswith("КОРОТКИЙ.\n\n")
+
+
+@pytest.mark.canon
+def test_the_backup_canon_is_read_or_refuses_to_start(tmp_path):
+    """v5.26: her TOML names `canon_backup`; it is read, shorter than her private canon, says nothing of what she is;
+    a path to nothing refuses to start."""
+    from pathlib import Path
+
+    from agents.config import ConfigError, load_config
+    from tests.test_thoughts import ENV
+    cfg = load_config("agents/kira.toml", env=ENV)
+    assert cfg.canon_backup.startswith("# Кіра") and len(cfg.canon_backup) < len(cfg.canon_private)
+    assert not BANNED_RE.search(cfg.canon_backup)
+    src = Path("agents/kira.toml").read_text(encoding="utf-8")
+    toml = tmp_path / "kira.toml"
+    toml.write_text(src.replace('"agents/canon/kira.backup.md"', f'"{tmp_path}/none.md"'), encoding="utf-8")
+    with pytest.raises(ConfigError, match="canon not found"):
+        load_config(toml, env=ENV)
