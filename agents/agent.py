@@ -1121,8 +1121,11 @@ class Agent:
             if self.facts_dir is not None and not nudge:  # v5.8: «запам'ятай» — a skill, never a keyword
                 brief = f"{brief}\n\n{REMEMBER_SKILL}"
             # v5.15.1 (the owner): how she says it this time, drawn anew — live words or none, a turn of a real chat,
-            # an open ending, where a voice tag may go, and what she has been repeating
-            her_lines = [t for s, t in self.private_history if s == self.cfg.name]
+            # an open ending, where a voice tag may go, and what she has been repeating. v5.24: her repeats are read
+            # from the lines open to Gemini — a word named from a closed line would carry it into Gemini's prompt
+            window = self._gemini_lines()
+            her_lines = ([strip_notes(x.text) for x in window if x.speaker == self.cfg.name] if window is not None
+                         else [t for s, t in self.private_history if s == self.cfg.name])
             brief = f"{brief}\n\n{style_line(self.rng, her_lines, self.cfg.can('emotion'))}"
             seen = list(self._unanswered)  # v5.13 review #2: the lines this call answers — never one that comes later
             LAST_BLOCK.set(None)  # code review v5.22 #5: only this answer's own block and silence, never those
