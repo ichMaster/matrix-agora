@@ -3314,6 +3314,17 @@ for good.
 - **The summaries written before stay** («не треба міняти вже згенеровані підсумки, вони не дають проблем. якщо вони
   будуть перегенрюватись колись то вже за новими правилами»): no cleanup and no rewrite.
 
+**Owner decisions** (2026-11-04, her endings; AGORA-196):
+- **Why** («прочитай зараз остані меседжі від Кіри, вони постійно закінчує одним і тим саме … Як розмивати цей вектор
+  розмови щоб він не був у кожному меседжі?»): all 21 of her messages of a morning ended by sending him back to work or
+  by the evening they had agreed on. The words changed each time (звіти, таски, справи, вкладки), so v5.15.1's repeat
+  filter, which counts whole words, named none of them, and the move stayed.
+- **What she keeps ending with is named** («роби 1-3»): the words three of her last six endings share, and the line
+  asks her to end otherwise and not bring it up unless he asks.
+- **How she ends is drawn:** on the thought itself, a detail of what she is doing, a question about what he said, a
+  short reaction or a joke; most answers get no send-off unless he says goodbye himself.
+- **A repeat counts by the word's stem**, so «звіти» and «звітів» are one word.
+
 **DoD:**
 - (Manual, owner) `/scan` answers with the counts within a minute.
 - (Manual, owner) `/scan yes` closes them: her **Prompt** tab no longer shows them.
@@ -3346,6 +3357,11 @@ for good.
   - none after the third;
   - a failed check writes nothing and is never given up;
   - the summaries written before stay untouched.
+- **Her endings (AGORA-196):**
+  - a word's stem;
+  - the endings' shared words named once;
+  - an ending drawn and most answers with no send-off;
+  - her lines read from those open to Gemini, never a closed one named.
 
 **Not in this phase:**
 - an automatic scan (the owner: not needed);
