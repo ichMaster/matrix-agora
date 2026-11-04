@@ -207,6 +207,9 @@ SCHEMA: tuple[Setting, ...] = (
        36000),
     _s("FALLBACK_HISTORY_N", "int", "300", "fallback", "cap:fallback", None, "Скільки рядків історії бачить резерв",
        "", 10, 300),
+    # v5.26 (the owner, 2026-11-04: «так в бакап мережі вона буде памятати лише 12 останіх годин»)
+    _s("FALLBACK_HISTORY_HOURS", "int", "0", "fallback", "cap:fallback", None,
+       "Скільки годин розмови пам'ятає резерв (0 — уся її пам'ять)", "hours", 0, 168),
     # v5.17 — her photos in Telegram (`photos`): Google's image model, the size, and a day's cap that only guards
     # against a fault (the owner: as many as she wants)
     _s("PHOTO_MODEL", "choice", "gemini-nano-banana-2.1", "private", "cap:photos", None, "Модель її фото",

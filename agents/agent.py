@@ -388,6 +388,9 @@ from agents.world import (
 )
 
 log = logging.getLogger("agent")
+# v5.26 (the owner, 2026-11-04): what the backup leaves out when it remembers only its hours — her memories of every
+# kind and her last-session note
+BACKUP_FORGETS = frozenset({"day", "week", "month", "year", "summary"})
 # v5.22 — the prompt this task built last and its parts' sizes in characters (`build_prompt`), read by `_compose` for
 # the answer call's usage line when that very prompt is sent; a context variable, as concurrent answers never share it
 _LAST_PARTS: ContextVar[tuple[str, dict] | None] = ContextVar("last_prompt_parts", default=None)
@@ -563,6 +566,8 @@ class Agent:
             self.fallback_lock_s = int(os.environ.get("FALLBACK_LOCK_S", "3600"))    # v5.21: then the backup this long
             self.fallback_context = int(os.environ.get("FALLBACK_CONTEXT", "32000"))
             self.fallback_history_n = int(os.environ.get("FALLBACK_HISTORY_N", "300"))  # v5.21: the owner
+            # v5.26 (the owner): the backup remembers only so many hours of the talk (0: all her memory, as before)
+            self.fallback_history_hours = int(os.environ.get("FALLBACK_HISTORY_HOURS", "0"))
             if model and fallback_token:
                 self.fallback = FallbackClient(fallback_token, model, sink=self.record_fallback_usage)
                 self.fallback_responder = FallbackResponder(self.fallback)
@@ -1297,19 +1302,20 @@ class Agent:
         backup's only as history, within `FALLBACK_HISTORY_N` (300) lines of every mark): the open facts, the recall of
         open lines by words only (its query never goes to Gemini's embeddings), fitted to `FALLBACK_CONTEXT` — the month
         digests, the week digests, «Agora today», then the oldest lines (never fewer than 10) left out."""
-        history = [(who, strip_notes(t)) for who, t in self.private_history[-max(self.fallback_history_n, 1):]
-                   if strip_notes(t)]  # v5.23: never her kept note
+        hours = getattr(self, "fallback_history_hours", 0)
+        history = self._backup_history(hours)
         facts = self.facts_now()
         recalled = agora_now = None
-        if self.archive is not None:
+        if self.archive is not None and hours <= 0:  # v5.26: with only its hours, no older talk at all
             query = next((t for s, t in reversed(history) if s == "Ich"), "")
             recalled = await self.recall_section(query, self.private_places, set(history), meaning=False)
             agora_now = self.agora_now_section()
+        forget = BACKUP_FORGETS if hours > 0 else frozenset()
         built: dict[tuple[str, ...], str] = {}
 
         def instruction(cuts: tuple[str, ...]) -> str:
             if cuts not in built:
-                skip = frozenset().union(*(CUT_LAYERS.get(c, frozenset()) for c in cuts))
+                skip = forget.union(*(CUT_LAYERS.get(c, frozenset()) for c in cuts))
                 built[cuts] = self.build_prompt(private=brief, recalled=recalled, facts=facts, skip_layers=skip,
                                                 agora_now=None if "agora" in cuts else agora_now, backup=True)
             return built[cuts]
@@ -1319,9 +1325,27 @@ class Agent:
         if cuts or n < len(history):
             log.info("backup: the prompt fitted (left out: %s; history %d of %d)", "+".join(cuts) or "nothing", n,
                      len(history))
-        skip = frozenset().union(*(CUT_LAYERS.get(c, frozenset()) for c in cuts))  # v5.22: built once more, as sent,
+        skip = forget.union(*(CUT_LAYERS.get(c, frozenset()) for c in cuts))  # v5.22: built once more, as sent,
         return self.build_prompt(private=brief, recalled=recalled, facts=facts, skip_layers=skip,  # for its parts
                                  agora_now=None if "agora" in cuts else agora_now, backup=True), history[-n:]
+
+    def _backup_history(self, hours: int) -> list[tuple[str, str]]:
+        """The backup's history (v5.21: every mark, within `FALLBACK_HISTORY_N`); v5.26 (the owner, 2026-11-04: «в
+        бакап мережі вона буде памятати лише 12 останіх годин»): with `hours`, only the archive's lines of the last so
+        many real hours — never fewer than `PRIVATE_HISTORY_MIN` nor his lines since her last one. Her kept note never
+        (v5.23)."""
+        n = max(self.fallback_history_n, 1)
+        if hours > 0 and self.archive is not None:
+            try:
+                lines = self.archive.latest("private", n, gemini=False)
+            except Exception as exc:  # noqa: BLE001
+                log.error("archive: the backup's history was not read (%s) — her own", type(exc).__name__)
+            else:
+                his = next((k for k, x in enumerate(reversed(lines)) if x.speaker == self.cfg.name), len(lines))
+                lines = lines[window_start([x.ts_ms for x in lines], self.clock(), hours, self.private_history_min,
+                                           len(lines) - his):] if lines else lines
+                return [(x.speaker, strip_notes(x.text)) for x in lines if strip_notes(x.text)]
+        return [(who, strip_notes(t)) for who, t in self.private_history[-n:] if strip_notes(t)]
 
     async def _backup_text(self, brief: str, kind: str):
         prompt, lines = await self._backup_private_prompt(brief)
@@ -2769,7 +2793,8 @@ class Agent:
             "canon": ((self.cfg.canon_backup if backup and private is not None and self.cfg.canon_backup
                        else self.cfg.canon_private if private is not None and self.cfg.canon_private else self.cfg.canon)
                       if can("canon") else ""),
-            "summary": self.summary if can("summary") else None, "life": life, "world": world,
+            "summary": self.summary if can("summary") and "summary" not in skip_layers else None,  # v5.26: the backup
+            "life": life, "world": world,
             "memories": self.memories_section(now, skip_layers) if can("chronicle") else None,
             "plans": self.plans_section(now) if can("plans") else None,
             "today": self.today_section(now) if can("today") else None,

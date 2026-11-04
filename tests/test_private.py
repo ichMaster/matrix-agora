@@ -316,3 +316,32 @@ def test_the_backup_canon_is_read_or_refuses_to_start(tmp_path):
     toml.write_text(src.replace('"agents/canon/kira.backup.md"', f'"{tmp_path}/none.md"'), encoding="utf-8")
     with pytest.raises(ConfigError, match="canon not found"):
         load_config(toml, env=ENV)
+
+
+def test_the_backup_remembers_only_its_hours(tmp_path, monkeypatch):
+    """v5.26 (the owner, 2026-11-04: «так в бакап мережі вона буде памятати лише 12 останіх годин»): with
+    `FALLBACK_HISTORY_HOURS` the backup's history is the archive's lines of the last so many hours, of every mark, at
+    least the floor; her memories, her last-session note, the recall and Agora are left out. With 0, all as before."""
+    from agents.fallback import FallbackResponder
+    from tests.test_archive import kira
+    from tests.test_private_route import Backup
+    agent = kira(tmp_path, monkeypatch)
+    agent.fallback, agent.fallback_responder = Backup(), FallbackResponder(Backup())
+    agent.fallback_context, agent.fallback_history_n, agent.private_history_min = 32000, 60, 2
+    agent.summary = "Минулого разу говорили про поїзд."
+    now, hour = agent.clock(), 3_600_000
+    for i, (ago, who, text, mark) in enumerate([(30, "Ich", "Давнє питання", "gemini"),
+                                                (13, "Кіра", "Давня відповідь", "gemini"),
+                                                (11, "Ich", "Свіже питання", "gemini"),
+                                                (1, "Кіра", "Закрита відповідь", "blocked"),
+                                                (0.5, "Ich", "Нове", "gemini")]):
+        agent.archive.append(f"tg:{i}", now - int(ago * hour), "private", "telegram", who, text)
+        agent.archive.mark([f"tg:{i}"], mark)
+        agent.private_history.append((who, text))
+    agent.fallback_history_hours = 12
+    prompt, history = asyncio.run(agent._backup_private_prompt(PRIVATE_BRIEF))
+    assert [t for _, t in history] == ["Свіже питання", "Закрита відповідь", "Нове"]   # its hours, every mark
+    assert "поїзд" not in prompt
+    agent.fallback_history_hours = 0
+    prompt, history = asyncio.run(agent._backup_private_prompt(PRIVATE_BRIEF))
+    assert len(history) == 5 and "поїзд" in prompt                                     # as before
