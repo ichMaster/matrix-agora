@@ -305,6 +305,7 @@ from agents.thoughts import Thought, thought_rows, thoughts_section
 from agents.thoughts import archive_key as thought_key
 from agents.thoughts import block as thought_block
 from agents.thoughts import parse_day as parse_thoughts
+from agents.topics import parse_topics, topics_request, topics_section
 from agents.turns import (
     claude_mode,
     decide_reply,
@@ -611,6 +612,10 @@ class Agent:
         # v5.23 (the owner): Gemini's private window by time — the last day word for word, never fewer than 20 lines
         self.private_history_hours = int(os.environ.get("PRIVATE_HISTORY_HOURS", "24")) if cfg.can("private") else 0
         self.private_history_min = int(os.environ.get("PRIVATE_HISTORY_MIN", "20")) if cfg.can("private") else 0
+        # v5.25 (the owner): her topics — from how many of the private chat's last lines Flash lists them (0: none)
+        self.topics_lines = int(os.environ.get("TOPICS_LINES", "20")) if cfg.can("private") else 0
+        self._topics: tuple[list, int] | None = None  # (topic, her, his) and the lines read — in memory only
+        self._topics_lock = asyncio.Lock()
         # v5.24 (the owner, 2026-11-03: «через опус як суддя») — `/scan`: Opus 5.5 on his key, for her private talk
         self.scan_days = int(os.environ.get("SCAN_DAYS", "7"))
         self.scan_ttl_s = int(os.environ.get("SCAN_TTL_S", "1800"))
@@ -1129,6 +1134,10 @@ class Agent:
             own = " чи ".join(t for c, t in (("today", "«Сьогодні»"), ("thoughts", "«Що ти сьогодні думала»"))
                              if self.cfg.can(c))  # v5.25: the sections of her day her prompt holds
             brief = f"{brief}\n\n{style_line(self.rng, her_lines, self.cfg.can('emotion'), own)}"
+            # v5.25 (the owner, 2026-11-04): what their last messages are about, and she picks which to go on with
+            topics = topics_section(*self._topics) if self._topics and self.topics_lines > 0 and not nudge else None
+            if topics:
+                brief = f"{brief}\n\n{topics}"
             seen = list(self._unanswered)  # v5.13 review #2: the lines this call answers — never one that comes later
             LAST_BLOCK.set(None)  # code review v5.22 #5: only this answer's own block and silence, never those
             LAST_SILENCE.set(None)  # of the today block's or the mood's calls made above
@@ -1213,6 +1222,8 @@ class Agent:
                         log.error("archive: her line was not marked (%s)", type(exc).__name__)
             log.info("private: %s%s%s", "wrote first" if nudge else "answered", " (telegram)" if door == "telegram" else "",
                      " by the backup" if by == "backup" else "")
+            if self.topics_lines > 0 and self.archive is not None and not self._topics_lock.locked():
+                self._spawn(self.ensure_topics())  # v5.25: her topics for her next answer — no answer waits for it
             return True
         except Exception as exc:
             if not nudge and door == "telegram":  # v5.22: a failed answer is said too, then logged by the caller
@@ -3454,6 +3465,31 @@ class Agent:
         if first is None or second is None:
             return None, 0
         return cap_words(" ".join(t for t in (first, second) if t), self.talk_words[level]), first_out + second_out
+
+    async def ensure_topics(self) -> None:
+        """v5.25 (the owner, 2026-11-04: «вона буде читати мої меседжі і свої меседжі, бачити які там теми і сама
+        вибирати на яку говорити») — what the private chat's last `TOPICS_LINES` lines open to Gemini are about, both
+        sides: one call on `GEMINI_MODEL` (Flash), kind `topics`, after her answer, for her next one. A failure, a block
+        or a bad answer keeps the list before it; the log holds the counts, never a topic."""
+        if self.topics_lines <= 0 or self.archive is None or self._topics_lock.locked():
+            return
+        async with self._topics_lock:
+            try:
+                lines = [x for x in self.archive.latest("private", self.topics_lines)  # open to Gemini only
+                         if (x.speaker, x.text) not in self._closed and strip_notes(x.text)]
+                if not lines:
+                    return
+                system, contents = topics_request(self.cfg.name, [(x.speaker, history_entry(strip_notes(x.text)))
+                                                                  for x in lines])
+                raw = await self.llm.generate(contents, system, max_output_tokens=400, kind="topics")
+                topics = parse_topics(raw or "", len(lines))
+                if topics is None:
+                    log.warning("topics: no valid answer — the list before kept")
+                    return
+                self._topics = (topics, len(lines))
+                log.info("topics: %d from %d lines", len(topics), len(lines))
+            except Exception:
+                log.exception("topics: failed (bot keeps running)")
 
     async def ensure_reading(self, now) -> None:
         """v5.12: a reading — her time is saved before the calls, so a restart never reads twice; a failure backs off

@@ -76,6 +76,7 @@ def kira(tmp_path, monkeypatch, *answers, note=None, clip=None, made=None):
     agent.video_day_max, agent.video_note_max_s = 4, 30
     agent.spawned = []
     agent._spawn = agent.spawned.append
+    agent.topics_lines = 0  # v5.25: her topics, spawned after each answer, are not these tests' subject
     bot = agent.telegram
 
     async def send_note(chat_id, mp4, duration_s, length):

@@ -153,6 +153,10 @@ SCHEMA: tuple[Setting, ...] = (
        "Найменше останніх рядків, які він бачить, хоч би якими давніми", "lines", 0, 300),
     _s("PRIVATE_AGORA_N", "int", "20", "private", "cap:recall", None,
        "Скільки сьогоднішніх рядків Агори бачить в особистому чаті", "lines", 0, 60),
+    # v5.25 (the owner, 2026-11-04: «додай параметрт на панел щоб визначати зі скільком останіх меседжів брати теми, я
+    # пропоную 20») — her topics: Flash lists what their last messages are about, she picks which to go on with
+    _s("TOPICS_LINES", "int", "20", "private", "cap:private", None,
+       "Зі скількох останніх повідомлень особистого чату брати теми розмови (0 — без тем)", "lines", 0, 100),
     # v5.11 — events of her life (`events`): the hourly roll, the kinds' weights, her waking hours
     _s("EVENT_P", "float", "0.12", "life", "cap:events", None, "Ймовірність події щогодини", "", 0, 1),
     _s("EVENT_WEIGHTS", "weights", "everyday:6,joyful:2,inspiring:2,heavy:1", "life", "cap:events", None,
