@@ -145,7 +145,7 @@ def test_scan_yes_closes_the_candidates_through_her_own_code(tmp_path, monkeypat
     agent = scanning(tmp_path, monkeypatch)
     scan(agent)
     scan(agent, "/scan yes")
-    assert texts_sent(agent)[-1] == "⚙️ Закрито: 1 рядків, 1 фактів, 1 думок, 1 підсумків"
+    assert texts_sent(agent)[-1] == "⚙️ Закрито: 1 рядків, 1 фактів, 1 думок, 1 підсумків; переписую підсумки: 1 — повідомлю, коли закінчу"
     marks = dict(agent.archive.db.execute("SELECT key, mark FROM lines WHERE place != 'facts'").fetchall())
     assert marks["k1"] == "blocked" and marks["k2"] == "clean" and marks["k0"] == "gemini" and marks["t1"] == "blocked"
     assert ("Кіра (наодинці)", "сцена у стіни") not in agent.session and ("Кіра", "сцена у стіни") in agent._closed
@@ -160,7 +160,7 @@ def test_scan_all_closes_the_borderline_too(tmp_path, monkeypatch):
     agent = scanning(tmp_path, monkeypatch)
     scan(agent)
     scan(agent, "/scan all")
-    assert texts_sent(agent)[-1] == "⚙️ Закрито: 2 рядків, 1 фактів, 1 думок, 1 підсумків"
+    assert texts_sent(agent)[-1] == "⚙️ Закрито: 2 рядків, 1 фактів, 1 думок, 1 підсумків; переписую підсумки: 1 — повідомлю, коли закінчу"
     marks = dict(agent.archive.db.execute("SELECT key, mark FROM lines WHERE place = 'private'").fetchall())
     assert marks["k2"] == "blocked" and marks["k0"] == "gemini"
 
@@ -274,3 +274,25 @@ def test_a_block_of_two_days_together_keeps_the_candidates_in_her_window(tmp_pat
     assert "Gemini (Pro): блокує — вікно доби" in answer and "пропускає" in answer
     kept = dict(load_scan(agent.scan_file)["candidates"])
     assert len([r for r in kept if r.startswith("L")]) == 2                     # both days' candidates, in the window
+
+
+def test_the_summaries_scan_yes_took_are_reported_once_they_are_written_again(tmp_path, monkeypatch, caplog):
+    """v5.24 (the owner, 2026-11-04: «зроби про це звіт в телеграм»): the summaries gone with `/scan yes` wait in the
+    scan file; once each is written again or no longer due, one ⚙️ line goes to him — once."""
+    from agents.archive import TalkRow
+    caplog.set_level(logging.INFO)
+    agent = scanning(tmp_path, monkeypatch)
+    scan(agent)
+    scan(agent, "/scan yes")
+    period = ("hour", ms(15, 0))
+    assert load_scan(agent.scan_file)["rewrite"] == [list(period)]
+    sent = len(texts_sent(agent))
+    asyncio.run(agent._rewrite_report([], [(*period, ms(16, 0))]))                 # still due, not written
+    assert len(texts_sent(agent)) == sent
+    row = TalkRow("hour", ms(15, 0), ms(16, 0), "заново", 2, 1, 0, NOW)
+    asyncio.run(agent._rewrite_report([row], []))
+    assert texts_sent(agent)[-1] == "⚙️ Підсумки після /scan yes переписано: годин — 1, днів — 0"
+    assert "rewrite" not in load_scan(agent.scan_file)
+    asyncio.run(agent._rewrite_report([row], []))
+    assert len(texts_sent(agent)) == sent + 1                                       # said once
+    assert "заново" not in caplog.text

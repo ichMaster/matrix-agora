@@ -254,6 +254,7 @@ from agents.route import step as route_after
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.scan import KEY_VAR as SCAN_KEY_VAR
 from agents.scan import (
+    REWRITE_LEVELS,
     WINDOW,
     Found,
     OpusJudge,
@@ -265,6 +266,7 @@ from agents.scan import (
     group_text,
     kind_of,
     load_scan,
+    rewrite_line,
     save_scan,
     scan_counts,
     scan_groups,
@@ -2044,6 +2046,7 @@ class Agent:
         seen = [h for h in (data.get("facts_seen") or []) + (data.get("facts_read") or []) if isinstance(h, str)]
         data.update({"spent": True, "last_end_ms": data.get("end_ms"), "facts_seen": sorted(set(seen))})
         save_scan(self.scan_file, data)  # spent before anything closes: a second /scan yes never closes twice
+        held = {(r.level, r.start_ms) for r in self.archive.talk_rows()} if self.archive is not None else set()
         lines = thoughts = facts = summaries = 0
         ids = {int(r[1:]): r[:1] for r in refs if kind_of(r) in ("line", "thought")}
         rows = self.archive.lines(ids, gemini=True) if ids and self.archive is not None else {}  # open ones only
@@ -2064,7 +2067,37 @@ class Agent:
             if r in refs and self.archive is not None:
                 summaries += self.archive.talk_delete(level, start)
         log.warning("scan: closed %d lines, %d facts, %d thoughts, %d summaries", lines, facts, thoughts, summaries)
-        return f"⚙️ Закрито: {lines} рядків, {facts} фактів, {thoughts} думок, {summaries} підсумків"
+        answer = f"⚙️ Закрито: {lines} рядків, {facts} фактів, {thoughts} думок, {summaries} підсумків"
+        # v5.24 (the owner: «зроби про це звіт в телеграм»): the summaries gone with it, kept for the report
+        now_held = {(r.level, r.start_ms) for r in self.archive.talk_rows()} if self.archive is not None else set()
+        gone = sorted([level, start] for level, start in held - now_held if level in REWRITE_LEVELS)
+        if gone:
+            data["rewrite"] = gone
+            save_scan(self.scan_file, data)
+            answer += f"; переписую підсумки: {len(gone)} — повідомлю, коли закінчу"
+        return answer
+
+    async def _rewrite_report(self, rows: list, due: list) -> None:
+        """v5.24 (the owner, 2026-11-04: «зроби про це звіт в телеграм») — once every summary `/scan yes` took is
+        written again or no longer due (`rewrite_line`), one ⚙️ line to him in Telegram; the list leaves the scan
+        file, so it is said once. Checked by the writer at each tick."""
+        data = load_scan(self.scan_file)
+        pending = [(p[0], p[1]) for p in data.get("rewrite") or [] if isinstance(p, list) and len(p) == 2]
+        if not pending:
+            return
+        line = rewrite_line(pending, {(r.level, r.start_ms): r.text for r in rows}, {(lv, s) for lv, s, _ in due})
+        if line is None:
+            return
+        data.pop("rewrite", None)
+        save_scan(self.scan_file, data)
+        log.info("scan: the summaries written again — %d settled", len(pending))
+        if self.telegram is None or not self.telegram_owner:
+            return
+        try:
+            if not await self.telegram.send_message(self.telegram_owner, line):
+                log.warning("telegram: the rewrite report was not delivered")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("telegram: the rewrite report was not delivered (%s)", type(exc).__name__)
 
     def purge_answer(self, args: list[str]) -> str:
         """v5.14 — `/purge` asks first (how much would go; `/purge yes` within `PURGE_CONFIRM_S` confirms), then
@@ -3436,9 +3469,11 @@ class Agent:
                 log.exception("talk: the summary failed (bot keeps running)")
 
     async def _talk_tick(self) -> None:
-        held = {(r.level, r.start_ms) for r in self.archive.talk_rows()}
+        rows = self.archive.talk_rows()
+        held = {(r.level, r.start_ms) for r in rows}
         due = periods_due(self.clock(), self.tz, self.archive.private_open_times(), held, self.talk_hour_days,
                           self.talk_day_days)
+        await self._rewrite_report(rows, due)  # v5.24: what /scan yes took, settled — told once
         if not due:
             return
         level, start, end = due[0]

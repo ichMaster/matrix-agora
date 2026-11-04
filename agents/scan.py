@@ -269,6 +269,29 @@ def gemini_line(statuses: list[tuple[str, str]], dropped: int) -> str:
     return "Gemini (Pro): " + "; ".join(parts) + "." + tail
 
 
+REWRITE_LEVELS = ("hour", "day")  # the levels the writer writes again; v5.20's 4h blocks and weeks never are
+
+
+def rewrite_line(pending: list[tuple[str, int]], rows: dict[tuple[str, int], str],
+                 due: set[tuple[str, int]]) -> str | None:
+    """v5.24 (the owner, 2026-11-04: «зроби про це звіт в телеграм») — the ⚙️ line once every summary `/scan yes`
+    took is settled (pure): written again (`rows`: its text, "" when it came out empty), or no longer due (no line
+    open to it is left, or its period is past the bands). None while one is still due and not written."""
+    if any(p not in rows and p in due for p in pending):
+        return None
+    written = [p for p in pending if p in rows]
+    hours = sum(1 for p in written if p[0] == "hour" and rows[p])
+    days = sum(1 for p in written if p[0] == "day" and rows[p])
+    empty = sum(1 for p in written if not rows[p])
+    gone = len(pending) - len(written)
+    parts = [f"годин — {hours}, днів — {days}"]
+    if empty:
+        parts.append(f"порожніх — {empty}")
+    if gone:
+        parts.append(f"не переписуються — {gone} (у них не лишилося відкритих рядків або період уже давній)")
+    return "⚙️ Підсумки після /scan yes переписано: " + "; ".join(parts)
+
+
 def fact_hash(fact_id: str) -> str:
     """A fact by the sha256 of its id in the scan file — never the id, which is its text's slug."""
     return hashlib.sha256((fact_id or "").encode("utf-8")).hexdigest()

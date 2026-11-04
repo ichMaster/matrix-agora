@@ -173,6 +173,12 @@ The invariants every reply path must honor:
    when it blocks, the candidates in it stay whatever their day said — a block may need two days together, as on
    2026-11-04 at 16:34. The answer adds each day's verdict after its line and «Gemini (Pro): блокує — …; пропускає —
    …», with how many of Opus's finds stay open; with no probe, Opus's verdict stands.
+   **The rewrite's report (v5.24, the owner, 2026-11-04: «зроби про це звіт в телеграм»):** the `hour` and `day`
+   summaries `/scan yes` takes (its own and those over the lines it closes, AGORA-200) are kept in the scan file
+   (`rewrite`), its answer adds «переписую підсумки: N — повідомлю, коли закінчу», and the writer checks them at each
+   tick (`Agent._rewrite_report`): once each is written again or no longer due (`rewrite_line`, pure), one ⚙️ line —
+   «⚙️ Підсумки після /scan yes переписано: годин — a, днів — b; порожніх — c; не переписуються — d» — and the list
+   leaves the file, so it is said once.
    **The list** (`state/<name>.scan.json`): the refs and codes, a fact by its id's sha256 (`fact_hash` — its id is its
    text's slug), a summary by `(level, start_ms)`, the range, `facts_read` and `facts_seen`, `last_end_ms` — a scan
    that found nothing moves it to its end, an unused list leaves it, so the next `/scan` reads the same lines again.

@@ -23,6 +23,7 @@ from agents.scan import (
     group_text,
     kind_of,
     parse_scan,
+    rewrite_line,
     scan_counts,
     scan_groups,
     scan_range,
@@ -242,3 +243,12 @@ def test_the_answer_names_what_gemini_blocks_and_what_it_lets_through():
     day = local_now(NOW - 3_600_000, TZ).strftime("%d.%m")
     out = days_lines(items(), Found({"L10": "S"}), TZ, {day: "блокує"})
     assert f"{day}: рядки 1 + 0 з 2, думки 0 + 0 з 1, факти 0 + 0 з 1 — Gemini блокує" in out
+
+
+def test_the_rewrite_report_waits_for_every_period_then_counts_them():
+    h1, h2, d1, h3 = ("hour", 1), ("hour", 2), ("day", 3), ("hour", 4)
+    pending = [h1, h2, d1, h3]
+    assert rewrite_line(pending, {h1: "так"}, {h2}) is None                        # one still due
+    assert rewrite_line(pending, {h1: "так", h2: "", d1: "день"}, set()) == (
+        "⚙️ Підсумки після /scan yes переписано: годин — 1, днів — 1; порожніх — 1; "
+        "не переписуються — 1 (у них не лишилося відкритих рядків або період уже давній)")
