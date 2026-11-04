@@ -7,6 +7,7 @@ Every call — ok, empty or failed — is reported to the usage sink (v3.1).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -25,6 +26,8 @@ DIGEST_MODEL = "gemini-3.1-pro-preview"  # v5.1: Hermes's digests and answers �
 THINK_MAX_TOKENS = 16384  # the cap counts the thinking too: room for it and a ~1,500-character digest
 # v5.8 — models that refuse a zero thinking budget: an answer on one of them goes through the thinking path
 THINKING_MODELS = frozenset({"gemini-3.1-pro-preview"})
+REPLY_TIMEOUT_S = 90  # v5.25 (the owner, 2026-11-04): an answer's call, at most so long
+REPLY_TRIES = 2       # … tried once more when it hangs
 EMBED_MODEL = "gemini-embedding-001"  # v5.8: the archive's meaning search (the owner, 2026-10-25: Gemini's)
 EMBED_DIM = 768
 
@@ -164,6 +167,18 @@ class GeminiClient:
         self._report(kind, getattr(resp, "usage_metadata", None), True, model)
         return text, finish_of(resp)
 
+    async def _within(self, call, kind: str):
+        """v5.25 (the owner, 2026-11-04: «роби обидва») — an answer's call to Gemini, at most `REPLY_TIMEOUT_S`,
+        tried once more when it hangs (on 2026-11-04 at 19:28 one took 194 s on a bad network); raises
+        `TimeoutError` when the last try hangs too. `call` makes a fresh request each time."""
+        for attempt in range(1, REPLY_TRIES + 1):
+            try:
+                return await asyncio.wait_for(call(), timeout=REPLY_TIMEOUT_S)
+            except TimeoutError:
+                log.warning("gemini %s timed out after %d s (try %d of %d)", kind, REPLY_TIMEOUT_S, attempt,
+                            REPLY_TRIES)
+        raise TimeoutError
+
     async def reply(
         self, transcript: str, system_instruction: str | None, max_output_tokens: int = 400, kind: str = "reply",
     ) -> tuple[str, str] | None:
@@ -178,7 +193,7 @@ class GeminiClient:
         model = self.reply_model
         self._start()
         try:
-            resp = await self._client.aio.models.generate_content(
+            resp = await self._within(lambda: self._client.aio.models.generate_content(
                 model=model,
                 contents=transcript,
                 config=types.GenerateContentConfig(
@@ -189,7 +204,7 @@ class GeminiClient:
                         thinking_level=getattr(types.ThinkingLevel, self.thinking_level.upper(), None)),
                     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                 ),
-            )
+            ), kind)
         except Exception as exc:  # noqa: BLE001 — any provider failure means silence
             log.error("gemini reply failed: %s", type(exc).__name__)
             self._report(kind, None, False, model)

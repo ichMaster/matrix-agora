@@ -11,6 +11,7 @@ status, Telegram's `error_code` or the exception's type — never the token, an 
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -28,6 +29,9 @@ log = logging.getLogger("agent.telegram")
 API = "https://api.telegram.org"
 POLL_TIMEOUT_S = 30   # long polling: the server holds the request this long when there is nothing new
 CALL_TIMEOUT_S = 60   # every other call — a voice note's upload included
+# v5.25 (the owner, 2026-11-04: «роби обидва»; at 19:24 her answer was lost to a TimeoutError): a send that fails on the
+# network (no HTTP status) is tried again after these pauses; an HTTP error never is
+SEND_BACKOFF_S = (2, 5)
 VIDEO_TIMEOUT_S = 180  # v5.18: a video's upload (a clip may be some megabytes)
 TEXT_MAX = 4096       # Telegram's limit for one message's text
 CAPTION_MAX = 1024    # v5.17: Telegram's limit for a photo's caption
@@ -217,6 +221,17 @@ class TelegramBot:
         log.error("telegram: %s failed: HTTP %s%s", method, status, f" ({code})" if code not in (None, status) else "")
         return Reply(False, None, status, wait if isinstance(wait, int) else None)
 
+    async def _send(self, method: str, timeout_s: float, json_body: dict | None = None, form=None) -> bool:
+        """v5.25 — a send: `_call`, tried again after each of `SEND_BACKOFF_S` while it fails on the network (no
+        HTTP status — the request may never have reached Telegram); `form` makes the multipart body anew each try."""
+        for attempt, pause in enumerate((*SEND_BACKOFF_S, None), start=1):
+            reply = await self._call(method, timeout_s, json_body=json_body, data=form() if form else None)
+            if reply.ok or reply.status is not None or pause is None:
+                return reply.ok
+            log.warning("telegram: %s tried again in %d s (try %d)", method, pause, attempt + 1)
+            await asyncio.sleep(pause)
+        return False
+
     async def get_updates(self, offset: int | None, timeout_s: int = POLL_TIMEOUT_S) -> Reply:
         """Long polling: the updates from `offset` on (messages only), the result a list."""
         body: dict = {"timeout": timeout_s, "allowed_updates": ["message", "edited_message"]}
@@ -230,8 +245,7 @@ class TelegramBot:
 
     async def send_message(self, chat_id: int, text: str) -> bool:
         """Plain text (no parse mode), cut to one message at a sentence."""
-        return (await self._call("sendMessage", CALL_TIMEOUT_S,
-                                 json_body={"chat_id": chat_id, "text": fit_text(text)})).ok
+        return await self._send("sendMessage", CALL_TIMEOUT_S, json_body={"chat_id": chat_id, "text": fit_text(text)})
 
     async def set_commands(self, chat_id: int) -> bool:
         """v5.14 — the command list, shown in the owner's chat only (`BotCommandScopeChat`)."""
@@ -241,11 +255,13 @@ class TelegramBot:
 
     async def send_voice(self, chat_id: int, ogg: bytes, duration_s: int) -> bool:
         """A voice note: OGG/Opus as multipart, with its length in seconds."""
-        form = aiohttp.FormData()
-        form.add_field("chat_id", str(chat_id))
-        form.add_field("duration", str(max(int(duration_s), 1)))
-        form.add_field("voice", ogg, filename="voice.ogg", content_type="audio/ogg")
-        return (await self._call("sendVoice", CALL_TIMEOUT_S, data=form)).ok
+        def form():
+            form = aiohttp.FormData()
+            form.add_field("chat_id", str(chat_id))
+            form.add_field("duration", str(max(int(duration_s), 1)))
+            form.add_field("voice", ogg, filename="voice.ogg", content_type="audio/ogg")
+            return form
+        return await self._send("sendVoice", CALL_TIMEOUT_S, form=form)
 
     async def send_photo(self, chat_id: int, image: bytes, caption: str | None = None,
                          mime: str = "image/jpeg") -> bool:
@@ -254,34 +270,40 @@ class TelegramBot:
         if caption is not None and len(caption) > CAPTION_MAX:
             log.warning("telegram: a photo caption over %d characters, not sent", CAPTION_MAX)
             return False
-        form = aiohttp.FormData()
-        form.add_field("chat_id", str(chat_id))
-        if caption:
-            form.add_field("caption", caption)
-        name = "photo.png" if mime == "image/png" else "photo.jpg"
-        form.add_field("photo", image, filename=name, content_type=mime)
-        return (await self._call("sendPhoto", CALL_TIMEOUT_S, data=form)).ok
+        def form():
+            form = aiohttp.FormData()
+            form.add_field("chat_id", str(chat_id))
+            if caption:
+                form.add_field("caption", caption)
+            name = "photo.png" if mime == "image/png" else "photo.jpg"
+            form.add_field("photo", image, filename=name, content_type=mime)
+            return form
+        return await self._send("sendPhoto", CALL_TIMEOUT_S, form=form)
 
     async def send_video_note(self, chat_id: int, mp4: bytes, duration_s: int, length: int) -> bool:
         """v5.18 — her кружечок: a round video message, a square MPEG4 as multipart, with its diameter and length."""
-        form = aiohttp.FormData()
-        form.add_field("chat_id", str(chat_id))
-        form.add_field("duration", str(max(int(duration_s), 1)))
-        form.add_field("length", str(int(length)))
-        form.add_field("video_note", mp4, filename="note.mp4", content_type="video/mp4")
-        return (await self._call("sendVideoNote", VIDEO_TIMEOUT_S, data=form)).ok
+        def form():
+            form = aiohttp.FormData()
+            form.add_field("chat_id", str(chat_id))
+            form.add_field("duration", str(max(int(duration_s), 1)))
+            form.add_field("length", str(int(length)))
+            form.add_field("video_note", mp4, filename="note.mp4", content_type="video/mp4")
+            return form
+        return await self._send("sendVideoNote", VIDEO_TIMEOUT_S, form=form)
 
     async def send_video(self, chat_id: int, mp4: bytes, duration_s: int | None = None, width: int | None = None,
                          height: int | None = None) -> bool:
         """v5.18 — her clip: a video as multipart, streamable, no caption (her words went before it)."""
-        form = aiohttp.FormData()
-        form.add_field("chat_id", str(chat_id))
-        form.add_field("supports_streaming", "true")
-        for name, value in (("duration", duration_s), ("width", width), ("height", height)):
-            if value:
-                form.add_field(name, str(int(value)))
-        form.add_field("video", mp4, filename="video.mp4", content_type="video/mp4")
-        return (await self._call("sendVideo", VIDEO_TIMEOUT_S, data=form)).ok
+        def form():
+            form = aiohttp.FormData()
+            form.add_field("chat_id", str(chat_id))
+            form.add_field("supports_streaming", "true")
+            for name, value in (("duration", duration_s), ("width", width), ("height", height)):
+                if value:
+                    form.add_field(name, str(int(value)))
+            form.add_field("video", mp4, filename="video.mp4", content_type="video/mp4")
+            return form
+        return await self._send("sendVideo", VIDEO_TIMEOUT_S, form=form)
 
     async def send_chat_action(self, chat_id: int, action: str) -> bool:
         """`typing`, `record_voice`, (v5.17) `upload_photo` or (v5.18) `record_video_note` / `upload_video` — shown
