@@ -244,7 +244,7 @@ def test_the_extraction_asks_for_long_lived_facts_only():
     system = EXTRACT_SYSTEM.format(name="Кіра", max_chars=240)
     assert "довготривалі" in system and "через рік" in system and "подій окремого дня" in system
     assert "планів на найближчі дні" in system and '{"add": [], "replace": []}' in system
-    # v5.24 (the owner, 2026-11-04): «ваші домовленості» had let in every meeting
+    # v5.25 (the owner, 2026-11-04): «ваші домовленості» had let in every meeting
     assert "разових домовленостей і зустрічей" in system and "ваші довгі домовленості" in system
     assert "не разовий план чи зустріч" in REMEMBER_SKILL
 
@@ -274,7 +274,7 @@ def test_the_extraction_asks_for_long_lived_facts_only():
     ("Ich живе на Хрещатику, 22, кв. 5", "an address"),
     ("Ich любить фільм «Матриця»", None),
     ("Ich любить програмувати вночі", None),
-    # v5.24 (the owner, 2026-11-04): a one-time arrangement is a day's event; a habit is not
+    # v5.25 (the owner, 2026-11-04): a one-time arrangement is a day's event; a habit is not
     ("Ich погодився піти зі мною в кіно сьогодні", "a day's event"),
     ("Ich попросив обговорити це на нашій зустрічі", "a day's event"),
     ("Ich попросив не забути тему на нашій сьогоднішній зустрічі", "a day's event"),

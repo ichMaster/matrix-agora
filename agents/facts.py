@@ -61,7 +61,7 @@ EXTRACT_SYSTEM = (
     "близькі, головні захоплення), pin 2 — решта важливого. Відповідай лише JSON: "
     '{{"add": [{{"text": "…", "pin": 1}}], "replace": [{{"id": "…", "text": "…"}}]}}. Якщо нового нема — '
     '{{"add": [], "replace": []}}.'
-)  # the owner, 2026-10-25: «факти мають бути довготривалими» — a day's events live in the memories; v5.24 (the
+)  # the owner, 2026-10-25: «факти мають бути довготривалими» — a day's events live in the memories; v5.25 (the
 # owner, 2026-11-04): «ваші домовленості» had let in every meeting — 8 of 25 facts in her prompt were that day's
 # evening, so her talk kept returning to it
 # the owner, 2026-10-25: «не все потрібно Кірі, вона думає, що вона людина» — a model's own judgement leaks facts
@@ -78,7 +78,7 @@ OFF_LIMITS = (
                 re.IGNORECASE), "what she is"),
     (re.compile(r"(?<!\w)(?:вул\.|вулиц\w*|просп\w*|провул\w*|буд\.|будин\w*\s+\d|кв\.|квартир\w*\s+\d)",
                 re.IGNORECASE), "an address"),
-    # v5.24 (the owner, 2026-11-04): a one-time arrangement is a day's event, whatever the model answered — only the
+    # v5.25 (the owner, 2026-11-04): a one-time arrangement is a day's event, whatever the model answered — only the
     # words that never say a habit («сьогодні», «на вечір», «до зустрічі»), so «увечері грає на гітарі» stays
     (re.compile(r"(?<!\w)(?:сьогодн\w*|завтра\w*|післязавтра|вчора\w*|позавчора|цього\s+вечора|на\s+вечір|"
                 r"до\s+зустрічі|наш\w*\s+(?:сьогоднішн\w*\s+)?зустріч\w*|перетнемо\w*)(?!\w)", re.IGNORECASE),
@@ -88,7 +88,7 @@ OFF_LIMITS = (
 
 def off_limits(text: str) -> str | None:
     """Why a fact may not reach a person who believes she is human — AI and tools, agents, models or servers, an
-    exact address — or, v5.24, may not be a fact at all — a day's event —; None when it may."""
+    exact address — or, v5.25, may not be a fact at all — a day's event —; None when it may."""
     return next((why for pattern, why in OFF_LIMITS if pattern.search(text or "")), None)
 
 

@@ -11,7 +11,7 @@ breaks a thought off happens mid-message. v5.24 (the owner, 2026-11-04: «вон
 Як розмивати цей вектор розмови щоб він не був у кожному меседжі?»): all 21 of her messages of a morning ended by
 sending him back to work or by the evening they had agreed on — the words changed (звіти, таски, справи, вкладки), the
 move did not. Now how she ends is drawn too, most answers get no send-off, what her last endings shared is named, and
-a repeat counts by the word's stem, so «звіти» and «звітів» are one word. The same day (the owner: «2-4
+a repeat counts by the word's stem, so «звіти» and «звітів» are one word. v5.25 (the owner, the same day: «2-4
 підтверджую»): about one answer in three also brings something of her own, from her day, not from their talk.
 
 Pure: the randomness is a callable passed in (`random.random` in the agent), her lines are plain strings.
@@ -57,7 +57,7 @@ ENDINGS = (
 NO_SENDOFF = ("Якщо він сам не прощається — без прощання, без «до зустрічі», без нагадувань про те, що ви "
               "запланували, і без порад йому, що робити.")
 NO_SENDOFF_P = 0.75
-# v5.24: something of her own, from her day — the sections her prompt holds (`own`), never from their talk today
+# v5.25: something of her own, from her day — the sections her prompt holds (`own`), never from their talk today
 OWN = "Відповівши йому, розкажи й щось своє — не з вашої сьогоднішньої розмови: що з тобою сталося сьогодні або що ти"
 OWN_P = 0.3
 TAG_PLACES = ("посеред репліки, між реченнями", "посеред речення, там, де змінюється тон", "наприкінці")
@@ -152,7 +152,7 @@ def repeats(her_lines: Sequence[str]) -> tuple[list[str], list[str]]:
 def style_line(rng: Callable[[], float], her_lines: Sequence[str], tags: bool, own: str = "") -> str:
     """The line for this answer: «Як сказати цього разу: …» — the words of live speech or none, maybe one turn of a
     real chat, maybe an open ending, else how the finished thought ends (v5.24), most often no send-off, where a voice
-    tag may go (`tags`: she has a palette), what her last endings shared (v5.24), and her repeats. `own` (v5.24): the
+    tag may go (`tags`: she has a palette), what her last endings shared (v5.24), and her repeats. `own` (v5.25): the
     titles of her prompt's sections of her day («Сьогодні», «Що ти сьогодні думала»); with them, now and then
     something of her own."""
     parts = []

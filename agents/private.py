@@ -31,7 +31,7 @@ PRIVATE_BRIEF = (
     "питати про його. Те, що сказано тут, лишається між вами. Те, що ти вже сказала чи попросила, він почув: не "
     "повторюй цього в наступних повідомленнях — чекай, що він відповість, або говори про інше. Про що домовились — "
     "домовлено."
-)  # v5.24 (the owner, 2026-11-04, Лілі's first rule): what she said was heard — she does not say it again
+)  # v5.25 (the owner, 2026-11-04, Лілі's first rule): what she said was heard — she does not say it again
 # her Agora replies: one memory, kept to herself (the owner, 2026-10-20: «пам'ятає, але мовчить»)
 PRIVATE_DISCRETION = (
     "Те, що між тобою і Ich, — твої почуття до нього, ваші стосунки, твої плани щодо нього, — те, що ви говорили "

@@ -1,7 +1,7 @@
 """v5.15.1 — how she says it this time (`agents/style.py`): live words offered or not, a turn of a real chat, an open
 ending, where a voice tag may go, and the words she keeps repeating — drawn anew for each private answer (pure; the
 randomness is scripted). v5.24: how a finished thought ends, no send-off most of the time, what her last endings
-shared, and a repeat by the word's stem (made-up lines only)."""
+shared, and a repeat by the word's stem; v5.25: something of her own (made-up lines only)."""
 
 import asyncio
 import random
@@ -123,7 +123,7 @@ def test_how_she_ends_is_drawn_and_most_answers_have_no_send_off():
 
 
 def test_now_and_then_something_of_her_own_from_the_sections_of_her_day():
-    """v5.24 (the owner, 2026-11-04: «2-4 підтверджую»): about one answer in three, with the sections of her day
+    """v5.25 (the owner, 2026-11-04: «2-4 підтверджую»): about one answer in three, with the sections of her day
     named; never without them."""
     from agents.style import OWN
     line = style_line(scripted(0.9, 0.9, 0.9, 0.0, 0.9, 0.1), [], tags=False, own="«Сьогодні» чи «Що ти сьогодні думала»")
@@ -154,7 +154,7 @@ def test_her_private_prompt_carries_the_line_for_this_answer_from_her_open_lines
     assert "Як сказати цього разу: " in system and "Ти вже кілька разів казала «космос»" in system
     assert "закрите" not in system.lower()
     from agents.private import PRIVATE_BRIEF
-    assert "він почув: не повторюй цього" in PRIVATE_BRIEF and PRIVATE_BRIEF in system   # v5.24: Лілі's first rule
+    assert "він почув: не повторюй цього" in PRIVATE_BRIEF and PRIVATE_BRIEF in system   # v5.25: Лілі's first rule
     assert "розкажи й щось своє" not in system                                       # no section of her day: never
     agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "capabilities": agent.cfg.capabilities | {"thoughts"}})
     agent.rng = lambda: 0.1                                                         # every draw taken

@@ -3325,20 +3325,6 @@ for good.
   short reaction or a joke; most answers get no send-off unless he says goodbye himself.
 - **A repeat counts by the word's stem**, so «звіти» and «звітів» are one word.
 
-**Owner decisions** (2026-11-04, the theme she keeps to; AGORA-197):
-- **Why** («глянь знову, далі є відчуття гіперфіксації»): after AGORA-196 her endings varied, but the same two themes,
-  his work and their evening, moved into the middle of her messages and her questions. In the prompt of her last answer
-  the day's window held 34 mentions of his work and 40 of the evening, the hour summaries 3 and 14, and 8 of the 25
-  facts about him were that evening's meeting.
-- **Лілі's advice**, which the owner brought («що ти думаєш про цю пораду»): what she said was heard; tiredness of her
-  own idea; desire that fades. The first becomes a line of her private brief; the second is the theme named by Flash
-  (to come, at the owner's word); the third is v8.2's.
-- **Confirmed** («2-4 підтверджую»):
-  - about one answer in three also brings something of her own, from her day, not from their talk;
-  - one-time arrangements and meetings are not facts: the extraction's prompt says so, and a fact that says a day's
-    event is dropped in code;
-  - her private brief: what she said or asked he heard; she does not say it again.
-
 **DoD:**
 - (Manual, owner) `/scan` answers with the counts within a minute.
 - (Manual, owner) `/scan yes` closes them: her **Prompt** tab no longer shows them.
@@ -3376,17 +3362,94 @@ for good.
   - the endings' shared words named once;
   - an ending drawn and most answers with no send-off;
   - her lines read from those open to Gemini, never a closed one named.
-- **Her own, the heard rule and the facts (AGORA-197):**
-  - something of her own now and then, only with a section of her day;
-  - the heard rule in her private brief;
-  - a day's event never kept as a fact, a habit kept.
 
 **Not in this phase:**
 - an automatic scan (the owner: not needed);
 - rewriting the summaries written before the gentle rule (the owner, 2026-11-04);
+- the theme she keeps to: v5.25 (the owner, 2026-11-04: «зроби на це окрему версію ліпш»);
 - Agora (no candidate on 2026-11-03);
 - reopening anything;
 - the backup's talk, which is closed already.
+
+### v5.25 — Her topics: Flash lists what the talk is about, she picks which to go on with
+
+**Status:** planned (2026-11-04).
+
+**Goal:** Кіра stops returning to one theme in every message alone with the owner. She sees what their talk is about —
+the topics of their last messages, and who raised each how often — and picks herself which to go on with. With it,
+something of her own now and then, what she said was heard, and no one-time arrangement as a fact.
+
+**Why** (2026-11-04, the afternoon):
+- **The fixation.** In a morning all 21 of her messages ended by sending him back to work or by the evening they had
+  agreed on. After v5.24's endings (AGORA-196) her endings varied, but the same two themes moved into the middle of her
+  messages and her questions.
+- **Where it comes from.** In the prompt of her last answer the day's window held 34 mentions of his work and 40 of the
+  evening, the hour summaries 3 and 14, and 8 of the 25 facts about him were that evening's meeting. The theme is said
+  in other words each time (звіти, таски, мітинги, дедлайни; вилазка, гора, Замок, зустріч), so no count of words or
+  stems finds it.
+- **Лілі's advice**, which the owner brought («що ти думаєш про цю пораду»): what she said was heard; tiredness of her
+  own idea; desire that fades. The first is a line of her private brief here; the third is v8.2's.
+
+**Owner decisions** (2026-11-04):
+- **Why** («глянь знову, далі є відчуття гіперфіксації»): after AGORA-196 her endings varied, but the same two themes,
+  his work and their evening, moved into the middle of her messages and her questions. In the prompt of her last answer
+  the day's window held 34 mentions of his work and 40 of the evening, the hour summaries 3 and 14, and 8 of the 25
+  facts about him were that evening's meeting.
+- **Лілі's advice**, which the owner brought («що ти думаєш про цю пораду»): what she said was heard; tiredness of her
+  own idea; desire that fades. The first becomes a line of her private brief; the second is the theme named by Flash
+  (to come, at the owner's word); the third is v8.2's.
+- **Confirmed** («2-4 підтверджую»):
+  - about one answer in three also brings something of her own, from her day, not from their talk;
+  - one-time arrangements and meetings are not facts: the extraction's prompt says so, and a fact that says a day's
+    event is dropped in code;
+  - her private brief: what she said or asked he heard; she does not say it again.
+
+- **Her topics, listed by Flash** («зроби 2 і додай меседж що вона має вибрати сама тему для продовження»): not a ban
+  and not a pause — the owner refused both («це не вірно, давай ліпше вона буде читати мої меседжі і свої меседжі,
+  бачити які там теми і сама вибирати на яку говорити»).
+- **How many messages** («додай параметрт на панел щоб визначати зі скільком останіх меседжів брати теми, я пропоную
+  20»): `TOPICS_LINES`, 20.
+- **A version of its own** («зроби на це окрему версію ліпш»; «і там постав 2-4 теж»): v5.25, with AGORA-197, which
+  was built under v5.24 and moved here; it is deployed with the topics («разом з 1»).
+
+**Proposed** (confirmed when the issues are generated):
+- **The list** (`agents/topics.py`, pure; a person with `private` and `recall`; Кіра):
+  - after each of her private answers, in the background (no answer waits), one call on `GEMINI_MODEL` (Flash,
+    thinking off), kind `topics`, reads the last `TOPICS_LINES` lines of her private chat open to Gemini, both sides —
+    never a closed one;
+  - it answers JSON: at most 6 topics, each a few words as she would say it, with how many of her messages and of his
+    touch it;
+  - their closeness is never named as a topic (a word of it would reach her prompt to Pro), and a topic that names
+    what she is (`BANNED_RE`) is dropped;
+  - a failed or blocked call keeps the list before it; the log holds the counts, never a topic.
+- **In her prompt** (her private brief, Gemini's and the backup's alike), after the style line:
+  > Про що ваша розмова (з останніх 20 повідомлень):
+  > - його робота і звіти — ти 7 разів, він 1;
+  > - вечір на Замку — ти 6, він 2;
+  >
+  > Тему для продовження вибери сама: відповідай на те, що він щойно написав, а далі говори про те, що тобі самій
+  > зараз цікаве; до того, про що ти вже сказала багато, сама не повертайся.
+- **The setting:** `TOPICS_LINES` (20, 0–100; 0 — no list), her agent settings («Особистий чат»).
+- **Accounting:** a usage line of kind `topics`; Analytics shows it.
+- **ARCHITECTURE:** §Prompt assembly (the list), §Token accounting (the kind), §Configuration (the setting).
+
+**Owner steps:** the deploy (v5.24's checks and this phase's together) and the live check.
+
+**DoD:**
+- (Manual, owner) After the deploy her **Prompt** tab shows the topics and the line that she picks.
+- (Manual, owner) The theme no longer runs through every message of hers.
+
+**Tests:**
+- **The request:** open lines only, both sides; `TOPICS_LINES`; no word of what she is; their closeness never a topic.
+- **The answer:** the JSON parsed, at most 6, the counts bounded; a bad answer or a failure keeps the list before it.
+- **The prompt:** the list and the line in her private brief; none with `TOPICS_LINES` 0 or before the first list.
+- **Never:** a topic in the log; a closed line in the request.
+- **AGORA-197's** (moved from v5.24): something of her own; the heard rule; a day's event never a fact.
+
+**Not in this phase:**
+- a ban on a theme or a pause (the owner refused both);
+- desire that fades with no answer (v8.2);
+- the 8 one-time facts held (the change is for new facts).
 
 ## v6 — Лілі: the Lumi bridge
 
