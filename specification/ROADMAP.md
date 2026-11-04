@@ -3299,6 +3299,11 @@ for good.
 - the deploy;
 - the live checks.
 
+**Owner decisions** (2026-11-04, the answer by day; AGORA-201): after his first live `/scan` («в звіті Знайдено 141
+рядків … я хочу бачити по днях скільки закриється зі всіх в цьому дні»; «так зроби статистику в телеграм теж»), its
+answer adds, for each day, how many lines, thoughts, facts and summaries `/scan yes` closes and `/scan all` adds, of
+how many were read.
+
 **Owner decisions** (2026-11-04, the gentle summaries; AGORA-195):
 - **Why.** At 09:00 her prompt was blocked the hour the 24-hour window passed the hour before. That hour's summary came
   into her prompt, while its own lines, word for word, had passed at 08:50: a summary sets a scene closer together than
