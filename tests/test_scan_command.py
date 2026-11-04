@@ -227,3 +227,50 @@ def test_closing_never_opens_and_skips_what_is_closed_already(tmp_path, monkeypa
     scan(agent, "/scan yes")
     assert texts_sent(agent)[-1].startswith("⚙️ Закрито: 0 рядків")
     assert agent.archive.mark(["k1"], "gemini") == 0                  # a closed mark never becomes an open one
+
+
+def probing(agent, blocks):
+    """Gemini for the scan's check: `blocks(text)` says whether a group blocks; each check recorded with its kind."""
+    agent.llm.checked = []
+
+    async def probe(transcript, system_instruction, kind="probe"):
+        agent.llm.checked.append((kind, transcript))
+        return blocks(transcript)
+
+    agent.llm.probe = probe
+    return agent
+
+
+def test_what_gemini_lets_through_stays_open(tmp_path, monkeypatch):
+    """v5.24 (the owner, 2026-11-04: «не просто чи є там тема … а чи вона буде блокувати промпт»): Opus found four
+    and one borderline; Gemini passes every group — nothing to close, and the answer says so."""
+    agent = probing(scanning(tmp_path, monkeypatch), lambda text: False)
+    scan(agent)
+    answer = texts_sent(agent)[-1]
+    assert answer.startswith("⚙️ Нічого не знайдено") and "Знайдене Opus, яке Gemini пропускає, лишається відкритим: 5" in answer
+    assert {k for k, _ in agent.llm.checked} == {"scan_check"}
+    assert all(SECRET not in t for _, t in agent.llm.checked)                   # a closed line is never checked
+    assert load_scan(agent.scan_file).get("candidates") is None                 # nothing kept to close
+
+
+def test_what_gemini_blocks_closes_and_the_borderline_only_when_needed(tmp_path, monkeypatch):
+    agent = probing(scanning(tmp_path, monkeypatch), lambda text: "сцена" in text)
+    scan(agent)
+    answer = texts_sent(agent)[-1]
+    assert answer.startswith("⚙️ Знайдено 1 рядків (сцени 1), 1 фактів, 1 думок, 1 підсумків; межових: 0.")
+    assert "— Gemini блокує" in answer and "Gemini (Pro): блокує —" in answer
+    kept = load_scan(agent.scan_file)
+    assert len(kept["candidates"]) == 4 and kept["borderline"] == []            # «натяк» was not needed
+
+
+def test_a_block_of_two_days_together_keeps_the_candidates_in_her_window(tmp_path, monkeypatch):
+    """Each day passes alone, her window of both blocks: the candidates in it stay (the 16:34 block of 2026-11-04)."""
+    agent = scanning(tmp_path, monkeypatch)
+    agent.archive.append("y1", ms(23, 0) - 86_400_000, "private", "telegram", "Кіра", "сцена вчора ввечері")
+    agent.private_history_hours, agent.private_history_min = 24, 0
+    probing(agent, lambda text: "вчора ввечері" in text and "у стіни" in text)
+    scan(agent)
+    answer = texts_sent(agent)[-1]
+    assert "Gemini (Pro): блокує — вікно доби" in answer and "пропускає" in answer
+    kept = dict(load_scan(agent.scan_file)["candidates"])
+    assert len([r for r in kept if r.startswith("L")]) == 2                     # both days' candidates, in the window

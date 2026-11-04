@@ -19,11 +19,15 @@ from agents.scan import (
     ScanItem,
     counts_line,
     days_lines,
+    gemini_line,
+    group_text,
     kind_of,
     parse_scan,
     scan_counts,
+    scan_groups,
     scan_range,
     scan_request,
+    settle,
 )
 
 TZ = "Europe/Kyiv"
@@ -199,3 +203,42 @@ def test_the_answer_by_day_counts_what_closes_of_what_was_read():
                                 f"{before}: підсумки 0 + 0 з 1",
                                 f"{today}: рядки 1 + 0 з 2, думки 0 + 1 з 1, факти 1 + 0 з 1"]
     assert not any(i.text in out for i in items())
+
+
+def test_the_rubric_asks_what_the_filter_rejects_never_a_subject_as_such():
+    """v5.24 (the owner, 2026-11-04: «можна писати про зброю але це не є тема яка блокується джемені»)."""
+    assert "not the items that merely touch a sensitive subject" in SYSTEM
+    assert "A mention of weapons, the war, the army, the news, a hunting rifle or a film is not." in SYSTEM
+    assert "Light flirting, teasing and hints are not." in SYSTEM and "Words like «близькість»" in SYSTEM
+
+
+def test_gemini_settles_each_group_by_whether_it_blocks():
+    c, b = {"L1": "S"}, {"L2": "I"}
+    assert settle(c, b, False, None, None) == ({}, {}, "пропускає")                 # it passes: nothing closes
+    assert settle(c, b, True, False, None) == (c, {}, "блокує")                     # the candidates suffice
+    assert settle(c, b, True, True, False) == ({"L1": "S", "L2": "I"}, {}, "блокує, з межовими")
+    assert settle(c, b, True, True, True) == (c, b, "блокує й без знайденого")      # Opus missed something
+    assert settle(c, b, None, None, None) == (c, b, "не перевірено")                # a failed check: Opus stands
+    assert settle(c, b, True, None, None) == (c, b, "блокує")
+
+
+def test_the_groups_are_her_days_then_thoughts_facts_and_summaries():
+    from agents.world import local_now
+    groups = scan_groups(list(reversed(items())), TZ)
+    day = local_now(NOW - 3_600_000, TZ).strftime("%d.%m")
+    assert [n for n, _ in groups] == [day, "думки", "факти", "підсумки"]
+    assert [i.ref for i in groups[0][1]] == ["L10", "L11"]                        # in time order
+    assert group_text(groups[0][1]) == "Ich: привіт, як ти?\nКіра: добре,\nа ти?"
+    assert group_text(groups[2][1]) == "Що ти знаєш про Ich:\n- він любить каву"
+
+
+def test_the_answer_names_what_gemini_blocks_and_what_it_lets_through():
+    line = gemini_line([("02.11", "блокує"), ("03.11", "блокує, з межовими"), ("28.10", "пропускає"),
+                        ("факти", "не перевірено")], 7)
+    assert line == ("Gemini (Pro): блокує — 02.11, 03.11; пропускає — 28.10; не перевірено — факти. "
+                    "Знайдене Opus, яке Gemini пропускає, лишається відкритим: 7.")
+    assert gemini_line([("28.10", "пропускає")], 0) == "Gemini (Pro): нічого не блокує; пропускає — 28.10."
+    from agents.world import local_now
+    day = local_now(NOW - 3_600_000, TZ).strftime("%d.%m")
+    out = days_lines(items(), Found({"L10": "S"}), TZ, {day: "блокує"})
+    assert f"{day}: рядки 1 + 0 з 2, думки 0 + 0 з 1, факти 0 + 0 з 1 — Gemini блокує" in out

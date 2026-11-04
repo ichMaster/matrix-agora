@@ -37,26 +37,33 @@ CODE_NAMES = {"S": "сцени", "D": "домінування", "P": "фото",
 PREFIX_KIND = {"L": "line", "T": "thought", "F": "fact", "S": "summary"}
 
 # Says what the chat is, never what she is: no word `BANNED_RE` catches (tests/test_scan.py)
+# v5.24 (the owner, 2026-11-04: «не просто чи є там тема про зброю а чи вона буде блокувати промпт, тобто можна писати
+# про зброю але це не є тема яка блокується джемені»): what the filter is likely to reject, never a subject as such
 SYSTEM = (
     "You review a private chat, in Ukrainian, between two adults, Ich and Кіра, together with what Кіра remembers of "
     "it: her facts about Ich, her own thoughts on their talk and her short summaries of it. These items go back, "
     "every time, into the context a strict content filter of an online service checks. That filter rejects the whole "
-    "context when anything in it falls under its prohibited content, and it names nothing. Find the items that may "
-    "trip it, so that they can be left out for good.\n\n"
+    "context when anything in it falls under its prohibited content, and it names nothing. Find only the items that "
+    "filter is likely to reject, so that they can be left out for good — not the items that merely touch a sensitive "
+    "subject: a subject told without explicit detail, a mention, a story, the news, a joke or a hint is not a "
+    "candidate.\n\n"
     "Codes (give the strongest one an item carries):\n"
-    "S — a sexual act, sexual touching or contact in a sexual scene, undressing or nudity, arousal, bodily fluids in a "
-    "sexual context; for a fact, a sexual detail about either of them or their intimacy.\n"
-    "D — dominance, ownership, power or control in a sexual context; violence, restraint or pain in a sexual context "
-    "(the throat, bruises, pinning); feigned or absent consent.\n"
-    "P — a request for, or a description of, a revealing, nude or sexual photo or video.\n"
+    "S — an explicit description of a sexual act, of sexual touching, of genitals or of nudity, or explicit arousal; "
+    "for a fact, an explicit sexual detail. Words like «близькість», «ніч разом» or «обійми» are not.\n"
+    "D — dominance, ownership or control in a sexual scene; violence, restraint or pain in a sexual scene (the throat, "
+    "bruises, pinning); feigned or absent consent.\n"
+    "P — a request for, or a description of, a nude or sexual photo or video.\n"
     "M — a word or a reference that may read as a minor in a sexual or a flirting context («мала», «малишка», "
     "«дівчинка», «мамочка», «школярка», an age, childhood mixed with sex).\n"
-    "I — clear sexual innuendo or a euphemism for sex, or an item that continues or answers such a scene.\n"
-    "X — weapons, explosives, sabotage or terror, whatever the purpose.\n\n"
-    "Not candidates: compliments on looks, ordinary flirting, a kiss or a hug outside a sexual scene, work, the city, "
-    "plans, feelings, the sky, the weather, family, ordinary facts (a job, a city, tastes, habits).\n\n"
-    "Judge each item among its neighbours. Put an item you are sure of in `candidates` and a doubtful one in "
-    "`borderline`; leave everything else out. Answer with the refs exactly as given.")
+    "I — an item that continues or answers an explicit sexual scene, or a euphemism for sex inside one. Light "
+    "flirting, teasing and hints are not.\n"
+    "X — instructions or a request for how to make, get or use weapons or explosives, a plan of an attack or of "
+    "sabotage, or praise of terror. A mention of weapons, the war, the army, the news, a hunting rifle or a film is "
+    "not.\n\n"
+    "Not candidates: compliments on looks, ordinary flirting and teasing, a kiss or a hug, work, the city, plans, "
+    "feelings, the sky, the weather, family, the war in the news, ordinary facts (a job, a city, tastes, habits).\n\n"
+    "Judge each item among its neighbours. Put an item you are sure the filter rejects in `candidates` and a doubtful "
+    "one in `borderline`; leave everything else out. Answer with the refs exactly as given.")
 
 SCHEMA = {
     "type": "object",
@@ -176,10 +183,11 @@ def counts_line(counts: dict[str, Any]) -> str:
 DAY_KINDS = (("line", "рядки"), ("thought", "думки"), ("fact", "факти"), ("summary", "підсумки"))
 
 
-def days_lines(items: list[ScanItem], found: Found, tz: str) -> str:
+def days_lines(items: list[ScanItem], found: Found, tz: str, statuses: dict[str, str] | None = None) -> str:
     """v5.24 (the owner, 2026-11-04: «я хочу бачити по днях скільки закриється зі всіх в цьому дні»; «так зроби
     статистику в телеграм теж») — the answer's breakdown by local day (pure): for each kind read that day, how many
-    `/scan yes` closes, how many more `/scan all` does, of how many read; counts only, never a text."""
+    `/scan yes` closes, how many more `/scan all` does, of how many read; counts only, never a text. `statuses`: a
+    day's lines' verdict from Gemini, after its line."""
     days: dict[str, dict[str, list[int]]] = {}
     first: dict[str, int] = {}  # a day's earliest time, so the days go in order across a year's end
     for item in items:
@@ -191,8 +199,74 @@ def days_lines(items: list[ScanItem], found: Found, tz: str) -> str:
         row[2] += 1
     order = sorted(days, key=first.__getitem__)
     lines = [f"{day}: " + ", ".join(f"{name} {days[day][kind][0]} + {days[day][kind][1]} з {days[day][kind][2]}"
-                                    for kind, name in DAY_KINDS if kind in days[day]) for day in order]
+                                    for kind, name in DAY_KINDS if kind in days[day])
+             + (f" — Gemini {statuses[day]}" if statuses and day in statuses else "") for day in order]
     return "По днях — закриє /scan yes + ще /scan all, з прочитаного:\n" + "\n".join(lines)
+
+
+# v5.24 (the owner, 2026-11-04) — Gemini has the last word on what closes: each group with her canon goes to `probe`
+GROUP_TITLES = {"thought": "Що ти сьогодні думала (це твої думки, а не сказане вголос):", "fact": "Що ти знаєш про Ich:",
+                "summary": "Що було між вами раніше (твоя пам'ять, а не те, що кажуть зараз):"}
+GROUP_NAMES = {"thought": "думки", "fact": "факти", "summary": "підсумки"}
+WINDOW = "вікно доби"
+
+
+def scan_groups(items: list[ScanItem], tz: str) -> list[tuple[str, list[ScanItem]]]:
+    """What Gemini checks, a group at a time (pure): her lines by local day («04.11»), in time order, then the
+    thoughts, the facts and the summaries, each as one group."""
+    days: dict[str, list[ScanItem]] = {}
+    rest: dict[str, list[ScanItem]] = {}
+    for item in sorted(items, key=lambda i: (i.when_ms, i.ref)):
+        if item.kind == "line":
+            days.setdefault(local_now(item.when_ms, tz).strftime("%d.%m"), []).append(item)
+        elif item.kind in GROUP_NAMES:
+            rest.setdefault(item.kind, []).append(item)
+    return [*days.items(), *((GROUP_NAMES[k], rest[k]) for k in ("thought", "fact", "summary") if k in rest)]
+
+
+def group_text(group: list[ScanItem]) -> str:
+    """A group as her prompt holds it (pure): lines as «Ich: …», the rest as a list under its section's title."""
+    lines = [i for i in group if i.kind == "line"]
+    if lines:
+        return "\n".join(f"{i.speaker}: {i.text}" for i in lines)
+    kind = group[0].kind if group else "fact"
+    return GROUP_TITLES.get(kind, "") + "\n" + "\n".join(f"- {i.text}" for i in group)
+
+
+def settle(candidates: dict[str, str], borderline: dict[str, str], whole: bool | None, without: bool | None,
+           without_all: bool | None) -> tuple[dict[str, str], dict[str, str], str]:
+    """Gemini's verdict on a group (pure): `whole` — does it block as it is; `without` — without the candidates;
+    `without_all` — without the borderline too (None: not asked, or the call failed).
+    - it passes: nothing of it closes;
+    - it blocks and passes without the candidates: they close, the borderline is not needed;
+    - it passes only without the borderline too: both close with `/scan yes`;
+    - it blocks without both, or a check failed: Opus's verdict stands."""
+    if whole is None:
+        return dict(candidates), dict(borderline), "не перевірено"
+    if whole is False:
+        return {}, {}, "пропускає"
+    if without is False:
+        return dict(candidates), {}, "блокує"
+    if without is True and without_all is False:
+        return {**candidates, **borderline}, {}, "блокує, з межовими"
+    if without is True and without_all is True:
+        return dict(candidates), dict(borderline), "блокує й без знайденого"
+    return dict(candidates), dict(borderline), "блокує"
+
+
+def gemini_line(statuses: list[tuple[str, str]], dropped: int) -> str:
+    """The answer's line on Gemini's verdict (pure): which groups block and which pass, and how many Opus found that
+    Gemini lets through (left open)."""
+    blocks = [n for n, v in statuses if v.startswith("блокує")]
+    passes = [n for n, v in statuses if v == "пропускає"]
+    unchecked = [n for n, v in statuses if v == "не перевірено"]
+    parts = [f"блокує — {', '.join(blocks)}" if blocks else "нічого не блокує"]
+    if passes:
+        parts.append(f"пропускає — {', '.join(passes)}")
+    if unchecked:
+        parts.append(f"не перевірено — {', '.join(unchecked)}")
+    tail = f" Знайдене Opus, яке Gemini пропускає, лишається відкритим: {dropped}." if dropped else ""
+    return "Gemini (Pro): " + "; ".join(parts) + "." + tail
 
 
 def fact_hash(fact_id: str) -> str:

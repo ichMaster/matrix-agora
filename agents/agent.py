@@ -254,16 +254,22 @@ from agents.route import step as route_after
 from agents.runtime import acquire_lock, lock_holder, setup_logging
 from agents.scan import KEY_VAR as SCAN_KEY_VAR
 from agents.scan import (
+    WINDOW,
+    Found,
     OpusJudge,
     ScanItem,
     counts_line,
     days_lines,
     fact_hash,
+    gemini_line,
+    group_text,
     kind_of,
     load_scan,
     save_scan,
     scan_counts,
+    scan_groups,
     scan_range,
+    settle,
 )
 from agents.settings import VOICE_ID_RE, live_value
 from agents.settings import start as settings_start
@@ -1923,6 +1929,9 @@ class Agent:
         found = await self.scan_judge.judge(items, self.tz)
         if found is None:
             return "⚙️ Opus не відповів: нічого не знайдено і не закрито"
+        opus = len(found.candidates) + len(found.borderline)
+        found, statuses = await self._scan_gemini(items, found)
+        verdict = gemini_line(statuses, opus - len(found.candidates) - len(found.borderline)) if statuses else ""
         data: dict = {"last_end_ms": end if not found else state.get("last_end_ms"),
                       "facts_seen": seen + list(facts.values()) if not found else seen, "facts_read": list(facts.values())}
         if found:
@@ -1932,9 +1941,57 @@ class Agent:
                          "facts": {r: facts[r] for r in refs if r in facts},
                          "summaries": {r: summaries[r] for r in refs if r in summaries}})
         save_scan(self.scan_file, data)
-        log.info("scan: %d read — %d found, %d borderline", len(items), len(found.candidates), len(found.borderline))
+        log.info("scan: %d read — %d found, %d borderline (%d by Opus)", len(items), len(found.candidates),
+                 len(found.borderline), opus)
         line = counts_line(scan_counts(found))
-        return f"{line}\n\n{days_lines(items, found, self.tz)}" if found else line  # v5.24 (the owner): by day
+        days = dict(statuses)
+        out = f"{line}\n\n{days_lines(items, found, self.tz, days)}" if found else line  # v5.24 (the owner): by day
+        return f"{out}\n\n{verdict}" if verdict else out
+
+    async def _scan_gemini(self, items: list[ScanItem], found: Found) -> tuple[Found, list[tuple[str, str]]]:
+        """v5.24 (the owner, 2026-11-04: «не просто чи є там тема про зброю а чи вона буде блокувати промпт») — Gemini
+        has the last word: each group Opus found something in (a day's lines, the thoughts, the facts, the summaries)
+        goes with her private canon to `probe` on her reply model (kind `scan_check`), whole, then without the
+        candidates, then without the borderline too; `settle` keeps what it blocks. Then her window as Gemini reads it:
+        when it blocks, the candidates in it stay whatever their day said (a block may need two days together). No
+        probe: Opus's verdict stands."""
+        probe = getattr(self.llm, "probe", None)
+        if probe is None:
+            return found, []
+        canon = self.cfg.canon_private or self.cfg.canon
+        settled, statuses = Found(), []
+
+        async def blocks(group: list[ScanItem], skip: set[str]) -> bool | None:
+            kept = [i for i in group if i.ref not in skip]
+            return await probe(group_text(kept), canon, kind="scan_check") if kept else False
+
+        for name, group in scan_groups(items, self.tz):
+            refs = {i.ref for i in group}
+            cands = {r: c for r, c in found.candidates.items() if r in refs}
+            border = {r: c for r, c in found.borderline.items() if r in refs}
+            if not cands and not border:
+                continue
+            whole = await blocks(group, set())
+            without = await blocks(group, set(cands)) if whole else None
+            without_all = await blocks(group, set(cands) | set(border)) if whole and without else None
+            kept_c, kept_b, status = settle(cands, border, whole, without, without_all)
+            settled.candidates.update(kept_c)
+            settled.borderline.update(kept_b)
+            statuses.append((name, status))
+        window = self._gemini_lines() or []
+        in_window = {f"L{x.id}" for x in window}
+        held = {r: c for r, c in found.candidates.items() if r in in_window}
+        if held:
+            lines = [ScanItem(f"L{x.id}", "line", x.ts_ms, x.speaker, strip_notes(x.text)) for x in window]
+            whole = await blocks(lines, set())
+            if whole:
+                settled.candidates.update(held)
+                for ref in held:
+                    settled.borderline.pop(ref, None)
+            statuses.append((WINDOW, "не перевірено" if whole is None else ("блокує" if whole else "пропускає")))
+        log.info("scan: Gemini checked %d groups — %d block", len(statuses),
+                 sum(v.startswith("блокує") for _, v in statuses))
+        return settled, statuses
 
     def scan_items(self, start_ms: int, end_ms: int, facts_seen: set[str] = frozenset()
                    ) -> tuple[list[ScanItem], dict, dict]:

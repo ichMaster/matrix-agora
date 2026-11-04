@@ -160,6 +160,19 @@ The invariants every reply path must honor:
    дні»; «так зроби статистику в телеграм теж») the breakdown by local day (`days_lines`, pure): for each kind read
    that day, «рядки a + b з n» — what `/scan yes` closes, what `/scan all` adds, of how many were read — and the same
    for thoughts, facts (by the day added) and summaries (by their period's day), the days in time order.
+   **Gemini has the last word (v5.24, the owner, 2026-11-04: «не просто чи є там тема про зброю а чи вона буде
+   блокувати промпт, тобто можна писати про зброю але це не є тема яка блокується джемені»):** the rubric names only
+   what the filter is likely to reject, never a subject as such — X is instructions, a request or a plan (a mention of
+   weapons, the war, the news or a film is not), I continues an explicit scene (light flirting and hints are not), S is
+   an explicit description; then `Agent._scan_gemini` sends each group Opus found something in (`scan_groups`: her
+   lines by local day, then the thoughts, the facts, the summaries; `group_text` as her prompt holds them) with her
+   private canon to `probe` on her reply model (kind `scan_check`) — whole, without the candidates, without the
+   borderline too — and `settle` (pure) decides: a group that passes closes nothing; one that passes without the
+   candidates closes them alone; one that passes only without the borderline closes both at `/scan yes`; one that
+   blocks without both, or a failed check, keeps Opus's verdict. Then her window as Gemini reads it (`_gemini_lines`):
+   when it blocks, the candidates in it stay whatever their day said — a block may need two days together, as on
+   2026-11-04 at 16:34. The answer adds each day's verdict after its line and «Gemini (Pro): блокує — …; пропускає —
+   …», with how many of Opus's finds stay open; with no probe, Opus's verdict stands.
    **The list** (`state/<name>.scan.json`): the refs and codes, a fact by its id's sha256 (`fact_hash` — its id is its
    text's slug), a summary by `(level, start_ms)`, the range, `facts_read` and `facts_seen`, `last_end_ms` — a scan
    that found nothing moves it to its end, an unused list leaves it, so the next `/scan` reads the same lines again.
