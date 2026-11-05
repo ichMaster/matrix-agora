@@ -87,6 +87,15 @@ def test_her_repeats_are_named_and_function_words_never():
     assert repeats(["Добрий вечір", "Як день?"]) == ([], [])
 
 
+def test_her_live_words_are_her_surzhyk_and_its_function_words_are_never_a_repeat():
+    # the owner, 2026-11-05: «хай говорить суржиком а не чисто львівською мовою»
+    assert {"тіпа", "вобщєм", "наверно", "вроді", "канєшно", "ладно", "тю"} <= set(FILLERS)
+    assert not {"типу", "загалом", "мабуть", "наче", "ніби", "уяви", "до речі", "кстаті"} & set(FILLERS)
+    her = ["Хотя я тоже не знаю, даже не питай.", "Ну всьо, хотя шось тоже є, даже смішно.",
+           "Єслі тіки хотя б тоже так, даже краще, всьо."]
+    assert repeats(her) == ([], [])
+
+
 def test_a_word_counts_by_its_stem():
     """v5.24: «звіти», «звітів» and «звіт» are one word; a short word is never cut below four letters."""
     for a, b in (("звіти", "звітів"), ("звіт", "звіти"), ("хакере", "хакерську"), ("сьомій", "сьому"),

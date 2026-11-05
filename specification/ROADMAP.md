@@ -3479,6 +3479,12 @@ something of her own now and then, what she said was heard, and no one-time arra
   private canon (softer) and her backup canon (the first: their intimate scenes) (AGORA-209).
 - **No makeup** (2026-11-05: «допиши в канон що вона не носить ніколи мейкапу і це її позиція природньої краси»; «роби»):
   her three canons say so (private), and a selfie's request asks for a bare, natural face (AGORA-210).
+- **Her Donetsk surzhyk** (2026-11-05: «я хочу додати їй більше русизмів але власне Донецьких … і хай говорить
+  суржиком а не чисто львівською мовою наприклад хвіртка це не суржик»; «так знає що говорить суржиком», «Агора теж»,
+  «в коді теж»): her three canons (private) say she speaks surzhyk and knows it — the Russian words of every day, the
+  Donetsk words she takes for common ones, now and then the street's fenya, no bookish or Galician word, Ukrainian
+  letters only (the backup's `russian` check); the style line's live words are her surzhyk, and the topics line names
+  «хотя…» and «кстаті» beside «хоча…» and «до речі» (AGORA-211).
 
 **Owner steps:** the deploy (v5.24's checks and this phase's together) and the live check.
 

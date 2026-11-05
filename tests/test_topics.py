@@ -67,7 +67,8 @@ def test_the_section_counts_in_ukrainian_and_ends_with_her_choice():
     # the owner, 2026-11-05: one topic a message, never a jump in the middle of one
     assert "одне повідомлення — одна тема" in TOPICS_CHOOSE and "а далі говори" not in TOPICS_CHOOSE
     # the same day: her interest decides — on the two of them she stays; from a dull topic she may slip away
-    assert "Поки ви про те, що тобі з ним найцікавіше" in TOPICS_CHOOSE and "без «хоча…», «до речі»" in TOPICS_CHOOSE
+    assert "Поки ви про те, що тобі з ним найцікавіше" in TOPICS_CHOOSE
+    assert "без «хоча…» чи «хотя…», «до речі» чи «кстаті»" in TOPICS_CHOOSE         # … and her surzhyk's words
     assert "Тема, яка тобі не цікава, — інша справа" in TOPICS_CHOOSE
     assert "«наш флірт і ніжність» — без подробиць" in topics_request("Кіра", [("Ich", "Привіт")])[0]
 
