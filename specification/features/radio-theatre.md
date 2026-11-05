@@ -186,7 +186,7 @@ New env names: `STAGE_ROOM_ID` (both shared examples), `LEON_VOICE_ID`, `MIA_VOI
 
 ## Open questions
 
-1. **Numbering:** decided — v7, before Лілі, who moved to v8 (the owner, 2026-10-25). On 2026-10-26 the owner renumbered: Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9. The three new personas of v9.1 shipped as v5.5.
+1. **Numbering:** decided — v7, before Лілі, who moved to v8 (the owner, 2026-10-25). On 2026-10-26 the owner renumbered: Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9. On 2026-11-05: Кіра's inner life v6, Лілі v7, Applications v8, the Theatre v9. The three new personas of v9.1 shipped as v5.5.
 2. **Do the actors know the sources?** Proposed: no.
 3. **The Agora pause** during a play: proposed yes.
 4. **The owner in a play:** only the audience, or a character too (typed lines in his cloned voice)?
