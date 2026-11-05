@@ -387,8 +387,7 @@ def test_kiras_env_example_holds_the_bot_the_owner_and_her_hearing_only():
                                                                "GUARDIAN_API_KEY",  # v5.12: her reading
                                                                "NOVELAI_API_TOKEN", "FALLBACK_MODEL",  # v5.14
                                                                 # v5.15: the judge
-                                                               "FAL_KEY",  # v5.18: her кружечок
-                                                               "OPUS_JUDGE_KEY"}  # v5.24: the scan
+                                                               "FAL_KEY"}  # v5.18: her кружечок
     for example in (".env.example", "server/.env.example"):
         assert not env_keys(ROOT / example) & {"TELEGRAM_BOT_TOKEN", "TELEGRAM_OWNER_ID"}, example
 

@@ -94,22 +94,19 @@ def test_kind_list_is_the_contract():
                      "scan")                               # v5.24: Opus naming what may block her prompt
 
 
-def test_the_scans_line_is_anthropics_priced_by_its_model_and_holds_no_text():
-    """v5.24 — the scan's call: kind `scan`, engine `anthropic` (a service of its own in Analytics), billing `api` —
-    priced by `PRICE_MODELS` under the model's id; the prompt counts the cached input tokens too."""
-    from agents.usage import aggregate, cost, parse_lines, parse_model_prices, scan_usage_line
-    line = scan_usage_line("2026-11-03T22:00:00+02:00", "kira", "claude-opus-5-5", 20000, 3000, True, 41000, 0, 0)
-    assert (line["kind"], line["engine"], line["billing"], line["total_tokens"]) == ("scan", "anthropic", "api", 23000)
-    assert line["latency_ms"] == 41000 and line["blocked"] is None and line["reported_cost_usd"] is None
-    assert set(line) == set(usage_line("2026-11-03T22:00:00", "kira", "scan", "m", None, True))  # one line shape
+def test_a_scan_line_from_before_agora_212_is_still_read_and_priced():
+    """v5.24 — the Opus scan's lines (kind `scan`, engine `anthropic`, billing `api`) stay in her usage file after
+    AGORA-212 took the scan to Gemini alone: still read, still priced by `PRICE_MODELS` under the model's id."""
+    from agents.usage import aggregate, cost, parse_lines, parse_model_prices
+    line = {**usage_line("2026-11-03T22:00:00+02:00", "kira", "scan", "claude-opus-5-5", None, True),
+            "prompt_tokens": 20000, "output_tokens": 3000, "total_tokens": 23000, "engine": "anthropic",
+            "billing": "api"}
     records, bad = parse_lines([json.dumps(line)])
     assert bad == 0 and len(records) == 1
     prices, wrong = parse_model_prices("gemini-3.1-pro-preview=2/12,claude-opus-5-5=4/20")
     assert wrong == [] and prices["claude-opus-5-5"] == (4.0, 20.0)
     row = aggregate(records)[("2026-11-03", "kira", "scan")]
     assert abs(cost(row, 0.3, 2.5, prices) - (20000 * 4 + 3000 * 20) / 1e6) < 1e-12
-    failed = scan_usage_line("t", "kira", "claude-opus-5-5", None, None, False)
-    assert failed["total_tokens"] is None and failed["ok"] is False and failed["engine"] == "anthropic"
 
 
 def test_the_judges_line_is_priced_by_its_model_and_holds_no_text():

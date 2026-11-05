@@ -18,10 +18,9 @@ import stat
 import sys
 import time
 from contextvars import ContextVar
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -41,6 +40,7 @@ from agents.archive import (
     GEMINI_CLOSED,
     THOUGHT_PLACES,
     Archive,
+    SoftRow,
     cosine_top,
     emptying_due,
     fuse,
@@ -110,7 +110,6 @@ from agents.facts import (
     parse_extraction,
     purge_closed_facts,
     replace_fact,
-    set_mark,
     split_marker,
 )
 from agents.facts import (
@@ -129,6 +128,7 @@ from agents.logic import (
     CLAUDE_NEWS_BRIEF,
     CREATURE_RULES,
     CUT_LAYERS,
+    SOFT_LINE,
     append_history,
     asked_section,
     build_instruction,
@@ -252,26 +252,17 @@ from agents.route import (
 from agents.route import mode as route_mode
 from agents.route import step as route_after
 from agents.runtime import acquire_lock, lock_holder, setup_logging
-from agents.scan import KEY_VAR as SCAN_KEY_VAR
+from agents.scan import NEUTRAL as SCAN_NEUTRAL
+from agents.scan import ROUNDS as SCAN_ROUNDS
 from agents.scan import (
-    REWRITE_LEVELS,
-    WINDOW,
-    Found,
-    OpusJudge,
-    ScanItem,
-    counts_line,
-    days_lines,
-    fact_hash,
-    gemini_line,
-    group_text,
-    kind_of,
-    load_scan,
-    rewrite_line,
-    save_scan,
-    scan_counts,
-    scan_groups,
-    scan_range,
-    settle,
+    SOFT_KEEP_MS,
+    STRICT_MAX,
+    ScanStop,
+    hour_spans,
+    minimal_run,
+    next_level,
+    scan_line,
+    soften,
 )
 from agents.settings import VOICE_ID_RE, live_value
 from agents.settings import start as settings_start
@@ -336,7 +327,6 @@ from agents.usage import (
     answer_line,
     fallback_usage_line,
     parse_lines,
-    scan_usage_line,
     sdk_usage_line,
     stt_usage_line,
     trace_line,
@@ -439,8 +429,8 @@ class Agent:
         os.environ.pop("OPENROUTER_API_KEY", None)
         # v5.18 — fal's key for her кружечок (server/kira.env): out of the environment for every agent, used by hers
         fal_key = os.environ.pop(FAL_KEY_VAR, "").strip()
-        # v5.24 — the scan's key (server/kira.env, Lumi's): out of the environment for every agent, used by hers
-        scan_key = os.environ.pop(SCAN_KEY_VAR, "").strip()
+        # v5.24 (AGORA-212): the Opus scan is gone — a key left in kira.env never stays in the environment
+        os.environ.pop("OPUS_JUDGE_KEY", None)
         # the room's members come from the registry (v4.1): nothing in the code names them
         self.roster = roster if roster is not None else load_roster(cfg.simulation, strict_for=cfg.localpart)
         self.me = self.roster.get(cfg.localpart) or Member(cfg.localpart, cfg.user_id, cfg.name, (cfg.name.lower(),))
@@ -630,14 +620,12 @@ class Agent:
         self.topics_lines = int(os.environ.get("TOPICS_LINES", "20")) if cfg.can("private") else 0
         self._topics: tuple[list, int] | None = None  # (topic, her, his) and the lines read — in memory only
         self._topics_lock = asyncio.Lock()
-        # v5.24 (the owner, 2026-11-03: «через опус як суддя») — `/scan`: Opus 5.5 on his key, for her private talk
-        self.scan_days = int(os.environ.get("SCAN_DAYS", "7"))
-        self.scan_ttl_s = int(os.environ.get("SCAN_TTL_S", "1800"))
-        self.scan_judge = (OpusJudge(scan_key, os.environ.get("SCAN_MODEL", "claude-opus-5-5"),
-                                     os.environ.get("SCAN_EFFORT", "medium"), int(os.environ.get("SCAN_CHUNK", "400")),
-                                     usage=self.record_scan_usage)
-                           if scan_key and cfg.can("private") and cfg.can("recall") else None)
-        self._scan_running = False
+        # v5.24 (AGORA-212, the owner, 2026-11-05: «визначай проблемні години і роби для них самарізейшинг») — the
+        # scan: Gemini's checks of one scan at most, and how many start by themselves after a block in an hour (0: none)
+        self.scan_calls_max = int(os.environ.get("SCAN_CALLS_MAX", "40"))
+        self.scan_auto_hour_max = int(os.environ.get("SCAN_AUTO_HOUR_MAX", "3"))
+        self._scan_running, self._scan_due = False, False
+        self._auto_scans: list[int] = []  # the times of the last hour's scans after a block
         self.private_idle_ms, self.private_per_day, self.private_hours = 0, 0, (0, 0)
         self.private_first_door = "last"
         if cfg.can("private"):
@@ -1143,7 +1131,9 @@ class Agent:
             # an open ending, where a voice tag may go, and what she has been repeating. v5.24: her repeats are read
             # from the lines open to Gemini — a word named from a closed line would carry it into Gemini's prompt
             window = self._gemini_lines()
-            her_lines = ([strip_notes(x.text) for x in window if x.speaker == self.cfg.name] if window is not None
+            hidden = self._soft_hidden() if window else set()  # v5.24 (AGORA-212): never a softened span's word
+            her_lines = ([strip_notes(x.text) for x in window if x.speaker == self.cfg.name
+                          and (x.speaker, x.text) not in hidden] if window is not None
                          else [t for s, t in self.private_history if s == self.cfg.name])
             own = " чи ".join(t for c, t in (("today", "«Сьогодні»"), ("thoughts", "«Що ти сьогодні думала»"))
                              if self.cfg.can(c))  # v5.25: the sections of her day her prompt holds
@@ -1249,6 +1239,9 @@ class Agent:
                 action.cancel()
             if door == "matrix":
                 await self.client.room_typing(room, False)
+            if self._scan_due:  # v5.24 (AGORA-212): her prompt blocked at the prompt stage — the scan, now she answered
+                self._scan_due = False
+                self.auto_scan()
 
     async def _say_silence(self, line: str) -> None:
         """v5.22 (the owner, 2026-11-02: «я не хочу щоб було просто тиша у відповідь … бо не зрозуміло чи вона взагалі
@@ -1296,6 +1289,7 @@ class Agent:
             # pairs — never the backup's last `HISTORY_N` lines, which since the 24-hour window hold lines no prompt shows
             exclude = (set(self.private_history) if window is None
                        else {(x.speaker, x.text) for x in window} | set(history) | self._closed)
+            exclude |= self._soft_hidden()  # v5.24 (AGORA-212): a softened span's lines never come back by recall
             recalled = await self.recall_section(query, self.private_places, exclude)
             agora_now = self.agora_now_section()
         return self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts, talk=True)
@@ -1406,8 +1400,8 @@ class Agent:
         kind = "private_nudge" if nudge else "private"
         if not self.backup_open():
             text, block = await self._gemini_answer(brief, kind)
-            if block is not None and not nudge:  # v5.13: what Gemini refused never reaches it again
-                self.mark_unanswered(block[0], seen)
+            if block is not None:
+                self._after_block(block[0], nudge, seen)
             return text, "gemini"
         if route_mode(load_route(self.route_file), self.clock()) == "backup":
             log.info("private: route=backup — the backup answers")
@@ -1424,13 +1418,22 @@ class Agent:
         if block is None:
             return None, "gemini"  # silence, as ever: not a block
         self.route_step("block")
-        if not nudge:
-            self.mark_unanswered(block[0], seen)
+        self._after_block(block[0], nudge, seen)
         log.warning("private: route=gemini — a %s, the backup answers", block[0])
         text = await self._backup_text(brief, kind)
         if text is not None:
             self.route_step("backup")
         return text, "backup"
+
+    def _after_block(self, stage: str, nudge: bool, seen: list) -> None:
+        """v5.24 (AGORA-212, the owner, 2026-11-05: «тоді не треба буде і закривати рядки») — a block of her prompt
+        at the prompt stage closes nothing: the scan starts once her answer is out (`auto_scan`) and softens the hours
+        that block. v5.13: an answer-stage block or her caught refusal — what the scan cannot see — still makes his
+        unanswered lines `blocked`."""
+        if stage == "prompt":
+            self._scan_due = True
+        elif not nudge:
+            self.mark_unanswered(stage, seen)
 
     def gemini_history(self) -> list[tuple[str, str]]:
         """v5.14 — her private history as Gemini may read it, never a closed line (conservatively: a same text open
@@ -1467,20 +1470,53 @@ class Agent:
             lines = lines[-max(self.private_history_n, unanswered):] if lines else lines
         return lines
 
-    def gemini_history_shown(self) -> list[tuple[str | None, tuple[str, str]]]:
+    def gemini_history_shown(self, soft: dict | None = None, keep: list[tuple[int, int]] | None = None
+                             ) -> list[tuple[str | None, tuple[str, str]]]:
         """`gemini_history_keyed` as her prompt shows it (the owner, 2026-11-01): a time line (`history_times`, no id,
         no name) before the first line and after every long pause — the closed days leave a gap, and Wednesday's talk
-        right before Sunday's read as tonight's."""
+        right before Sunday's read as tonight's. v5.24 (AGORA-212): a span the scan softened stands as one line, its
+        summary as she remembers it (`SOFT_LINE`), or not at all (`soften`). `soft` (start → `SoftRow`; the archive's
+        by default) and `keep` (only the lines of these spans) are the scan's."""
         lines = self._gemini_lines()
         if lines is None:
             return self.gemini_history_keyed()
-        times = history_times([line.ts_ms for line in lines], local_now(self.clock(), self.tz), self.tz)
+        if soft is None:
+            soft = self._soft_now(lines)
+        if keep is not None:
+            lines = [x for x in lines if any(a <= x.ts_ms < b for a, b in keep)]
+        items = soften([(line.ts_ms, line) for line in lines], list(soft.values()))
+        times = history_times([ts for ts, _ in items], local_now(self.clock(), self.tz), self.tz)
         out: list[tuple[str | None, tuple[str, str]]] = []
-        for i, line in enumerate(lines):
+        for i, (_, item) in enumerate(items):
             if i in times:
                 out.append((None, ("", times[i])))
-            out.append((f"line:{line.key}", (line.speaker, history_entry(strip_notes(line.text)))))
+            if isinstance(item, SoftRow):
+                out.append((None, ("", SOFT_LINE.format(text=" ".join(item.text.split())))))
+            else:
+                out.append((f"line:{item.key}", (item.speaker, history_entry(strip_notes(item.text)))))
         return out
+
+    def _soft_now(self, lines: list) -> dict:
+        """v5.24 (AGORA-212) — the softened spans over her window (start → `SoftRow`); none when the archive fails."""
+        if self.archive is None or not lines:
+            return {}
+        try:
+            return {r.start_ms: r for r in self.archive.soft_rows(lines[0].ts_ms)}
+        except Exception as exc:  # noqa: BLE001
+            log.error("scan: the softened spans were not read (%s)", type(exc).__name__)
+            return {}
+
+    def _soft_hidden(self) -> set[tuple[str, str]]:
+        """v5.24 (AGORA-212) — the (speaker, text) of the open lines of the spans softened in the last 30 days: out of
+        her recall, her topics and the words her style line names, as they are out of her window."""
+        if self.archive is None:
+            return set()
+        try:
+            return {(x.speaker, x.text) for r in self.archive.soft_rows(self.clock() - SOFT_KEEP_MS)
+                    for x in self.archive.private_between(r.start_ms, r.end_ms)}
+        except Exception as exc:  # noqa: BLE001
+            log.error("scan: the softened spans were not read (%s)", type(exc).__name__)
+            return set()
 
     def talk_now(self, now) -> str | None:
         """v5.20 — the summaries of her private chat older than the first line of Gemini's history window (`talk_section`);
@@ -1910,221 +1946,166 @@ class Agent:
         named = ", ".join(f"{line.speaker} {when(line.ts_ms)}" for line in sorted(pair, key=lambda x: (x.ts_ms, x.id)))
         return f"⚙️ Закрито для gemini: {named}\n{self.status_answer()}"
 
-    @property
-    def scan_file(self) -> Path:
-        return self.memory_file.parent / f"{self.cfg.localpart}.scan.json"
-
     def scan_answer(self, args: list[str]) -> str:
-        """v5.24 (the owner, 2026-11-03: «спочатку показує скільки буде таких меседжів і потім yes це блокування») —
-        `/scan`: Opus reads what Gemini can read since the last scan, in a task of its own (her polling and her answers
-        never wait for it), and answers with the counts; `/scan yes` closes what it found and `/scan all` the
-        borderline too — exactly that list, within `SCAN_TTL_S`, once. Counts only, never a text."""
+        """`/scan` (v5.24, AGORA-212; the owner, 2026-11-05: «перероби сканування … тоді не треба буде і закривати
+        рядки»): Gemini finds the hours of her window that make her private prompt block and softens them (`scan_once`)
+        in a task of her own, so her polling and her answers never wait; the answer comes when it ends. `/scan yes`
+        and `/scan all` went with v5.24's Opus judge: nothing is closed any more."""
         if args[:1] in (["yes"], ["all"]):
-            return self.scan_close(args[0] == "all")
-        if self.scan_judge is None or self.archive is None:
-            return "⚙️ Сканування вимкнене: немає ключа"
+            return "⚙️ /scan yes більше немає: сканування саме пом'якшує години й нічого не закриває"
+        if not self._scan_open():
+            return "⚙️ Сканування вимкнене"
         if self._scan_running:
             return "⚙️ Сканування вже йде"
         self._scan_running = True
         self._spawn(self._scan_run())
         return "⚙️ Сканую…"
 
+    def _scan_open(self) -> bool:
+        return (getattr(self.llm, "probe", None) is not None and self.archive is not None and self.cfg.can("private")
+                and self.cfg.can("talk"))
+
+    def auto_scan(self) -> None:
+        """v5.24 (AGORA-212, the owner: «після блоку і /scan») — after a block of her prompt at the prompt stage, once
+        her answer (the backup's) is out: the scan in a task of her own, at most `SCAN_AUTO_HOUR_MAX` in an hour (0:
+        never), never two at once."""
+        now = self.clock()
+        self._auto_scans = [t for t in self._auto_scans if t > now - 3_600_000]
+        why = ("off" if self.scan_auto_hour_max <= 0 or not self._scan_open() else "running" if self._scan_running
+               else "the hour's cap" if len(self._auto_scans) >= self.scan_auto_hour_max else None)
+        if why:
+            log.info("scan: not started after the block (%s)", why)
+            return
+        self._auto_scans.append(now)
+        self._scan_running = True
+        self._spawn(self._scan_run())
+
     async def _scan_run(self) -> None:
         try:
             answer = await self.scan_once()
         except Exception:
             log.exception("scan: failed (bot keeps running)")
-            answer = "⚙️ Opus не відповів: нічого не знайдено і не закрито"
+            answer = "⚙️ Сканування впало: нічого не змінено"
         finally:
             self._scan_running = False
-        if not await self.telegram.send_message(self.telegram_owner, answer):
-            log.warning("telegram: the scan's answer was not delivered")
-
-    async def scan_once(self) -> str:
-        """One scan: what Gemini can read in the range, Opus's verdict, the list kept for `/scan yes`. A scan that
-        found nothing moves the next one's start; an unused list leaves it, so the next `/scan` reads it again. A fact
-        has only its day, so the facts a used or an empty scan read are kept by hash (`facts_seen`) and never read
-        again."""
-        state = load_scan(self.scan_file)
-        now = self.clock()
-        start, end = scan_range(now, state.get("last_end_ms") if isinstance(state.get("last_end_ms"), int) else None,
-                                self.scan_days)
-        seen = [h for h in state.get("facts_seen") or [] if isinstance(h, str)]
-        items, facts, summaries = self.scan_items(start, end, set(seen))
-        if not items:
-            save_scan(self.scan_file, {"last_end_ms": end, "facts_seen": seen})
-            log.info("scan: nothing to read")
-            return "⚙️ Нічого не знайдено"
-        found = await self.scan_judge.judge(items, self.tz)
-        if found is None:
-            return "⚙️ Opus не відповів: нічого не знайдено і не закрито"
-        opus = len(found.candidates) + len(found.borderline)
-        found, statuses = await self._scan_gemini(items, found)
-        verdict = gemini_line(statuses, opus - len(found.candidates) - len(found.borderline)) if statuses else ""
-        data: dict = {"last_end_ms": end if not found else state.get("last_end_ms"),
-                      "facts_seen": seen + list(facts.values()) if not found else seen, "facts_read": list(facts.values())}
-        if found:
-            refs = (*found.candidates, *found.borderline)
-            data.update({"made_ms": now, "start_ms": start, "end_ms": end,
-                         "candidates": sorted(found.candidates.items()), "borderline": sorted(found.borderline.items()),
-                         "facts": {r: facts[r] for r in refs if r in facts},
-                         "summaries": {r: summaries[r] for r in refs if r in summaries}})
-        save_scan(self.scan_file, data)
-        log.info("scan: %d read — %d found, %d borderline (%d by Opus)", len(items), len(found.candidates),
-                 len(found.borderline), opus)
-        line = counts_line(scan_counts(found))
-        days = dict(statuses)
-        out = f"{line}\n\n{days_lines(items, found, self.tz, days)}" if found else line  # v5.24 (the owner): by day
-        return f"{out}\n\n{verdict}" if verdict else out
-
-    async def _scan_gemini(self, items: list[ScanItem], found: Found) -> tuple[Found, list[tuple[str, str]]]:
-        """v5.24 (the owner, 2026-11-04: «не просто чи є там тема про зброю а чи вона буде блокувати промпт») — Gemini
-        has the last word: each group Opus found something in (a day's lines, the thoughts, the facts, the summaries)
-        goes with her private canon to `probe` on her reply model (kind `scan_check`), whole, then without the
-        candidates, then without the borderline too; `settle` keeps what it blocks. Then her window as Gemini reads it:
-        when it blocks, the candidates in it stay whatever their day said (a block may need two days together). No
-        probe: Opus's verdict stands."""
-        probe = getattr(self.llm, "probe", None)
-        if probe is None:
-            return found, []
-        canon = self.cfg.canon_private or self.cfg.canon
-        settled, statuses = Found(), []
-
-        async def blocks(group: list[ScanItem], skip: set[str]) -> bool | None:
-            kept = [i for i in group if i.ref not in skip]
-            return await probe(group_text(kept), canon, kind="scan_check") if kept else False
-
-        for name, group in scan_groups(items, self.tz):
-            refs = {i.ref for i in group}
-            cands = {r: c for r, c in found.candidates.items() if r in refs}
-            border = {r: c for r, c in found.borderline.items() if r in refs}
-            if not cands and not border:
-                continue
-            whole = await blocks(group, set())
-            without = await blocks(group, set(cands)) if whole else None
-            without_all = await blocks(group, set(cands) | set(border)) if whole and without else None
-            kept_c, kept_b, status = settle(cands, border, whole, without, without_all)
-            settled.candidates.update(kept_c)
-            settled.borderline.update(kept_b)
-            statuses.append((name, status))
-        window = self._gemini_lines() or []
-        in_window = {f"L{x.id}" for x in window}
-        held = {r: c for r, c in found.candidates.items() if r in in_window}
-        if held:
-            lines = [ScanItem(f"L{x.id}", "line", x.ts_ms, x.speaker, strip_notes(x.text)) for x in window]
-            whole = await blocks(lines, set())
-            if whole:
-                settled.candidates.update(held)
-                for ref in held:
-                    settled.borderline.pop(ref, None)
-            statuses.append((WINDOW, "не перевірено" if whole is None else ("блокує" if whole else "пропускає")))
-        log.info("scan: Gemini checked %d groups — %d block", len(statuses),
-                 sum(v.startswith("блокує") for _, v in statuses))
-        return settled, statuses
-
-    def scan_items(self, start_ms: int, end_ms: int, facts_seen: set[str] = frozenset()
-                   ) -> tuple[list[ScanItem], dict, dict]:
-        """What Gemini can read of her private talk in [start, end): her lines and her private thoughts open to it
-        (never a closed one — the archive's own open-mark queries), her open facts added since the start's day and not
-        read by a used scan (`facts_seen`), and the summaries her prompt shows written in the range — with a fact kept
-        by its id's hash and a summary by its (level, start), never a text."""
-        items: list[ScanItem] = []
-        for line in self.archive.private_between(start_ms, end_ms):
-            text = strip_notes(line.text)
-            if text:
-                items.append(ScanItem(f"L{line.id}", "line", line.ts_ms, line.speaker, text))
-        for line in self.archive.latest("thought_private", 100_000, since_ms=start_ms):
-            if line.ts_ms < end_ms and line.text:
-                items.append(ScanItem(f"T{line.id}", "thought", line.ts_ms, line.speaker, line.text))
-        facts: dict[str, str] = {}
-        if self.facts_dir is not None:
-            first_day = local_now(start_ms, self.tz).date().isoformat()
-            for fact in load_facts(self.facts_dir):
-                if fact.mark in CLOSED_MARKS or (fact.added or "") < first_day or fact_hash(fact.id) in facts_seen:
-                    continue
-                ref = f"F{len(facts)}"
-                facts[ref] = fact_hash(fact.id)
-                try:
-                    when = int(datetime.fromisoformat(fact.added).replace(tzinfo=ZoneInfo(self.tz)).timestamp() * 1000)
-                except ValueError:
-                    when = start_ms
-                items.append(ScanItem(ref, "fact", when, "факт", fact.text))
-        summaries: dict[str, list] = {}
-        shown_ms = end_ms - max(int(getattr(self, "talk_day_days", 7) or 7), 1) * 86_400_000
-        for row in self.archive.talk_rows():
-            if row.level in ("hour", "day") and row.text and start_ms <= row.made_ms < end_ms and row.end_ms > shown_ms:
-                ref = f"S{len(summaries)}"
-                summaries[ref] = [row.level, row.start_ms]
-                items.append(ScanItem(ref, "summary", row.start_ms, row.level, row.text))
-        return items, facts, summaries
-
-    def scan_close(self, with_borderline: bool) -> str:
-        """`/scan yes` (`all`): the kept list closed for good through her own code — a line `blocked` in the archive and
-        out of the session, a thought `blocked`, a fact `blocked` by its hash, a summary deleted so the writer writes it
-        again from the open lines; an item closed already or gone is skipped; nothing is ever opened. Once."""
-        data = load_scan(self.scan_file)
-        made = data.get("made_ms")
-        if (data.get("spent") or not isinstance(made, int) or self.clock() - made > self.scan_ttl_s * 1000
-                or not (data.get("candidates") or data.get("borderline"))):
-            return "⚙️ Немає свіжого сканування: спершу /scan"
-        refs = {r for r, _ in data.get("candidates") or []}
-        if with_borderline:
-            refs |= {r for r, _ in data.get("borderline") or []}
-        seen = [h for h in (data.get("facts_seen") or []) + (data.get("facts_read") or []) if isinstance(h, str)]
-        data.update({"spent": True, "last_end_ms": data.get("end_ms"), "facts_seen": sorted(set(seen))})
-        save_scan(self.scan_file, data)  # spent before anything closes: a second /scan yes never closes twice
-        held = {(r.level, r.start_ms) for r in self.archive.talk_rows()} if self.archive is not None else set()
-        lines = thoughts = facts = summaries = 0
-        ids = {int(r[1:]): r[:1] for r in refs if kind_of(r) in ("line", "thought")}
-        rows = self.archive.lines(ids, gemini=True) if ids and self.archive is not None else {}  # open ones only
-        private = [x for i, x in rows.items() if ids[i] == "L" and x.place == "private"]
-        thought = [x for i, x in rows.items() if ids[i] == "T" and x.place == "thought_private"]
-        if private:
-            lines = self.archive.mark([x.key for x in private], "blocked")
-            self.close_lines([(x.speaker, x.text) for x in private])
-        if thought:
-            thoughts = self.archive.mark([x.key for x in thought], "blocked")
-        wanted = {h for r, h in (data.get("facts") or {}).items() if r in refs}
-        if wanted and self.facts_dir is not None:
-            facts = sum(1 for f in load_facts(self.facts_dir)
-                        if fact_hash(f.id) in wanted and set_mark(self.facts_dir, f.id, "blocked"))
-            if facts:
-                self.facts_now()  # the archive's mirror follows
-        for r, (level, start) in (data.get("summaries") or {}).items():
-            if r in refs and self.archive is not None:
-                summaries += self.archive.talk_delete(level, start)
-        log.warning("scan: closed %d lines, %d facts, %d thoughts, %d summaries", lines, facts, thoughts, summaries)
-        answer = f"⚙️ Закрито: {lines} рядків, {facts} фактів, {thoughts} думок, {summaries} підсумків"
-        # v5.24 (the owner: «зроби про це звіт в телеграм»): the summaries gone with it, kept for the report
-        now_held = {(r.level, r.start_ms) for r in self.archive.talk_rows()} if self.archive is not None else set()
-        gone = sorted([level, start] for level, start in held - now_held if level in REWRITE_LEVELS)
-        if gone:
-            data["rewrite"] = gone
-            save_scan(self.scan_file, data)
-            answer += f"; переписую підсумки: {len(gone)} — повідомлю, коли закінчу"
-        return answer
-
-    async def _rewrite_report(self, rows: list, due: list) -> None:
-        """v5.24 (the owner, 2026-11-04: «зроби про це звіт в телеграм») — once every summary `/scan yes` took is
-        written again or no longer due (`rewrite_line`), one ⚙️ line to him in Telegram; the list leaves the scan
-        file, so it is said once. Checked by the writer at each tick."""
-        data = load_scan(self.scan_file)
-        pending = [(p[0], p[1]) for p in data.get("rewrite") or [] if isinstance(p, list) and len(p) == 2]
-        if not pending:
-            return
-        line = rewrite_line(pending, {(r.level, r.start_ms): r.text for r in rows}, {(lv, s) for lv, s, _ in due})
-        if line is None:
-            return
-        data.pop("rewrite", None)
-        save_scan(self.scan_file, data)
-        log.info("scan: the summaries written again — %d settled", len(pending))
         if self.telegram is None or not self.telegram_owner:
             return
         try:
-            if not await self.telegram.send_message(self.telegram_owner, line):
-                log.warning("telegram: the rewrite report was not delivered")
+            if not await self.telegram.send_message(self.telegram_owner, answer):
+                log.warning("telegram: the scan's answer was not delivered")
         except Exception as exc:  # noqa: BLE001
-            log.warning("telegram: the rewrite report was not delivered (%s)", type(exc).__name__)
+            log.warning("telegram: the scan's answer was not delivered (%s)", type(exc).__name__)
+
+    async def scan_once(self) -> str:
+        """One scan (v5.24, AGORA-212): her private prompt to Gemini as her next answer would have it, checked on her
+        reply model (`probe`, the kind `scan_check`, at most `SCAN_CALLS_MAX` checks). When it blocks, each round:
+        does her history block with her canon alone (else with the whole prompt; when only the rest of the prompt
+        blocks, the hours cannot help)? His lines still waiting for her answer are in every check and never softened
+        (when they block alone, nothing can help). The last round's hours, while they still block, go one step
+        stricter again; else `minimal_run` finds the run of hours (`hour_spans`) that blocks with them. Each of those
+        hours goes one step stricter (`next_level`: her summary, stricter, the strictest, left out — `_soft_text`);
+        then the whole prompt again. Only a prompt that passes keeps its spans (the archive's `soft`) and ends the
+        backup's window (`clear`); otherwise nothing changes. The log and the answer hold times, steps and counts,
+        never a text."""
+        now = self.clock()
+        lines = self._gemini_lines() or []
+        checks = [0]
+        if not lines:
+            return scan_line("empty", [], 0, now, self.tz)
+        rows = self._soft_now(lines)
+        waiting = {key for key, _ in self._unanswered}
+        cut = next((x.ts_ms for x in lines if x.key in waiting), now + 1)
+        spans = hour_spans([x.ts_ms for x in lines], cut)
+        tail = [(cut, now + 1)] if cut <= now else []  # his lines still waiting: in every check, never softened
+        brief = f"{PRIVATE_BRIEF}\n\n{REMEMBER_SKILL}" if self.facts_dir is not None else PRIVATE_BRIEF
+        system = await self._gemini_private_prompt(brief)
+        canon = build_instruction(self.cfg.name, self.cfg.canon_private or self.cfg.canon, can_pass=False)
+
+        async def blocks(instruction: str, contents: str) -> bool:
+            if checks[0] >= self.scan_calls_max:
+                raise ScanStop("cap")
+            checks[0] += 1
+            got = await self.llm.probe(contents, instruction, kind="scan_check")
+            if got is None:
+                raise ScanStop("failed")
+            return got
+
+        def history(state: dict, keep: list[tuple[int, int]] | None = None) -> str:
+            return build_transcript([entry for _, entry in self.gemini_history_shown(state, keep)])
+
+        state: dict = dict(rows)
+        changed: dict[int, SoftRow] = {}
+
+        def still_open(span: tuple[int, int]) -> bool:  # a span left out may have new lines since
+            row = state.get(span[0])
+            return row is None or row.strict < STRICT_MAX or row.end_ms < span[1]
+
+        try:
+            if not await blocks(system, history(state)):
+                why = "passes"
+            else:
+                why, targets = "rounds", []
+                for _ in range(SCAN_ROUNDS):
+                    if await blocks(canon, history(state)):
+                        test = canon
+                    elif await blocks(system, SCAN_NEUTRAL):
+                        why = "rest"
+                        break
+                    else:
+                        test = system
+                    if tail and await blocks(test, history(state, tail)):
+                        why = "tail"
+                        break
+                    # the last round's hours, while they still block, go one step stricter again; else a new search
+                    targets = [sp for sp in targets if still_open(sp)]
+                    if not targets or not await blocks(test, history(state, targets + tail)):
+                        open_spans = [sp for sp in spans if still_open(sp)]
+
+                        async def run_blocks(a: int, b: int, spans_=open_spans, test_=test) -> bool:
+                            return await blocks(test_, history(state, spans_[a:b] + tail))
+
+                        run = await minimal_run(len(open_spans), run_blocks)
+                        if run is None:
+                            break
+                        targets = open_spans[run[0]:run[1]]
+                    for start, end in targets:
+                        level = next_level(state.get(start))
+                        text = await self._soft_text(start, end, level)
+                        if text is None:
+                            raise ScanStop("write")
+                        state[start] = changed[start] = SoftRow(start, end, level if text else STRICT_MAX, text, now)
+                    if not await blocks(system, history(state)):
+                        why = "softened"
+                        break
+        except ScanStop as stop:
+            why = str(stop)
+        if why == "softened":
+            for row in changed.values():
+                self.archive.soft_put(row.start_ms, row.end_ms, row.strict, row.text, row.made_ms)
+            if self.cfg.can("fallback"):
+                self.route_step("clear")
+        steps = ", ".join(f"{local_now(r.start_ms, self.tz):%H:%M} {r.strict}" for r in sorted(
+            changed.values(), key=lambda r: r.start_ms))
+        log.info("scan: %s after %d checks%s", why, checks[0], f" — {steps}" if why == "softened" else "")
+        return scan_line(why, [(r.start_ms, r.end_ms, r.strict) for r in changed.values()], checks[0], now, self.tz)
+
+    async def _soft_text(self, start: int, end: int, level: int) -> str | None:
+        """A softened span's text at `level`: none at `STRICT_MAX` (""); at 0 the hour's own summary when the span is
+        the whole hour and it has one, else written, at 1 and 2 written stricter — her summary writer (`_talk_text`,
+        `talk.TALK_GENTLE`) from the span's lines open to Gemini; "" when everything blocked; None when it failed."""
+        if level >= STRICT_MAX:
+            return ""
+        if level == 0 and end - start == 3_600_000:
+            row = next((r for r in self.archive.talk_rows("hour", start, start + 1) if r.text), None)
+            if row is not None:
+                return row.text
+        items = [(x.speaker, history_entry(strip_notes(x.text))) for x in self.archive.private_between(start, end)
+                 if strip_notes(x.text)]
+        if not items:
+            return ""
+        async with self._talk_lock:
+            text, _ = await self._talk_text("hour", items, False, [0], level)
+        return text
 
     def purge_answer(self, args: list[str]) -> str:
         """v5.14 — `/purge` asks first (how much would go; `/purge yes` within `PURGE_CONFIRM_S` confirms), then
@@ -2959,14 +2940,6 @@ class Agent:
         parts = PROMPT_PARTS.get()
         self._append_usage(lambda ts: fallback_usage_line(ts, self.cfg.localpart, kind, model, ok, latency_ms, parts))
 
-    def record_scan_usage(self, model: str, prompt_tokens: int | None, output_tokens: int | None, ok: bool,
-                          latency_ms: int | None = None, cache_read: int | None = None,
-                          cache_write: int | None = None) -> None:
-        """v5.24 — one line per call of the scan (Opus 5.5 on the owner's key): `anthropic`, `api`, priced by
-        `PRICE_MODELS` under the model's id, no text."""
-        self._append_usage(lambda ts: scan_usage_line(ts, self.cfg.localpart, model, prompt_tokens, output_tokens, ok,
-                                                      latency_ms, cache_read, cache_write))
-
     def record_sdk_usage(self, kind: str, model: str, usage: dict | None, ok: bool,
                          reported_cost: float | None, latency_ms: int | None = None) -> None:
         """v4.4 — one line per Claude Agent SDK call: always `subscription`, never priced."""
@@ -3508,7 +3481,6 @@ class Agent:
         held = {(r.level, r.start_ms) for r in rows}
         due = periods_due(self.clock(), self.tz, self.archive.private_open_times(), held, self.talk_hour_days,
                           self.talk_day_days)
-        await self._rewrite_report(rows, due)  # v5.24: what /scan yes took, settled — told once
         if not due:
             return
         level, start, end = due[0]
@@ -3604,8 +3576,10 @@ class Agent:
             return
         async with self._topics_lock:
             try:
+                hidden = self._soft_hidden()  # v5.24 (AGORA-212): never a softened span's lines
                 lines = [x for x in self.archive.latest("private", self.topics_lines)  # open to Gemini only
-                         if (x.speaker, x.text) not in self._closed and strip_notes(x.text)]
+                         if (x.speaker, x.text) not in self._closed and (x.speaker, x.text) not in hidden
+                         and strip_notes(x.text)]
                 if not lines:
                     return
                 system, contents = topics_request(self.cfg.name, [(x.speaker, history_entry(strip_notes(x.text)))

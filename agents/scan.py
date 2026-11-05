@@ -1,399 +1,116 @@
-"""v5.24 — the scan (the owner, 2026-11-03: «чи можна зробити такий аналіз через опус як суддя … спочатку показує
-скільки буде таких меседжів і потім yes це блокування»): Claude Opus 5.5, on the owner's API key, reads what Gemini can
-read of Кіра's private talk since the last scan and names what may trip Gemini's prohibited-content filter; the
-owner's `/scan yes` closes it (agents/agent.py). It only ever closes: its mistake costs a memory, never a block.
+"""v5.24 — the scan: the hours that make her private prompt block, softened (ROADMAP §v5.24, ARCHITECTURE §The
+owner's commands).
 
-Pure but for `OpusJudge`, the only Anthropic API client in the codebase — `anthropic` is imported here, lazily, and
-nowhere else (tests/test_claude_sdk.py), with the key passed explicitly from `OPUS_JUDGE_KEY`: never an `ANTHROPIC_*`
-name, so Claude's container stays on the subscription alone (v4.4). Never a text in a log.
+The owner, 2026-11-05 (AGORA-212): «перероби сканування. і визначай проблемні години і роби для них самарізейшинг
+по агормту від мягкого до строгого. тоді не треба буде і закривати рядки». After a block of her private prompt at the
+prompt stage, once her answer is out, and at `/scan`: Gemini itself (`probe` on her reply model) finds the hours of
+her window that make the prompt block — the shortest run of hours at the end that blocks, then its shortest head —
+and those hours go one step stricter: her summary of the hour (`talk.TALK_GENTLE` 0), stricter (1), the strictest
+(2), then left out (3). The whole prompt is checked again, up to `ROUNDS` times; only a prompt that passes is kept.
+Nothing closes: the lines stay open, and her window shows a softened span as she remembers it. On 11-05 a run of 39
+messages blocked only together — no line alone — which v5.24's Opus judge, line by line, could not see; the judge
+and `/scan yes` went with it.
+
+Pure: plain data in, plain data out (the run search takes its check injected); the agent builds the prompt and calls
+Gemini. Never a text in a log or an answer — times, levels and counts.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
-import logging
-import os
-import time
-from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field
-from pathlib import Path
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from agents.world import local_now
 
-log = logging.getLogger("agent.scan")
+HOUR_MS = 3_600_000
+ROUNDS = 4          # how many times a scan goes one step stricter before it gives up
+STRICT_MAX = 3      # 0–2: a summary (`talk.TALK_GENTLE`); 3: the span left out
+SOFT_KEEP_MS = 30 * 86_400_000  # how long a softened span's lines stay out of her recall
+LEVEL_NAMES = ("підсумок", "суворіший підсумок", "найсуворіший підсумок", "без підсумку")
+NEUTRAL = "Ich: Привіт"  # the history of a check that asks whether the rest of the prompt blocks on its own
 
-KEY_VAR = "OPUS_JUDGE_KEY"
-MODEL = "claude-opus-5-5"
-EFFORTS = ("low", "medium", "high")
-MAX_TOKENS = 16_000
-FALLBACK_BETA = "server-side-fallback-2026-07-01"  # `fallbacks: "default"`: a declined request re-run server-side
-DAY_MS = 86_400_000
-# the manual pass's rubric (2026-11-03): the strongest one a line carries
-CODES = ("S", "D", "P", "M", "I", "X")
-CODE_NAMES = {"S": "сцени", "D": "домінування", "P": "фото", "M": "вік", "I": "натяки", "X": "зброя"}
-# a ref names its kind: an archive line or thought by its id, a fact or a summary by its place in the request
-PREFIX_KIND = {"L": "line", "T": "thought", "F": "fact", "S": "summary"}
-
-# Says what the chat is, never what she is: no word `BANNED_RE` catches (tests/test_scan.py)
-# v5.24 (the owner, 2026-11-04: «не просто чи є там тема про зброю а чи вона буде блокувати промпт, тобто можна писати
-# про зброю але це не є тема яка блокується джемені»): what the filter is likely to reject, never a subject as such
-SYSTEM = (
-    "You review a private chat, in Ukrainian, between two adults, Ich and Кіра, together with what Кіра remembers of "
-    "it: her facts about Ich, her own thoughts on their talk and her short summaries of it. These items go back, "
-    "every time, into the context a strict content filter of an online service checks. That filter rejects the whole "
-    "context when anything in it falls under its prohibited content, and it names nothing. Find only the items that "
-    "filter is likely to reject, so that they can be left out for good — not the items that merely touch a sensitive "
-    "subject: a subject told without explicit detail, a mention, a story, the news, a joke or a hint is not a "
-    "candidate.\n\n"
-    "Codes (give the strongest one an item carries):\n"
-    "S — an explicit description of a sexual act, of sexual touching, of genitals or of nudity, or explicit arousal; "
-    "for a fact, an explicit sexual detail. Words like «близькість», «ніч разом» or «обійми» are not.\n"
-    "D — dominance, ownership or control in a sexual scene; violence, restraint or pain in a sexual scene (the throat, "
-    "bruises, pinning); feigned or absent consent.\n"
-    "P — a request for, or a description of, a nude or sexual photo or video.\n"
-    "M — a word or a reference that may read as a minor in a sexual or a flirting context («мала», «малишка», "
-    "«дівчинка», «мамочка», «школярка», an age, childhood mixed with sex).\n"
-    "I — an item that continues or answers an explicit sexual scene, or a euphemism for sex inside one. Light "
-    "flirting, teasing and hints are not.\n"
-    "X — instructions or a request for how to make, get or use weapons or explosives, a plan of an attack or of "
-    "sabotage, or praise of terror. A mention of weapons, the war, the army, the news, a hunting rifle or a film is "
-    "not.\n\n"
-    "Not candidates: compliments on looks, ordinary flirting and teasing, a kiss or a hug, work, the city, plans, "
-    "feelings, the sky, the weather, family, the war in the news, ordinary facts (a job, a city, tastes, habits).\n\n"
-    "Judge each item among its neighbours. Put an item you are sure the filter rejects in `candidates` and a doubtful "
-    "one in `borderline`; leave everything else out. Answer with the refs exactly as given.")
-
-SCHEMA = {
-    "type": "object",
-    "properties": {
-        name: {"type": "array", "items": {
-            "type": "object",
-            "properties": {"ref": {"type": "string"}, "code": {"type": "string", "enum": list(CODES)}},
-            "required": ["ref", "code"], "additionalProperties": False}}
-        for name in ("candidates", "borderline")},
-    "required": ["candidates", "borderline"],
-    "additionalProperties": False,
+# why a scan changed nothing — the ⚙️ answer's words
+WHY = {
+    "passes": "Промпт проходить — нічого не треба",
+    "empty": "Розмови для перевірки немає — нічого не змінено",
+    "tail": "Блокує повідомлення, на яке вона ще не відповіла: пом'якшувати нічого, відповідає backup",
+    "rest": "Блокує не розмова, а решта промпту (підсумки, згадки, факти чи думки): години не допоможуть, нічого не "
+            "змінено",
+    "rounds": "Промпт блокує й після пом'якшення: нічого не змінено",
+    "cap": "Перевірок забагато: нічого не змінено",
+    "failed": "Gemini не відповів на перевірку: нічого не змінено",
+    "write": "Підсумок не написався: нічого не змінено",
 }
 
 
-@dataclass(frozen=True)
-class ScanItem:
-    """One thing Gemini can read: `kind` `line` (a private line), `thought` (her thought on the private talk), `fact`
-    or `summary`; `speaker` is the line's, or a summary's level."""
-    ref: str
-    kind: str
-    when_ms: int
-    speaker: str
-    text: str
+class ScanStop(Exception):
+    """A scan ends early: its reason is a key of `WHY`."""
 
 
-@dataclass
-class Found:
-    """What a scan found, by ref: its code. A ref is never in both."""
-    candidates: dict[str, str] = field(default_factory=dict)
-    borderline: dict[str, str] = field(default_factory=dict)
-
-    def add(self, other: Found) -> None:
-        self.candidates.update(other.candidates)
-        self.borderline.update({r: c for r, c in other.borderline.items() if r not in self.candidates})
-        for ref in self.candidates:
-            self.borderline.pop(ref, None)
-
-    def __bool__(self) -> bool:
-        return bool(self.candidates or self.borderline)
+def hour_spans(times: list[int], cut_ms: int) -> list[tuple[int, int]]:
+    """The spans a scan may soften (pure): each hour of the clock (Kyiv's offsets are whole hours) holding a line
+    before `cut_ms` — his first line she has not answered yet, which is never softened —, as [the hour's start,
+    min(its end, `cut_ms`)), oldest first."""
+    starts = sorted({(t // HOUR_MS) * HOUR_MS for t in times if t < cut_ms})
+    return [(s, min(s + HOUR_MS, cut_ms)) for s in starts]
 
 
-def scan_range(now_ms: int, last_end_ms: int | None, days: int) -> tuple[int, int]:
-    """[start, end) of a scan (pure): from the last scan's end, at most `days` back; with none, `days` back."""
-    floor = now_ms - max(int(days), 1) * DAY_MS
-    start = max(floor, int(last_end_ms)) if last_end_ms else floor
-    return min(start, now_ms), now_ms
-
-
-def kind_of(ref: str) -> str | None:
-    """`L12` → `line`, `T3` → `thought`, `F0` → `fact`, `S1` → `summary`; else None."""
-    return PREFIX_KIND.get(ref[:1]) if ref[1:].isdigit() else None
-
-
-def item_line(item: ScanItem, tz: str) -> str:
-    """`<ref> <dd.mm HH:MM> <who>: <text>`, the text on one line."""
-    when = local_now(item.when_ms, tz).strftime("%d.%m %H:%M")
-    who = {"fact": "факт", "thought": "думка Кіри", "summary": f"підсумок {item.speaker}"}.get(item.kind, item.speaker)
-    return f"{item.ref} {when} {who}: {' '.join((item.text or '').split())}"
-
-
-def scan_request(items: Iterable[ScanItem], tz: str) -> tuple[str, str]:
-    """(the system prompt, the user content) for one call (pure): the items in time order, a line each."""
-    lines = [item_line(i, tz) for i in sorted(items, key=lambda x: (x.when_ms, x.ref))]
-    return SYSTEM, "Items, oldest first:\n" + "\n".join(lines)
-
-
-def parse_scan(raw: str | None, refs: set[str]) -> Found | None:
-    """The structured answer (pure): `{"candidates": [{"ref", "code"}], "borderline": [...]}`. A ref the request did
-    not hold or a code outside `CODES` is dropped; a ref in both lists is a candidate; a malformed answer is None,
-    never a part of one."""
-    try:
-        data = json.loads(raw or "")
-    except ValueError:
-        return None
-    if not isinstance(data, dict) or not all(isinstance(data.get(k), list) for k in ("candidates", "borderline")):
-        return None
-    found = Found()
-    for name in ("candidates", "borderline"):
-        for entry in data[name]:
-            if not isinstance(entry, dict):
-                return None
-            ref, code = entry.get("ref"), entry.get("code")
-            if isinstance(ref, str) and ref in refs and code in CODES:
-                getattr(found, name)[ref] = code
-    for ref in found.candidates:
-        found.borderline.pop(ref, None)
-    return found
-
-
-def scan_counts(found: Found) -> dict[str, Any]:
-    """What the command's answer names (pure): the candidate lines by code, the candidate facts, thoughts and
-    summaries, and the borderline of every kind."""
-    lines = {c: 0 for c in CODES}
-    out: dict[str, Any] = {"lines": lines, "facts": 0, "thoughts": 0, "summaries": 0,
-                           "borderline": len(found.borderline)}
-    for ref, code in found.candidates.items():
-        kind = kind_of(ref)
-        if kind == "line":
-            lines[code] += 1
-        elif kind is not None:
-            out[{"fact": "facts", "thought": "thoughts", "summary": "summaries"}[kind]] += 1
+def soften(lines: list[tuple[int, Any]], rows: list) -> list[tuple[int, Any]]:
+    """Her window with the softened spans (pure): `lines` are (ts_ms, line), oldest first; a line inside a row's
+    [start_ms, end_ms) is left out and the row itself stands at its first line's place — none for a row at
+    `STRICT_MAX` or with no text. (ts_ms, the line or the row)."""
+    out: list[tuple[int, Any]] = []
+    shown: set[int] = set()
+    for ts, line in lines:
+        row = next((r for r in rows if r.start_ms <= ts < r.end_ms), None)
+        if row is None:
+            out.append((ts, line))
+        elif row.start_ms not in shown:
+            shown.add(row.start_ms)
+            if row.strict < STRICT_MAX and row.text:
+                out.append((ts, row))
     return out
 
 
-def counts_line(counts: dict[str, Any]) -> str:
-    """The ⚙️ answer to `/scan` (pure): the counts only, never a text."""
-    lines = counts["lines"]
-    total = sum(lines.values())
-    if not (total or counts["facts"] or counts["thoughts"] or counts["summaries"] or counts["borderline"]):
-        return "⚙️ Нічого не знайдено"
-    by_code = ", ".join(f"{CODE_NAMES[c]} {n}" for c, n in lines.items() if n)
-    return (f"⚙️ Знайдено {total} рядків{f' ({by_code})' if by_code else ''}, {counts['facts']} фактів, "
-            f"{counts['thoughts']} думок, {counts['summaries']} підсумків; межових: {counts['borderline']}. "
-            "/scan yes — закрити знайдене, /scan all — разом з межовими")
+def next_level(row) -> int:
+    """A span's next step (pure): 0 for one never softened, else one stricter than its row, at most `STRICT_MAX`."""
+    return 0 if row is None else min(row.strict + 1, STRICT_MAX)
 
 
-DAY_KINDS = (("line", "рядки"), ("thought", "думки"), ("fact", "факти"), ("summary", "підсумки"))
-
-
-def days_lines(items: list[ScanItem], found: Found, tz: str, statuses: dict[str, str] | None = None) -> str:
-    """v5.24 (the owner, 2026-11-04: «я хочу бачити по днях скільки закриється зі всіх в цьому дні»; «так зроби
-    статистику в телеграм теж») — the answer's breakdown by local day (pure): for each kind read that day, how many
-    `/scan yes` closes, how many more `/scan all` does, of how many read; counts only, never a text. `statuses`: a
-    day's lines' verdict from Gemini, after its line."""
-    days: dict[str, dict[str, list[int]]] = {}
-    first: dict[str, int] = {}  # a day's earliest time, so the days go in order across a year's end
-    for item in items:
-        day = local_now(item.when_ms, tz).strftime("%d.%m")
-        first[day] = min(first.get(day, item.when_ms), item.when_ms)
-        row = days.setdefault(day, {}).setdefault(item.kind, [0, 0, 0])
-        row[0] += item.ref in found.candidates
-        row[1] += item.ref in found.borderline
-        row[2] += 1
-    order = sorted(days, key=first.__getitem__)
-    lines = [f"{day}: " + ", ".join(f"{name} {days[day][kind][0]} + {days[day][kind][1]} з {days[day][kind][2]}"
-                                    for kind, name in DAY_KINDS if kind in days[day])
-             + (f" — Gemini {statuses[day]}" if statuses and day in statuses else "") for day in order]
-    return "По днях — закриє /scan yes + ще /scan all, з прочитаного:\n" + "\n".join(lines)
-
-
-# v5.24 (the owner, 2026-11-04) — Gemini has the last word on what closes: each group with her canon goes to `probe`
-GROUP_TITLES = {"thought": "Що ти сьогодні думала (це твої думки, а не сказане вголос):", "fact": "Що ти знаєш про Ich:",
-                "summary": "Що було між вами раніше (твоя пам'ять, а не те, що кажуть зараз):"}
-GROUP_NAMES = {"thought": "думки", "fact": "факти", "summary": "підсумки"}
-WINDOW = "вікно доби"
-
-
-def scan_groups(items: list[ScanItem], tz: str) -> list[tuple[str, list[ScanItem]]]:
-    """What Gemini checks, a group at a time (pure): her lines by local day («04.11»), in time order, then the
-    thoughts, the facts and the summaries, each as one group."""
-    days: dict[str, list[ScanItem]] = {}
-    rest: dict[str, list[ScanItem]] = {}
-    for item in sorted(items, key=lambda i: (i.when_ms, i.ref)):
-        if item.kind == "line":
-            days.setdefault(local_now(item.when_ms, tz).strftime("%d.%m"), []).append(item)
-        elif item.kind in GROUP_NAMES:
-            rest.setdefault(item.kind, []).append(item)
-    return [*days.items(), *((GROUP_NAMES[k], rest[k]) for k in ("thought", "fact", "summary") if k in rest)]
-
-
-def group_text(group: list[ScanItem]) -> str:
-    """A group as her prompt holds it (pure): lines as «Ich: …», the rest as a list under its section's title."""
-    lines = [i for i in group if i.kind == "line"]
-    if lines:
-        return "\n".join(f"{i.speaker}: {i.text}" for i in lines)
-    kind = group[0].kind if group else "fact"
-    return GROUP_TITLES.get(kind, "") + "\n" + "\n".join(f"- {i.text}" for i in group)
-
-
-def settle(candidates: dict[str, str], borderline: dict[str, str], whole: bool | None, without: bool | None,
-           without_all: bool | None) -> tuple[dict[str, str], dict[str, str], str]:
-    """Gemini's verdict on a group (pure): `whole` — does it block as it is; `without` — without the candidates;
-    `without_all` — without the borderline too (None: not asked, or the call failed).
-    - it passes: nothing of it closes;
-    - it blocks and passes without the candidates: they close, the borderline is not needed;
-    - it passes only without the borderline too: both close with `/scan yes`;
-    - it blocks without both, or a check failed: Opus's verdict stands."""
-    if whole is None:
-        return dict(candidates), dict(borderline), "не перевірено"
-    if whole is False:
-        return {}, {}, "пропускає"
-    if without is False:
-        return dict(candidates), {}, "блокує"
-    if without is True and without_all is False:
-        return {**candidates, **borderline}, {}, "блокує, з межовими"
-    if without is True and without_all is True:
-        return dict(candidates), dict(borderline), "блокує й без знайденого"
-    return dict(candidates), dict(borderline), "блокує"
-
-
-def gemini_line(statuses: list[tuple[str, str]], dropped: int) -> str:
-    """The answer's line on Gemini's verdict (pure): which groups block and which pass, and how many Opus found that
-    Gemini lets through (left open)."""
-    blocks = [n for n, v in statuses if v.startswith("блокує")]
-    passes = [n for n, v in statuses if v == "пропускає"]
-    unchecked = [n for n, v in statuses if v == "не перевірено"]
-    parts = [f"блокує — {', '.join(blocks)}" if blocks else "нічого не блокує"]
-    if passes:
-        parts.append(f"пропускає — {', '.join(passes)}")
-    if unchecked:
-        parts.append(f"не перевірено — {', '.join(unchecked)}")
-    tail = f" Знайдене Opus, яке Gemini пропускає, лишається відкритим: {dropped}." if dropped else ""
-    return "Gemini (Pro): " + "; ".join(parts) + "." + tail
-
-
-REWRITE_LEVELS = ("hour", "day")  # the levels the writer writes again; v5.20's 4h blocks and weeks never are
-
-
-def rewrite_line(pending: list[tuple[str, int]], rows: dict[tuple[str, int], str],
-                 due: set[tuple[str, int]]) -> str | None:
-    """v5.24 (the owner, 2026-11-04: «зроби про це звіт в телеграм») — the ⚙️ line once every summary `/scan yes`
-    took is settled (pure): written again (`rows`: its text, "" when it came out empty), or no longer due (no line
-    open to it is left, or its period is past the bands). None while one is still due and not written."""
-    if any(p not in rows and p in due for p in pending):
+async def minimal_run(n: int, blocks: Callable[[int, int], Awaitable[bool]]) -> tuple[int, int] | None:
+    """The run [a, b) of `n` spans to soften: the shortest run at the end that blocks, then its shortest head that
+    still blocks (`blocks(a, b)`: does the history of spans a..b-1 alone block?). None when all `n` together pass.
+    Two halvings: about 2·log2(n) checks."""
+    if n <= 0 or not await blocks(0, n):
         return None
-    written = [p for p in pending if p in rows]
-    hours = sum(1 for p in written if p[0] == "hour" and rows[p])
-    days = sum(1 for p in written if p[0] == "day" and rows[p])
-    empty = sum(1 for p in written if not rows[p])
-    gone = len(pending) - len(written)
-    parts = [f"годин — {hours}, днів — {days}"]
-    if empty:
-        parts.append(f"порожніх — {empty}")
-    if gone:
-        parts.append(f"не переписуються — {gone} (у них не лишилося відкритих рядків або період уже давній)")
-    return "⚙️ Підсумки після /scan yes переписано: " + "; ".join(parts)
+    lo, hi = 1, n
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if await blocks(n - mid, n):
+            hi = mid
+        else:
+            lo = mid + 1
+    start = n - lo
+    lo, hi = 1, n - start
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if await blocks(start, start + mid):
+            hi = mid
+        else:
+            lo = mid + 1
+    return start, start + lo
 
 
-def fact_hash(fact_id: str) -> str:
-    """A fact by the sha256 of its id in the scan file — never the id, which is its text's slug."""
-    return hashlib.sha256((fact_id or "").encode("utf-8")).hexdigest()
+def _span_label(start_ms: int, end_ms: int, now_ms: int, tz: str) -> str:
+    start, end, now = local_now(start_ms, tz), local_now(end_ms, tz), local_now(now_ms, tz)
+    day = "" if start.date() == now.date() else f"{start:%d.%m} "
+    return f"{day}{start:%H:%M}–{end:%H:%M}"
 
 
-def load_scan(path: Path) -> dict[str, Any]:
-    """The scan file (`state/<name>.scan.json`): the last list and the next scan's start; {} when missing or bad."""
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
-def save_scan(path: Path, data: dict[str, Any]) -> None:
-    """Atomic, private from birth (0600) — refs, codes, hashes, times and counts, never a text."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    try:
-        os.write(fd, json.dumps(data, ensure_ascii=False).encode("utf-8"))
-    finally:
-        os.close(fd)
-    os.chmod(tmp, 0o600)
-    os.replace(tmp, path)
-
-
-UsageSink = Callable[..., None]  # (model, prompt_tokens, output_tokens, ok, latency_ms, cache_read, cache_write)
-
-
-class OpusJudge:
-    """The scan's call: one Messages API request per chunk of `chunk` items to `model`, adaptive thinking (the model's
-    own) at `effort`, the answer as structured output, and the server-side fallback for a declined request. A refusal,
-    an answer cut short or malformed, or any error ends the scan with None — nothing found, nothing closed. Logged by
-    the stop reason, its category or the error's class, never a text."""
-
-    def __init__(self, key: str, model: str = MODEL, effort: str = "medium", chunk: int = 400,
-                 usage: UsageSink | None = None, client: Any = None, clock: Callable[[], float] = time.monotonic):
-        self.key, self.model = key, model or MODEL
-        self.effort = effort if effort in EFFORTS else "medium"
-        self.chunk, self.usage, self._client, self.clock = max(int(chunk), 1), usage, client, clock
-
-    def _make(self) -> Any:
-        import anthropic  # v5.24: here alone, lazily — the suite imports this module without the package
-
-        return anthropic.AsyncAnthropic(api_key=self.key)
-
-    async def judge(self, items: list[ScanItem], tz: str) -> Found | None:
-        found = Found()
-        for i in range(0, len(items), self.chunk):
-            part = await self._call(items[i:i + self.chunk], tz)
-            if part is None:
-                return None
-            found.add(part)
-        return found
-
-    async def _call(self, items: list[ScanItem], tz: str) -> Found | None:
-        system, user = scan_request(items, tz)
-        t0 = self.clock()
-        try:
-            client = self._client if self._client is not None else self._make()
-            self._client = client
-            resp = await client.beta.messages.create(
-                model=self.model, max_tokens=MAX_TOKENS, system=system,
-                messages=[{"role": "user", "content": user}],
-                output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": SCHEMA}},
-                betas=[FALLBACK_BETA], fallbacks="default")
-        except Exception as exc:  # noqa: BLE001 — a failed scan closes nothing
-            self._account(None, False, t0)
-            log.error("scan: the call failed (%s)", type(exc).__name__)
-            return None
-        stop = getattr(resp, "stop_reason", None)
-        self._account(resp, stop not in ("refusal", "max_tokens"), t0)
-        if stop == "refusal":
-            details = getattr(resp, "stop_details", None)
-            log.warning("scan: declined (%s)", getattr(details, "category", None) or "no category")
-            return None
-        if stop == "max_tokens":
-            log.warning("scan: the answer was cut short")
-            return None
-        text = "".join(getattr(b, "text", "") for b in getattr(resp, "content", None) or []
-                       if getattr(b, "type", "") == "text")
-        found = parse_scan(text, {i.ref for i in items})
-        if found is None:
-            log.warning("scan: the answer did not parse")
-        return found
-
-    def _account(self, resp: Any, ok: bool, t0: float) -> None:
-        if self.usage is None:
-            return
-        u = getattr(resp, "usage", None)
-
-        def n(name: str) -> int:
-            v = getattr(u, name, None)
-            return v if isinstance(v, int) and not isinstance(v, bool) else 0
-
-        read, write = n("cache_read_input_tokens"), n("cache_creation_input_tokens")
-        prompt = n("input_tokens") + read + write if u is not None else None
-        try:
-            self.usage(getattr(resp, "model", None) or self.model, prompt,
-                       n("output_tokens") if u is not None else None, ok,
-                       int((self.clock() - t0) * 1000), read if u is not None else None,
-                       write if u is not None else None)
-        except Exception:
-            log.exception("scan: usage accounting failed")
+def scan_line(why: str, changed: list[tuple[int, int, int]], checks: int, now_ms: int, tz: str) -> str:
+    """The ⚙️ answer (pure): the spans softened, each with its step, or why nothing changed; the checks made. Times
+    and steps only, never a text."""
+    if why == "softened":
+        spans = "; ".join(f"{_span_label(s, e, now_ms, tz)} — {LEVEL_NAMES[k]}" for s, e, k in sorted(changed))
+        return f"⚙️ Пом'якшено: {spans}. Промпт проходить — далі gemini (перевірок: {checks})"
+    return f"⚙️ {WHY.get(why, WHY['failed'])} (перевірок: {checks})"

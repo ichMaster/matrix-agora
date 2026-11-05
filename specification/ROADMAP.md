@@ -3205,7 +3205,7 @@ That saves $0.013–0.026 per answer (14–28%), about $88 a month at ~140 answe
 - deleting the four-hour blocks or the weeks;
 - Agora's talk.
 
-### v5.24 — The scan: Opus names what may block her prompt, `/scan yes` closes it
+### v5.24 — The scan: the hours that block her prompt, softened (at first: Opus names it, `/scan yes` closes it)
 
 **Status:** planned (2026-11-03).
 
@@ -3299,6 +3299,28 @@ for good.
 - the deploy;
 - the live checks.
 
+**Owner decisions** (2026-11-05, the hour scan; AGORA-212). **Why.** From 17:16 every one of his messages blocked her
+private prompt at the prompt stage (`prohibited_content`, 3.1 Pro), with her photo skill and without, and each block
+closed his line; `/scan` found nothing. A check of her kept prompt in parts (20 Pro calls, ≈ $0.51) showed the cause:
+her history with her canon alone blocks — 39 messages, 13:58–15:47, only together; no line alone, no shorter run —
+and the prompt without them passes. The scan read only what was new since the last scan, line by line, and Gemini
+checked only what Opus had picked, so it could not see it. The owner: «перероби сканування. і визначай проблемні
+години і роби для них самарізейшинг по агормту від мягкого до строгого. тоді не треба буде і закривати рядки»; then
+«після блоку і /scan», «не закривати нічого», «прибрати Opus»:
+- **The scan is Gemini's own check** of her whole private prompt as her next answer would have it, on her reply model
+  (the kind `scan_check`, at most `SCAN_CALLS_MAX` 40 checks): it finds the run of hours of her window that blocks —
+  the shortest run at the end, then its shortest head — with his waiting lines in every check and never softened.
+- **From soft to strict:** each of those hours is shown to Gemini as her summary of it (the hour's own, or written),
+  then stricter, then the strictest (`TALK_GENTLE`), then left out; the whole prompt is checked after each step, and
+  only a prompt that passes keeps them (the archive's `soft`).
+- **Nothing closes:** the lines stay open; for 30 days a softened span's lines stay out of her recall, her topics and
+  her style line. A prompt-stage block no longer closes his line; an answer-stage block or a caught refusal, which the
+  scan cannot see, still does.
+- **When:** at `/scan`, and by itself after a prompt-stage block once her answer is out (`SCAN_AUTO_HOUR_MAX` 3 in an
+  hour); a scan that makes the prompt pass ends the backup's window, never a pin.
+- **Opus goes:** the judge, the rubric, the list, `/scan yes` and `/scan all`, `SCAN_DAYS` … `SCAN_CHUNK`,
+  `OPUS_JUDGE_KEY` (read by nothing) and the `anthropic` dependency. The past `scan` usage lines stay readable.
+
 **Owner decisions** (2026-11-04, the rewrite's report; AGORA-203): «Підсумки над закритими рядками агент потім
 переписує у фоні, і про це в Telegram нічого не приходить. — зроби про це звіт в телеграм»: `/scan yes` says how many
 summaries it took, and once they are written again one ⚙️ line says how many hours and days came back.
@@ -3345,6 +3367,9 @@ how many were read.
 - (Manual, owner) `/scan` answers with the counts within a minute.
 - (Manual, owner) `/scan yes` closes them: her **Prompt** tab no longer shows them.
 - (Manual, owner) A second `/scan` right after finds nothing in the same range.
+- (Manual, owner; AGORA-212, replaces the three above) after a prompt-stage block the scan's ⚙️ line comes by itself
+  within a few minutes, names the hours it softened and their steps, and her next answer is Gemini's; her **Prompt**
+  tab shows those hours as her memory of them; no line of his is closed by the block.
 
 **Tests:**
 - **The request:**
@@ -3373,6 +3398,17 @@ how many were read.
   - none after the third;
   - a failed check writes nothing and is never given up;
   - the summaries written before stay untouched.
+- **The hour scan (AGORA-212):**
+  - the hours of the lines before his waiting one; a softened span stands once, or not at all;
+  - the run search with an injected check: the shortest run at the end, then its shortest head;
+  - a run that blocks only together goes stricter step by step until the prompt passes, nothing closed;
+  - an hour's own summary first; the strictest step leaves it out;
+  - his waiting line in every check, never softened; alone, nothing changes;
+  - only the rest of the prompt blocking, a failed check, the checks' cap: nothing changes;
+  - a softened span out of her recall, her topics and her style line;
+  - a prompt-stage block closes nothing and starts the scan once she answered; an answer-stage one closes his line;
+  - the hour's cap and never two at once; the backup's window ends, a pin stays;
+  - `/scan` in Telegram, `/scan yes` gone, no `anthropic` import anywhere.
 - **Her endings (AGORA-196):**
   - a word's stem;
   - the endings' shared words named once;
@@ -3380,7 +3416,8 @@ how many were read.
   - her lines read from those open to Gemini, never a closed one named.
 
 **Not in this phase:**
-- an automatic scan (the owner: not needed);
+- an automatic scan (the owner, 2026-11-03: not needed; from AGORA-212, 2026-11-05, it starts after a prompt-stage
+  block);
 - rewriting the summaries written before the gentle rule (the owner, 2026-11-04);
 - the theme she keeps to: v5.25 (the owner, 2026-11-04: «зроби на це окрему версію ліпш»);
 - Agora (no candidate on 2026-11-03);

@@ -72,8 +72,12 @@ CREATE TABLE IF NOT EXISTS talk (
     id INTEGER PRIMARY KEY, level TEXT NOT NULL, start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL,
     text TEXT NOT NULL, open_lines INTEGER NOT NULL, closed_lines INTEGER NOT NULL, left_out INTEGER NOT NULL,
     made_ms INTEGER NOT NULL, UNIQUE (level, start_ms));
+CREATE TABLE IF NOT EXISTS soft (
+    start_ms INTEGER PRIMARY KEY, end_ms INTEGER NOT NULL, strict INTEGER NOT NULL, text TEXT NOT NULL,
+    made_ms INTEGER NOT NULL);
 """
 TALK_COLS = "level, start_ms, end_ms, text, open_lines, closed_lines, left_out, made_ms"
+SOFT_COLS = "start_ms, end_ms, strict, text, made_ms"
 
 
 @dataclass(frozen=True)
@@ -87,6 +91,18 @@ class TalkRow:
     open_lines: int
     closed_lines: int
     left_out: int
+    made_ms: int
+
+
+@dataclass(frozen=True)
+class SoftRow:
+    """v5.24 (AGORA-212) — a span of her private chat (an hour of the clock, or its part up to the scan) the scan found
+    blocking her prompt: Gemini's window shows it as `text`, its summary at `strict` (0–2: `talk.TALK_GENTLE`), or —
+    `strict` 3, `text` empty — leaves it out; its lines stay open."""
+    start_ms: int
+    end_ms: int
+    strict: int
+    text: str
     made_ms: int
 
 
@@ -434,12 +450,6 @@ class Archive:
             return False
         return True
 
-    def talk_delete(self, level: str, start_ms: int) -> int:
-        """v5.24 — a summary the scan found, deleted at the owner's `/scan yes`: the writer writes it again from the open
-        lines while its period is due. How many rows went (0 or 1)."""
-        with self.db:
-            return self.db.execute("DELETE FROM talk WHERE level = ? AND start_ms = ?", (level, int(start_ms))).rowcount
-
     def talk_rows(self, level: str | None = None, since_ms: int | None = None,
                   until_ms: int | None = None) -> list[TalkRow]:
         """The summaries (of one level, or all) starting in [since_ms, until_ms), oldest first."""
@@ -447,6 +457,19 @@ class Archive:
                                "AND start_ms < ? ORDER BY start_ms, level",
                                (level, level, since_ms or 0, until_ms if until_ms is not None else 2 ** 62)).fetchall()
         return [TalkRow(*r) for r in rows]
+
+    def soft_put(self, start_ms: int, end_ms: int, strict: int, text: str, made_ms: int) -> None:
+        """v5.24 (AGORA-212) — a softened span, put or replaced by its start (a later scan only ever goes stricter or
+        covers more of its hour)."""
+        with self.db:
+            self.db.execute(f"INSERT OR REPLACE INTO soft({SOFT_COLS}) VALUES (?,?,?,?,?)",
+                            (int(start_ms), int(end_ms), int(strict), text, int(made_ms)))
+
+    def soft_rows(self, since_ms: int = 0) -> list[SoftRow]:
+        """The softened spans ending after `since_ms`, oldest first."""
+        rows = self.db.execute(f"SELECT {SOFT_COLS} FROM soft WHERE end_ms > ? ORDER BY start_ms",
+                               (int(since_ms),)).fetchall()
+        return [SoftRow(*r) for r in rows]
 
     def latest(self, place: str, limit: int, since_ms: int | None = None, gemini: bool = True) -> list[Line]:
         """The last `limit` lines of a place (from `since_ms` on), oldest first; for Gemini never a closed one (v5.13),

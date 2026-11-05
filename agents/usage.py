@@ -25,7 +25,8 @@ KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
          "photo",                             # v5.17: Google's image model, her photo in Telegram
          "video", "video_note",               # v5.18: her clip (Omni Flash) and her кружечок (Fabric 1.0 on fal)
          "frame",                             # v5.22: the image model drawing a video's first frame
-         "scan")                              # v5.24: Opus naming what may block her prompt (`/scan`)
+         "scan")                              # v5.24: Opus naming what may block her prompt (`/scan`; gone in
+                                              # AGORA-212 — its lines stay readable)
 # v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan; v5.1 also the ElevenLabs
 # plan's credits), `external` (Lumi's own)
 BILLING = ("api", "subscription", "external")
@@ -160,23 +161,6 @@ def judge_usage_line(ts_iso: str, agent: str, model: str, prompt_tokens: int | N
         "prompt_tokens": prompt_tokens, "output_tokens": output_tokens, "total_tokens": total, "ok": bool(ok),
         "engine": "openrouter", "billing": "api",
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": reported_cost,
-        "characters": None, "audio_ms": None, "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
-        "prompt_parts": None,
-    }
-
-
-def scan_usage_line(ts_iso: str, agent: str, model: str, prompt_tokens: int | None, output_tokens: int | None,
-                    ok: bool, latency_ms: int | None = None, cache_read: int | None = None,
-                    cache_write: int | None = None) -> dict:
-    """v5.24 — one record per call of the scan (Claude Opus 5.5 on the owner's API key, `agents/scan.py`): the kind
-    `scan`, the engine `anthropic`, paid per token (`api`, priced by `PRICE_MODELS` under the model's id); the prompt
-    counts every input token, the cached ones too. Never any text."""
-    total = prompt_tokens + output_tokens if prompt_tokens is not None and output_tokens is not None else None
-    return {
-        "ts": ts_iso, "agent": agent, "kind": "scan", "model": model,
-        "prompt_tokens": prompt_tokens, "output_tokens": output_tokens, "total_tokens": total, "ok": bool(ok),
-        "engine": "anthropic", "billing": "api",
-        "cache_read_tokens": cache_read, "cache_write_tokens": cache_write, "reported_cost_usd": None,
         "characters": None, "audio_ms": None, "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
         "prompt_parts": None,
     }

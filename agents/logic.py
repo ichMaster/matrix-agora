@@ -196,6 +196,9 @@ def build_transcript(history: list[tuple[str, str]]) -> str:
 
 
 TIME_LINE_RE = re.compile(r"^— (?:через [^,\n]+, )?[^:\n—]+: —$")  # `history_times`' line, never hers to say
+# v5.24 (AGORA-212): a span the scan softened, in her history as she remembers it — never hers to say either
+SOFT_LINE = "— далі ви говорили, і ти пам'ятаєш це так, не дослівно: {text} —"
+SOFT_LINE_RE = re.compile(r"^— далі ви говорили, і ти пам'ятаєш це так, не дослівно: .* —$")
 
 
 LEAD_TAGS_RE = re.compile(rf"(?:{TAG_RE.pattern}\s*)+")  # the voice tags a line opens with (v5.9)
@@ -208,10 +211,11 @@ def clean_reply(text: str, own_name: str, other_names: list[str]) -> str | None:
     if the reply opens with someone else's line, take the first own-prefixed block.
     Returns None when nothing of its own remains. A prefix is read past any voice tags before it (v5.9 review #1:
     `[sighs] Ада: …` is still Ада's line); the tags of an own line stay for the voice. A time line her history showed
-    (`TIME_LINE_RE`, 2026-11-01) is never her words."""
+    (`TIME_LINE_RE`, 2026-11-01) or a softened span's (`SOFT_LINE_RE`, v5.24) is never her words."""
     own = f"{own_name}:"
     others = tuple(f"{n}:" for n in other_names)
-    lines = [ln.strip() for ln in text.strip().splitlines() if not TIME_LINE_RE.match(ln.strip())]
+    lines = [ln.strip() for ln in text.strip().splitlines()
+             if not (TIME_LINE_RE.match(ln.strip()) or SOFT_LINE_RE.match(ln.strip()))]
     tags = [m.group() if (m := LEAD_TAGS_RE.match(ln)) else "" for ln in lines]
     bare = [ln[len(t):] for ln, t in zip(lines, tags, strict=True)]
     start = 0

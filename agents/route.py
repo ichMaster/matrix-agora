@@ -101,7 +101,8 @@ def step(route: Route, now_ms: int, outcome: str, window_s: int, hour_max: int, 
     """v5.21 — the route after an outcome: `block` (a Gemini block or a caught refusal: the backup for `window_s`, or for
     `lock_s` once more than `hour_max` blocks fell in the last 60 minutes; by hand, neither counted nor windowed),
     `gemini` / `backup` (who answered, counted for her day), `pin:gemini` (the owner: back to Gemini now — the window
-    ends and the hour's count is emptied) or `pin:backup` (the backup until `/gemini`). Only the last hour's blocks are
+    ends and the hour's count is emptied), `pin:backup` (the backup until `/gemini`) or `clear` (v5.24, AGORA-212: the
+    scan made her prompt pass — the window ends, the hour's count and a pin stay). Only the last hour's blocks are
     kept."""
     answers = dict(route.answers) if route.day == day else {"gemini": 0, "backup": 0}
     r = replace(route, day=day, answers=answers, blocks=tuple(t for t in route.blocks if t > now_ms - HOUR_MS))
@@ -117,6 +118,8 @@ def step(route: Route, now_ms: int, outcome: str, window_s: int, hour_max: int, 
         if outcome == "gemini" and r.window_until_ms is not None and now_ms >= r.window_until_ms:
             r = replace(r, window_until_ms=None)
         return r
+    if outcome == "clear":
+        return replace(r, window_until_ms=None)
     if outcome == "pin:gemini":
         return replace(r, pin="auto", pinned_at_ms=None, window_until_ms=None, blocks=())
     if outcome == "pin:backup":
