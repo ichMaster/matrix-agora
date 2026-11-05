@@ -87,13 +87,10 @@ def test_her_repeats_are_named_and_function_words_never():
     assert repeats(["Добрий вечір", "Як день?"]) == ([], [])
 
 
-def test_her_live_words_are_her_surzhyk_and_its_function_words_are_never_a_repeat():
-    # the owner, 2026-11-05: «хай говорить суржиком а не чисто львівською мовою»
-    assert {"тіпа", "вобщєм", "наверно", "вроді", "канєшно", "ладно", "тю"} <= set(FILLERS)
-    assert not {"типу", "загалом", "мабуть", "наче", "ніби", "уяви", "до речі", "кстаті"} & set(FILLERS)
-    her = ["Хотя я тоже не знаю, даже не питай.", "Ну всьо, хотя шось тоже є, даже смішно.",
-           "Єслі тіки хотя б тоже так, даже краще, всьо."]
-    assert repeats(her) == ([], [])
+def test_her_live_words_open_no_other_topic_and_are_not_surzhyk():
+    # the owner, 2026-11-05: her Donetsk surzhyk taken back the same day — «раніше було ліпше»
+    assert {"типу", "загалом", "мабуть", "наче", "ніби"} <= set(FILLERS)
+    assert not {"тіпа", "вобщєм", "наверно", "вроді", "канєшно", "уяви", "до речі", "кстаті"} & set(FILLERS)
 
 
 def test_a_word_counts_by_its_stem():

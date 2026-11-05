@@ -3529,6 +3529,10 @@ something of her own now and then, what she said was heard, and no one-time arra
   Donetsk words she takes for common ones, now and then the street's fenya, no bookish or Galician word, Ukrainian
   letters only (the backup's `russian` check); the style line's live words are her surzhyk, and the topics line names
   «хотя…» and «кстаті» beside «хоча…» and «до речі» (AGORA-211).
+- **Her surzhyk taken back** (2026-11-05, the same evening: «знайди зміни по Донецькома акценту і відреверть, вишло
+  занадто вже не реалістично, раніше було ліпше»): her three canons are the ones from before AGORA-211 again (the
+  surzhyk ones kept aside), and the live words, `STOP` and the topics line are as before it — except that the live
+  words still hold no word that opens another topic («до речі», «уяви»), as AGORA-208/209 asked.
 
 **Owner steps:** the deploy (v5.24's checks and this phase's together) and the live check.
 
