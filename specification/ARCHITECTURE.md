@@ -218,7 +218,7 @@ The invariants every reply path must honor:
    (backup|element|cap)`). The photo is made before anything is sent («sending a photo…» shown): `agents/photo.py`'s
    `PhotoMaker` on `PHOTO_MODEL` (`gemini-nano-banana-2.1`), an English request from her words and her moment (the
    part of the day, the season, her day's weather, for a selfie her face and clothes that suit the scene — never the
-   references'), her reference photos for a selfie (`kira.png` and three drawn from `agents/canon/kira.face/`), one
+   references' — and, from 2026-11-05, never makeup, the owner: «це її позиція природньої краси»), her reference photos for a selfie (`kira.png` and three drawn from `agents/canon/kira.face/`), one
    retry on a server error or a timeout. Then her voice note, then the photo with her words as its caption
    (`send_photo`; a text over 1024 characters: the photo, then the text; a photo not sent: the text alone). The photo
    is kept in `state/<name>.photos/`; **from v5.23** (the owner, 2026-11-03: «забери з тексту взагалі селфі чи фото

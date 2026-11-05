@@ -92,6 +92,7 @@ def test_the_request_holds_her_words_her_moment_and_the_look_and_the_face_only_f
         for word in ("ранок", "вечір", "осінь", "ніч"):                              # the template is English
             assert word not in request.replace("хмарно, +8, дрібний дощ", "")
     assert SELFIE in selfie and "not the clothes of the reference photos" in selfie
+    assert "never wears makeup: a bare, natural face" in selfie                     # the owner, 2026-11-05
     assert SELFIE not in photo and "Nobody's face" in photo
     assert "weather" not in photo_request(Shot("photo", "чашка"), Moment(EVENING.when))
 

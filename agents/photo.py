@@ -54,9 +54,10 @@ SEASONS = {"зима": "winter", "весна": "spring", "літо": "summer", "
 STYLE = ("A casual photo taken on a smartphone and sent in a private chat: natural light, slightly imperfect framing, "
          "real textures, no studio look. No other identifiable person in focus, no text, caption or watermark on the "
          "image.")
+# v5.25 (the owner, 2026-11-05: «вона не носить ніколи мейкапу і це її позиція природньої краси»)
 SELFIE = ("The young woman in the photo is the same person as in the reference photos: keep her face, hair and "
-          "features exactly. She is 23, from Lviv, Ukraine. She wears what suits the weather and the scene described "
-          "below — not the clothes of the reference photos.")
+          "features exactly. She is 23, from Lviv, Ukraine. She never wears makeup: a bare, natural face. She wears "
+          "what suits the weather and the scene described below — not the clothes of the reference photos.")
 
 
 # her private brief's skill (v5.17, the owner): understood from the talk, never a keyword — and never a word that a

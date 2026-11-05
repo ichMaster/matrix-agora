@@ -3477,6 +3477,8 @@ something of her own now and then, what she said was heard, and no one-time arra
   the topics line follows her interest — on the two of them she stays, with no «хоча…» or «до речі»; from a dull topic
   she may slip to her own; something of her own never while they flirt. What interests her most to least is in her
   private canon (softer) and her backup canon (the first: their intimate scenes) (AGORA-209).
+- **No makeup** (2026-11-05: «допиши в канон що вона не носить ніколи мейкапу і це її позиція природньої краси»; «роби»):
+  her three canons say so (private), and a selfie's request asks for a bare, natural face (AGORA-210).
 
 **Owner steps:** the deploy (v5.24's checks and this phase's together) and the live check.
 
