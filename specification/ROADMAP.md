@@ -3317,7 +3317,10 @@ checked only what Opus had picked, so it could not see it. The owner: «пере
   her style line. A prompt-stage block no longer closes his line; an answer-stage block or a caught refusal, which the
   scan cannot see, still does.
 - **When:** at `/scan`, and by itself after a prompt-stage block once her answer is out (`SCAN_AUTO_HOUR_MAX` 3 in an
-  hour); a scan that makes the prompt pass ends the backup's window, never a pin.
+  hour); a scan that finds the prompt passing — softened or as it was — ends the backup's window, never a pin.
+- **The window after a block closes nothing either** (the same evening, after the first live block at 20:12: the
+  backup's window had closed his two lines before the scan ran, so it found nothing to soften): only the backup's own
+  lines are closed; under his `/backup` his lines are still closed, as the backup's talk.
 - **Opus goes:** the judge, the rubric, the list, `/scan yes` and `/scan all`, `SCAN_DAYS` … `SCAN_CHUNK`,
   `OPUS_JUDGE_KEY` (read by nothing) and the `anthropic` dependency. The past `scan` usage lines stay readable.
 

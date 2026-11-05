@@ -236,6 +236,15 @@ def test_a_scan_that_makes_it_pass_ends_the_backups_window_but_never_a_pin(tmp_p
     assert load_route(agent.route_file).pin == "backup"
 
 
+def test_a_scan_that_finds_the_prompt_passing_ends_the_backups_window_too(tmp_path, monkeypatch):
+    # 2026-11-05 20:13: his blocked lines were closed by then, the prompt passed, and the backup kept the window
+    agent = scanning(tmp_path, monkeypatch, lines=RUN[1:])
+    agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "capabilities": agent.cfg.capabilities | {"fallback"}})
+    save_route(agent.route_file, Route(window_until_ms=ms(18, 5)))
+    assert asyncio.run(agent.scan_once()).startswith("⚙️ Промпт проходить")
+    assert load_route(agent.route_file).window_until_ms is None
+
+
 def test_scan_in_telegram_answers_at_once_and_sends_the_result_and_yes_is_gone(tmp_path, monkeypatch):
     agent = telegram_kira(tmp_path, monkeypatch, llm=Filter())
     agent.archive = Archive(tmp_path / "kira.archive.db")

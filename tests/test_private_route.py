@@ -126,8 +126,9 @@ def test_a_long_line_the_history_cuts_is_closed_to_gemini_too(tmp_path, monkeypa
     assert ASKED not in gemini.transcripts[-1] and "довга відповідь" not in gemini.transcripts[-1]
 
 
-def test_in_the_backup_mode_gemini_is_never_asked_and_his_lines_are_blocked_then_gemini_directly(tmp_path,
-                                                                                                monkeypatch):
+def test_in_the_backup_mode_gemini_is_never_asked_his_lines_stay_open_hers_are_blocked_then_gemini_directly(
+        tmp_path, monkeypatch):
+    # v5.24 (AGORA-212, the owner: «не закривати нічого»): the window after a block closes only the backup's own lines
     gemini = Gemini()
     agent = her(tmp_path, monkeypatch, gemini)
     save_route(agent.route_file, Route(window_until_ms=ms(18, 5)))
@@ -135,12 +136,13 @@ def test_in_the_backup_mode_gemini_is_never_asked_and_his_lines_are_blocked_then
     embedded = len(gemini.embedded)
     assert asyncio.run(agent.private_reply()) is True
     assert gemini.transcripts == [] and len(gemini.embedded) == embedded   # no answer, no recall embedding
-    assert set(marks(agent).values()) == {"blocked"}
+    got = marks(agent)
+    assert got["tg:1"] == "gemini" and sorted(got.values()) == ["blocked", "gemini"]   # his open, hers closed
     at(agent, 18, 6)                                                       # after the window
     agent.private_line("Добре, а тепер про погоду", ms(18, 6), "telegram", "tg:2")
     assert asyncio.run(agent.private_reply()) is True
     assert len(agent.fallback.calls) == 1                                   # straight to Gemini, no backup beside it
-    assert ASKED not in gemini.transcripts[-1] and "Від резерву" not in gemini.transcripts[-1]
+    assert ASKED in gemini.transcripts[-1] and "Від резерву" not in gemini.transcripts[-1]
     assert "Добре, а тепер про погоду" in gemini.transcripts[-1]
     assert load_route(agent.route_file).window_until_ms is None            # Gemini's again
     assert agent.private_history[-1] == ("Кіра", "Від Gemini.")
@@ -193,13 +195,17 @@ def test_a_line_she_writes_first_in_the_backup_mode_is_blocked_and_marks_none_of
     assert got["tg:1"] == "gemini" and sorted(got.values()) == ["blocked", "gemini"]
 
 
-def test_a_dropped_backup_answer_is_silence_and_his_line_stays_blocked(tmp_path, monkeypatch, caplog):
+def test_a_dropped_backup_answer_is_silence_and_his_line_stays_as_the_mode_leaves_it(tmp_path, monkeypatch, caplog):
     caplog.set_level(logging.INFO)
     agent = her(tmp_path, monkeypatch, Gemini(), Backup("Привет! Это ты?"))
     save_route(agent.route_file, Route(window_until_ms=ms(18, 5)))
     agent.private_line(ASKED, ms(17, 59), "telegram", "tg:1")
     assert asyncio.run(agent.private_reply()) is False
-    assert "backup: dropped (russian)" in caplog.text and marks(agent)["tg:1"] == "blocked"
+    assert "backup: dropped (russian)" in caplog.text and marks(agent)["tg:1"] == "gemini"   # the window: open
+    save_route(agent.route_file, Route(pin="backup", pinned_at_ms=ms(17)))
+    agent.private_line("ще раз", ms(17, 59, ), "telegram", "tg:2")
+    assert asyncio.run(agent.private_reply()) is False
+    assert marks(agent)["tg:2"] == "blocked"                                     # his `/backup`: closed
     assert load_route(agent.route_file).answers == {"gemini": 0, "backup": 0}
 
 

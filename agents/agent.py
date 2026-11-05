@@ -1403,9 +1403,12 @@ class Agent:
             if block is not None:
                 self._after_block(block[0], nudge, seen)
             return text, "gemini"
-        if route_mode(load_route(self.route_file), self.clock()) == "backup":
+        route = load_route(self.route_file)
+        if route_mode(route, self.clock()) == "backup":
             log.info("private: route=backup — the backup answers")
-            if not nudge:
+            # v5.24 (AGORA-212, the owner: «не закривати нічого»): only under his `/backup` are his lines the backup's
+            # talk; in the window after a block they stay open, and the scan softens their hour if they block
+            if not nudge and route.pin == "backup":
                 self.mark_unanswered("backup", seen)
             text = await self._backup_text(brief, kind)
             if text is not None:
@@ -2004,8 +2007,8 @@ class Agent:
         (when they block alone, nothing can help). The last round's hours, while they still block, go one step
         stricter again; else `minimal_run` finds the run of hours (`hour_spans`) that blocks with them. Each of those
         hours goes one step stricter (`next_level`: her summary, stricter, the strictest, left out — `_soft_text`);
-        then the whole prompt again. Only a prompt that passes keeps its spans (the archive's `soft`) and ends the
-        backup's window (`clear`); otherwise nothing changes. The log and the answer hold times, steps and counts,
+        then the whole prompt again. Only a prompt that passes keeps its spans (the archive's `soft`); a prompt that
+        passes, softened or as it was, ends the backup's window (`clear`); otherwise nothing changes. The log and the answer hold times, steps and counts,
         never a text."""
         now = self.clock()
         lines = self._gemini_lines() or []
@@ -2082,8 +2085,8 @@ class Agent:
         if why == "softened":
             for row in changed.values():
                 self.archive.soft_put(row.start_ms, row.end_ms, row.strict, row.text, row.made_ms)
-            if self.cfg.can("fallback"):
-                self.route_step("clear")
+        if why in ("softened", "passes") and self.cfg.can("fallback"):  # her prompt passes: Gemini's again at once
+            self.route_step("clear")
         steps = ", ".join(f"{local_now(r.start_ms, self.tz):%H:%M} {r.strict}" for r in sorted(
             changed.values(), key=lambda r: r.start_ms))
         log.info("scan: %s after %d checks%s", why, checks[0], f" — {steps}" if why == "softened" else "")
