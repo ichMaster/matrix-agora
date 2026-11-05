@@ -1149,9 +1149,10 @@ class Agent:
                              if self.cfg.can(c))  # v5.25: the sections of her day her prompt holds
             brief = f"{brief}\n\n{style_line(self.rng, her_lines, self.cfg.can('emotion'), own)}"
             # v5.25 (the owner, 2026-11-04): what their last messages are about, and she picks which to go on with
-            topics = topics_section(*self._topics) if self._topics and self.topics_lines > 0 and not nudge else None
-            if topics:
-                brief = f"{brief}\n\n{topics}"
+            # v5.25 (the owner, 2026-11-05): Gemini's prompt alone — the list is of the talk open to Gemini, so on the
+            # backup it named the talk before the scene and drew her away from it
+            self._topics_now = (topics_section(*self._topics) if self._topics and self.topics_lines > 0 and not nudge
+                                else None)
             seen = list(self._unanswered)  # v5.13 review #2: the lines this call answers — never one that comes later
             LAST_BLOCK.set(None)  # code review v5.22 #5: only this answer's own block and silence, never those
             LAST_SILENCE.set(None)  # of the today block's or the mood's calls made above
@@ -1281,6 +1282,8 @@ class Agent:
     async def _gemini_private_prompt(self, brief: str) -> str:
         """Her private instruction for Gemini: the history, the recall and the facts without a closed line (v5.14)."""
         recalled = agora_now = None
+        if topics := getattr(self, "_topics_now", None):  # v5.25: her topics — Gemini's alone, never the backup's
+            brief = f"{brief}\n\n{topics}"
         if self._offer_photo:  # v5.17: her photo skill — Gemini's alone, never the backup's
             brief = f"{brief}\n\n{PHOTO_SKILL}"
         if self._offer_video:  # v5.18: her video skill, the same way

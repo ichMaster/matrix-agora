@@ -28,11 +28,11 @@ class TopicsLLM(EmbedLLM):
         return await super().generate(transcript, system_instruction, max_output_tokens, kind)
 
 
-def test_the_request_is_both_sides_as_two_people_and_never_their_closeness():
+def test_the_request_is_both_sides_as_two_people_and_their_closeness_in_fixed_words():
     system, contents = topics_request("Кіра", [("Ich", "Привіт"), ("Кіра", "Привіт!")])
     assert contents == "Переписка:\nIch: Привіт\nКіра: Привіт!"
     assert "двох людей, Кіра та Ich" in system and f"не більше {TOPICS_MAX} тем" in system
-    assert "близькість" in system and "темою не називай" in system and '"her"' in system and '"his"' in system
+    assert "«наш флірт і ніжність» — без подробиць" in system and '"her"' in system and '"his"' in system
     assert not BANNED_RE.search(system) and "бот" not in system.lower()
 
 
@@ -65,7 +65,11 @@ def test_the_section_counts_in_ukrainian_and_ends_with_her_choice():
     assert section.endswith("\n\n" + TOPICS_CHOOSE) and topics_section([], 20) is None
     assert not BANNED_RE.search(TOPICS_CHOOSE)
     # the owner, 2026-11-05: one topic a message, never a jump in the middle of one
-    assert "Одне повідомлення — одна тема" in TOPICS_CHOOSE and "а далі говори" not in TOPICS_CHOOSE
+    assert "одне повідомлення — одна тема" in TOPICS_CHOOSE and "а далі говори" not in TOPICS_CHOOSE
+    # the same day: her interest decides — on the two of them she stays; from a dull topic she may slip away
+    assert "Поки ви про те, що тобі з ним найцікавіше" in TOPICS_CHOOSE and "без «хоча…», «до речі»" in TOPICS_CHOOSE
+    assert "Тема, яка тобі не цікава, — інша справа" in TOPICS_CHOOSE
+    assert "«наш флірт і ніжність» — без подробиць" in topics_request("Кіра", [("Ich", "Привіт")])[0]
 
 
 def talking(tmp_path, monkeypatch, llm=None):
@@ -129,6 +133,9 @@ def test_her_private_prompt_holds_the_list_and_her_choice_and_her_answer_asks_fo
     system = agent.llm.calls[-1][1]
     assert "Про що ваша розмова (з останніх 4 повідомлень):" in system and TOPICS_CHOOSE in system
     assert system.index("Як сказати цього разу") < system.index("Про що ваша розмова")   # after the style line
+    agent.private_history.append(("Ich", "А на резерві?"))                          # the backup: never the list
+    prompt, _ = asyncio.run(agent._backup_private_prompt("brief"))
+    assert TOPICS_CHOOSE not in prompt and "Про що ваша розмова" not in prompt
     agent.topics_lines = 0                                                          # the owner's switch: no list
     agent.private_history.append(("Ich", "А тепер?"))
     asyncio.run(agent.private_reply())

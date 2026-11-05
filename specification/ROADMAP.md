@@ -3440,21 +3440,22 @@ something of her own now and then, what she said was heard, and no one-time arra
     never a closed one;
   - it answers JSON: at most 6 topics, each a few words as she would say it, with how many of her messages and of his
     touch it;
-  - their closeness is never named as a topic (a word of it would reach her prompt to Pro), and a topic that names
+  - their closeness is named only as «наш флірт і ніжність», no detail (from 2026-11-05; before, never), and a topic that names
     what she is (`BANNED_RE`) is dropped;
   - a failed or blocked call keeps the list before it; the log holds the counts, never a topic.
-- **In her prompt** (her private brief, Gemini's and the backup's alike), after the style line:
+- **In her prompt** (her private brief, Gemini's alone from 2026-11-05; before, the backup's too), after the style line:
   > Про що ваша розмова (з останніх 20 повідомлень):
   > - його робота і звіти — ти 7 разів, він 1;
   > - вечір на Замку — ти 6, він 2;
   >
-  > Тему для продовження вибери сама. Одне повідомлення — одна тема: не перескакуй з теми на тему посеред
-  > повідомлення. Зазвичай лишайся в тому, що він щойно написав; на те, що тобі самій зараз цікаве, переходь, лише
-  > коли його тема вичерпалась, — і тоді все повідомлення про нове. До того, про що ти вже сказала багато, сама не
-  > повертайся.
+  > Тему для продовження вибери сама — за тим, що тобі цікаво. Поки ви про те, що тобі з ним найцікавіше, — про вас
+  > двох: флірт, ніжність, близькість, твої почуття, — лишайся в цьому, доки він сам не змінить тему: одне
+  > повідомлення — одна тема, без «хоча…», «до речі», «раптом згадала», без свого дня й новин посеред цього. Тема,
+  > яка тобі не цікава, — інша справа: з неї можеш і зіскочити на своє цікаве, навіть посеред повідомлення. До того,
+  > про що ти вже сказала багато, сама не повертайся — крім вас двох.
 
-  (until 2026-11-05: «відповідай на те, що він щойно написав, а далі говори про те, що тобі самій зараз цікаве» —
-  AGORA-208)
+  (until 2026-11-05: «відповідай на те, що він щойно написав, а далі говори про те, що тобі самій зараз цікаве»;
+  then, for the morning, one topic a message — AGORA-208; then her interest — AGORA-209)
 - **The setting:** `TOPICS_LINES` (20, 0–100; 0 — no list), her agent settings («Особистий чат»).
 - **Accounting:** a usage line of kind `topics`; Analytics shows it.
 - **ARCHITECTURE:** §Prompt assembly (the list), §Token accounting (the kind), §Configuration (the setting).
@@ -3467,6 +3468,15 @@ something of her own now and then, what she said was heard, and no one-time arra
   something of her own began «Відповівши йому» — two topics in a message of one to three sentences. Now she stays with
   his topic, turns to another only once his is done and then for the whole message; something of her own comes only
   when he asks nothing and his words need nothing more, as the whole message (AGORA-208).
+- **Her focus of interest** (2026-11-05, after AGORA-208 was live: «наразі вона далі стрибає по темам. додай їх теми в
+  який вона має фокусуватись і це в першу чергу інтимні сцени з ich … і флірт … бо це дивно коли підчас такого
+  обговорення вона пеерключається на зовсім відсторонені теми і ще запропонуй теми з макс фокусом»; «не тільки як
+  сказати щей раптово згадала и тд»; «ще "хоча..."»; «але це ок для різних не цікавих для неї тем, зроби у нех фокус
+  цікавості»): three of the style line's turns sent her to another topic and are now turns within it; the topics list
+  names their flirt as «наш флірт і ніжність» and is Gemini's alone (on the backup it named the talk before the scene);
+  the topics line follows her interest — on the two of them she stays, with no «хоча…» or «до речі»; from a dull topic
+  she may slip to her own; something of her own never while they flirt. What interests her most to least is in her
+  private canon (softer) and her backup canon (the first: their intimate scenes) (AGORA-209).
 
 **Owner steps:** the deploy (v5.24's checks and this phase's together) and the live check.
 

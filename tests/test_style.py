@@ -161,3 +161,4 @@ def test_her_private_prompt_carries_the_line_for_this_answer_from_her_open_lines
     asyncio.run(agent.private_reply())
     assert "розкажи щось своє — цілим повідомленням" in agent.llm.calls[-1][1]          # v5.25: never tacked on
     assert "(із «Що ти сьогодні думала»)" in agent.llm.calls[-1][1] and "Відповівши йому" not in agent.llm.calls[-1][1]
+    assert "Якщо ви зараз не фліртуєте" in agent.llm.calls[-1][1]                   # never in the middle of their flirt
