@@ -100,11 +100,27 @@ def test_a_refusal_makes_the_exchange_blocked_and_the_backup_answers_for_five_mi
     assert SECRET not in caplog.text and "Від резерву" not in caplog.text
 
 
-def test_an_answer_stage_block_takes_the_same_path(tmp_path, monkeypatch):
-    agent = her(tmp_path, monkeypatch, Gemini(blocks=1, block=("answer", "prohibited_content", None)))
+def test_an_answer_stage_block_is_tried_once_more_on_gemini_and_twice_takes_the_same_path(tmp_path, monkeypatch,
+                                                                                          caplog):
+    # v5.24 (AGORA-213, the owner, 2026-11-05): Gemini blocking what it wrote — the same prompt mostly passes again
+    caplog.set_level(logging.INFO)
+    gemini = Gemini(blocks=1, block=("answer", "prohibited_content", None))
+    agent = her(tmp_path, monkeypatch, gemini)
     agent.private_line(ASKED, ms(17), "telegram", "tg:1")
     assert asyncio.run(agent.private_reply()) is True
-    assert set(marks(agent).values()) == {"blocked"} and load_route(agent.route_file).window_until_ms == ms(18, 5)
+    assert agent.fallback.calls == [] and agent.private_history[-1] == ("Кіра", "Від Gemini.")
+    assert set(marks(agent).values()) == {"gemini"} and load_route(agent.route_file).window_until_ms is None
+    assert len(gemini.transcripts) == 2 and "her answer blocked — once more on gemini" in caplog.text
+    gemini.blocks = 2
+    agent.private_line("і ще", ms(17, 1), "telegram", "tg:2")
+    assert asyncio.run(agent.private_reply()) is True
+    assert len(gemini.transcripts) == 4 and len(agent.fallback.calls) == 1        # two tries, then the backup
+    assert marks(agent)["tg:2"] == "blocked" and load_route(agent.route_file).window_until_ms == ms(18, 5)
+    gemini.blocks, gemini.block = 1, ("prompt", "prohibited_content", None)        # a prompt block: never again
+    at(agent, 18, 10)
+    agent.private_line("а тепер", ms(18, 10), "telegram", "tg:3")
+    asyncio.run(agent.private_reply())
+    assert len(gemini.transcripts) == 5
 
 
 def test_a_long_line_the_history_cuts_is_closed_to_gemini_too(tmp_path, monkeypatch):

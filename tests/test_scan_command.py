@@ -191,7 +191,7 @@ def test_a_prompt_block_closes_nothing_and_the_scan_starts_once_she_answered(tmp
 
 
 def test_an_answer_stage_block_still_closes_his_line_and_starts_no_scan(tmp_path, monkeypatch):
-    agent = scanning(tmp_path, monkeypatch, Filter(blocks=1, stage="answer"), lines=RUN[1:])
+    agent = scanning(tmp_path, monkeypatch, Filter(blocks=2, stage="answer"), lines=RUN[1:])  # both tries
     spawned = []
     agent._spawn = spawned.append
     agent.private_line("Ну що?", ms(17, 50), "telegram", "tg:new")

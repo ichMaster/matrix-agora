@@ -1351,11 +1351,16 @@ class Agent:
     async def _gemini_answer(self, brief: str, kind: str):
         """`_gemini_text`, and v5.23 (the owner, 2026-11-03: «не треба переключати на бекап якщо блок на фото» —
         «Повтор без фото»): a block while her photo skill was offered is tried once more without it, so a block the
-        photo made goes neither to the backup nor to his lines; one that blocks without it too is a block, as ever."""
+        photo made goes neither to the backup nor to his lines; one that blocks without it too is a block, as ever.
+        v5.24 (AGORA-213, the owner, 2026-11-05: «зроби»): a block at the answer stage — Gemini blocking what it wrote,
+        while the same prompt mostly passes when asked again — is tried once more too; the photo's retry is that one."""
         text, block = await self._gemini_text(brief, kind)
         if text is None and block is not None and self._offer_photo:
             log.info("private: blocked with her photo skill — once more without it")
             self._offer_photo, self._pending_shot = False, None
+            text, block = await self._gemini_text(brief, kind)
+        elif text is None and block is not None and block[0] == "answer":
+            log.info("private: her answer blocked — once more on gemini")
             text, block = await self._gemini_text(brief, kind)
         return text, block
 

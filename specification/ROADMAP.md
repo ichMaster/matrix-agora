@@ -3318,6 +3318,10 @@ checked only what Opus had picked, so it could not see it. The owner: «пере
   scan cannot see, still does.
 - **When:** at `/scan`, and by itself after a prompt-stage block once her answer is out (`SCAN_AUTO_HOUR_MAX` 3 in an
   hour); a scan that finds the prompt passing — softened or as it was — ends the backup's window, never a pin.
+- **An answer-stage block is tried once more on Gemini** (AGORA-213; the owner, 2026-11-05: «зроби»): at 20:37 and 20:50
+  Gemini blocked what it wrote, not the prompt; the 20:50 prompt, asked 6 times again (3 with her recall, 3 without),
+  answered every time. So her answer is asked once more before the backup; the photo's retry, when there was one, is
+  that one.
 - **The window after a block closes nothing either** (the same evening, after the first live block at 20:12: the
   backup's window had closed his two lines before the scan ran, so it found nothing to soften): only the backup's own
   lines are closed; under his `/backup` his lines are still closed, as the backup's talk.
