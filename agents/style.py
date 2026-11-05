@@ -57,8 +57,10 @@ ENDINGS = (
 NO_SENDOFF = ("Якщо він сам не прощається — без прощання, без «до зустрічі», без нагадувань про те, що ви "
               "запланували, і без порад йому, що робити.")
 NO_SENDOFF_P = 0.75
-# v5.25: something of her own, from her day — the sections her prompt holds (`own`), never from their talk today
-OWN = "Відповівши йому, розкажи й щось своє — не з вашої сьогоднішньої розмови: що з тобою сталося сьогодні або що ти"
+# v5.25: something of her own, from her day — the sections her prompt holds (`own`), never from their talk today;
+# the owner, 2026-11-05: never tacked on after her answer — a whole message, once his words need nothing more
+OWN = ("Якщо він ні про що тебе не питає і на його слова тобі вже нема чого додати, розкажи щось своє — цілим "
+       "повідомленням, не з вашої сьогоднішньої розмови: що з тобою сталося сьогодні або що ти")
 OWN_P = 0.3
 TAG_PLACES = ("посеред репліки, між реченнями", "посеред речення, там, де змінюється тон", "наприкінці")
 TAG_NONE_P = 0.35   # no tag this time

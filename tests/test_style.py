@@ -155,8 +155,9 @@ def test_her_private_prompt_carries_the_line_for_this_answer_from_her_open_lines
     assert "закрите" not in system.lower()
     from agents.private import PRIVATE_BRIEF
     assert "він почув: не повторюй цього" in PRIVATE_BRIEF and PRIVATE_BRIEF in system   # v5.25: Лілі's first rule
-    assert "розкажи й щось своє" not in system                                       # no section of her day: never
+    assert "розкажи щось своє" not in system                                         # no section of her day: never
     agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "capabilities": agent.cfg.capabilities | {"thoughts"}})
     agent.rng = lambda: 0.1                                                         # every draw taken
     asyncio.run(agent.private_reply())
-    assert "розкажи й щось своє" in agent.llm.calls[-1][1] and "(із «Що ти сьогодні думала»)" in agent.llm.calls[-1][1]
+    assert "розкажи щось своє — цілим повідомленням" in agent.llm.calls[-1][1]          # v5.25: never tacked on
+    assert "(із «Що ти сьогодні думала»)" in agent.llm.calls[-1][1] and "Відповівши йому" not in agent.llm.calls[-1][1]

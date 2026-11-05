@@ -3448,8 +3448,13 @@ something of her own now and then, what she said was heard, and no one-time arra
   > - його робота і звіти — ти 7 разів, він 1;
   > - вечір на Замку — ти 6, він 2;
   >
-  > Тему для продовження вибери сама: відповідай на те, що він щойно написав, а далі говори про те, що тобі самій
-  > зараз цікаве; до того, про що ти вже сказала багато, сама не повертайся.
+  > Тему для продовження вибери сама. Одне повідомлення — одна тема: не перескакуй з теми на тему посеред
+  > повідомлення. Зазвичай лишайся в тому, що він щойно написав; на те, що тобі самій зараз цікаве, переходь, лише
+  > коли його тема вичерпалась, — і тоді все повідомлення про нове. До того, про що ти вже сказала багато, сама не
+  > повертайся.
+
+  (until 2026-11-05: «відповідай на те, що він щойно написав, а далі говори про те, що тобі самій зараз цікаве» —
+  AGORA-208)
 - **The setting:** `TOPICS_LINES` (20, 0–100; 0 — no list), her agent settings («Особистий чат»).
 - **Accounting:** a usage line of kind `topics`; Analytics shows it.
 - **ARCHITECTURE:** §Prompt assembly (the list), §Token accounting (the kind), §Configuration (the setting).
@@ -3457,6 +3462,11 @@ something of her own now and then, what she said was heard, and no one-time arra
 - **Her answer survives a bad network** («роби обидва», 2026-11-04, after an answer lost at 19:24 to a Telegram
   `TimeoutError` and one held 194 s by a Gemini call at 19:28): the answer's call to Gemini cut at 90 s and made once
   more; a send to Telegram that fails on the network tried again after 2 s and 5 s (AGORA-204).
+- **One topic a message** (2026-11-05: «фікс по темам занадто сильно заставляє її стрибати між темами в середині
+  одного меседжа»): the topics line asked her to answer him «а далі» talk of her own interest, and the line of
+  something of her own began «Відповівши йому» — two topics in a message of one to three sentences. Now she stays with
+  his topic, turns to another only once his is done and then for the whole message; something of her own comes only
+  when he asks nothing and his words need nothing more, as the whole message (AGORA-208).
 
 **Owner steps:** the deploy (v5.24's checks and this phase's together) and the live check.
 

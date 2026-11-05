@@ -64,6 +64,8 @@ def test_the_section_counts_in_ukrainian_and_ends_with_her_choice():
     assert "- вечір на Замку — ти 2 рази, він 21 раз;" in section and "- кіно — ти 0 разів, він 11 разів;" in section
     assert section.endswith("\n\n" + TOPICS_CHOOSE) and topics_section([], 20) is None
     assert not BANNED_RE.search(TOPICS_CHOOSE)
+    # the owner, 2026-11-05: one topic a message, never a jump in the middle of one
+    assert "Одне повідомлення — одна тема" in TOPICS_CHOOSE and "а далі говори" not in TOPICS_CHOOSE
 
 
 def talking(tmp_path, monkeypatch, llm=None):
