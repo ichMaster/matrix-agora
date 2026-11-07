@@ -129,15 +129,16 @@ def roll_news(items: list[Item], rolled: frozenset[str] | set[str], woven_today:
     return done, None
 
 
-def pick_way(rng: Callable[[], float]) -> str:
-    ways = list(WAYS)
+def pick_way(rng: Callable[[], float], world: bool = False) -> str:
+    """One of `WAYS`; the world's news (v5.27) never puts her there."""
+    ways = [w for w in WAYS if not (world and w == "there")]
     return ways[min(int(rng() * len(ways)), len(ways) - 1)]
 
 
-def news_ask(item: Item, way: str) -> str:
+def news_ask(item: Item, way: str, source: str = "ZAXID.NET") -> str:
     """The event call's ask for a woven item, in place of a kind."""
     about = f"«{item.title}»" + (f" — {item.summary}" if item.summary else "")
-    return (f"Сьогодні в новинах (ZAXID.NET): {about}. Ця новина торкнулася твого життя так: {WAYS[way]}. "
+    return (f"Сьогодні в новинах ({source}): {about}. Ця новина торкнулася твого життя так: {WAYS[way]}. "
             f"{NEWS_RULES}")
 
 

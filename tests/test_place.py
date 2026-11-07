@@ -245,17 +245,79 @@ def test_her_weather_photos_and_news_follow_her_place(tmp_path, monkeypatch, wor
 
     woven = []
 
-    async def items(now):
-        woven.append(now)
-        return []
-    agent.ensure_citynews = items
+    def source(name):
+        async def items(now):
+            woven.append(name)
+            return []
+        return items
+    agent.ensure_citynews, agent.ensure_worldnews = source("lviv"), source("world")
     agent.city_news_p, agent.city_news_max = 1.0, 2
     asyncio.run(agent._weave_news(local_now_of(agent), parse_day("")))
-    assert woven == []                                                      # Chile: no Lviv news in her life
+    assert woven == ["world"]                                               # Chile: the world's news, not Lviv's
     agent.clock = lambda: ms(2026, 11, 6, 15, 0, "Europe/Kyiv")             # at home, before she left
     agent._place_cache = None
     asyncio.run(agent._weave_news(local_now_of(agent), parse_day("")))
-    assert len(woven) == 1 and agent._moment().city == "Lviv"
+    assert woven == ["world", "lviv"] and agent._moment().city == "Lviv"
+
+
+def test_away_from_lviv_her_news_is_the_worlds(tmp_path, monkeypatch, world):
+    """The owner, 2026-11-07: «поміняй джерела новин на міжнародні» — away from a place with `news`, her reading has no
+    Zaxid.net and the news woven into her life is the Guardian's `world` section, fetched at most every three hours
+    (an empty answer tried again in an hour), never «you were there»."""
+    import asyncio
+    import dataclasses
+
+    from agents.citynews import WAYS, news_ask, pick_way
+    from agents.citynews import Item as CityItem
+    from agents.events import parse_day
+    from agents.reading import Item
+    from tests.test_archive import kira
+
+    assert {pick_way(lambda x=x: x, world=True) for x in (0.0, 0.3, 0.6, 0.999)} == set(WAYS) - {"there"}
+    assert "Сьогодні в новинах (The Guardian): «Flood»" in news_ask(CityItem("Flood", "https://x", "", "x"), "heard",
+                                                                    "The Guardian")
+    story, places, night = world
+    agent = kira(tmp_path, monkeypatch)
+    agent.cfg = dataclasses.replace(agent.cfg, life=story, places=places, night_place=night,
+                                    capabilities=agent.cfg.capabilities | {"events"})
+    agent.clock = lambda: ms(2026, 11, 20, 12, 0, "America/Santiago")
+    asked, answer = [], [Item("guardian", "world/1", "Flood in Spain", "Rivers rose", "https://g/1", "2026-11-20")]
+
+    async def guardian(sections, day):
+        asked.append(sections)
+        return list(answer)
+    agent.reading_sources.guardian = guardian
+    now = local_now_of(agent)
+    items = asyncio.run(agent.ensure_worldnews(now))
+    assert asked == [["world"]] and [(i.title, i.link, i.published) for i in items] == [
+        ("Flood in Spain", "https://g/1", "2026-11-20T00:00:00+00:00")]
+    assert asyncio.run(agent.ensure_worldnews(now)) == items and len(asked) == 1     # kept for three hours
+    agent.clock = lambda: ms(2026, 11, 20, 15, 1, "America/Santiago")
+    answer[:] = [Item("guardian", "world/2", "Storm", "", "https://g/2", "2026-11-20")]
+    assert [i.link for i in asyncio.run(agent.ensure_worldnews(local_now_of(agent)))] == ["https://g/1", "https://g/2"]
+    agent._worldnews, answer[:] = ("", 0, []), []
+    assert asyncio.run(agent.ensure_worldnews(local_now_of(agent))) == [] and len(asked) == 3
+    assert asyncio.run(agent.ensure_worldnews(local_now_of(agent))) == [] and len(asked) == 3  # tried again in an hour
+
+    asks = []
+
+    async def write_event(way, now, news=None):
+        asks.append((way, news))
+        return "Я прочитала про повінь."
+    agent._write_event = write_event
+    agent._worldnews = ("2026-11-20", agent.clock(), [CityItem("Storm", "https://g/2", "", "2026-11-20T00:00:00+00:00")])
+    agent.city_news_p, agent.city_news_max, agent.rng = 1.0, 2, lambda: 0.0
+    asyncio.run(agent._weave_news(local_now_of(agent), parse_day("")))
+    assert asks and asks[0][0] != "there" and "(The Guardian): «Storm»" in asks[0][1]
+
+    async def lviv(now):
+        raise AssertionError("no Lviv feed away from Lviv")
+
+    async def nothing(sections, day):
+        return []
+    agent.ensure_citynews, agent.reading_sources.guardian = lviv, nothing
+    asyncio.run(agent._reading_tick(local_now_of(agent)))                 # her reading never asks Zaxid.net here
+
 
 
 def local_now_of(agent):

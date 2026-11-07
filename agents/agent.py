@@ -65,6 +65,7 @@ from agents.citynews import (
     REFRESH_MS as CITYNEWS_REFRESH_MS,
 )
 from agents.citynews import RETRY_MS as CITYNEWS_RETRY_MS
+from agents.citynews import Item as CityItem
 from agents.citynews import day_items, fetch_citynews, news_ask, pick_way, roll_news
 from agents.citynews import load as load_citynews
 from agents.citynews import save as save_citynews
@@ -519,6 +520,7 @@ class Agent:
         self._events_retry_ms = 0
         self.citynews_fetch = fetch_citynews  # the seam: tests pass a canned feed, never the network
         self._citynews_retry_ms = 0
+        self._worldnews: tuple[str, int, list] = ("", 0, [])  # v5.27: (day, fetched_ms, items), away from Lviv
         # v5.12 — she reads and thinks: a reading every READING_EVERY_S in READING_HOURS (at most READING_PICKS items),
         # a reflection every REFLECT_EVERY_S on each place with new lines. Only a person with `thoughts` reads them
         self.reading_every_ms, self.reflect_every_ms, self.reading_hours = 0, 0, (0, 0)
@@ -3667,7 +3669,8 @@ class Agent:
         before = load_reading(self.reading_file).last_reading_ms
         self._reading_state(lambda s: setattr(s, "last_reading_ms", start))
         day = now.date()
-        zaxid = from_citynews(await self.ensure_citynews(now))
+        # v5.27 (the owner, 2026-11-07: «поміняй джерела новин на міжнародні»): Lviv's outlet only where it is hers
+        zaxid = from_citynews(await self.ensure_citynews(now)) if self.place.news else []
         guardian = await self.reading_sources.guardian(self.reading_sections, day)
         seen = load_reading(self.reading_file).seen
         items = shown(fresh(zaxid, seen), fresh(guardian, seen))
@@ -3829,20 +3832,41 @@ class Agent:
         log.info("citynews: %d items today", len(items))
         return items
 
+    async def ensure_worldnews(self, now) -> list:
+        """v5.27 (the owner, 2026-11-07): away from a place with `news`, the world's news — the day's items of the
+        Guardian's `world` section through her reading's key, fetched at most every three hours, kept in memory and
+        merged by link; no key or no answer is no news."""
+        day = now.date()
+        kept_day, fetched_ms, kept = self._worldnews
+        items = kept if kept_day == day.isoformat() else []
+        if items and self.clock() - fetched_ms < CITYNEWS_REFRESH_MS:
+            return items
+        if kept_day == day.isoformat() and not items and self.clock() - fetched_ms < CITYNEWS_RETRY_MS:
+            return items
+        fetched = [CityItem(i.title, i.link, i.summary, f"{i.published[:10] or day.isoformat()}T00:00:00+00:00")
+                   for i in await self.reading_sources.guardian(["world"], day)]
+        seen = {i.link for i in items}
+        items = [*items, *(i for i in fetched if i.link not in seen)]
+        self._worldnews = (day.isoformat(), self.clock(), items)
+        log.info("worldnews: %d items today", len(items))
+        return items
+
     async def _weave_news(self, now, today) -> None:
         """This hour's roll of the day's news: each new item once; a hit touches her life in one of five ways."""
         woven = sum(1 for e in today.events if e.source == "news")
-        if woven >= self.city_news_max or self.city_news_p <= 0 or not self.place.news:
-            return  # v5.27: Lviv's news touches her life only where it can — at a place with `news`
-        items = await self.ensure_citynews(now)
+        if woven >= self.city_news_max or self.city_news_p <= 0:
+            return
+        # v5.27: Lviv's news only at a place with `news`; elsewhere the world's, which never puts her there
+        world = not self.place.news
+        items = await (self.ensure_worldnews(now) if world else self.ensure_citynews(now))
         rolled, hit = roll_news(items, today.news, woven, self.city_news_p, self.city_news_max, now, self.rng)
         day = now.date()
         if rolled:
             self._append_events(day, "".join(news_marker(link) for link in rolled))
         if hit is None:
             return
-        way = pick_way(self.rng)
-        text = await self._write_event(way, now, news=news_ask(hit, way))
+        way = pick_way(self.rng, world)
+        text = await self._write_event(way, now, news=news_ask(hit, way, "The Guardian" if world else "ZAXID.NET"))
         if text is None:
             log.info("events: no news event this hour")
             return
