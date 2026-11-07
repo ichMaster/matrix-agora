@@ -2436,16 +2436,18 @@ class Agent:
             self.session.append((private_label(self.cfg.name), text))
 
     def _moment(self) -> Moment:
-        """v5.17 — her moment for a photo or (v5.18) a clip: her clock, the season and (with `mood`) her day's Lviv
-        weather."""
-        now = local_now(self.clock(), self.tz)
+        """v5.17 — her moment for a photo or (v5.18) a clip: her clock, the season and (with `mood`) her day's
+        weather; v5.27: her place's — its city, its hemisphere's season, its weather."""
+        here = self.place
+        now = local_now(self.clock(), here.tz)
         weather = None
         if self.cfg.can("mood"):
             try:
-                weather = load_weather(self.weather_file, now.date().isoformat())
+                weather = load_weather(self.weather_file, self.weather_key(now))
             except Exception as exc:  # noqa: BLE001 — a photo without the weather, never none
                 log.error("photo: the weather was not read (%s)", type(exc).__name__)
-        return Moment(now, weather)
+        city = here.name_en.split(",", 1)[0] if here.key == "home" else here.name_en
+        return Moment(now, weather, city, here.south)
 
     async def _make_photo(self, shot: Shot, aspect: str = "3:4", extra: str | None = None,
                           kind: str = "photo") -> Made:
@@ -3296,14 +3298,22 @@ class Agent:
     def weather_file(self) -> Path:
         return self.memory_file.parent / f"{self.cfg.localpart}.weather.json"
 
+    def weather_key(self, now) -> str:
+        """The weather's day, and (v5.27) the place when she is away: a move fetches the new place's weather."""
+        here = self.place
+        return now.date().isoformat() if here.key == "home" else f"{now.date().isoformat()} {here.key}"
+
     def weather_today(self, now) -> str | None:
-        day = now.date().isoformat()
+        day = self.weather_key(now)
         return self._weather[1] if self._weather is not None and self._weather[0] == day else None
 
     async def ensure_weather(self, now) -> str | None:
-        """Once per local day: the day's file, else one Open-Meteo request; a failure means no weather and a retry
-        after 10 minutes — never a blocked mood or reply. Not a model call: no usage line."""
-        day = now.date().isoformat()
+        """Once per local day (v5.27: and place): the day's file, else one Open-Meteo request; a failure means no
+        weather and a retry after 10 minutes — never a blocked mood or reply; a place without coordinates (the road)
+        has none. Not a model call: no usage line."""
+        here, day = self.place, self.weather_key(now)
+        if here.lat is None:
+            return None
         if (line := self.weather_today(now)) is not None:
             return line
         if self._weather_lock.locked() or self.clock() < self._weather_retry_ms:
@@ -3312,7 +3322,8 @@ class Agent:
             if (line := load_weather(self.weather_file, day)) is not None:
                 self._weather = (day, line)
                 return line
-            line = await self.weather_fetch(now.date(), self.tz)
+            line = (await self.weather_fetch(now.date(), here.tz) if here.key == "home"
+                    else await self.weather_fetch(now.date(), here.tz, place=here))
             if line is None:
                 self._weather_retry_ms = self.clock() + 600_000
                 return None
@@ -3813,8 +3824,8 @@ class Agent:
     async def _weave_news(self, now, today) -> None:
         """This hour's roll of the day's news: each new item once; a hit touches her life in one of five ways."""
         woven = sum(1 for e in today.events if e.source == "news")
-        if woven >= self.city_news_max or self.city_news_p <= 0:
-            return
+        if woven >= self.city_news_max or self.city_news_p <= 0 or not self.place.news:
+            return  # v5.27: Lviv's news touches her life only where it can — at a place with `news`
         items = await self.ensure_citynews(now)
         rolled, hit = roll_news(items, today.news, woven, self.city_news_p, self.city_news_max, now, self.rng)
         day = now.date()

@@ -56,7 +56,7 @@ STYLE = ("A casual photo taken on a smartphone and sent in a private chat: natur
          "image.")
 # v5.25 (the owner, 2026-11-05: «вона не носить ніколи мейкапу і це її позиція природньої краси»)
 SELFIE = ("The young woman in the photo is the same person as in the reference photos: keep her face, hair and "
-          "features exactly. She is 23, from Lviv, Ukraine. She never wears makeup: a bare, natural face. She wears "
+          "features exactly. She is 23, Ukrainian. She never wears makeup: a bare, natural face. She wears "
           "what suits the weather and the scene described below — not the clothes of the reference photos.")
 
 
@@ -83,6 +83,7 @@ class Moment:
     when: datetime
     weather: str | None = None   # her day's weather line (v5.10), as written
     city: str = "Lviv"
+    south: bool = False          # v5.27: her place is in the southern hemisphere — November is spring
 
 
 @dataclass(frozen=True)
@@ -136,7 +137,8 @@ def strip_notes(text: str) -> str:
 def moment_line(moment: Moment) -> str:
     """Her moment in English (pure): the part of the day, the season, the time, the city unless named, the weather."""
     when = moment.when
-    line = (f"It is {PARTS[part_of_day(when.hour)]} in {SEASONS[season(when.month)]}, around {when:%H:%M}, in "
+    line = (f"It is {PARTS[part_of_day(when.hour)]} in {SEASONS[season(when.month, moment.south)]}, around "
+            f"{when:%H:%M}, in "
             f"{moment.city} unless the description names another place.")
     if moment.weather:
         line += f" Today's weather there (in Ukrainian): {moment.weather}"

@@ -5,6 +5,9 @@ through the night (an astronomer reads the night). Fetched once a local day and 
 (the day and the line — world data, no room text), so a restart makes no second request. Only the mood reading takes
 the line; it never reaches a prompt by itself. A failed fetch means no weather, never a blocked mood. Pure but for
 the HTTP call and the file I/O.
+
+v5.27: away from Lviv a person's weather is her place's — its coordinates, zone and short name (`agents/place.py`);
+a place without coordinates (the road) has none.
 """
 
 from __future__ import annotations
@@ -54,7 +57,12 @@ def _temp(value: float) -> str:
     return f"{n:+d}" if n else "0"
 
 
-def parse_weather(data: dict, day: date) -> str | None:
+def place_label(name: str) -> str:
+    """v5.27 — a place's short name for the weather line: «Сантьяго, Чилі» → «Сантьяго»."""
+    return name.split(",", 1)[0].strip() or name
+
+
+def parse_weather(data: dict, day: date, label: str = "Львів") -> str | None:
     """The day's line, e.g. «Львів: дощ, від +3 до +9 °C, опади 4 мм, вітер до 18 км/год, схід 07:31, захід 16:52,
     уночі хмарність 85 %»; a missing field is left out, and an answer without the day's temperature is None."""
     daily = (data or {}).get("daily") if isinstance(data, dict) else None
@@ -80,7 +88,7 @@ def parse_weather(data: dict, day: date) -> str | None:
             parts.append(f"{word} {stamp.split('T', 1)[1][:5]}")
     if (clouds := night_clouds(data, day)) is not None:
         parts.append(f"уночі хмарність {clouds} %")
-    return "Львів: " + ", ".join(parts)
+    return f"{label}: " + ", ".join(parts)
 
 
 def night_clouds(data: dict, day: date) -> int | None:
@@ -104,14 +112,16 @@ async def http_json(url: str) -> dict:
         return await resp.json()
 
 
-async def fetch_weather(day: date, tz: str = "Europe/Kyiv", fetch: Fetch = http_json) -> str | None:
-    """One request; any failure (the network, the status, the JSON, the shape) is logged by its type and is None."""
+async def fetch_weather(day: date, tz: str = "Europe/Kyiv", fetch: Fetch = http_json, place=None) -> str | None:
+    """One request; any failure (the network, the status, the JSON, the shape) is logged by its type and is None.
+    v5.27: `place` (an `agents.place.Place` with coordinates) — its weather, in its zone, under its short name."""
+    url = weather_url(tz=tz) if place is None else weather_url(place.lat, place.lon, place.tz)
     try:
-        data = await fetch(weather_url(tz=tz))
+        data = await fetch(url)
     except Exception as exc:  # noqa: BLE001 — no weather is never a blocked mood
         log.error("weather fetch failed (%s)", type(exc).__name__)
         return None
-    line = parse_weather(data, day)
+    line = parse_weather(data, day) if place is None else parse_weather(data, day, place_label(place.name))
     if line is None:
         log.error("weather answer has no day's temperature")
     return line

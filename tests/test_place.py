@@ -198,3 +198,67 @@ def test_the_agent_follows_her_place(tmp_path, monkeypatch, world, caplog):
     agent.cfg = dataclasses.replace(agent.cfg, places=None)          # no places: home, as before v5.27
     agent._place_cache = None
     assert agent.tz == "Europe/Kyiv" and "У Львові" not in agent.prompt_layers()["world"]
+
+
+def test_her_weather_photos_and_news_follow_her_place(tmp_path, monkeypatch, world):
+    """AGORA-215 — away, the weather is her place's (none on the road), her photos are set there in its season, and
+    Lviv's news no longer touches her life."""
+    import asyncio
+    import dataclasses
+    from urllib.parse import parse_qs, urlparse
+
+    from agents.events import parse_day
+    from agents.photo import moment_line
+    from agents.weather import fetch_weather
+    from tests.test_archive import kira
+    from tests.test_weather import DAY, answer
+
+    story, places, night = world
+    seen = []
+
+    async def fetch(url):
+        seen.append(parse_qs(urlparse(url).query))
+        return answer()
+
+    line = asyncio.run(fetch_weather(DAY, fetch=fetch, place=places["paranal"]))
+    assert line.startswith("гора Параналь: дощ, від +3 до +9 °C")
+    assert (seen[0]["latitude"], seen[0]["longitude"], seen[0]["timezone"]) == (["-24.63"], ["-70.4"],
+                                                                              ["America/Santiago"])
+
+    agent = kira(tmp_path, monkeypatch)
+    agent.cfg = dataclasses.replace(agent.cfg, life=story, places=places, night_place=night,
+                                    capabilities=agent.cfg.capabilities | {"mood"})
+    calls = []
+
+    async def weather(day, tz, place=None):
+        calls.append((day, tz, place and place.key))
+        return f"{place.name if place else 'Львів'}: ясно"
+    agent.weather_fetch = weather
+    agent.clock = lambda: ms(2026, 11, 8, 10, 0, "Europe/Kyiv")             # on the road: no weather, no call
+    assert asyncio.run(agent.ensure_weather(local_now_of(agent))) is None and calls == []
+    agent.clock = lambda: ms(2026, 11, 10, 15, 0, "America/Santiago")
+    assert asyncio.run(agent.ensure_weather(local_now_of(agent))) == "гора Параналь, Чилі: ясно"
+    assert calls == [(date(2026, 11, 10), "America/Santiago", "paranal")]
+    moment = agent._moment()
+    assert moment.city == "Paranal, Chile" and moment.south and moment.weather == "гора Параналь, Чилі: ясно"
+    assert "afternoon in spring, around 15:00, in Paranal, Chile" in moment_line(moment)
+
+    woven = []
+
+    async def items(now):
+        woven.append(now)
+        return []
+    agent.ensure_citynews = items
+    agent.city_news_p, agent.city_news_max = 1.0, 2
+    asyncio.run(agent._weave_news(local_now_of(agent), parse_day("")))
+    assert woven == []                                                      # Chile: no Lviv news in her life
+    agent.clock = lambda: ms(2026, 11, 6, 15, 0, "Europe/Kyiv")             # at home, before she left
+    agent._place_cache = None
+    asyncio.run(agent._weave_news(local_now_of(agent), parse_day("")))
+    assert len(woven) == 1 and agent._moment().city == "Lviv"
+
+
+def local_now_of(agent):
+    from agents.world import local_now
+
+    return local_now(agent.clock(), agent.tz)

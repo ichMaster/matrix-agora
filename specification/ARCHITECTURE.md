@@ -533,7 +533,10 @@ over the cap by its `Content-Length` or by what arrives (never more than the cap
   day, her waking hours — and her world line names her place, takes the season of her hemisphere (November is spring
   in Chile) and, when her zone is not `TIMEZONE`, adds Lviv's time: «У Львові, де Ich, зараз 01:15 — там уже
   вівторок.» (the weekday only when Lviv's date is another). `TIMEZONE` stays home: the hours she may write to Ich
-  first are his (`PRIVATE_HOURS`, §Configuration).
+  first are his (`PRIVATE_HOURS`, §Configuration). Her world follows her too: the weather of her mood is her
+  place's (its coordinates and zone, its short name as the line's label, kept per day and place; none for a place
+  without coordinates), her photos and videos are set in her place's city and season, and Lviv's news is woven into
+  her events only at a place with `news`.
 - Before every Gemini call the code computes the current moment in `TIMEZONE` and adds date, weekday, time, part of day and season to the prompt — in Ukrainian, e.g. «Зараз четвер, 2 жовтня 2026, 20:15, вечір, осінь». Weekday/month names come from tables in code, not the system locale. The clock is an injected function, replaceable in tests.
 - The prompt also says when the last session summary was made («Востаннє ви говорили позавчора ввечері»).
 
