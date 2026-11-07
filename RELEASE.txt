@@ -1,3 +1,20 @@
+Version 5.25.0 (2026-11-07)
+---------------------------
+- Phase v5.25 (AGORA-197..200, 204, 208..211): her topics - Flash lists what
+  their talk is about after each of her private answers, and she picks which
+  to go on with (`TOPICS_LINES`)
+- Something of her own from her day; what she said was heard; no one-time
+  arrangement kept as a fact
+- One topic a message; her focus of interest - on the two of them she stays,
+  from a dull topic she may slip away
+- No makeup in her canons and her selfies; her Donetsk surzhyk in her
+  canons, live words and the topics line
+- A closed line takes the summaries over it: written again without it; her
+  answer survives a bad network (Gemini's call cut and made again, a send
+  tried again)
+- The owner confirmed the live checks on 2026-11-07; the phase had no code
+  review of its own
+
 Version 5.24.0 (2026-11-07)
 ---------------------------
 - Phase v5.24 (AGORA-192..196, 201..203, 212, 213): the scan - Gemini finds
