@@ -1,3 +1,13 @@
+Version 6.2.1 (2026-11-07)
+---------------------------
+- Her story's timed events fall at their time in any hour of her clock
+  (Kira's 03:40 on the mountain, her 04:00 and 06:00 calls), and the hourly
+  roll with the news only while she is awake: her waking hours, on a night
+  at the telescope 14-07, asleep the morning after - so her window the whole
+  day never wakes her at night (the owner, 2026-11-07)
+- Code review v6.2 #1: a missing look file is a warning at her start; #2:
+  the seed command with its required args in the docs
+
 Version 6.2.0 (2026-11-07)
 ---------------------------
 - Phase v6.2 (AGORA-218..222): the code for a second companion - a selfie is
