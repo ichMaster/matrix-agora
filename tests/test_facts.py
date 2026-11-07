@@ -543,3 +543,33 @@ def test_the_seeds_usage_sink_takes_the_calls_time_as_the_client_passes_it(tmp_p
     ok, blocked = [_json.loads(x) for x in usage.read_text(encoding="utf-8").splitlines()]
     assert (ok["kind"], ok["agent"], ok["prompt_tokens"], ok["latency_ms"]) == ("facts", "kira", 1200, 1234)
     assert (blocked["ok"], blocked["blocked"], blocked["latency_ms"]) == (False, "prompt", 90)
+
+
+def test_the_seed_needs_whose_facts_and_fills_hers_alone(tmp_path, monkeypatch, capsys):
+    """v6.2: `--agent` and `--name` are required — with two companions a bare seed never fills Кіра's by default — and
+    with both it reads that agent's archive and writes her facts folder (Gemini mocked, a made-up archive)."""
+    import agents.facts as facts_mod
+    import agents.llm as llm_mod
+    from agents.archive import Archive
+    for argv in (["seed"], ["seed", "--agent", "ustyna"], ["seed", "--name", "Устина"]):
+        with pytest.raises(SystemExit) as exit_:
+            facts_mod.main(argv)
+        assert exit_.value.code == 2
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "state").mkdir()
+    for name in ("kira", "ustyna"):
+        archive = Archive(tmp_path / "state" / f"{name}.archive.db")
+        archive.append(f"$p-{name}", ms(17), "private", "matrix", "Ich", f"рядок для {name}")
+        archive.close()
+    seen = []
+
+    async def fake_seed(lines, folder, llm, name, today, *rest):
+        seen.append((lines, folder, name))
+        return 0
+
+    monkeypatch.setattr(facts_mod, "run_seed", fake_seed)
+    monkeypatch.setattr(llm_mod, "GeminiClient", lambda sink=None: object())
+    assert facts_mod.main(["seed", "--agent", "ustyna", "--name", "Устина", "--dry-run"]) == 0
+    lines, folder, name = seen[0]
+    assert lines == [("Ich (наодинці)", "рядок для ustyna")] and name == "Устина"
+    assert str(folder) == "state/ustyna.facts"

@@ -418,8 +418,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m agents.facts")
     sub = parser.add_subparsers(dest="cmd", required=True)
     seed = sub.add_parser("seed", help="her first facts, from the private chat in her archive (once)")
-    seed.add_argument("--agent", default="kira")
-    seed.add_argument("--name", default="Кіра")
+    # v6.2: whose facts — no default person, so with two companions a bare seed never fills the wrong one
+    seed.add_argument("--agent", required=True, help="her localpart, e.g. kira: state/<agent>.archive.db and .facts/")
+    seed.add_argument("--name", required=True, help="her name as the facts call her, e.g. Кіра")
     seed.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
