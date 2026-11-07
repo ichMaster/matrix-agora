@@ -222,9 +222,11 @@ The invariants every reply path must honor:
    — a marker in capitals only, so «Гітара — моє друге хобі» stays her line — offered as `PLAY_SKILL` beside the
    others and under the same caps (`VIDEO_DAY_MAX`, `VIDEO_WINDOW_MAX`); without `play` the line is dropped (`off`).
    Its first frame is her selfie (her face, age and look) at 9:16 with `FRAME_LINES["play"]` — the phone on a shelf,
-   her face, the instrument and both hands in frame — and Omni Flash animates it with `play_request` (pure): her
-   words, her moment, the instrument's own sound only — no singing, no voice, no other music — and her eyes never
-   darker than in the first frame (the owner's test: grey eyes came out dark under a warm lamp); usage kinds `frame`
+   her face, the instrument and both hands in frame — and Omni Flash animates it with `play_request` (pure, all
+   English): the part of the day and the instrument's own sound only — her lips closed, no speech, singing or humming,
+   no other music — and her eyes never darker than in the first frame; never her own words or the day's weather line,
+   which are Ukrainian (the owner's live test, 2026-11-08: with them Omni made her say «простий перебір…» instead of
+   playing) (the owner's test: grey eyes came out dark under a warm lamp); usage kinds `frame`
    and `video`, sent as a clip is. Gemini's private prompt in Telegram offers `video_skill` for the kinds open now (the maker
    on — her кружечок also needs `FAL_KEY` and her voice — under `VIDEO_DAY_MAX` today for both together, and no video
    being made); in the backup's answer, in Element, past the cap or while one is made it is dropped (`video: dropped

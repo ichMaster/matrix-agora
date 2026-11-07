@@ -148,13 +148,16 @@ def test_her_playing_line_is_cut_in_capitals_only():
     assert split_photo("гітара: стоїть у кутку") == ("гітара: стоїть у кутку", None)
 
 
-def test_the_play_request_holds_her_words_the_instruments_sound_and_no_voice_in_english():
-    request = play_request(Shot("play", f"граю на ліжку {SECRET}"), EVENING, "guitar")
-    assert SECRET in request and "She plays an acoustic guitar" in request and "around 21:15, in Lviv" in request
-    assert "only the acoustic guitar she plays" in request and "no singing, no voice, no other music" in request
-    assert "never turn darker in any light" in request and "shelf" in request and "{" not in request
-    for word in ("вечір", "осінь", "гітара", "відео"):                                 # the template is English
-        assert word not in request.replace(f"граю на ліжку {SECRET}", "").replace("хмарно, +8, дрібний дощ", "")
+def test_the_play_request_is_all_english_with_no_words_of_hers_to_say():
+    """The owner's live test (2026-11-08): her Ukrainian words in Omni's request were said aloud instead of played —
+    the request holds the time of day, the shelf camera and the guitar's sound, never her words or the weather line."""
+    request = play_request(Shot("play", f"граю простий перебір на ліжку {SECRET}"), EVENING, "guitar")
+    assert SECRET not in request and "перебір" not in request and "хмарно" not in request
+    assert not any("а" <= ch <= "я" or ch in "іїєґ" for ch in request.lower())               # no Cyrillic at all
+    assert "evening in autumn, around 21:15, in Lviv" in request and "She plays an acoustic guitar:" in request
+    assert "she never speaks, sings or hums" in request and "no words in the video at all" in request
+    assert "only the acoustic guitar she plays" in request and "never turn darker in any light" in request
+    assert "shelf" in request and "{" not in request
 
 
 def test_the_play_frame_is_her_face_on_a_shelf_camera():

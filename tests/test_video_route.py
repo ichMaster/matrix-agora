@@ -308,7 +308,7 @@ def test_her_playing_follows_her_answer_from_her_own_vertical_frame(tmp_path, mo
     assert agent.photos.frames == [("9:16", FRAME_LINES["play"])]
     (shot, _, _, request), = agent.clips.calls
     assert shot == Shot("play", f"граю перебір на ліжку {SECRET}") and "acoustic guitar" in request
-    assert "no singing, no voice, no other music" in request
+    assert "she never speaks, sings or hums" in request and SECRET not in request   # the owner's test: never her words
     assert "[гітара" not in " ".join(her_lines(agent)).lower()
     assert "video: sent (play, telegram, 0 s)" in caplog.text and SECRET not in caplog.text
 

@@ -74,11 +74,13 @@ CLIP_STYLE = ("A handheld phone video with natural motion, as someone films what
 NOTE_PROMPT = "She talks to the front camera of her phone, with natural small head movements and blinks."
 # v6.3: what she plays on, for Omni (English) and for her skill (Ukrainian)
 INSTRUMENTS = {"guitar": ("an acoustic guitar", "на гітарі")}
-PLAY_STYLE = ("A vertical phone video: the phone stands still on a shelf in front of her and films her playing; only "
-              "she moves, her fingers natural on the strings and frets. The sound: only the {instrument} she plays, "
-              "close and warm, with the quiet tone of the room — no singing, no voice, no other music. Her face, her "
-              "figure and the colour of her eyes stay exactly as in the first frame: her eyes never turn darker in "
-              "any light. No text, caption or watermark.")
+PLAY_STYLE = ("She plays {an_instrument}: a gentle, slow fingerpicked melody, looking down at the strings, now and then "
+              "glancing up at the camera with a shy smile and back to the strings; her fingers move naturally on the "
+              "strings and frets. Her lips stay closed: she never speaks, sings or hums — there are no words in the "
+              "video at all. The phone stands still on a shelf in front of her; only she moves. The sound: only the "
+              "{instrument} she plays, close and warm, with the quiet tone of the room — no voice, no other music. Her "
+              "face, her figure and the colour of her eyes stay exactly as in the first frame: her eyes never turn "
+              "darker in any light. No text, caption or watermark.")
 NOTE_MODELS = {  # each model's own fields beside the frame and the voice (fal's pricing API, 2026-11-01)
     NOTE_MODEL: {"resolution": "480p"},                                   # cut to 640×640 anyway
     "fal-ai/kling-video/ai-avatar/v2/standard": {"prompt": NOTE_PROMPT},  # $0.0562 a second
@@ -163,12 +165,14 @@ def clip_request(shot: Shot, moment: Moment) -> str:
 
 
 def play_request(shot: Shot, moment: Moment, play: str) -> str:
-    """v6.3 — Omni Flash's instruction for her playing (pure, English): her words of what and where, her moment, and a
-    shelf camera's video with the instrument's own sound only — no voice, singing or other music — her eyes as in
-    the first frame."""
+    """v6.3 — Omni Flash's instruction for her playing (pure, all English): the part of the day and a shelf camera's
+    video of her playing with the instrument's own sound only, her eyes as in the first frame. The owner's live test
+    (2026-11-08): with her own Ukrainian words in it Omni made her say them — «простий перебір…» — instead of playing,
+    so her words and the day's weather line stay out of it; the frame already shows what she described."""
     instrument = INSTRUMENTS.get(play, INSTRUMENTS["guitar"])[0]
-    return "\n".join([f"She plays {instrument}, as she describes it (in Ukrainian): {shot.description}",
-                      moment_line(moment), PLAY_STYLE.format(instrument=instrument.removeprefix("an "))])
+    when = moment_line(Moment(moment.when, None, moment.city, moment.south))  # no weather: its line is Ukrainian
+    return "\n".join([when, PLAY_STYLE.format(an_instrument=instrument,
+                                             instrument=instrument.removeprefix("an "))])
 
 
 def _retryable(exc: BaseException) -> bool:
