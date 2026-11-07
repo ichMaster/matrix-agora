@@ -11,8 +11,8 @@ They come three ways:
 - **extracted** — at a session's end, one call reads the session and the facts she holds and returns new facts and
   the replacements of stale ones as JSON (`parse_extraction`), validated before anything is written;
 - **seeded** — once, from the private chat she already had with him, read back from her archive
-  (`python -m agents.facts seed [--dry-run]`; the owner, 2026-10-25: «факти тільки з чату з Кірою» — no import from
-  Noos).
+  (`python -m agents.facts seed --agent <localpart> --name <her name> [--dry-run]`, both required from v6.2; the
+  owner, 2026-10-25: «факти тільки з чату з Кірою» — no import from Noos).
 
 She believes she is human, so no fact she keeps names AI, agents, bots, models, servers or his exact address
 (`off_limits`), whatever a model answered.
