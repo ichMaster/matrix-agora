@@ -1,0 +1,45 @@
+name = "Устина"
+user_id = "@ustyna:agora.lan"
+canon = "agents/canon/ustyna.md"
+canon_private = "agents/canon/ustyna.private.md"  # her whole canon alone with him (private canon)
+canon_backup = "agents/canon/ustyna.backup.md"  # her canon for the backup (NovelAI) alone, never Gemini's (private canon)
+life = "agents/canon/ustyna.life.md"
+life_private = "agents/canon/ustyna.life.private.md"  # the shorter story, her private prompt only (private canon)
+simulation = "agora"
+type = "persona"         # v6.3: a second companion on Кіра's code (the owner, 2026-11-07)
+engine = "gemini"
+name_forms = ["устина", "устини", "устині", "устину", "устиною", "устино", "устю", "ustyna"]  # any case, a whole word
+voice_spec = "agents/canon/ustyna.voice.md"  # the tags verified on her voice
+natal = "agents/canon/ustyna.natal.md"   # her natal chart, Lumi's format, read by her mood of the day
+reading = "agents/canon/ustyna.reading.md"  # what she reads and how she sees the news (private canon)
+play = "guitar"          # v6.3: she learns the guitar and now and then films herself playing (`ГІТАРА:`)
+
+[capabilities]           # Кіра's, every one
+private = true           # a private chat with the owner
+telegram = true          # her own Telegram bot (server/ustyna.env)
+recall = true            # an archive of every line she sees, recalled before each answer
+facts = true             # facts about the owner, in her private prompt only (state/ustyna.facts/)
+emotion = true           # audio tags from her palette, performed by her voice
+mood = true              # her mood of the day — her chart under the day's sky, the biorhythms, the Lviv weather
+events = true            # events of her life — her story's dated ones, an hourly roll, Lviv's news
+thoughts = true          # she reads the news and thinks
+fallback = true          # the backup answers her private chat when Gemini blocks (FALLBACK_MODEL on)
+photos = true            # her photos in Telegram, her face from agents/canon/ustyna.face/
+videos = true            # her кружечок, short clips, and her playing
+talk = true              # her private chat in layers
+
+[turns]
+mode = "none"            # v6.3: not yet in the room — no turn, no one addresses her there; v6.4 makes her ranked
+
+[places.lviv]            # her home: Lviv's weather and news
+name = "Львів, Україна"
+name_en = "Lviv, Ukraine"
+tz = "Europe/Kyiv"
+lat = 49.84
+lon = 24.03
+news = true
+
+[panel]                  # shown by the panel only — never part of a prompt
+name = "Ustyna"
+role = "neuroscientist, 22, Lviv"
+pronoun = "she"

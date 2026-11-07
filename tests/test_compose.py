@@ -17,8 +17,8 @@ def env_keys(path: Path) -> set[str]:
 
 
 def test_the_service_set():
-    assert set(SERVICES) == {"homeserver", "ada", "bruno", "leon", "mia", "irma", "kira", "kit", "claude", "hermes",
-                             "usage-report", "panel"}  # v5.1, v5.5
+    assert set(SERVICES) == {"homeserver", "ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "kit", "claude",
+                             "hermes", "usage-report", "panel"}  # v5.1, v5.5, v6.3
 
 
 def test_the_homeserver_stays_closed():
@@ -30,15 +30,15 @@ def test_the_homeserver_stays_closed():
 
 
 def test_one_container_per_agent_from_one_image():
-    for name in ("ada", "bruno", "leon", "mia", "irma", "kira", "kit"):  # v5.5: the four newcomers too
+    for name in ("ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "kit"):  # v5.5: the newcomers, v6.3 Устина
         svc = SERVICES[name]
         assert svc["image"] == IMAGE and svc["command"] == [f"agents/{name}.toml"]
         assert svc["environment"]["HOMESERVER"] == "http://homeserver:8008"  # the compose network
         assert svc["volumes"] == ["../state:/app/state", CANON_MOUNT] and svc["user"] == "1000:1000"
         assert svc["stop_grace_period"] == "30s" and svc["restart"] == "unless-stopped"
-        kira = [{"path": "kira.env", "required": False}] if name == "kira" else []  # v5.7: her bot
+        own = [{"path": f"{name}.env", "required": False}] if name in ("kira", "ustyna") else []  # v5.7, v6.3: her bot
         assert svc["env_file"] == [{"path": ".env", "required": False}, {"path": "voice.env", "required": False},
-                                   *kira]  # v5.3: the voice key
+                                   *own]  # v5.3: the voice key
         assert "ports" not in svc  # agents listen on nothing
 
 
@@ -65,7 +65,7 @@ def test_the_private_canon_is_mounted_never_committed_never_baked():
     assert "agents/canon/" in (ROOT / ".gitignore").read_text().splitlines()
     assert "agents/canon/" in (ROOT / ".dockerignore").read_text().splitlines()
     mounted = sorted(n for n, s in SERVICES.items() if CANON_MOUNT in s.get("volumes", []))
-    assert mounted == sorted(["ada", "bruno", "leon", "mia", "irma", "kira", "kit", "hermes", "panel"])
+    assert mounted == sorted(["ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "kit", "hermes", "panel"])
     deploy = (ROOT / "server" / "deploy.sh").read_text()
     assert '"$CANON_DIR/" "$TARGET:matrix-agora/canon/"' in deploy and "--delete" not in deploy
     # v5.17 (the live test): folders 700, files 600 — `kira.face/` stays searchable to her container
@@ -377,7 +377,7 @@ def test_the_voice_key_reaches_exactly_the_members_who_speak():
     never the panel or the report; synced privately."""
     readers = {n for n, svc in SERVICES.items()
                if any((e.get("path") if isinstance(e, dict) else e) == "voice.env" for e in svc.get("env_file", []))}
-    assert readers == {"ada", "bruno", "leon", "mia", "irma", "kira", "kit", "claude", "hermes"}  # v5.5
+    assert readers == {"ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "kit", "claude", "hermes"}  # v5.5, v6.3
     assert env_keys(ROOT / "server" / "voice.env.example") == {"ELEVENLABS_API_KEY"}
     deploy = (ROOT / "server" / "deploy.sh").read_text()
     assert 'VOICE_ENV="$REPO_DIR/server/voice.env"' in deploy and "chmod 600 ~/$REMOTE_DIR/voice.env" in deploy
@@ -391,6 +391,16 @@ def test_kiras_env_file_reaches_her_container_only():
     readers = {n for n, svc in SERVICES.items()
                if any((e.get("path") if isinstance(e, dict) else e) == "kira.env" for e in svc.get("env_file", []))}
     assert readers == {"kira"}  # her bot's token and the owner's id reach no other container
+
+
+def test_each_companion_reads_her_own_env_file_and_never_the_others():
+    """v6.2 review #4 / v6.3: Устина's service reads `ustyna.env` and never `kira.env`; Кіра's never `ustyna.env`."""
+    def files(name):
+        return [(e.get("path") if isinstance(e, dict) else e) for e in SERVICES[name].get("env_file", [])]
+    assert "ustyna.env" in files("ustyna") and "kira.env" not in files("ustyna")
+    assert "kira.env" in files("kira") and "ustyna.env" not in files("kira")
+    readers = {n for n in SERVICES if "ustyna.env" in files(n)}
+    assert readers == {"ustyna"} and SERVICES["ustyna"]["command"] == ["agents/ustyna.toml"]
 
 
 def test_kiras_env_example_holds_the_bot_the_owner_and_her_hearing_only():

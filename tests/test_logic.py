@@ -114,6 +114,8 @@ def test_no_persona_prompt_or_canon_calls_the_agent_a_model_or_bot():
     files = persona_files(_registry_tomls())
     assert "agents/canon/ada.md" in files and "agents/canon/bruno.life.md" in files
     assert {"agents/canon/kira.private.md", "agents/canon/kira.life.private.md"} <= set(files)  # review v5.22 #8
+    assert {"agents/canon/ustyna.md", "agents/canon/ustyna.private.md", "agents/canon/ustyna.backup.md",
+            "agents/canon/ustyna.life.md", "agents/canon/ustyna.life.private.md"} <= set(files)  # v6.3
     texts = [build_instruction("Ада", "Канон.", "підсумок"), Path("agents/canon/common.md").read_text(encoding="utf-8")]
     texts += [Path(f).read_text(encoding="utf-8") for f in files]
     for text in texts:

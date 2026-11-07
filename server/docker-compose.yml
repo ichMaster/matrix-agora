@@ -146,6 +146,29 @@ services:
       - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
     stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
 
+  ustyna:
+    # v6.3 — Устина, a second companion on Кіра's code: the same image, her TOML picks her
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
+    command: ["agents/ustyna.toml"]
+    restart: unless-stopped
+    init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
+    depends_on: [homeserver]
+    env_file:
+      - path: .env
+        required: false
+      - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
+        required: false
+      - path: ustyna.env                         # her bot's token, the owner's Telegram id, her keys
+        required: false                          # — read by no other service (never kira.env)
+    environment:
+      HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
+      TZ: ${TIMEZONE:-Europe/Kyiv}
+    user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
+    volumes:
+      - ../state:/app/state
+      - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
+    stop_grace_period: 30s                       # SIGTERM → the session summary, then SIGKILL
+
   kit:
     # one container per agent, the same image (v3.2); the TOML picks the agent
     image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}

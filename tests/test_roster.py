@@ -43,7 +43,7 @@ def write_roster(tmp_path, kit_toml: str):
 
 def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
     roster = load_roster("agora")
-    assert list(roster) == ["ada", "bruno", "leon", "mia", "irma", "kira", "kit", "claude", "hermes"]  # v5.1 the herald, v5.5 four people
+    assert list(roster) == ["ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "kit", "claude", "hermes"]  # v5.1 the herald, v5.5 four people, v6.3 Устина
     ada = roster["ada"]
     assert (ada.user_id, ada.name, ada.type, ada.engine, ada.mode, ada.weight) == (
         "@ada:agora.lan", "Ада", "persona", "gemini", "ranked", 1.0)
@@ -241,7 +241,7 @@ def test_the_agent_reads_its_members_from_the_roster():
 
 def test_the_launcher_lists_the_registry_agents():
     out = subprocess.run([sys.executable, "-m", "agents.roster"], capture_output=True, text=True, check=True).stdout
-    assert out.split() == ["ada", "bruno", "leon", "mia", "irma", "kira", "kit", "claude", "hermes"]
+    assert out.split() == ["ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "kit", "claude", "hermes"]
 
 
 def test_an_unreadable_toml_is_a_roster_error_not_a_crash(tmp_path):
@@ -413,6 +413,17 @@ def test_hermes_is_a_herald_with_no_turns_and_his_own_canon():
 def test_the_herald_rules_are_named_errors(data, match):
     with pytest.raises(RosterError, match=match):
         parse_member("x", {"name": "X", "user_id": "@x:agora.lan", **data})
+
+
+def test_ustyna_is_a_second_companion_with_every_one_of_kiras_capabilities_not_yet_in_the_room():
+    """v6.3: her TOML — Кіра's capabilities, her own name forms, `mode = "none"` until v6.4, the guitar."""
+    roster = load_roster("agora")
+    ustyna, kira = roster["ustyna"], roster["kira"]
+    assert (ustyna.user_id, ustyna.name, ustyna.type, ustyna.mode, ustyna.play) == (
+        "@ustyna:agora.lan", "Устина", "persona", "none", "guitar")
+    assert ustyna.capabilities == kira.capabilities and kira.play == ""
+    assert {"устина", "устино", "устю", "ustyna"} <= set(ustyna.name_forms)
+    assert ustyna.panel == {"name": "Ustyna", "role": "neuroscientist, 22, Lviv", "pronoun": "she"}
 
 
 def test_a_person_not_yet_in_the_room_takes_no_turn_and_no_one_addresses_her(tmp_path):

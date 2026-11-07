@@ -235,5 +235,5 @@ def test_an_owner_message_while_she_writes_first_is_answered(tmp_path, monkeypat
 
 
 # --- who has it ------------------------------------------------------------------------------------------------------
-def test_only_kira_has_a_private_chat():
-    assert [n for n, m in load_roster("agora").items() if m.can("private")] == ["kira"]
+def test_only_the_companions_have_a_private_chat():
+    assert [n for n, m in load_roster("agora").items() if m.can("private")] == ["kira", "ustyna"]  # v6.3

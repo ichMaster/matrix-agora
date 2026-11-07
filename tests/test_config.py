@@ -68,3 +68,15 @@ def test_real_state_paths_are_under_state(monkeypatch):
     cfg = load_config("agents/ada.toml", env=ENV)
     assert cfg.state_file == Path("state/ada.json")
     assert cfg.memory_file == Path("state/ada.memory.md")
+
+
+@pytest.mark.canon
+def test_ustynas_toml_loads_with_every_capability_and_her_own_files():
+    """v6.3: her config from her TOML and her private canon — Кіра's capabilities, the guitar, her canon, shorter
+    story, backup canon, voice palette, chart and reading."""
+    cfg = load_config("agents/ustyna.toml", env={**ENV, "USTYNA_PASSWORD": "pw-ustyna"})
+    kira = load_config("agents/kira.toml", env={**ENV, "KIRA_PASSWORD": "pw-kira"})
+    assert cfg.localpart == "ustyna" and cfg.capabilities == kira.capabilities and cfg.play == "guitar"
+    assert cfg.canon_private and cfg.canon_backup and cfg.life_private and cfg.voice_spec and cfg.reading
+    assert "Устина" in cfg.canon and cfg.natal and cfg.places and cfg.places["lviv"].news
+

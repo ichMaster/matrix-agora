@@ -76,7 +76,7 @@ def test_validate(name, raw, ok, value):
     assert (v is not None) is ok and v == value and (why is None) is ok
 
 
-PEOPLE = {"ada", "bruno", "leon", "mia", "irma", "kira"}  # v5.5: the six persons
+PEOPLE = {"ada", "bruno", "leon", "mia", "irma", "kira", "ustyna"}  # v5.5: the six persons, v6.3 Устина
 
 
 @pytest.mark.parametrize("name,who", [
