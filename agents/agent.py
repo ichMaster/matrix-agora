@@ -587,9 +587,11 @@ class Agent:
                                           self.record_usage, f"{cfg.localpart}.png", parse_birth_date(cfg.natal),
                                           look)
             if faces:
-                log.info("photos: %d faces%s", len(faces), "" if look else ", no look file")
+                log.info("photos: %d faces", len(faces))
             else:  # review #3: the first deploy ran so, unnoticed — every selfie would quietly be redrawn without one
                 log.warning("photos: no faces — a selfie will not come out")
+            if not look:  # v6.2 review #1: without it her selfie silently loses her look (Кіра's no-makeup rule)
+                log.warning("photos: no look file — her selfie has no look")
         # v5.18 — her videos in Telegram: her кружечок (Fabric 1.0 on fal, from her selfie and her voice; the key lives
         # only in the maker) and her clips (Omni Flash, from a photo of what she sees); one at a time, after her answer
         self.notes: NoteMaker | None = None

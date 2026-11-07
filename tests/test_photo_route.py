@@ -252,6 +252,24 @@ def test_no_faces_at_start_is_a_warning(tmp_path, monkeypatch, caplog):
     assert "photos: 1 faces" in caplog.text and "no faces" not in caplog.text
 
 
+def test_a_missing_look_file_is_a_warning(tmp_path, monkeypatch, caplog):
+    # v6.2 review #1: «photos: 21 faces, no look file» at INFO would let her selfie lose her look unnoticed
+    from agents.llm import GeminiClient
+    monkeypatch.setattr(GeminiClient, "__init__", lambda self, sink=None: None)
+    monkeypatch.setattr(agent_mod, "photo_maker", lambda *a: object())
+    monkeypatch.setattr(agent_mod, "load_faces", lambda folder: [("kira.png", b"x", "image/png")])
+    cfg = telegram_kira(tmp_path, monkeypatch).cfg
+    cfg = cfg.__class__(**{**cfg.__dict__, "capabilities": cfg.capabilities | {"photos"}})
+    caplog.set_level(logging.INFO)
+    monkeypatch.setattr(agent_mod, "load_look", lambda path: "")
+    agent_mod.Agent(cfg, llm=GeminiClient())
+    assert [r.levelname for r in caplog.records if "no look file" in r.getMessage()] == ["WARNING"]
+    caplog.clear()
+    monkeypatch.setattr(agent_mod, "load_look", lambda path: "She never wears makeup.")
+    agent_mod.Agent(cfg, llm=GeminiClient())
+    assert "no look file" not in caplog.text and "She never wears makeup" not in caplog.text  # never her look itself
+
+
 
 def test_her_photo_maker_is_built_for_her_own_main_face_age_and_look(tmp_path, monkeypatch):
     # v6.2: nothing of the selfie is Кіра's in code — the localpart names the main face and the look file, the chart
