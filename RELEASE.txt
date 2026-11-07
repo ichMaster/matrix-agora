@@ -1,3 +1,15 @@
+Version 5.24.0 (2026-11-07)
+---------------------------
+- Phase v5.24 (AGORA-192..196, 201..203, 212, 213): the scan - Gemini finds
+  the hours that make her private prompt block and softens them as her
+  summary, from soft to strict, nothing closed (AGORA-212 replaced the first
+  Opus 5.5 judge, `/scan yes` and `/scan all`)
+- Her endings: what she keeps ending with named, an ending drawn, a repeat
+  counted by its stem
+- An answer-stage block tried once more on Gemini before the backup
+- The owner confirmed the live checks on 2026-11-07; the phase had no code
+  review of its own
+
 Version 5.23.0 (2026-11-03)
 ---------------------------
 - Phase v5.23 (AGORA-188..191): Kira's memory by time - Gemini's window is
