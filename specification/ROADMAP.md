@@ -3763,15 +3763,26 @@ private chat and her own Telegram bot; not yet in Agora.
   room waits for her; `simulations.toml` lists her (her card in the panel); her compose service (Кіра's, with her
   TOML and env file).
 - Her panel settings: the code's defaults, her own overrides (the owner's).
+- Her own tool, a video of her playing (the owner, 2026-11-07: «окрім фотографії у неї буде ще одне хобі — вона буде
+  вчитись грати на гітарі і час від часу записувати такі відео», «зроби це як новий тул якщо треба для неї»): a third
+  video kind beside the кружечок and the clip, offered only to a person whose TOML names an instrument
+  (`play = "guitar"`); a last line `ГІТАРА: …` (what she plays and where) asks for it, when he asks or when she wants.
+  Its first frame is a vertical (9:16) photo of her with her face from her reference photos — a phone standing on a
+  shelf films her playing — and Gemini Omni Flash animates it with the instrument's own sound only: no singing, no
+  voice, no other music. It counts toward her videos' caps (`VIDEO_DAY_MAX`, `VIDEO_WINDOW_MAX`), its usage lines are
+  the kinds `frame` and `video`, and a block or a failure is a reason, never a crash, as for her clips. The owner's
+  test of 2026-11-07 (one frame on Nano Banana 2.1, one 10 s clip on Omni Flash) is the proof the two models do it.
 
 **DoD:**
 - (Manual, owner) She answers in her private chat and in Telegram, in her voice; she sends photos with her face and
-  кружечки.
+  кружечки, and now and then a video of her playing the guitar.
 - (Manual, owner) Her card, Talk, Prompt and Analytics in the panel; Кіра is unchanged, and nothing of one reaches
   the other.
 
 **Tests:** her TOML loads with every capability; the roster keeps her out of every turn pool while `none`; the
-persona scan covers her canon files (`canon`-marked).
+persona scan covers her canon files (`canon`-marked); the playing tool — offered only with `play`, its line cut like
+`ВІДЕО:`, its frame with her face and its request with the instrument's sound and no voice (pure), its caps shared with
+her other videos, Omni and the image model mocked.
 
 ### v6.4 — Agora meets her
 
