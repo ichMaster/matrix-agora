@@ -58,7 +58,8 @@ NEEDS = {"telegram": "private",                    # v5.7: the bot is a door to 
 INITIATIVES = ("nudge", "news")                    # who may speak first: one member per initiative
 SINGLES = (*INITIATIVES, "digest", "transcribe")   # one member per simulation with each of these
 ENGINES = ("gemini", "claude-sdk")  # v4.4: Claude through the Agent SDK, on the subscription only
-MODES = ("ranked", "ambient", "mention-only", "none")  # v5.1: `none` — a herald's, in no turn pool
+MODES = ("ranked", "ambient", "mention-only", "none")  # v5.1: `none` — a herald's, in no turn pool; v6.3: and a
+# person's not yet in the room (Устина before v6.4): a member, but no turn and no one addresses her
 
 
 class RosterError(RuntimeError):
@@ -128,8 +129,8 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
     mode = "none" if kind == "herald" else str(turns.get("mode", "ranked"))
     if mode not in MODES:
         raise RosterError(f"{source}: unknown turn mode {mode!r} (known: {', '.join(MODES)})")
-    if mode == "none" and kind != "herald":
-        raise RosterError(f"{source}: turn mode 'none' belongs to the herald type only")
+    if mode == "none" and kind not in ("herald", "persona"):
+        raise RosterError(f"{source}: turn mode 'none' belongs to a herald, or a person not yet in the room")
     weight = turns.get("weight", 1.0)
     if isinstance(weight, bool) or not isinstance(weight, int | float) or not math.isfinite(weight) or weight <= 0:
         raise RosterError(f"{source}: [turns] weight must be a positive finite number")

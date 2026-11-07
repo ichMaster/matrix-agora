@@ -405,13 +405,34 @@ def test_hermes_is_a_herald_with_no_turns_and_his_own_canon():
 @pytest.mark.parametrize("data,match", [
     ({"type": "herald", "turns": {"mode": "ranked"}}, "a herald takes no turns"),
     ({"type": "herald", "turns": {}}, "a herald takes no turns"),
-    ({"turns": {"mode": "none"}}, "turn mode 'none' belongs to the herald type only"),
+    ({"type": "creature", "turns": {"mode": "none"}}, "turn mode 'none' belongs to a herald, or a person not yet"),
+    ({"type": "assistant", "turns": {"mode": "none"}}, "turn mode 'none' belongs to a herald, or a person not yet"),
     ({"capabilities": {"digest": True}}, "'digest' belongs to the herald type only"),
     ({"type": "creature", "capabilities": {"digest": True}}, "'digest' belongs to the herald type only"),
 ])
 def test_the_herald_rules_are_named_errors(data, match):
     with pytest.raises(RosterError, match=match):
         parse_member("x", {"name": "X", "user_id": "@x:agora.lan", **data})
+
+
+def test_a_person_not_yet_in_the_room_takes_no_turn_and_no_one_addresses_her(tmp_path):
+    """v6.3: a persona with `mode = "none"` (Устина before v6.4) is a member — her card, her private chat — but she is
+    in no turn pool, no `ask` names her, a name of hers in the room calls no one, and she is no herald."""
+    from agents.moves import persona_move
+    from agents.roster import speakers
+    from agents.turns import next_speaker, owner_repliers
+    ustyna = parse_member("ustyna", {"name": "Устина", "user_id": "@ustyna:agora.lan", "name_forms": ["устина", "устю"],
+                                     "turns": {"mode": "none"}})
+    assert (ustyna.type, ustyna.mode) == ("persona", "none")
+    reg, agents = write_roster(tmp_path, 'name = "Кіт"\nuser_id = "@kit:agora.lan"\n')
+    roster = {**load_roster("sim", reg, agents), "ustyna": ustyna}
+    assert ustyna not in speakers(roster.values())
+    asked = {persona_move(f"$e{i}", roster["ada"], roster, "Ich", {"ask": 1.0}, has_plans=False,
+                          has_life=False).addressee for i in range(60)}
+    assert "Устина" not in asked and asked
+    for i in range(20):
+        assert "ustyna" not in owner_repliers(f"$m{i}", "Устю, як ти?", roster, 2)
+        assert next_speaker(f"$n{i}", "@ada:agora.lan", "Устю, а ти що скажеш?", roster) != "ustyna"
 
 
 def test_a_simulation_has_at_most_one_herald(tmp_path):
