@@ -1,3 +1,18 @@
+Version 5.27.0 (2026-11-07)
+---------------------------
+- Phase v5.27 (AGORA-214..217): Kira far away - her place from her story's
+  moves and nights (`### Місця`, `### Ночі на телескопі`, the TOML's
+  `[places]`), her clock and Lviv's, the southern seasons
+- Her world by her place: the weather, her photos' city, the city's news;
+  away from Lviv the world's news (The Guardian's world section) in her
+  reading and her life
+- Nights at the telescope, when she writes first (his hours, her waking
+  hours), her talk across a move
+- Code review v5.27: her weather on her card wherever she is, and the other
+  fixes in v5.27-code-review.md
+- The owner confirmed the live checks on 2026-11-07; the checks that need
+  her in Chile (she lands on 2026-11-09) are waived
+
 Version 5.26.0 (2026-11-07)
 ---------------------------
 - Phase v5.26 (AGORA-205..207): the backup's own canon - `canon_backup`,
