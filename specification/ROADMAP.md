@@ -1,6 +1,6 @@
 # Roadmap — matrix-agora
 
-Eleven self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, her reading and thoughts, and a backup model for her private chat when Gemini blocks) → **v6** A second companion (Кіра's code with her own name, canon, life, face and voice: the code, then her, then Agora meets her) → **v7** Лілі (the Lumi bridge: when named, then under the full rules) → **v8** Applications (the panel's System and Applications; Telegram as an application) → **v9** Theatre (plays on the Stage, recorded by Hermes) → **v10** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Eleven self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, her reading and thoughts, and a backup model for her private chat when Gemini blocks) → **v6** Устина, a second companion (Кіра's code with her own name, canon, life, face and voice: her first version, the code, then her, then Agora meets her) → **v7** Лілі (the Lumi bridge: when named, then under the full rules) → **v8** Applications (the panel's System and Applications; Telegram as an application) → **v9** Theatre (plays on the Stage, recorded by Hermes) → **v10** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
 **Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v10→10), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
@@ -77,9 +77,10 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.25 | Her topics: Flash lists what the talk is about, she picks which to go on with | 🔄 owner checks | — |
 | v5.26 | The backup's own canon: Кіра open to explicit scenes on NovelAI | 🔄 owner checks | — |
 | v5.27 | Кіра far away: her place, two clocks and nights at the telescope | 🔄 owner checks | — |
-| v6.1 | The code for a second companion: everything Кіра has, by her TOML alone | ⏳ planned | — |
-| v6.2 | Her: the name, the canon, the life, the face and the voice | ⏳ planned | — |
-| v6.3 | Agora meets her | ⏳ planned | — |
+| v6.1 | Устина's first version: the name and the main canon | 🔄 owner checks | — |
+| v6.2 | The code for a second companion: everything Кіра has, by her TOML alone | ⏳ planned | — |
+| v6.3 | Her: the face, the voice and the accounts; her private chat and Telegram | ⏳ planned | — |
+| v6.4 | Agora meets her | ⏳ planned | — |
 | v7.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v7.2 | Лілі under the full rules | ⏳ planned | — |
 | v8.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -3670,18 +3671,45 @@ coordinates in the weather, «Lviv» in her photos, Zaxid.net in her events, the
 - a Chilean news feed (Spanish) for her events;
 - the other people's canons and Agora's common canon (canon edits, not code).
 
-## v6 — A second companion: Кіра's code, her own life
+## v6 — Устина: a second companion on Кіра's code
 
 The owner, 2026-11-07: «я хочу створити нового агента копію Кіри по коду але інше імя, канон, життя і фото. заплануй
 як повністю нову версію пілся 5». A second person with everything Кіра has — Agora, her private chat and her own
 Telegram bot, her voice with emotion, her photos and videos, her memory, mood, events, reading and thoughts, and her
 backup — on the same code, with her own name, canon, life story, face and voice. The owner's decisions (2026-11-07):
 she is in Agora too, as Кіра is; she is 22, a scientist, and lives in Lviv; her birth chart is not a copy of his but
-compatible with his on the emotional level (his: 1977-11-12 14:30, Lviv); her name is chosen from proposals that fit
-her canon. Inserted after v5 on 2026-11-07: Лілі moved to v7, Applications to v8, the Theatre to v9 and Кіра's inner
+compatible with his on the emotional level (his: 1977-11-12 14:30, Lviv); her name, chosen from proposals that fit
+her canon, is Устина. Her first version — the name and the main canon — comes first. Inserted after v5 on 2026-11-07: Лілі moved to v7, Applications to v8, the Theatre to v9 and Кіра's inner
 life to v10. Depends on: v5.
 
-### v6.1 — The code for a second companion: everything Кіра has, by her TOML alone
+### v6.1 — Устина's first version: the name and the main canon
+
+**Status:** 🔄 owner checks (drafted 2026-11-07).
+
+**Goal:** the owner and Claude Code agree on who she is before any code: her name, her birth chart, her main canon
+and her life story, in the private canon.
+
+**Why:** the owner, 2026-11-07: «зроби першу версію тих файлів а потім почнемо по роудмапі рухатись», «самий
+мінімум щоб узгодити імя, і основний канон», «постав це першою версією 6.1».
+
+**Tasks** (the owner and Claude Code; text, no code):
+- Her birth chart, chosen for emotional compatibility with his (1977-11-12 14:30, Lviv) — trines and sextiles of her
+  Moon, Venus, Sun and ascendant to his Moon, Venus and Sun, not conjunctions: 2004-11-01 23:00, Lviv.
+- The name, from proposals that fit the canon: Устина.
+- In the private canon (gitignored, never quoted in the repo): `ustyna.md` (her main canon and her people in Agora),
+  `ustyna.private.md`, `ustyna.backup.md`, `ustyna.life.md` (chapters and dated events in the life-story format),
+  `ustyna.natal.md`; her love and closeness drawn from her chart.
+- Checks: the life story parses (`agents.life.parse_life`), the natal file gives her birth date
+  (`agents.mood.parse_birth_date`), no file says she is a model or a bot.
+
+**DoD:**
+- (Manual, owner) The name and the main canon agreed.
+
+**Tests:** none new (canon only); the `canon`-marked persona scan covers her files from v6.3.
+
+**Not in this phase:** her voice and reading files, her shorter private story and her face (v6.3).
+
+### v6.2 — The code for a second companion: everything Кіра has, by her TOML alone
 
 **Status:** ⏳ planned (2026-11-07).
 
@@ -3711,7 +3739,7 @@ agents.facts seed` defaults to Кіра.
 **Tests:** the main face by localpart; the deploy's env sync (a dry run lists every member's env file, never its
 content); two companions in one test — no file, setting or command of one reaches the other.
 
-### v6.2 — Her: the name, the canon, the life, the face and the voice
+### v6.3 — Her: the face, the voice and the accounts; her private chat and Telegram
 
 **Status:** ⏳ planned.
 
@@ -3719,18 +3747,17 @@ content); two companions in one test — no file, setting or command of one reac
 private chat and her own Telegram bot; not yet in Agora.
 
 **Owner steps** (with Claude Code where it is text):
-- the name, from the proposals, and her name forms;
-- her private canon, the same shapes as Кіра's: `<name>.md`, `.private.md`, `.backup.md`, `.life.md`,
-  `.life.private.md`, `.voice.md`, `.natal.md` (her chart, compatible with his on the emotional level),
-  `.reading.md`;
-- her face: reference photos in `agents/canon/<name>.face/`, the main one `<name>.png`;
-- her voice: an ElevenLabs voice, `<NAME>_VOICE_ID` in `server/.env`;
-- the Matrix account (`!admin users create-user <name>`), `<NAME>_PASSWORD`; her Telegram bot from BotFather;
-  `server/<name>.env` (her bot's token, the owner's Telegram id, and the keys she uses — Deepgram, the Guardian,
+- her name forms (Устина, Устини, Устині, Устину, Устиною, Устино, Устю);
+- the rest of her private canon, the same shapes as Кіра's (her canon, life and chart are v6.1's): `ustyna.voice.md`,
+  `ustyna.reading.md`, `ustyna.life.private.md`;
+- her face: reference photos in `agents/canon/ustyna.face/`, the main one `ustyna.png`;
+- her voice: an ElevenLabs voice, `USTYNA_VOICE_ID` in `server/.env`;
+- the Matrix account (`!admin users create-user ustyna`), `USTYNA_PASSWORD`; her Telegram bot from BotFather;
+  `server/ustyna.env` (her bot's token, the owner's Telegram id, and the keys she uses — Deepgram, the Guardian,
   NovelAI, fal — on his word).
 
 **Tasks:**
-- `agents/<name>.toml`: Кіра's capabilities, Lviv as her home; `[turns] mode = "none"` until v6.3, so no wave of the
+- `agents/ustyna.toml`: Кіра's capabilities, Lviv as her home; `[turns] mode = "none"` until v6.4, so no wave of the
   room waits for her; `simulations.toml` lists her (her card in the panel); her compose service (Кіра's, with her
   TOML and env file).
 - Her panel settings: the code's defaults, her own overrides (the owner's).
@@ -3744,7 +3771,7 @@ private chat and her own Telegram bot; not yet in Agora.
 **Tests:** her TOML loads with every capability; the roster keeps her out of every turn pool while `none`; the
 persona scan covers her canon files (`canon`-marked).
 
-### v6.3 — Agora meets her
+### v6.4 — Agora meets her
 
 **Status:** ⏳ planned.
 
