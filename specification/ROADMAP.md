@@ -71,7 +71,12 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.19 | Analytics: the spending by agent and by service, over a chosen period | ✅ completed | `v5.19.0` (2026-11-02) |
 | v5.20 | Кіра's layered memory of the private chat: by the hour, by four hours, by the week | ✅ completed | `v5.20.0` (2026-11-02) |
 | v5.21 | Blocked for good: the backup without the judge, its talk gone after a day | ✅ completed | `v5.21.0` (2026-11-02) |
-| v5.22 | Analytics: the answer time, the prompts' length, the photos and videos | ⏳ planned | — |
+| v5.22 | Analytics: the answer time, the prompts' length, the photos and videos | ✅ completed | `v5.22.0` (2026-11-03) |
+| v5.23 | Кіра's memory by time: a day word for word, then hours, then days, the rest by recall | ✅ completed | `v5.23.0` (2026-11-03) |
+| v5.24 | The scan: the hours that block her prompt, softened | 🔄 owner checks | — |
+| v5.25 | Her topics: Flash lists what the talk is about, she picks which to go on with | 🔄 owner checks | — |
+| v5.26 | The backup's own canon: Кіра open to explicit scenes on NovelAI | 🔄 owner checks | — |
+| v5.27 | Кіра far away: her place, two clocks and nights at the telescope | ⏳ planned | — |
 | v6.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v6.2 | Лілі under the full rules | ⏳ planned | — |
 | v7.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -3596,6 +3601,71 @@ not fit: at 18:22 it left out the month and week digests, «Agora today» and 25
 **Not in this phase:**
 - a shorter life story for the backup (the next room in its prompt, 9,000 characters);
 - raising the backup's budget past NovelAI's context.
+
+### v5.27 — Кіра far away: her place, two clocks and nights at the telescope
+
+**Status:** planned (2026-11-07).
+
+**Goal:** Кіра moves to Chile, and the code follows her: her place sets her clock, her season, her weather, the
+city in her photos and whether the city's news touches her life; her prompt shows her time and Lviv's; some nights
+she works at the telescope and is awake in his morning; she writes first only when both of them are awake.
+
+**Why** (2026-11-07): the owner rewrote her life — on 7 November a call from Edinburgh: Матео Ортусар, who had
+supervised her master's, died in a crash below Paranal, and she flies that evening to take over his programme for two
+years, nights on the mountain and the rest in Santiago. The code knew only Lviv: `TIMEZONE` for every person, Lviv's
+coordinates in the weather, «Lviv» in her photos, Zaxid.net in her events, the northern seasons.
+
+**Owner decisions** (2026-11-07):
+- «я хочу переписати історію життя Кіри. саме сьогодні вона має отримати новину про ще що хтось з науковців помер в
+  аварії і тому вона має сьогодні терміново збиратись і летіти ввечері в Чілі на наукову роботу»; «Вона має робити
+  наукову роботу більше і час від часу їздити в подорожі» — the life story (private canon): a new chapter
+  «2026–2029 · Атакама», new people there, her trips as dated events;
+- «зроби щоб вона інколи працювала вночі щоб ми перетинались по часу але не кожну ніч» — blocks of nights at the
+  telescope, eight to ten a month, written in her chapter;
+- «також змісти її години коли вона може писати мені» → «коли не спите обоє»: she writes first only in his hours
+  (`PRIVATE_HOURS`, his clock) when she is awake too — a normal day his 13–01, a night at the telescope his 08–12
+  and 19–01 (November to March, five hours apart).
+
+**Tasks:**
+- **Her place** (`agents/place.py`, pure): the places in her TOML (`[places.<key>]`: `name`, `name_en`, `lat`,
+  `lon`, `tz`, `news`; `[places] night = <key>`); her current chapter's `### Місця` (`- YYYY-MM-DD HH:MM · <key>`,
+  the time in that place's zone) and `### Ночі на телескопі` (`- YYYY-MM-DD – YYYY-MM-DD`), both cut from the body
+  as `### Події` is. Her place at a moment: within a block of nights (from the first night's noon to noon after the
+  last) the night place, else the latest move, else the default (`LOCATION`, `TIMEZONE`).
+- **Her clock:** a person's zone is her place's; the world line adds Lviv's time when the zones differ («У Львові,
+  де Ich, зараз …»); the season follows her hemisphere.
+- **Her world:** the weather by her place (its coordinates, zone and name; none for a place without coordinates);
+  her photos' and videos' city is the place's English name; Lviv's news touches her life only at a place with
+  `news`.
+- **Her nights:** `AWAKE_HOURS` (08-01) and, on a night of a block, `AWAKE_NIGHT_HOURS` (14-07), in her clock; her
+  prompt says when she is on the mountain tonight and when the next block is; she writes first when his
+  `PRIVATE_HOURS` (his clock, `TIMEZONE`) and her awake hours both hold.
+- **Her talk across a move:** a day of her talk summaries that overlaps a day already written (in another zone) is
+  held, so a move never doubles a day.
+- ARCHITECTURE: §World awareness, §Canon (the life story's places and nights, the TOML's places), §Configuration
+  (`AWAKE_HOURS`, `AWAKE_NIGHT_HOURS`).
+
+**Owner steps:** the life story (written with Claude Code on 2026-11-07); the deploy; the live checks.
+
+**DoD:**
+- (Manual, owner) After she lands in Santiago her world line is Chile's time with Lviv's, and the season is spring.
+- (Manual, owner) On a night of a block she writes to him in his morning; on a day without one, never before his
+  13:00.
+- (Manual, owner) Her selfies are in Chile, her mood's weather is Paranal's or Santiago's.
+
+**Tests:**
+- the life story's places and nights parsed, cut from the body, checked against the TOML's places; a bad line or an
+  unknown place refuses to start;
+- her place at a moment: before any move, after a move (in that place's zone), within a block, after it;
+- the world line with one clock at home and two away, the weekday when Lviv's day differs; the southern seasons;
+- the weather's URL and label by place, none without coordinates; the photo's city; no news woven away from Lviv;
+- writing first: his hours and her awake hours together, a night of a block opening his morning;
+- a talk day overlapping a written day is held; the other people (no places) keep their behaviour.
+
+**Not in this phase:**
+- days out of reach (a hike with no signal): she neither answers nor writes, and writes first on her return;
+- a Chilean news feed (Spanish) for her events;
+- the other people's canons and Agora's common canon (canon edits, not code).
 
 ## v6 — Лілі: the Lumi bridge
 
