@@ -23,7 +23,13 @@ are left in the v5 review docs, as backlog. The same day the owner opened two mo
 - v5.20, released as `v5.20.0`: Кіра's layered memory of the private chat, by the hour, by four hours and by the
   week;
 - v5.21, released as `v5.21.0`: blocked for good, the backup without the judge, its talk gone after a day;
-- v5.22, analytics: the answer time, the prompts' length, the photos and videos (planned).
+- v5.22, released as `v5.22.0`: analytics, the answer time, the prompts' length, the photos and videos;
+- v5.23, released as `v5.23.0`: Кіра's memory by time;
+- v5.24–v5.27, released as `v5.24.0`–`v5.27.0` on 2026-11-07: the scan, her topics, the backup's own canon, and Кіра
+  far away (her place, two clocks, nights at the telescope).
+
+v6 is under way: v6.1 (Устина's first version) and v6.2 (the code for a second companion) released as `v6.1.0`
+and `v6.2.0` on 2026-11-07; v6.3 and v6.4 are next.
 
 Then come v6–v10 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
@@ -73,12 +79,12 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.21 | Blocked for good: the backup without the judge, its talk gone after a day | ✅ completed | `v5.21.0` (2026-11-02) |
 | v5.22 | Analytics: the answer time, the prompts' length, the photos and videos | ✅ completed | `v5.22.0` (2026-11-03) |
 | v5.23 | Кіра's memory by time: a day word for word, then hours, then days, the rest by recall | ✅ completed | `v5.23.0` (2026-11-03) |
-| v5.24 | The scan: the hours that block her prompt, softened | 🔄 owner checks | — |
-| v5.25 | Her topics: Flash lists what the talk is about, she picks which to go on with | 🔄 owner checks | — |
-| v5.26 | The backup's own canon: Кіра open to explicit scenes on NovelAI | 🔄 owner checks | — |
-| v5.27 | Кіра far away: her place, two clocks and nights at the telescope | 🔄 owner checks | — |
-| v6.1 | Устина's first version: the name and the main canon | 🔄 owner checks | — |
-| v6.2 | The code for a second companion: everything Кіра has, by her TOML alone | ⏳ planned | — |
+| v5.24 | The scan: the hours that block her prompt, softened | ✅ completed | `v5.24.0` (2026-11-07) |
+| v5.25 | Her topics: Flash lists what the talk is about, she picks which to go on with | ✅ completed | `v5.25.0` (2026-11-07) |
+| v5.26 | The backup's own canon: Кіра open to explicit scenes on NovelAI | ✅ completed | `v5.26.0` (2026-11-07) |
+| v5.27 | Кіра far away: her place, two clocks and nights at the telescope | ✅ completed | `v5.27.0` (2026-11-07) |
+| v6.1 | Устина's first version: the name and the main canon | ✅ completed | `v6.1.0` (2026-11-07) |
+| v6.2 | The code for a second companion: everything Кіра has, by her TOML alone | ✅ completed | `v6.2.0` (2026-11-07) |
 | v6.3 | Her: the face, the voice and the accounts; her private chat and Telegram | ⏳ planned | — |
 | v6.4 | Agora meets her | ⏳ planned | — |
 | v7.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
@@ -3216,7 +3222,7 @@ That saves $0.013–0.026 per answer (14–28%), about $88 a month at ~140 answe
 
 ### v5.24 — The scan: the hours that block her prompt, softened (at first: Opus names it, `/scan yes` closes it)
 
-**Status:** planned (2026-11-03).
+**Status:** ✅ completed — released `v5.24.0` on 2026-11-07. The owner confirmed the live checks on 2026-11-07 («всі перевірки я зробив») and asked for the release («релізь все що до і сам 6.2»); the phase had no code review of its own before it.
 
 **Goal:** at the owner's word, what in Кіра's private talk may trip Gemini's prohibited-content filter is found and closed
 for good.
@@ -3442,7 +3448,7 @@ how many were read.
 
 ### v5.25 — Her topics: Flash lists what the talk is about, she picks which to go on with
 
-**Status:** planned (2026-11-04).
+**Status:** ✅ completed — released `v5.25.0` on 2026-11-07. The owner confirmed the live checks on 2026-11-07 («всі перевірки я зробив») and asked for the release («релізь все що до і сам 6.2»); the phase had no code review of its own before it.
 
 **Goal:** Кіра stops returning to one theme in every message alone with the owner. She sees what their talk is about —
 the topics of their last messages, and who raised each how often — and picks herself which to go on with. With it,
@@ -3565,7 +3571,7 @@ something of her own now and then, what she said was heard, and no one-time arra
 
 ### v5.26 — The backup's own canon: Кіра open to explicit scenes on NovelAI
 
-**Status:** planned (2026-11-04).
+**Status:** ✅ completed — released `v5.26.0` on 2026-11-07. The owner confirmed the live checks on 2026-11-07 («всі перевірки я зробив») and asked for the release («релізь все що до і сам 6.2»); the phase had no code review of its own before it.
 
 **Goal:** on the backup (GLM-4.6 on NovelAI, which does not filter text) Кіра is open to explicit scenes with Ich and
 does what he asks, from a canon of her own for the backup's prompt alone, shorter, so more of her history fits.
@@ -3608,7 +3614,7 @@ not fit: at 18:22 it left out the month and week digests, «Agora today» and 25
 
 ### v5.27 — Кіра far away: her place, two clocks and nights at the telescope
 
-**Status:** planned (2026-11-07).
+**Status:** ✅ completed — released `v5.27.0` on 2026-11-07. The owner confirmed the live checks on 2026-11-07 («всі перевірки я зробив») and asked for the release («релізь все що до і сам 6.2»); the checks that need her in Chile (she lands on 2026-11-09) are waived.
 
 **Goal:** Кіра moves to Chile, and the code follows her: her place sets her clock, her season, her weather, the
 city in her photos and whether the city's news touches her life; her prompt shows her time and Lviv's; some nights
@@ -3689,7 +3695,7 @@ after his review the same day — the canon in sections, a second hobby (the gui
 by, her looks and how she dresses, her light grey eyes, and her initiative when she feels safe (in the private and
 backup canons only). Checks run: the life story parses (8 chapters, 20 events), the natal file gives 2004-11-01, and
 the persona scan's pattern (`BANNED_RE`) finds nothing in her five files. No release tag of its own: the canon is
-private, so the phase has no commit but this one, and `v6.1.0` comes after v5.24–v5.27 are released.
+private, so the phase has no commit but this one; released as `v6.1.0` on 2026-11-07, after v5.24–v5.27.
 
 **Goal:** the owner and Claude Code agree on who she is before any code: her name, her birth chart, her main canon
 and her life story, in the private canon.
@@ -3716,7 +3722,7 @@ and her life story, in the private canon.
 
 ### v6.2 — The code for a second companion: everything Кіра has, by her TOML alone
 
-**Status:** ⏳ planned (2026-11-07).
+**Status:** ✅ completed — released `v6.2.0` on 2026-11-07. AGORA-218–222; the owner confirmed Кіра unchanged after the deploy, and the review's two LOW fix-now findings are fixed.
 
 **Goal:** a second persona with every one of Кіра's capabilities runs from her own TOML, canon, face folder and env
 file, beside Кіра and apart from her; nothing in the code assumes there is one companion.
