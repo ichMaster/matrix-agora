@@ -3,7 +3,6 @@ her, and nothing of one reaches the other — her state files, archive, facts, t
 Telegram state and selfie are her own, and a command or a cap of one never reads or writes the other's (nio, Gemini,
 the image model, Telegram and the archive's embeddings mocked; made-up lines only)."""
 
-import asyncio
 import tomllib
 from datetime import date
 from pathlib import Path
