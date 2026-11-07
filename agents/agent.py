@@ -509,9 +509,7 @@ class Agent:
                 self.event_weights = parse_weights(os.environ.get("EVENT_WEIGHTS", "everyday:6,joyful:2,inspiring:2,heavy:1"))
             except ValueError:
                 log.warning("EVENT_WEIGHTS is not kind:weight,… — using its default")
-            for e in (e for c in cfg.life.chapters for e in c.events) if cfg.life else ():
-                if e.time and not in_hours(int(e.time[:2]), self.event_hours):  # review #4: it would never fall
-                    log.warning("events: the story's event of %s at %s is outside EVENT_HOURS", e.date, e.time)
+            # v6.2.1: a timed event of her story falls at its time in any hour, so none is outside her hours any more
         # Lviv's news woven in: each of the day's items rolled once at CITY_NEWS_P, at most CITY_NEWS_MAX a day
         self.city_news_p, self.city_news_max = 0.0, 0
         if cfg.can("events"):
@@ -3776,12 +3774,13 @@ class Agent:
             os.close(fd)
 
     async def ensure_events(self, now) -> None:
-        """In her waking hours: her story's events due today, entered once each, then one roll for this hour —
-        marked rolled before the call, so a restart never rolls it twice and a missed hour is never caught up. A
-        failure backs off for 10 minutes; it never blocks the watcher."""
+        """Her story's events due today, entered once each — v6.2.1 (the owner, 2026-11-07: «для Кіри мало бути інше
+        вікно в її часовій зоні»): a timed one at its time in any hour of her clock, the author's time —, then, only
+        in `EVENT_HOURS` and while she is awake (`awake_at`: her waking hours, on a night at the telescope 14–07),
+        one roll for this hour — marked rolled before the call, so a restart never rolls it twice and a missed hour is
+        never caught up; never a roll while she sleeps. A failure backs off for 10 minutes; it never blocks the
+        watcher."""
         if not self.cfg.can("events") or self._events_lock.locked() or self.clock() < self._events_retry_ms:
-            return
-        if not in_hours(now.hour, self.event_hours):
             return
         async with self._events_lock:
             try:
@@ -3794,13 +3793,19 @@ class Agent:
         day = now.date()
         today = parse_day(self._read_raw(self.events_file(day)))
         life = self.cfg.life
+        # v6.2.1: awake in her clock — in `EVENT_HOURS` and by her waking hours (a night at the telescope 14–07)
+        awake = in_hours(now.hour, self.event_hours) and awake_at(now, life, self.awake_hours, self.awake_night_hours)
         for due in events_due(life, day) if life else []:
+            if due.time is None and not awake:
+                continue  # an untimed one falls at her day's first waking tick, never at midnight
             if due.time is not None and f"{now:%H:%M}" < due.time:
                 continue  # review #4: a timed event falls from its time, never told as done in the morning
             if not any(e.source == due.kind and e.text == due.text for e in today.events):
                 at = due.time or f"{now:%H:%M}"
                 self._append_events(day, block(Event(at, "story", due.kind, due.text)))
                 log.info("events: %s event of the story fell at %s", due.kind, at)
+        if not awake:
+            return  # v6.2.1: the roll and the news only while she is awake, in her clock
         if not hour_due(now, True, today.rolled):
             return
         kind = roll_event(self.rng, self.event_p, self.event_weights)

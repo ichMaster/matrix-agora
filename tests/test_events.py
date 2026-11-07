@@ -284,7 +284,8 @@ def test_a_story_event_with_odd_spacing_enters_once(tmp_path):
 
 def test_a_timed_story_event_falls_from_its_time(tmp_path, caplog):
     """Review #4: an evening event of her story fell at the first waking tick and was told as done in the morning;
-    with a time it falls at the first tick from then, told at that time, and a time past her hours is warned about."""
+    with a time it falls at the first tick from then, told at that time; v6.2.1: a time past `EVENT_HOURS` falls at
+    its time too, so nothing is warned about any more."""
     life = parse_life(STORY.replace("- 2026-11-03 · known", "- 2026-11-03 19:00 · known")
                       .replace("- 2027-02-14 · known", "- 2027-02-14 23:30 · known"))
     llm = EventLLM()
@@ -302,4 +303,34 @@ def test_a_timed_story_event_falls_from_its_time(tmp_path, caplog):
     cfg = AgentConfig(**{**CFG.__dict__, "name": "Кіра", "user_id": "@kira:agora.lan",
                          "capabilities": TYPES["persona"] | {"events"}, "life": life})
     Agent(cfg, llm=llm)
-    assert "2027-02-14 at 23:30 is outside EVENT_HOURS" in caplog.text
+    assert "outside EVENT_HOURS" not in caplog.text
+    late = person(tmp_path / "late", EventLLM(), "2027-02-14 23:30", rolls=(0.99,) * 10)
+    late.cfg = AgentConfig(**{**late.cfg.__dict__, "life": life})
+    tick(late, "2027-02-14 23:40")                                                    # past 23:00, at its time
+    assert [(e.time, e.source) for e in late.day_events(at("2027-02-14 23:40").date())] == [("23:30", "known")]
+
+
+NIGHTS = STORY.replace("### Люди", "### Ночі на телескопі\n- 2026-11-10 – 2026-11-12\n\n### Люди").replace(
+    "- 2026-11-03 · known", "- 2026-11-11 03:40 · surprise")
+
+
+def test_a_night_event_falls_at_its_time_and_the_roll_only_while_she_is_awake(tmp_path):
+    """v6.2.1 (the owner, 2026-11-07: «для Кіри мало бути інше вікно в її часовій зоні … вийде що вона прокидається
+    серед ночі»): with the window the whole day her story's 03:40 on the mountain falls at 03:40, but the hourly roll
+    follows her waking hours in her clock — never at 03:00 on an ordinary night, at 03:00 on a night at the telescope,
+    and never the morning after one, while she sleeps till 14:00; an untimed event waits for her first waking hour."""
+    llm = EventLLM()
+    agent = person(tmp_path, llm, "2026-11-09 03:00", rolls=(0.0, 0.0) * 10)
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "life": parse_life(NIGHTS)})
+    agent.event_hours, agent.awake_hours, agent.awake_night_hours = (0, 24), (8, 1), (14, 7)
+    tick(agent, "2026-11-09 03:00")                                                   # an ordinary night: asleep
+    assert agent.day_events(at("2026-11-09 03:00").date()) == [] and llm.calls == []
+    tick(agent, "2026-11-11 03:00")                                                   # the night of a block: awake
+    tick(agent, "2026-11-11 03:45")
+    events = agent.day_events(at("2026-11-11 03:00").date())
+    assert [(e.time, e.source) for e in events] == [("03:00", "rolled"), ("03:40", "surprise")]
+    calls = len(llm.calls)
+    tick(agent, "2026-11-13 09:00")                                                   # the morning after: she sleeps
+    assert agent.day_events(at("2026-11-13 09:00").date()) == [] and len(llm.calls) == calls
+    tick(agent, "2026-11-13 14:00")
+    assert [e.source for e in agent.day_events(at("2026-11-13 14:00").date())] == ["rolled"]
