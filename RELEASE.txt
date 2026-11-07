@@ -1,3 +1,12 @@
+Version 5.26.0 (2026-11-07)
+---------------------------
+- Phase v5.26 (AGORA-205..207): the backup's own canon - `canon_backup`,
+  read by the backup on NovelAI alone and never by Gemini; the canon's text
+  drafted and edited by the owner (private canon)
+- The backup remembers only its hours: `FALLBACK_HISTORY_HOURS`
+- The owner confirmed the live checks on 2026-11-07; the phase had no code
+  review of its own
+
 Version 5.25.0 (2026-11-07)
 ---------------------------
 - Phase v5.25 (AGORA-197..200, 204, 208..211): her topics - Flash lists what
