@@ -1,3 +1,24 @@
+Version 6.2.0 (2026-11-07)
+---------------------------
+- Phase v6.2 (AGORA-218..222): the code for a second companion - a selfie is
+  the person's own: her main face `<localpart>.png`, her age on the shot's
+  day from her chart, her look from the private
+  `agents/canon/<localpart>.look.md` (Kira's no-makeup rule now in her
+  `kira.look.md`)
+- `server/deploy.sh` syncs every member's own `server/<name>.env` by one
+  loop over the members' TOMLs, 0600 on the host;
+  `server/ustyna.env.example`
+- `python -m agents.facts seed`: `--agent` and `--name` required, no default
+  person
+- Two companions side by side in tests: state files, archive, selfie, photo
+  and video caps, Telegram state and commands their own; the sweep found
+  nothing to fix (the voice's month stays one budget for all speakers, by
+  design)
+- Code review v6.2: a missing look file is a warning at her start (#1); the
+  seed command with its args in the docs (#2); #3 backlog, #4 to v6.3's
+  tests
+- The owner confirmed Kira unchanged after the deploy on 2026-11-07
+
 Version 6.1.0 (2026-11-07)
 ---------------------------
 - Phase v6.1: Ustyna's first version - her name, her birth chart (chosen for
