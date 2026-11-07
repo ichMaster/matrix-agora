@@ -262,3 +262,69 @@ def local_now_of(agent):
     from agents.world import local_now
 
     return local_now(agent.clock(), agent.tz)
+
+
+@pytest.mark.parametrize("when, due", [
+    ((2026, 11, 20, 6, 0), False),     # his 11:00, her 06:00: she sleeps
+    ((2026, 11, 20, 9, 0), True),      # his 14:00, her 09:00: both awake
+    ((2026, 11, 20, 21, 0), False),    # his 02:00: he sleeps
+    ((2026, 11, 12, 4, 0), True),      # a night at the telescope: his 09:00, her 04:00 — the morning they share
+    ((2026, 11, 12, 10, 0), False),    # the morning after a night: she sleeps
+])
+def test_she_writes_first_only_when_both_are_awake(tmp_path, monkeypatch, world, when, due):
+    """AGORA-216 — «коли не спите обоє»: his PRIVATE_HOURS in his clock, her AWAKE_HOURS in hers, a night of a block
+    awake by AWAKE_NIGHT_HOURS."""
+    import asyncio
+    import dataclasses
+
+    from tests.test_private_runtime import nudger
+
+    monkeypatch.setenv("PRIVATE_HOURS", "08-01")
+    monkeypatch.setenv("AWAKE_HOURS", "08-01")
+    story, places, night = world
+    agent = nudger(tmp_path, monkeypatch)
+    agent.cfg = dataclasses.replace(agent.cfg, life=story, places=places, night_place=night)
+    now = ms(*when, "America/Santiago")
+    agent.clock = lambda: now
+    agent.last_private_ms = now - 7 * 3_600_000
+    assert asyncio.run(agent.maybe_private_nudge()) is due
+
+
+def test_her_world_line_tells_her_nights(tmp_path, monkeypatch, world):
+    import dataclasses
+
+    from agents.place import nights_line
+    from tests.test_archive import kira
+
+    story, places, night = world
+    scl = ZoneInfo("America/Santiago")
+    assert nights_line(datetime(2026, 11, 10, 15, 0, tzinfo=scl), story) == "Сьогодні в тебе ніч на телескопі."
+    assert nights_line(datetime(2026, 11, 11, 3, 0, tzinfo=scl), story) == "Ти зараз на нічній зміні біля телескопа."
+    assert nights_line(datetime(2026, 11, 18, 3, 0, tzinfo=scl), story) == "Ти зараз на нічній зміні біля телескопа."
+    assert nights_line(datetime(2026, 11, 18, 15, 0, tzinfo=scl), story) == "Наступні ночі на телескопі — з 8 по 11 грудня."
+    assert nights_line(datetime(2026, 12, 20, 15, 0, tzinfo=scl), story) == ""
+    cross = parse_life(STORY.replace("- 2026-12-08 – 2026-12-11", "- 2026-11-28 – 2026-12-02"))
+    assert nights_line(datetime(2026, 11, 20, 15, 0, tzinfo=scl), cross) == (
+        "Наступні ночі на телескопі — з 28 листопада по 2 грудня.")
+    agent = kira(tmp_path, monkeypatch)
+    agent.cfg = dataclasses.replace(agent.cfg, life=story, places=places, night_place=night)
+    agent.clock = lambda: ms(2026, 11, 10, 21, 0, "America/Santiago")
+    assert agent.prompt_layers()["world"].endswith("там уже середа. Сьогодні в тебе ніч на телескопі.")
+
+
+def test_a_talk_day_of_another_zone_is_never_written_twice():
+    """AGORA-216 — Kyiv's day already written; after the move Santiago's day overlapping it by five hours is held,
+    while a DST neighbour (an hour) never is."""
+    from agents.talk import period_of, periods_due
+
+    kyiv_day = period_of("day", ms(2026, 11, 8, 12, 0, "Europe/Kyiv"), "Europe/Kyiv")[0]
+    line = ms(2026, 11, 8, 20, 0, "America/Santiago")                      # Kyiv's 9 Nov 01:00, Santiago's 8 Nov
+    now = ms(2026, 11, 13, 12, 0, "America/Santiago")
+    due = periods_due(now, "America/Santiago", [line], {("day", kyiv_day)}, hour_days=3, day_days=7)
+    assert due == []
+    due = periods_due(now, "America/Santiago", [line], set(), hour_days=3, day_days=7)
+    assert [lv for lv, _, _ in due] == ["day"]
+    oct_25 = period_of("day", ms(2026, 10, 25, 12, 0, "Europe/Kyiv"), "Europe/Kyiv")   # the DST day: 25 hours
+    after = ms(2026, 10, 26, 12, 0, "Europe/Kyiv")
+    due = periods_due(ms(2026, 10, 31, 12, 0, "Europe/Kyiv"), "Europe/Kyiv", [after], {("day", oct_25[0])}, 3, 7)
+    assert [lv for lv, _, _ in due] == ["day"]

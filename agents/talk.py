@@ -51,14 +51,19 @@ def periods_due(now_ms: int, tz: str, open_times: list[int], held: set[tuple[str
     - `hour`: starting within the last `hour_days` days, or earlier in a day not yet past the band (code review v5.23
       #3: else an hour not written in the band — a downtime, an outage — waits in neither level until its day passes);
     - `day` (v5.23): ended before the hours' band and within the last `day_days` days;
-    - nothing older (v5.23: her recall brings it back)."""
+    - nothing older (v5.23: her recall brings it back).
+    v5.27: a `day` that overlaps a `day` already written by more than two hours (one written in another zone, before
+    a move) is held — a DST day's neighbour overlaps it by an hour at most."""
     hour_cut, day_cut = now_ms - hour_days * DAY_MS, now_ms - day_days * DAY_MS
+    held_days = [s for lv, s in held if lv == "day"]
     due: dict[tuple[str, int], int] = {}
     for ts in open_times:
         for level in LEVELS:
             start, end = period_of(level, ts, tz)
             if (level, start) in held or (level, start) in due or end > now_ms:
                 continue
+            if level == "day" and any(min(end, s + DAY_MS) - max(start, s) > 2 * HOUR_MS for s in held_days):
+                continue  # v5.27: a day of another zone is written over it — a move never doubles a day
             if (level == "hour" and (start >= hour_cut or period_of("day", start, tz)[1] > hour_cut)) or (
                     level == "day" and day_cut < end <= hour_cut):
                 due[(level, start)] = end

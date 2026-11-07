@@ -133,6 +133,13 @@ SCHEMA: tuple[Setting, ...] = (
     _s("PRIVATE_NUDGES_PER_DAY", "int", "2", "private", "cap:private", None,
        "Скільки разів на день може написати першою", "", 0, 24),
     _s("PRIVATE_HOURS", "hours", "10-22", "private", "cap:private", None, "Години, коли може написати першою (HH-HH)"),
+    # v5.27 (the owner, 2026-11-07: «змісти її години коли вона може писати мені» → «коли не спите обоє»): her own
+    # waking hours, in her clock — she writes first only when his PRIVATE_HOURS (his clock) and these both hold; on a
+    # night at the telescope she is awake by the second
+    _s("AWAKE_HOURS", "hours", "00-24", "private", "cap:private", None,
+       "Коли вона не спить, за її часом (HH-HH; 00-24 — завжди)"),
+    _s("AWAKE_NIGHT_HOURS", "hours", "14-07", "private", "cap:private", None,
+       "Коли вона не спить у ніч на телескопі, за її часом (HH-HH)"),
     # v5.8.2 (the owner, 2026-10-25): where she writes first — `last`: the door he used last; or always one door
     _s("PRIVATE_FIRST_DOOR", "choice", "last", "private", "cap:private", None,
        "Куди пише першою (last — туди, де він писав останнім)", choices=("last", "telegram", "matrix")),

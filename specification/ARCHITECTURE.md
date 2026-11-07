@@ -536,7 +536,11 @@ over the cap by its `Content-Length` or by what arrives (never more than the cap
   first are his (`PRIVATE_HOURS`, §Configuration). Her world follows her too: the weather of her mood is her
   place's (its coordinates and zone, its short name as the line's label, kept per day and place; none for a place
   without coordinates), her photos and videos are set in her place's city and season, and Lviv's news is woven into
-  her events only at a place with `news`.
+  her events only at a place with `news`. Her nights at the telescope reach her world line as a person says them:
+  «Сьогодні в тебе ніч на телескопі.», after midnight of such a night «Ти зараз на нічній зміні біля телескопа.»,
+  else the next block within 30 days, «Наступні ночі на телескопі — з 8 по 11 грудня.». Her talk summaries
+  (§Memory, v5.23) hold a `day` that overlaps a day already written by more than two hours — one written in
+  another zone before a move — so a move never writes a day twice.
 - Before every Gemini call the code computes the current moment in `TIMEZONE` and adds date, weekday, time, part of day and season to the prompt — in Ukrainian, e.g. «Зараз четвер, 2 жовтня 2026, 20:15, вечір, осінь». Weekday/month names come from tables in code, not the system locale. The clock is an injected function, replaceable in tests.
 - The prompt also says when the last session summary was made («Востаннє ви говорили позавчора ввечері»).
 
@@ -708,6 +712,7 @@ All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hard
 | `OPENROUTER_API_KEY` | v5.15 | **removed in v5.21 with the judge: no longer read; one left in `kira.env` is taken out of the environment at start** — Кіра's `server/kira.env` only: the OpenRouter key of the judge (`agents/judge.py`); taken out of every agent's environment at start, never in a prompt, a log or the panel; with the backup on and no key the judge is off, said once, and the backup's talk waits as in v5.14 |
 | `PRIVATE_FIRST_DOOR` | v5.8.2 | read only by a person with `private` (an agent setting): where she writes first — `last` (the door he used last; the default), `telegram` or `matrix`; a closed door falls back to the other. Кіра's `kira.env`: `telegram` (the owner, 2026-10-25) |
 | `PRIVATE_IDLE_S`, `PRIVATE_NUDGES_PER_DAY`, `PRIVATE_HOURS` | v5.6 | read only by a person with `private` (agent settings, the panel's «Особистий чат») — writing first in the private chat after so much silence, at most so many a day, in these local hours (21600 / 2 / `10-22`); a day's cap up to 24 from v5.25 (the owner, 2026-11-04: «зроби щоб Кіра сама писала кожну годину»; was 10) |
+| `AWAKE_HOURS`, `AWAKE_NIGHT_HOURS` | v5.27 | read only by a person with `private` (agent settings) — her own waking hours in her clock (`00-24`, always, as before v5.27 / `14-07`); from v5.27 `PRIVATE_HOURS` is his clock (`TIMEZONE`), and she writes first only when both hold (the owner, 2026-11-07: «коли не спите обоє»); on a night of her story's block of nights she is awake by `AWAKE_NIGHT_HOURS` and asleep the morning after, from its end to its start |
 | `ELEVENLABS_API_KEY`, `HERMES_PASSWORD`, v5.2 `DEEPGRAM_API_KEY` | v5.1–v5.2 | Hermes's own env file `server/hermes.env` only (the key copied from Lumi's, the owner's decision 2026-10-13): taken out of the environment at start, never in a prompt or a log |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_ID`, Кіра's `DEEPGRAM_API_KEY` | v5.7 | Кіра's own env file `server/kira.env` only (gitignored, 0600, read by her container alone; the Deepgram key copied from Hermes's): taken out of the environment at start, never in a prompt, a log or the panel; the bot's token is in every Bot API URL, so no URL is ever logged; the owner's numeric id is not a secret to Telegram but stays out of the logs and the repo; without the token or the id Telegram is off, without the key she does not hear voice notes |
 | `GUARDIAN_API_KEY` | v4.5 | Claude's news source, a Guardian Open Platform key — `server/claude.env` only; taken out of the environment at start, never in a prompt or a log; unset: no news |

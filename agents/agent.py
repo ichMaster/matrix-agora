@@ -191,7 +191,7 @@ from agents.photo import (
     split_photo,
     strip_notes,
 )
-from agents.place import Place, home_place, place_at
+from agents.place import Place, awake_at, home_place, nights_line, place_at
 from agents.plans import (
     HORIZONS,
     parse_items,
@@ -628,9 +628,13 @@ class Agent:
         self._scan_running, self._scan_due = False, False
         self._auto_scans: list[int] = []  # the times of the last hour's scans after a block
         self.private_idle_ms, self.private_per_day, self.private_hours = 0, 0, (0, 0)
+        self.awake_hours, self.awake_night_hours = (0, 24), (14, 7)
         self.private_first_door = "last"
         if cfg.can("private"):
             self.private_hours = parse_hours(os.environ.get("PRIVATE_HOURS", "10-22"))
+            # v5.27: her own waking hours (her clock), and on a night at the telescope
+            self.awake_hours = parse_hours(os.environ.get("AWAKE_HOURS", "00-24"))
+            self.awake_night_hours = parse_hours(os.environ.get("AWAKE_NIGHT_HOURS", "14-07"))
             self.private_per_day = int(os.environ.get("PRIVATE_NUDGES_PER_DAY", "2"))
             self.private_idle_ms = int(float(os.environ.get("PRIVATE_IDLE_S", "21600")) * 1000)
             first = os.environ.get("PRIVATE_FIRST_DOOR", "last").strip()  # v5.8.2: last | telegram | matrix
@@ -1591,8 +1595,10 @@ class Agent:
         state = load_private_state(self.private_file, now.date().isoformat())
         state.room = state.room or self.private_room
         last = max([t for t in (self.last_private_ms, self.started_ms) if t is not None], default=None)
-        if not private_nudge_due(now_ms, now, last, state, self.private_idle_ms, self.private_per_day,
-                                 self.private_hours):
+        # v5.27: his hours in his clock (`TIMEZONE`), and she awake in hers — «коли не спите обоє»
+        if not (private_nudge_due(now_ms, local_now(now_ms, self.home_tz), last, state, self.private_idle_ms,
+                                  self.private_per_day, self.private_hours)
+                and awake_at(now, self.cfg.life, self.awake_hours, self.awake_night_hours)):
             return False
         self._private_pending = True
         try:
@@ -2781,6 +2787,8 @@ class Agent:
             here = self.place
             home = local_now(self.clock(), self.home_tz) if here.tz != self.home_tz else None  # v5.27: Lviv's clock
             world = now_line(now, here.name, home, here.south)
+            if self.cfg.night_place and (nights := nights_line(now, self.cfg.life)):
+                world += " " + nights  # v5.27: her nights at the telescope
             if self.summary_ms is not None:
                 world += " " + last_talk_line(local_now(self.summary_ms, self.tz), now)
         # v5.22 (the owner): alone with him the shorter story, when her canon has one (`life_private`)

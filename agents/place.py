@@ -146,3 +146,20 @@ def awake_at(now: datetime, story: LifeStory | None, hours: tuple[int, int] | No
     if night_on(story, yesterday) and end <= now.hour < start:
         return False  # the morning after a night: she sleeps
     return in_hours(now.hour, hours)
+
+
+def nights_line(now: datetime, story: LifeStory | None) -> str:
+    """Her nights at the telescope in her world line (pure): on the night shift now, tonight, or the next block
+    within 30 days, as a person says it; "" with none."""
+    from agents.world import MONTHS_GEN
+
+    if now.hour < 7 and night_on(story, now.date() - timedelta(days=1)):
+        return "Ти зараз на нічній зміні біля телескопа."
+    if night_on(story, now.date()):
+        return "Сьогодні в тебе ніч на телескопі."
+    block = next_block(story, now.date())
+    if block is None:
+        return ""
+    first, last = block
+    since = f"{first.day}" if first.month == last.month else f"{first.day} {MONTHS_GEN[first.month - 1]}"
+    return f"Наступні ночі на телескопі — з {since} по {last.day} {MONTHS_GEN[last.month - 1]}."
