@@ -188,6 +188,7 @@ from agents.photo import (
     PhotoMaker,
     Shot,
     load_faces,
+    load_look,
     photo_maker,
     split_photo,
     strip_notes,
@@ -578,12 +579,15 @@ class Agent:
             self.photo_window_max = int(os.environ.get("PHOTO_WINDOW_MAX", "3"))  # v5.22: at most so many in any
             self.photo_window_s = int(os.environ.get("PHOTO_WINDOW_S", "1800"))   # window of this length
             faces = load_faces(Path("agents/canon") / f"{cfg.localpart}.face")
+            # v6.2: her own selfie — her main face photo, her age from her chart, her look file
+            look = load_look(Path("agents/canon") / f"{cfg.localpart}.look.md")
             if isinstance(self.llm, GeminiClient):
                 self.photos = photo_maker(os.environ.get("PHOTO_MODEL", "gemini-nano-banana-2.1").strip() or PHOTO_MODEL,
                                           os.environ.get("PHOTO_SIZE", "1K").strip() or "1K", faces,
-                                          self.record_usage)
+                                          self.record_usage, f"{cfg.localpart}.png", parse_birth_date(cfg.natal),
+                                          look)
             if faces:
-                log.info("photos: %d faces", len(faces))
+                log.info("photos: %d faces%s", len(faces), "" if look else ", no look file")
             else:  # review #3: the first deploy ran so, unnoticed — every selfie would quietly be redrawn without one
                 log.warning("photos: no faces — a selfie will not come out")
         # v5.18 — her videos in Telegram: her кружечок (Fabric 1.0 on fal, from her selfie and her voice; the key lives

@@ -4,7 +4,7 @@ failure a reason, never a crash (google-genai mocked; no network; made-up descri
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
@@ -12,16 +12,19 @@ import pytest
 from google.genai import errors
 
 from agents.photo import (
-    MAIN_FACE,
-    SELFIE,
+    SELFIE_HEAD,
+    SELFIE_TAIL,
     STYLE,
     Made,
     Moment,
     PhotoMaker,
     Shot,
+    age_on,
     load_faces,
+    load_look,
     photo_request,
     pick_faces,
+    selfie_line,
     split_photo,
     strip_notes,
 )
@@ -91,9 +94,13 @@ def test_the_request_holds_her_words_her_moment_and_the_look_and_the_face_only_f
         assert "хмарно, +8, дрібний дощ" in request
         for word in ("ранок", "вечір", "осінь", "ніч"):                              # the template is English
             assert word not in request.replace("хмарно, +8, дрібний дощ", "")
-    assert SELFIE in selfie and "not the clothes of the reference photos" in selfie
-    assert "never wears makeup: a bare, natural face" in selfie                     # the owner, 2026-11-05
-    assert SELFIE not in photo and "Nobody's face" in photo
+    assert SELFIE_HEAD in selfie and SELFIE_TAIL in selfie and "not the clothes of the reference photos" in selfie
+    assert SELFIE_HEAD not in photo and "Nobody's face" in photo
+    # v6.2: her own line — her age and her look — when the maker passes it; a photo never carries it
+    who = selfie_line(date(2003, 3, 9), "She never wears makeup: a bare, natural face.", EVENING.when.date())
+    assert "She is 23." in photo_request(Shot("selfie", "я"), EVENING, who=who)
+    assert "never wears makeup: a bare, natural face" in photo_request(Shot("selfie", "я"), EVENING, who=who)
+    assert "makeup" not in photo_request(Shot("photo", "чашка"), EVENING, who=who)
     assert "weather" not in photo_request(Shot("photo", "чашка"), Moment(EVENING.when))
 
 
@@ -106,11 +113,50 @@ def test_her_faces_are_the_folders_own_images_and_a_selfie_takes_kira_png_and_th
     faces = load_faces(folder)
     assert [f[0] for f in faces] == ["a.png", "b.jpg", "c.jpeg", "d.png", "kira.png"]  # never places/, never text
     assert faces[1][2] == "image/jpeg" and faces[0][2] == "image/png"
-    picked = pick_faces(faces, scripted(0.0, 0.99, 0.5))
-    assert [f[0] for f in picked] == [MAIN_FACE, "a.png", "d.png", "c.jpeg"]
-    assert [f[0] for f in pick_faces(faces[:2], scripted(0.0))] == ["a.png", "b.jpg"]  # no kira.png: the first
+    picked = pick_faces(faces, scripted(0.0, 0.99, 0.5), "kira.png")
+    assert [f[0] for f in picked] == ["kira.png", "a.png", "d.png", "c.jpeg"]
+    assert [f[0] for f in pick_faces(faces[:2], scripted(0.0), "kira.png")] == ["a.png", "b.jpg"]  # none: the first
+    # v6.2: the main photo is the person's own — another's folder never puts kira.png first
+    assert pick_faces(faces, scripted(0.0, 0.0, 0.0), "ustyna.png")[0][0] == "a.png"
+    assert pick_faces(faces, scripted(0.0, 0.0, 0.0))[0][0] == "a.png"
     assert load_faces(tmp_path / "missing") == [] and load_faces(None) == [] and pick_faces([], scripted()) == []
 
+
+
+def test_her_age_on_the_shots_day_counts_whole_years_from_her_birth_date():
+    birth = date(2004, 11, 1)
+    assert age_on(birth, date(2026, 10, 31)) == 21                                  # the day before her birthday
+    assert age_on(birth, date(2026, 11, 1)) == 22 and age_on(birth, date(2026, 11, 7)) == 22
+    assert age_on(date(2004, 2, 29), date(2025, 2, 28)) == 20 and age_on(None, date(2026, 11, 7)) is None
+
+
+def test_the_selfie_line_is_hers_her_age_and_her_look_between_the_fixed_head_and_tail():
+    look = "Her eyes are light grey. She never wears makeup."
+    line = selfie_line(date(2004, 11, 1), look, date(2026, 11, 7))
+    assert line == f"{SELFIE_HEAD} She is 22. {look} {SELFIE_TAIL}"
+    assert selfie_line(None, "", date(2026, 11, 7)) == f"{SELFIE_HEAD} {SELFIE_TAIL}"   # no chart, no look: neither
+    assert selfie_line(None, look, date(2026, 11, 7)) == f"{SELFIE_HEAD} {look} {SELFIE_TAIL}"
+
+
+def test_her_look_file_is_its_lines_without_comments_and_a_missing_or_empty_one_is_none(tmp_path):
+    path = tmp_path / "ustyna.look.md"
+    path.write_text("# her look, for the image model\nShe is Ukrainian.\n\n  Her eyes are light grey.  \n",
+                    encoding="utf-8")
+    assert load_look(path) == "She is Ukrainian. Her eyes are light grey."
+    (tmp_path / "empty.look.md").write_text("# nothing\n\n", encoding="utf-8")
+    assert load_look(tmp_path / "empty.look.md") == "" and load_look(tmp_path / "missing.look.md") == ""
+    assert load_look(None) == ""
+
+
+def test_a_makers_selfie_is_its_persons_own_main_face_age_and_look():
+    models = Models(image())
+    faces = [(n, n.encode(), "image/png") for n in ("a.png", "b.png", "kira.png", "ustyna.png")]
+    photos = PhotoMaker(SimpleNamespace(aio=SimpleNamespace(models=models)), faces=faces, rng=scripted(0.0, 0.0, 0.0),
+                        main_face="ustyna.png", birth=date(2004, 11, 1), look="Her eyes are light grey.")
+    asyncio.run(photos.make(Shot("selfie", "я з гітарою"), EVENING))
+    contents = models.calls[0][1]
+    assert contents[0].inline_data.data == b"ustyna.png"                             # her main face first
+    assert "She is 21." in contents[-1] and "Her eyes are light grey." in contents[-1]  # 2026-10-31: still 21
 
 class Models:
     """The SDK's `aio.models`: answers or raises in turn; keeps each call's contents and config."""
@@ -200,3 +246,17 @@ def test_photos_are_a_persons_capability_that_needs_her_telegram_bot():
     with pytest.raises(RosterError, match="'photos' belongs to the persona type only"):
         parse_member("kit", {"name": "Кіт", "user_id": "@kit:agora.lan", "type": "creature",
                              "capabilities": {"photos": True}}, "kit.toml")
+
+
+@pytest.mark.canon
+def test_every_look_file_in_the_canon_names_no_model_or_bot_and_kiras_keeps_her_no_makeup_rule():
+    """v6.2: the look files are private canon (`agents/canon/<localpart>.look.md`), read into a selfie's request — the
+    human-belief scan covers them, and Кіра's carries v5.25's rule, so her selfie is as before."""
+    from pathlib import Path
+
+    from agents.logic import BANNED_RE
+    looks = sorted(Path("agents/canon").glob("*.look.md"))
+    assert {p.name for p in looks} >= {"kira.look.md", "ustyna.look.md"}
+    for path in looks:
+        assert not BANNED_RE.search(path.read_text(encoding="utf-8")), path.name
+    assert "never wears makeup: a bare, natural face" in load_look(Path("agents/canon/kira.look.md"))

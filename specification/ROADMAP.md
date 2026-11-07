@@ -3728,9 +3728,10 @@ agents.facts seed` defaults to Кіра.
 **Tasks:**
 - The main face photo is `<localpart>.png` in `agents/canon/<localpart>.face/`.
 - The selfie line names Кіра's age and her no-makeup rule (`agents/photo.py` `SELFIE`: «She is 23, Ukrainian. She
-  never wears makeup»): the age comes from the person's birth date, and the look from her TOML — makeup or none, her
-  eye colour (kept in any light) and her figure and how she dresses — so a selfie keeps what the image model drops by
-  default (the owner, 2026-11-07: «це губиться при генеруванні фото»).
+  never wears makeup»): the age comes from the person's birth date, and the look from her private
+  `agents/canon/<localpart>.look.md` (reconciled 2026-11-07: the TOML is public, the look is canon) — makeup or none,
+  her eye colour (kept in any light) and her figure and how she dresses — so a selfie keeps what the image model drops
+  by default (the owner, 2026-11-07: «це губиться при генеруванні фото»).
 - `server/deploy.sh` syncs every `server/<name>.env` of a member that has one (0600 on the host), never printed;
   `server/<name>.env.example` documents hers.
 - `agents.facts seed`: `--agent` and `--name` required, no default person.

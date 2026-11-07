@@ -252,6 +252,25 @@ def test_no_faces_at_start_is_a_warning(tmp_path, monkeypatch, caplog):
     assert "photos: 1 faces" in caplog.text and "no faces" not in caplog.text
 
 
+
+def test_her_photo_maker_is_built_for_her_own_main_face_age_and_look(tmp_path, monkeypatch):
+    # v6.2: nothing of the selfie is Кіра's in code — the localpart names the main face and the look file, the chart
+    # gives the birth date
+    from datetime import date
+
+    from agents.llm import GeminiClient
+    monkeypatch.setattr(GeminiClient, "__init__", lambda self, sink=None: None)
+    built, looked = [], []
+    monkeypatch.setattr(agent_mod, "photo_maker", lambda *a: built.append(a) or object())
+    monkeypatch.setattr(agent_mod, "load_faces", lambda folder: [("ustyna.png", b"x", "image/png")])
+    monkeypatch.setattr(agent_mod, "load_look", lambda path: looked.append(path) or "Her eyes are light grey.")
+    cfg = telegram_kira(tmp_path, monkeypatch).cfg
+    cfg = cfg.__class__(**{**cfg.__dict__, "user_id": "@ustyna:agora.lan", "capabilities": cfg.capabilities | {"photos"},
+                           "natal": "Народження: 01.11.2004, 23:00, Львів."})
+    agent_mod.Agent(cfg, llm=GeminiClient())
+    assert built[0][4:] == ("ustyna.png", date(2004, 11, 1), "Her eyes are light grey.")
+    assert str(looked[0]).endswith("agents/canon/ustyna.look.md")
+
 class ShyOfPhotos(Says):
     """Gemini blocks a private prompt that offers her photo skill (`always`: every one), answers one that does not."""
 

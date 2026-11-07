@@ -4,13 +4,17 @@ A last line of her answer names a shot — `ФОТО: …` (without her) or `С�
 her) — and is never sent (`split_photo`, as «ЗАПАМ'ЯТАЙ»). The request to Google's image model is English, built from
 her words and her moment (`photo_request`, pure): the part of the day, her day's weather, the season, what she wears
 in a selfie — never the reference photos' clothes — and a casual phone snapshot's look. A selfie takes the owner's
-reference photos of her face (`kira.face/`: `kira.png` always, three more drawn each time). The call retries once on a
-server error or a timeout; a block, or a second failure, is a reason, never a crash. The log holds outcomes and types
+reference photos of her face (`<localpart>.face/`: `<localpart>.png` always, three more drawn each time). The call
+retries once on a server error or a timeout; a block, or a second failure, is a reason, never a crash. The log holds outcomes and types
 only — never her description, the request or a path.
 
 v5.18: the same line may name a video instead — `КРУЖЕЧОК: …` (her round video message, her answer said in it) or
 `ВІДЕО: …` (a short clip of what she sees); one media line per answer, the last one counts. Its first frame is made
 here too (`make(..., aspect=, extra=)`); the video itself in `agents/video.py`.
+
+v6.2: a selfie is the person's own, not Кіра's — her main face photo by her localpart, her age on the shot's day from
+her chart's birth date, and her look (`agents/canon/<localpart>.look.md`, English lines for the image model: her eyes,
+makeup or none, her figure and how she dresses) in its line (`selfie_line`, pure).
 """
 
 from __future__ import annotations
@@ -23,7 +27,7 @@ import time
 from collections.abc import Callable
 from contextvars import ContextVar
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from google import genai
@@ -37,7 +41,6 @@ log = logging.getLogger("agent.photo")
 
 MODEL = "gemini-nano-banana-2.1"   # the owner, 2026-10-31: Google's image model, Nano Banana 2.1
 SIZES = ("1K", "2K")
-MAIN_FACE = "kira.png"
 FACES_PER_SHOT = 4                 # the model takes up to 4 character references
 FACE_SUFFIXES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 TIMEOUT_S = 90                     # a photo took 11–40 s in the owner's test
@@ -54,10 +57,12 @@ SEASONS = {"зима": "winter", "весна": "spring", "літо": "summer", "
 STYLE = ("A casual photo taken on a smartphone and sent in a private chat: natural light, slightly imperfect framing, "
          "real textures, no studio look. No other identifiable person in focus, no text, caption or watermark on the "
          "image.")
-# v5.25 (the owner, 2026-11-05: «вона не носить ніколи мейкапу і це її позиція природньої краси»)
-SELFIE = ("The young woman in the photo is the same person as in the reference photos: keep her face, hair and "
-          "features exactly. She is 23, Ukrainian. She never wears makeup: a bare, natural face. She wears "
-          "what suits the weather and the scene described below — not the clothes of the reference photos.")
+# v6.2: a selfie's line, head and tail fixed; her age and her look between them are her own (`selfie_line`) —
+# Кіра's look file carries v5.25's rule (the owner, 2026-11-05: «вона не носить ніколи мейкапу і це її позиція
+# природньої краси»)
+SELFIE_HEAD = ("The young woman in the photo is the same person as in the reference photos: keep her face, hair and "
+               "features exactly.")
+SELFIE_TAIL = "She wears what suits the weather and the scene described below — not the clothes of the reference photos."
 
 
 # her private brief's skill (v5.17, the owner): understood from the talk, never a keyword — and never a word that a
@@ -145,10 +150,39 @@ def moment_line(moment: Moment) -> str:
     return line
 
 
-def photo_request(shot: Shot, moment: Moment, extra: str | None = None) -> str:
-    """The image model's instruction (pure, English): who, if she is in it; the shot in her words; the moment; the
-    look of a phone snapshot; v5.18: a video's frame line (`extra`)."""
-    parts = [SELFIE] if shot.kind == "selfie" else ["Nobody's face is in the shot unless the description says so."]
+def age_on(birth: date | None, day: date) -> int | None:
+    """Her age on `day` (pure): whole years since `birth`; none without a birth date."""
+    if birth is None:
+        return None
+    return day.year - birth.year - ((day.month, day.day) < (birth.month, birth.day))
+
+
+def selfie_line(birth: date | None, look: str, day: date) -> str:
+    """Who is in a selfie (pure, English): the same person as in her references, her age on the shot's day (none
+    without a birth date), her look as her file has it (none without one), and clothes that suit the scene."""
+    age = age_on(birth, day)
+    parts = [SELFIE_HEAD, f"She is {age}." if age is not None else "", look.strip(), SELFIE_TAIL]
+    return " ".join(p for p in parts if p)
+
+
+def load_look(path: Path | None) -> str:
+    """Her look for the image model (`agents/canon/<localpart>.look.md`): its lines but `#` comments, joined with a
+    space; a missing, unreadable or empty file is none."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, AttributeError):
+        return ""
+    return " ".join(line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#"))
+
+
+def photo_request(shot: Shot, moment: Moment, extra: str | None = None, who: str | None = None) -> str:
+    """The image model's instruction (pure, English): who, if she is in it (v6.2: her own `selfie_line`, or one with
+    no age and no look); the shot in her words; the moment; the look of a phone snapshot; v5.18: a video's frame line
+    (`extra`)."""
+    if shot.kind == "selfie":
+        parts = [who or selfie_line(None, "", moment.when.date())]
+    else:
+        parts = ["Nobody's face is in the shot unless the description says so."]
     parts.append(f"The shot, as she describes it (in Ukrainian): {shot.description}")
     parts += [moment_line(moment), STYLE]
     if extra:
@@ -172,11 +206,12 @@ def load_faces(folder: Path | None) -> list[tuple[str, bytes, str]]:
     return faces
 
 
-def pick_faces(faces: list, rng: Callable[[], float]) -> list:
-    """`kira.png` always (else the first), and three others drawn by `rng`, so the references' clothes and light vary."""
+def pick_faces(faces: list, rng: Callable[[], float], main_name: str | None = None) -> list:
+    """Her main photo always (v6.2: `<localpart>.png`, named by the maker; else the first), and three others drawn by
+    `rng`, so the references' clothes and light vary."""
     if not faces:
         return []
-    main = next((f for f in faces if f[0] == MAIN_FACE), faces[0])
+    main = next((f for f in faces if f[0] == main_name), faces[0])
     rest = [f for f in faces if f is not main]
     picked = []
     while rest and len(picked) < FACES_PER_SHOT - 1:
@@ -206,9 +241,11 @@ class PhotoMaker:
 
     def __init__(self, client, model: str = MODEL, size: str = "1K", faces: list | None = None,
                  sink: Callable | None = None, rng: Callable[[], float] | None = None,
-                 timeout_s: float = TIMEOUT_S) -> None:
+                 timeout_s: float = TIMEOUT_S, main_face: str | None = None, birth: date | None = None,
+                 look: str = "") -> None:
         self._client, self.model, self.size = client, model, size if size in SIZES else "1K"
         self.faces = faces or []
+        self.main_face, self.birth, self.look = main_face, birth, look  # v6.2: whose selfie it is
         self._sink, self._rng, self._timeout_s = sink, rng or random.random, timeout_s
 
     def _report(self, usage, ok: bool, blocked: str | None = None) -> None:
@@ -229,12 +266,12 @@ class PhotoMaker:
         """The photo, or why there is none: one retry on a server error or a timeout; a block is final. v5.18: a
         video's first frame takes its own `aspect` and a frame line (`extra`); v5.22: and its usage line's `kind` is
         `frame`, so the `photo` lines are the photos she sent."""
-        refs = pick_faces(self.faces, self._rng) if shot.kind == "selfie" else []
+        refs = pick_faces(self.faces, self._rng, self.main_face) if shot.kind == "selfie" else []
         if shot.kind == "selfie" and not refs:
             log.warning("photo: no faces for a selfie")
             return Made(None, why="blocked")
         contents = [*(types.Part.from_bytes(data=data, mime_type=mime) for _, data, mime in refs),
-                    photo_request(shot, moment, extra)]
+                    photo_request(shot, moment, extra, selfie_line(self.birth, self.look, moment.when.date()))]
         config = types.GenerateContentConfig(
             response_modalities=["IMAGE"],
             image_config=types.ImageConfig(aspect_ratio=aspect, image_size=self.size),
@@ -269,6 +306,8 @@ class PhotoMaker:
         return Made(None, why="failed")  # never reached: the loop returns
 
 
-def photo_maker(model: str, size: str, faces: list, sink: Callable) -> PhotoMaker:
-    """Her photos on Google's image model, through a client of their own (the Gemini key from the environment)."""
-    return PhotoMaker(genai.Client(), model or MODEL, size, faces, sink)
+def photo_maker(model: str, size: str, faces: list, sink: Callable, main_face: str | None = None,
+                birth: date | None = None, look: str = "") -> PhotoMaker:
+    """Her photos on Google's image model, through a client of their own (the Gemini key from the environment); v6.2:
+    her main face photo, birth date and look make her selfie her own."""
+    return PhotoMaker(genai.Client(), model or MODEL, size, faces, sink, main_face=main_face, birth=birth, look=look)
