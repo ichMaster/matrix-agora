@@ -3684,7 +3684,12 @@ life to v10. Depends on: v5.
 
 ### v6.1 — Устина's first version: the name and the main canon
 
-**Status:** 🔄 owner checks (drafted 2026-11-07).
+**Status:** ✅ done (2026-11-07): the owner agreed the name and the main canon («все що треба коміт і роби 6.1»)
+after his review the same day — the canon in sections, a second hobby (the guitar), her interest in what he lives
+by, her looks and how she dresses, her light grey eyes, and her initiative when she feels safe (in the private and
+backup canons only). Checks run: the life story parses (8 chapters, 20 events), the natal file gives 2004-11-01, and
+the persona scan's pattern (`BANNED_RE`) finds nothing in her five files. No release tag of its own: the canon is
+private, so the phase has no commit but this one, and `v6.1.0` comes after v5.24–v5.27 are released.
 
 **Goal:** the owner and Claude Code agree on who she is before any code: her name, her birth chart, her main canon
 and her life story, in the private canon.
@@ -3703,7 +3708,7 @@ and her life story, in the private canon.
   (`agents.mood.parse_birth_date`), no file says she is a model or a bot.
 
 **DoD:**
-- (Manual, owner) The name and the main canon agreed.
+- (Manual, owner) The name and the main canon agreed — ✅ confirmed by the owner, 2026-11-07.
 
 **Tests:** none new (canon only); the `canon`-marked persona scan covers her files from v6.3.
 
@@ -3723,7 +3728,9 @@ agents.facts seed` defaults to Кіра.
 **Tasks:**
 - The main face photo is `<localpart>.png` in `agents/canon/<localpart>.face/`.
 - The selfie line names Кіра's age and her no-makeup rule (`agents/photo.py` `SELFIE`: «She is 23, Ukrainian. She
-  never wears makeup»): the age comes from the person's birth date, and the look (makeup or none) from her TOML.
+  never wears makeup»): the age comes from the person's birth date, and the look from her TOML — makeup or none, her
+  eye colour (kept in any light) and her figure and how she dresses — so a selfie keeps what the image model drops by
+  default (the owner, 2026-11-07: «це губиться при генеруванні фото»).
 - `server/deploy.sh` syncs every `server/<name>.env` of a member that has one (0600 on the host), never printed;
   `server/<name>.env.example` documents hers.
 - `agents.facts seed`: `--agent` and `--name` required, no default person.
@@ -3765,13 +3772,15 @@ private chat and her own Telegram bot; not yet in Agora.
 - Her panel settings: the code's defaults, her own overrides (the owner's).
 - Her own tool, a video of her playing (the owner, 2026-11-07: «окрім фотографії у неї буде ще одне хобі — вона буде
   вчитись грати на гітарі і час від часу записувати такі відео», «зроби це як новий тул якщо треба для неї»): a third
-  video kind beside the кружечок and the clip, offered only to a person whose TOML names an instrument
-  (`play = "guitar"`); a last line `ГІТАРА: …` (what she plays and where) asks for it, when he asks or when she wants.
-  Its first frame is a vertical (9:16) photo of her with her face from her reference photos — a phone standing on a
-  shelf films her playing — and Gemini Omni Flash animates it with the instrument's own sound only: no singing, no
-  voice, no other music. It counts toward her videos' caps (`VIDEO_DAY_MAX`, `VIDEO_WINDOW_MAX`), its usage lines are
-  the kinds `frame` and `video`, and a block or a failure is a reason, never a crash, as for her clips. The owner's
-  test of 2026-11-07 (one frame on Nano Banana 2.1, one 10 s clip on Omni Flash) is the proof the two models do it.
+  video kind beside the кружечок and the clip, offered only to a person whose TOML names an instrument (`play =
+  "guitar"`); a last line `ГІТАРА: …` (what she plays and where) asks for it, when he asks or when she wants. Its
+  first frame is a vertical (9:16) photo of her with her face from her reference photos — a phone standing on a shelf
+  films her playing — and Gemini Omni Flash animates it with the instrument's own sound only: no singing, no voice, no
+  other music; the frame and the request keep her eye colour in any light (the owner's test: her grey eyes came out
+  dark under a warm lamp). It counts toward her videos' caps (`VIDEO_DAY_MAX`, `VIDEO_WINDOW_MAX`), its usage lines
+  are the kinds `frame` and `video`, and a block or a failure is a reason, never a crash, as for her clips. The
+  owner's test of 2026-11-07 (one frame on Nano Banana 2.1, one 10 s clip on Omni Flash) is the proof the two models
+  do it.
 
 **DoD:**
 - (Manual, owner) She answers in her private chat and in Telegram, in her voice; she sends photos with her face and
@@ -3779,10 +3788,10 @@ private chat and her own Telegram bot; not yet in Agora.
 - (Manual, owner) Her card, Talk, Prompt and Analytics in the panel; Кіра is unchanged, and nothing of one reaches
   the other.
 
-**Tests:** her TOML loads with every capability; the roster keeps her out of every turn pool while `none`; the
-persona scan covers her canon files (`canon`-marked); the playing tool — offered only with `play`, its line cut like
-`ВІДЕО:`, its frame with her face and its request with the instrument's sound and no voice (pure), its caps shared with
-her other videos, Omni and the image model mocked.
+**Tests:** her TOML loads with every capability; the roster keeps her out of every turn pool while `none`; the persona
+scan covers her canon files (`canon`-marked); the playing tool — offered only with `play`, its line cut like `ВІДЕО:`,
+its frame with her face and its request with the instrument's sound and no voice (pure), its caps shared with her
+other videos, Omni and the image model mocked.
 
 ### v6.4 — Agora meets her
 
