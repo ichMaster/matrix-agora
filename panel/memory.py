@@ -96,10 +96,10 @@ def mood_view(state_dir: Path, name: str, today: date, natal: Path | None) -> di
 
 
 def weather_view(state_dir: Path, name: str, today: date) -> dict | None:
-    """v5.10 — a person's day of Lviv weather from `<name>.weather.json`: today's line, or None (another day, not
-    fetched yet, unreadable — never a 500)."""
+    """v5.10 — a person's day of weather from `<name>.weather.json`: today's line, or None (another day, not
+    fetched yet, unreadable — never a 500); v5.27: wherever she is."""
     from agents.weather import load_weather
-    line = load_weather(state_dir / f"{name}.weather.json", today.isoformat())
+    line = load_weather(state_dir / f"{name}.weather.json", today.isoformat(), any_place=True)
     return {"date": today.isoformat(), "line": line} if line else None
 
 

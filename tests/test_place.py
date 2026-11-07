@@ -328,3 +328,13 @@ def test_a_talk_day_of_another_zone_is_never_written_twice():
     after = ms(2026, 10, 26, 12, 0, "Europe/Kyiv")
     due = periods_due(ms(2026, 10, 31, 12, 0, "Europe/Kyiv"), "Europe/Kyiv", [after], {("day", oct_25[0])}, 3, 7)
     assert [lv for lv, _, _ in due] == ["day"]
+
+
+def test_the_panel_shows_her_weather_wherever_she_is(tmp_path):
+    from agents.weather import load_weather, save_weather
+    from panel.memory import weather_view
+
+    save_weather(tmp_path / "kira.weather.json", "2026-11-10 paranal", "гора Параналь: ясно")
+    assert load_weather(tmp_path / "kira.weather.json", "2026-11-10") is None          # the agent keys by place
+    assert weather_view(tmp_path, "kira", date(2026, 11, 10)) == {"date": "2026-11-10", "line": "гора Параналь: ясно"}
+    assert weather_view(tmp_path, "kira", date(2026, 11, 11)) is None

@@ -127,13 +127,16 @@ async def fetch_weather(day: date, tz: str = "Europe/Kyiv", fetch: Fetch = http_
     return line
 
 
-def load_weather(path: Path, day: str) -> str | None:
-    """The day's line from the file, or None (another day, missing, corrupt)."""
+def load_weather(path: Path, day: str, any_place: bool = False) -> str | None:
+    """The day's line from the file, or None (another day, missing, corrupt). v5.27: away from Lviv the day is kept
+    with her place («2026-11-10 paranal»); `any_place` takes the day's line wherever it was (the panel's view)."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    if not isinstance(data, dict) or data.get("day") != day or not isinstance(data.get("weather"), str):
+    if not isinstance(data, dict) or not isinstance(data.get("weather"), str) or not isinstance(data.get("day"), str):
+        return None
+    if data["day"] != day and not (any_place and data["day"].split(" ", 1)[0] == day):
         return None
     return data["weather"] or None
 
