@@ -1,3 +1,13 @@
+Version 6.1.0 (2026-11-07)
+---------------------------
+- Phase v6.1: Ustyna's first version - her name, her birth chart (chosen for
+  emotional compatibility with the owner's, not a copy), her main canon and
+  her life story; in the private canon, so the repo holds only the ROADMAP's
+  record
+- Agreed by the owner on 2026-11-07 after his review (the canon in sections,
+  a second hobby, her looks, her initiative in the private chat); no issues
+  of its own, no code
+
 Version 5.27.0 (2026-11-07)
 ---------------------------
 - Phase v5.27 (AGORA-214..217): Kira far away - her place from her story's
