@@ -191,6 +191,7 @@ from agents.photo import (
     split_photo,
     strip_notes,
 )
+from agents.place import Place, home_place, place_at
 from agents.plans import (
     HORIZONS,
     parse_items,
@@ -668,8 +669,11 @@ class Agent:
         self.last_attempt_ms: int | None = None
         self._summary_pro_blocked: int | None = None  # code review v5.22 #2: the session's length Pro blocked
         self._summary_lock = asyncio.Lock()
-        self.location = os.environ.get("LOCATION", "Львів, Україна")
-        self.tz = os.environ.get("TIMEZONE", "Europe/Kyiv")
+        # v5.27 (the owner, 2026-11-07: Кіра moves to Chile): her place moves with her story (`place`, below);
+        # `TIMEZONE` and `LOCATION` are home, Lviv's clock beside hers when she is away
+        self.home_tz = os.environ.get("TIMEZONE", "Europe/Kyiv")
+        self.home = home_place(os.environ.get("LOCATION", "Львів, Україна"), self.home_tz)
+        self._place_cache: tuple[int, Place] | None = None
         self.summary_ms: int | None = None  # when the last-session summary was written
         self.plan_max_words = int(os.environ.get("PLAN_MAX_WORDS", "120"))
         self.plan_mutation_rate = float(os.environ.get("PLAN_MUTATION_RATE", "0.3"))
@@ -2772,7 +2776,9 @@ class Agent:
         now = local_now(self.clock(), self.tz)
         world = None
         if can("world"):
-            world = now_line(now, self.location)
+            here = self.place
+            home = local_now(self.clock(), self.home_tz) if here.tz != self.home_tz else None  # v5.27: Lviv's clock
+            world = now_line(now, here.name, home, here.south)
             if self.summary_ms is not None:
                 world += " " + last_talk_line(local_now(self.summary_ms, self.tz), now)
         # v5.22 (the owner): alone with him the shorter story, when her canon has one (`life_private`)
@@ -2826,6 +2832,29 @@ class Agent:
         return move_line(move)
 
     # --- v2.2: files under state/ -------------------------------------------------
+    @property
+    def place(self) -> Place:
+        """v5.27 — where she is now (`agents/place.py`): her story's block of nights or latest move, else home;
+        looked up at most once a clock minute."""
+        now_ms = self.clock()
+        minute = now_ms // 60_000
+        if self._place_cache is None or self._place_cache[0] != minute:
+            here = (place_at(self.cfg.life, self.cfg.places, self.cfg.night_place, self.home, now_ms)
+                    if self.cfg.places else self.home)
+            if self._place_cache is not None and self._place_cache[1].key != here.key:
+                log.info("place: %s → %s", self._place_cache[1].key, here.key)
+            self._place_cache = (minute, here)
+        return self._place_cache[1]
+
+    @property
+    def tz(self) -> str:
+        """Her clock: her place's zone (v5.27); at home `TIMEZONE`."""
+        return self.place.tz
+
+    @property
+    def location(self) -> str:
+        return self.place.name
+
     def _dir(self, kind: str) -> Path:
         return self.memory_file.parent / f"{self.cfg.localpart}.{kind}"
 

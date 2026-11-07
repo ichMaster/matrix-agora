@@ -9,6 +9,11 @@ v5.11: a chapter may carry a dated list of events (`### Події`, one
 `- YYYY-MM-DD[ HH:MM] · known|surprise · text` a line). The list is cut out of the
 chapter's body, so no prompt that shows the chapter shows it; only the code
 that delivers an event on its date, and the plans' known events ahead, read it.
+
+v5.27 (the owner, 2026-11-07: Кіра moves to Chile): a chapter may also carry her moves (`### Місця`, one
+`- YYYY-MM-DD HH:MM · <place>` a line, the time in that place's zone) and her blocks of nights at the telescope
+(`### Ночі на телескопі`, one `- YYYY-MM-DD – YYYY-MM-DD` a line, the first night and the last); both are cut out of
+the body like the events, and only `agents/place.py` reads them.
 """
 
 from __future__ import annotations
@@ -27,6 +32,11 @@ NEXT_HEAD_RE = re.compile(r"^#{2,3} ", re.MULTILINE)
 # an optional local time (review #4): the event falls at the first tick from then, else at her day's first
 EVENT_LINE_RE = re.compile(r"^-\s*(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}):(\d{2}))?\s*·\s*(\w+)\s*·\s*(\S.*?)\s*$")
 EVENT_KINDS = ("known", "surprise")
+# v5.27: her moves and her nights at the telescope
+MOVES_HEAD_RE = re.compile(r"^### Місця\s*$", re.MULTILINE)
+NIGHTS_HEAD_RE = re.compile(r"^### Ночі на телескопі\s*$", re.MULTILINE)
+MOVE_LINE_RE = re.compile(r"^-\s*(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2})\s*·\s*([\w-]+)\s*$")
+NIGHTS_LINE_RE = re.compile(r"^-\s*(\d{4}-\d{2}-\d{2})\s*[–—-]\s*(\d{4}-\d{2}-\d{2})\s*$")
 
 
 class LifeError(ValueError):
@@ -44,12 +54,23 @@ class LifeEvent:
 
 
 @dataclass(frozen=True)
+class Move:
+    """v5.27 — from this local moment (in the named place's zone) she is at `place`, a key of her TOML's places."""
+
+    date: date
+    time: str  # HH:MM
+    place: str
+
+
+@dataclass(frozen=True)
 class Chapter:
     start: int
     end: int
     title: str
     body: str
     events: tuple[LifeEvent, ...] = ()
+    moves: tuple[Move, ...] = ()                    # v5.27
+    nights: tuple[tuple[date, date], ...] = ()      # v5.27: (the first night, the last)
 
     @property
     def opening(self) -> str:
@@ -77,8 +98,11 @@ def parse_life(text: str) -> LifeStory:
     for i, m in enumerate(heads):
         body_end = heads[i + 1].start() if i + 1 < len(heads) else len(text)
         start, end = int(m[1]), int(m[2])
-        body, events = _split_events(text[m.end():body_end], start, end)
-        chapters.append(Chapter(start, end, m[3], body, events))
+        chunk, move_lines = _cut(text[m.end():body_end], MOVES_HEAD_RE)
+        chunk, night_lines = _cut(chunk, NIGHTS_HEAD_RE)
+        body, events = _split_events(chunk, start, end)
+        chapters.append(Chapter(start, end, m[3], body, events, _moves(move_lines, start, end),
+                                _nights(night_lines, start, end)))
     for a, nxt in pairwise(chapters):
         if a.start > a.end or nxt.start <= a.end:
             raise LifeError(f"chapters overlap or are out of order: {a.start}–{a.end} / {nxt.start}–{nxt.end}")
@@ -89,6 +113,51 @@ def parse_life(text: str) -> LifeStory:
         death=date(int(d[1]), int(d[2]), int(d[3])),
         chapters=tuple(chapters),
     )
+
+
+def _cut(chunk: str, head_re: re.Pattern) -> tuple[str, list[str]]:
+    """v5.27 — the chunk without the subsection `head_re` opens (to the next heading or the end), and its non-empty
+    lines."""
+    head = head_re.search(chunk)
+    if head is None:
+        return chunk, []
+    nxt = NEXT_HEAD_RE.search(chunk, head.end())
+    stop = nxt.start() if nxt else len(chunk)
+    lines = [line.strip() for line in chunk[head.end():stop].splitlines() if line.strip()]
+    return chunk[:head.start()].rstrip() + "\n\n" + chunk[stop:].lstrip(), lines
+
+
+def _day(text: str, start: int, end: int, what: str) -> date:
+    try:
+        day = date.fromisoformat(text)
+    except ValueError:
+        raise LifeError(f"chapter {start}–{end}: bad {what} date {text}") from None
+    if not start <= day.year <= end:
+        raise LifeError(f"chapter {start}–{end}: the {what} of {text} is outside the chapter's years")
+    return day
+
+
+def _moves(lines: list[str], start: int, end: int) -> tuple[Move, ...]:
+    moves = []
+    for line in lines:
+        m = MOVE_LINE_RE.match(line)
+        if not m or not (int(m[2]) < 24 and int(m[3]) < 60):
+            raise LifeError(f"chapter {start}–{end}: a move line is not '- YYYY-MM-DD HH:MM · <place>'")
+        moves.append(Move(_day(m[1], start, end, "move"), f"{m[2]}:{m[3]}", m[4]))
+    return tuple(sorted(moves, key=lambda mv: (mv.date, mv.time)))
+
+
+def _nights(lines: list[str], start: int, end: int) -> tuple[tuple[date, date], ...]:
+    blocks = []
+    for line in lines:
+        m = NIGHTS_LINE_RE.match(line)
+        if not m:
+            raise LifeError(f"chapter {start}–{end}: a nights line is not '- YYYY-MM-DD – YYYY-MM-DD'")
+        first, last = _day(m[1], start, end, "night"), _day(m[2], start, end, "night")
+        if last < first:
+            raise LifeError(f"chapter {start}–{end}: the nights {m[1]} – {m[2]} end before they begin")
+        blocks.append((first, last))
+    return tuple(sorted(blocks))
 
 
 def _split_events(chunk: str, start: int, end: int) -> tuple[str, tuple[LifeEvent, ...]]:

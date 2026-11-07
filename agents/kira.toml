@@ -31,7 +31,54 @@ talk = true             # v5.20: her private chat in layers — the last message
 mode = "ranked"         # ranked | ambient | mention-only
 weight = 1.0            # the owner, 2026-10-20: every person the same
 
+# v5.27 (the owner, 2026-11-07: Кіра moves to Chile) — her places; her moves and nights at the telescope are her life
+# story's (`### Місця`, `### Ночі на телескопі`). `name` is her world line's, `name_en` her photos' city; a place
+# without `lat`/`lon` has no weather; `news`: Lviv's news may touch her life there
+[places]
+night = "paranal"       # where her nights at the telescope are
+
+[places.lviv]
+name = "Львів, Україна"
+name_en = "Lviv, Ukraine"
+tz = "Europe/Kyiv"
+lat = 49.84
+lon = 24.03
+news = true
+
+[places.road]
+name = "у дорозі зі Львова до Чилі"
+name_en = "on the road from Lviv to Chile"
+tz = "Europe/Kyiv"
+
+[places.santiago]
+name = "Сантьяго, Чилі"
+name_en = "Santiago, Chile"
+tz = "America/Santiago"
+lat = -33.45
+lon = -70.66
+
+[places.paranal]
+name = "обсерваторія на горі Параналь, пустеля Атакама, Чилі"
+name_en = "Paranal Observatory in the Atacama Desert, Chile"
+tz = "America/Santiago"
+lat = -24.63
+lon = -70.40
+
+[places.valparaiso]
+name = "Вальпараїсо, Чилі"
+name_en = "Valparaíso, Chile"
+tz = "America/Santiago"
+lat = -33.05
+lon = -71.62
+
+[places.chiloe]
+name = "острів Чилое, Чилі"
+name_en = "Chiloé Island, Chile"
+tz = "America/Santiago"
+lat = -42.48
+lon = -73.76
+
 [panel]                 # shown by the panel only — never part of a prompt
 name = "Kira"
-role = "astrophysicist, 23, Lviv"
+role = "astrophysicist, 23, Chile"
 pronoun = "she"

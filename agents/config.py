@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 from agents.life import LifeError, LifeStory, parse_life
 from agents.pastlife import ThesesError, parse_theses
+from agents.place import Place, PlaceError, check_story, parse_places
 from agents.registry import REGISTRY_PATH, RegistryError, load_registry
 from agents.roster import TYPES, RosterError, parse_member
 
@@ -51,6 +52,10 @@ class AgentConfig:
     # prompt only, in place of common + personal (private canon); "": the same canon there too
     canon_private: str = ""
     canon_backup: str = ""  # v5.26: her canon for the backup's prompt only (`canon_backup`), never Gemini's
+    # v5.27 (the owner, 2026-11-07: Кіра moves to Chile): her places (`[places.<key>]`) and her nights' place
+    # (`[places] night`); her moves and nights are her life story's. None: she is where `LOCATION` and `TIMEZONE` say
+    places: dict[str, Place] | None = None
+    night_place: str | None = None
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -147,6 +152,11 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
             raise ConfigError(f"private life story not found: {private_path}") from exc
         except LifeError as exc:
             raise ConfigError(f"{private_path}: {exc}") from exc
+    try:  # v5.27: her places, and her story's moves and nights checked against them
+        places, night_place = parse_places(data.get("places"), str(toml_path))
+        check_story(life, places, night_place, str(toml_path))
+    except PlaceError as exc:
+        raise ConfigError(str(exc)) from exc
 
     natal = ""
     if member.can("mood"):
@@ -227,4 +237,6 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         theses=theses,
         voice_spec=voice_spec,
         reading=reading,
+        places=places or None,
+        night_place=night_place,
     )

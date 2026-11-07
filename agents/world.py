@@ -28,16 +28,27 @@ def part_of_day(hour: int) -> str:
     return "ніч"
 
 
-def season(month: int) -> str:
+def season(month: int, south: bool = False) -> str:
+    """The season of `month`; v5.27: in the southern hemisphere the other half of the year (November is spring)."""
+    if south:
+        month = (month + 5) % 12 + 1
     return {12: "зима", 1: "зима", 2: "зима", 3: "весна", 4: "весна", 5: "весна",
             6: "літо", 7: "літо", 8: "літо"}.get(month, "осінь")
 
 
-def now_line(now: datetime, location: str) -> str:
-    return (
+def now_line(now: datetime, location: str, home: datetime | None = None, south: bool = False) -> str:
+    """Her place and moment; v5.27: away from Lviv (`home`, Lviv's moment, when her zone is another) Lviv's time
+    too, with its weekday when Lviv's date is another."""
+    line = (
         f"Місце: {location}. Зараз {WEEKDAYS[now.weekday()]}, {now.day} {MONTHS_GEN[now.month - 1]} "
-        f"{now.year} року, {now:%H:%M}, {part_of_day(now.hour)}, {season(now.month)}."
+        f"{now.year} року, {now:%H:%M}, {part_of_day(now.hour)}, {season(now.month, south)}."
     )
+    if home is not None:
+        line += f" У Львові, де Ich, зараз {home:%H:%M}"
+        if home.date() != now.date():
+            line += f" — там {'уже' if home.date() > now.date() else 'ще'} {WEEKDAYS[home.weekday()]}"
+        line += "."
+    return line
 
 
 def _days_word(n: int) -> str:
