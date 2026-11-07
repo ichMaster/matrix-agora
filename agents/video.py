@@ -1,6 +1,7 @@
 """v5.18 — Кіра's videos in Telegram: her кружечок in her own voice, and short clips of what she sees.
 
-A last line of her answer names one (`КРУЖЕЧОК: …` / `ВІДЕО: …`, cut by `agents/photo.py`'s `split_photo`). Its first
+A last line of her answer names one (`КРУЖЕЧОК: …` / `ВІДЕО: …`; v6.3 `ГІТАРА: …`, a video of her playing, for a person
+whose TOML names an instrument — cut by `agents/photo.py`'s `split_photo`). Its first
 frame is her photo, made by the image model (`frame_shot`, `FRAME_ASPECT`, `FRAME_LINES`): a front-camera close-up of
 her for a кружечок, a vertical faceless shot for a clip.
 - **The кружечок:** VEED Fabric 1.0 on fal.ai (the owner, after the live test; Kling AI Avatar v2 stays a choice)
@@ -38,7 +39,7 @@ from agents.voice import RATE
 
 log = logging.getLogger("agent.video")
 
-KINDS = ("note", "clip")
+KINDS = ("note", "clip", "play")  # v6.3: `play` — a video of her playing her instrument (her TOML's `play`)
 USAGE_KINDS = ("video", "video_note")  # the usage lines a video is paid by (review #1: the day's cap counts them)
 KEY_VAR = "FAL_KEY"                # server/kira.env: fal.ai/dashboard/keys, preset API (docs/fal-ai.md)
 MODEL = "gemini-omni-1.1-flash"    # the owner, 2026-11-01: Google's video model for her clips
@@ -59,15 +60,25 @@ WORKING = ("queued", "in_progress")                    # the interaction's state
 FAL_WORKING = ("IN_QUEUE", "IN_PROGRESS")
 BLOCK_WORDS = ("safety", "policy", "prohibited", "blocked", "nsfw", "moderation")
 
-FRAME_ASPECT = {"note": "1:1", "clip": "9:16"}
+FRAME_ASPECT = {"note": "1:1", "clip": "9:16", "play": "9:16"}
 FRAME_LINES = {
     "note": ("This is a front-camera selfie, the first frame of a round video message: her face and shoulders fill the "
              "square frame, she looks into the camera, her mouth relaxed and closed, as if about to speak."),
     "clip": "This is the first frame of a short vertical phone video.",
+    # v6.3: she films herself playing — the phone on a shelf, her face, the instrument and her hands in the frame
+    "play": ("This is the first frame of a short vertical phone video she films of herself: the phone stands on a shelf "
+             "in front of her, and her face, her instrument and both her hands are in the frame as she plays."),
 }
 CLIP_STYLE = ("A handheld phone video with natural motion, as someone films what they see. The sound of the place only: "
               "no dialogue, no voice, no narration, no music. No text, caption or watermark. Nobody's face.")
 NOTE_PROMPT = "She talks to the front camera of her phone, with natural small head movements and blinks."
+# v6.3: what she plays on, for Omni (English) and for her skill (Ukrainian)
+INSTRUMENTS = {"guitar": ("an acoustic guitar", "на гітарі")}
+PLAY_STYLE = ("A vertical phone video: the phone stands still on a shelf in front of her and films her playing; only "
+              "she moves, her fingers natural on the strings and frets. The sound: only the {instrument} she plays, "
+              "close and warm, with the quiet tone of the room — no singing, no voice, no other music. Her face, her "
+              "figure and the colour of her eyes stay exactly as in the first frame: her eyes never turn darker in "
+              "any light. No text, caption or watermark.")
 NOTE_MODELS = {  # each model's own fields beside the frame and the voice (fal's pricing API, 2026-11-01)
     NOTE_MODEL: {"resolution": "480p"},                                   # cut to 640×640 anyway
     "fal-ai/kling-video/ai-avatar/v2/standard": {"prompt": NOTE_PROMPT},  # $0.0562 a second
@@ -85,15 +96,26 @@ CLIP_SKILL = (
     "Ти можеш зняти для Ich коротке відео того, що бачиш, — без себе в кадрі й без слів, лише звуки місця, — коли він "
     "просить або коли тобі самій хочеться щось йому показати. Тоді в самому кінці додай окремий останній рядок: слово ВІДЕО великими літерами, двокрапка і що на відео, одним реченням."
 )
+# v6.3 (the owner, 2026-11-07: «зроби це як новий тул якщо треба для неї»): a video of her playing — offered only to
+# a person whose TOML names an instrument; the marker in capitals, as the others
+PLAY_SKILL = (
+    "Ти можеш записати для Ich коротке відео, як ти граєш {on} — телефон стоїть на полиці навпроти, у кадрі ти й "
+    "інструмент, звучить лише музика, без співу й без слів, — коли він просить або коли тобі самій хочеться йому "
+    "зіграти. Тоді в самому кінці додай окремий останній рядок: слово ГІТАРА великими літерами, двокрапка і що ти "
+    "граєш і де, одним реченням."
+)
 SKILL_TAIL = ("Відео приходить йому трохи пізніше за твої слова. В одній відповіді — щонайбільше одне фото чи відео. "
               "Не хочеш чи не можеш зараз — просто скажи це своїми словами.")
 VIDEO_FAILED = ("Відео, яке ти щойно хотіла надіслати Ich, не надіслалося. Скажи про це дуже коротко, одним реченням, "
                 "своїми словами, або нічого не кажи. Нічого нового не обіцяй.")
 
 
-def video_skill(kinds: tuple[str, ...]) -> str:
-    """Her video skill for the kinds she may send now (pure): the кружечок, the clip, or both; empty for none."""
+def video_skill(kinds: tuple[str, ...], play: str = "") -> str:
+    """Her video skill for the kinds she may send now (pure): the кружечок, the clip, v6.3 her playing (with an
+    instrument of `INSTRUMENTS`); empty for none."""
     parts = [NOTE_SKILL] * ("note" in kinds) + [CLIP_SKILL] * ("clip" in kinds)
+    if "play" in kinds and play in INSTRUMENTS:
+        parts.append(PLAY_SKILL.format(on=INSTRUMENTS[play][1]))
     return " ".join([*parts, SKILL_TAIL]) if parts else ""
 
 
@@ -131,13 +153,22 @@ class Video:
 
 def frame_shot(shot: Shot) -> Shot:
     """The photo a video starts from: her кружечок is a selfie of her, a clip a shot of what she sees (pure)."""
-    return Shot({"note": "selfie", "clip": "photo"}.get(shot.kind, shot.kind), shot.description)
+    return Shot({"note": "selfie", "clip": "photo", "play": "selfie"}.get(shot.kind, shot.kind), shot.description)
 
 
 def clip_request(shot: Shot, moment: Moment) -> str:
     """Omni Flash's instruction (pure, English): the shot in her words, her moment, a phone video's look and sound."""
     return "\n".join([f"The video, as she describes it (in Ukrainian): {shot.description}", moment_line(moment),
                       CLIP_STYLE])
+
+
+def play_request(shot: Shot, moment: Moment, play: str) -> str:
+    """v6.3 — Omni Flash's instruction for her playing (pure, English): her words of what and where, her moment, and a
+    shelf camera's video with the instrument's own sound only — no voice, singing or other music — her eyes as in
+    the first frame."""
+    instrument = INSTRUMENTS.get(play, INSTRUMENTS["guitar"])[0]
+    return "\n".join([f"She plays {instrument}, as she describes it (in Ukrainian): {shot.description}",
+                      moment_line(moment), PLAY_STYLE.format(instrument=instrument.removeprefix("an "))])
 
 
 def _retryable(exc: BaseException) -> bool:
@@ -195,10 +226,11 @@ class ClipMaker:
         except Exception:
             log.exception("usage accounting failed")
 
-    async def make(self, shot: Shot, moment: Moment, frame: bytes, mime: str) -> Video:
+    async def make(self, shot: Shot, moment: Moment, frame: bytes, mime: str, request: str | None = None) -> Video:
         """The clip, or why there is none: one retry on a server error or a timeout before the job is accepted — never
-        once it is (review #2: it would run and be billed twice); a block is final."""
-        request = clip_request(shot, moment)
+        once it is (review #2: it would run and be billed twice); a block is final. v6.3: her playing brings its own
+        `request` (`play_request`)."""
+        request = request or clip_request(shot, moment)
         for attempt in (1, 2):
             submitted: list = []
             _T0.set(self._mono())  # v5.22: each attempt is its own call

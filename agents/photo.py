@@ -44,14 +44,15 @@ SIZES = ("1K", "2K")
 FACES_PER_SHOT = 4                 # the model takes up to 4 character references
 FACE_SUFFIXES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 TIMEOUT_S = 90                     # a photo took 11–40 s in the owner's test
-KINDS = {"ФОТО": "photo", "СЕЛФІ": "selfie", "КРУЖЕЧОК": "note", "ВІДЕО": "clip"}  # v5.18: the videos
+KINDS = {"ФОТО": "photo", "СЕЛФІ": "selfie", "КРУЖЕЧОК": "note", "ВІДЕО": "clip",  # v5.18: the videos
+         "ГІТАРА": "play"}  # v6.3: a video of her playing the guitar (her TOML's `play`)
 # the marker, as «ЗАПАМ'ЯТАЙ»'s: a line of its own in any case — after a quote, a bullet or a number — or, in capitals,
 # anywhere in a line; a colon or a dash after it. Everything from the marker to the line's end is the shot.
-_MARK = r"(?P<kind>КРУЖЕЧОК|СЕЛФІ|ФОТО|ВІДЕО)[ \t*_»\"')\]]*[:—–-][ \t*_]*(?P<shot>[^\n]*)"
+_MARK = r"(?P<kind>КРУЖЕЧОК|СЕЛФІ|ФОТО|ВІДЕО|ГІТАРА)[ \t*_»\"')\]]*[:—–-][ \t*_]*(?P<shot>[^\n]*)"
 MARK_LINE_RE = re.compile(r"^[ \t>*_\-–—•\d.)«\"'(\[]*" + _MARK, re.MULTILINE | re.IGNORECASE)
 MARK_ANY_RE = re.compile(r"[«\"'(\[]*[ \t]*" + _MARK)
 # v5.17 review #2: her kept note, `[селфі: …]` / `[фото: …]`, anywhere in a line and in any case — Gemini may echo it
-NOTE_RE = re.compile(r"\[[ \t]*(?P<kind>КРУЖЕЧОК|СЕЛФІ|ФОТО|ВІДЕО)[ \t]*[:—–-][ \t]*(?P<shot>[^\]\n]*)\]", re.IGNORECASE)
+NOTE_RE = re.compile(r"\[[ \t]*(?P<kind>КРУЖЕЧОК|СЕЛФІ|ФОТО|ВІДЕО|ГІТАРА)[ \t]*[:—–-][ \t]*(?P<shot>[^\]\n]*)\]", re.IGNORECASE)
 PARTS = {"ранок": "morning", "день": "afternoon", "вечір": "evening", "ніч": "night"}
 SEASONS = {"зима": "winter", "весна": "spring", "літо": "summer", "осінь": "autumn"}
 STYLE = ("A casual photo taken on a smartphone and sent in a private chat: natural light, slightly imperfect framing, "
@@ -105,6 +106,8 @@ def split_photo(text: str) -> tuple[str, Shot | None]:
     lines, shot = [], None
     for line in (text or "").split("\n"):
         m = MARK_LINE_RE.match(line) or MARK_ANY_RE.search(line)
+        if m is not None and m.group("kind").upper() == "ГІТАРА" and m.group("kind") != "ГІТАРА":
+            m = None  # v6.3: her playing line in capitals only — «Гітара — моє друге хобі» is a line of hers
         note = NOTE_RE.search(line) if m is None else None
         if m is None and note is None:
             lines.append(line)

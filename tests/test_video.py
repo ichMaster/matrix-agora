@@ -29,6 +29,7 @@ from agents.video import (
     clip_request,
     frame_shot,
     pcm_to_mp3,
+    play_request,
     shrink_frame,
     square_note,
 )
@@ -59,7 +60,8 @@ def test_a_notes_frame_is_her_square_selfie_and_a_clips_a_vertical_faceless_shot
     assert frame_shot(Shot("note", SECRET)) == Shot("selfie", SECRET)
     assert frame_shot(Shot("clip", SECRET)) == Shot("photo", SECRET)
     assert frame_shot(Shot("photo", "чашка")) == Shot("photo", "чашка")
-    assert FRAME_ASPECT == {"note": "1:1", "clip": "9:16"}
+    assert FRAME_ASPECT == {"note": "1:1", "clip": "9:16", "play": "9:16"}
+    assert frame_shot(Shot("play", SECRET)) == Shot("selfie", SECRET)                  # v6.3: her face, as a selfie
     request = photo_request(frame_shot(Shot("note", SECRET)), EVENING, FRAME_LINES["note"])
     assert request.endswith(FRAME_LINES["note"]) and "front-camera" in request and SECRET in request
     assert FRAME_LINES["note"] not in photo_request(Shot("selfie", SECRET), EVENING)
@@ -134,6 +136,38 @@ def clips(creates, gets=(), files=None):
 
 def done_by_uri():
     return interaction("completed", SimpleNamespace(data=None, uri="files/abc", mime_type="video/mp4"))
+
+
+# --- v6.3: her playing --------------------------------------------------------------------------------------------
+def test_her_playing_line_is_cut_in_capitals_only():
+    assert split_photo("ось, слухай 🙂\nГІТАРА: граю «Ой у вишневому саду» на ліжку") == (
+        "ось, слухай 🙂", Shot("play", "граю «Ой у вишневому саду» на ліжку"))
+    assert split_photo("- ГІТАРА — перебір увечері") == ("", Shot("play", "перебір увечері"))
+    assert split_photo("а\nГІТАРА: на ліжку\nВІДЕО: дощ")[1] == Shot("clip", "дощ")      # the last one counts
+    assert split_photo("Гітара — моє друге хобі.\nа ти?") == ("Гітара — моє друге хобі.\nа ти?", None)
+    assert split_photo("гітара: стоїть у кутку") == ("гітара: стоїть у кутку", None)
+
+
+def test_the_play_request_holds_her_words_the_instruments_sound_and_no_voice_in_english():
+    request = play_request(Shot("play", f"граю на ліжку {SECRET}"), EVENING, "guitar")
+    assert SECRET in request and "She plays an acoustic guitar" in request and "around 21:15, in Lviv" in request
+    assert "only the acoustic guitar she plays" in request and "no singing, no voice, no other music" in request
+    assert "never turn darker in any light" in request and "shelf" in request and "{" not in request
+    for word in ("вечір", "осінь", "гітара", "відео"):                                 # the template is English
+        assert word not in request.replace(f"граю на ліжку {SECRET}", "").replace("хмарно, +8, дрібний дощ", "")
+
+
+def test_the_play_frame_is_her_face_on_a_shelf_camera():
+    assert "shelf" in FRAME_LINES["play"] and "her face, her instrument and both her hands" in FRAME_LINES["play"]
+    request = photo_request(frame_shot(Shot("play", SECRET)), EVENING, FRAME_LINES["play"])
+    assert request.endswith(FRAME_LINES["play"]) and "same person as in the reference photos" in request
+
+
+def test_a_play_job_takes_its_own_request():
+    maker, inter, _, seen = clips([done_by_uri()])
+    made = asyncio.run(maker.make(Shot("play", "на ліжку"), EVENING, b"JPEG", "image/jpeg", "REQUEST-6.3"))
+    assert made.data == b"MP4-uri" and inter.calls[0]["input"][1]["text"] == "REQUEST-6.3"
+    assert [s[0] for s in seen] == ["video"]                                           # counted as a clip is
 
 
 def test_a_clip_is_polled_to_its_end_fetched_by_its_uri_and_counted_as_video(caplog):

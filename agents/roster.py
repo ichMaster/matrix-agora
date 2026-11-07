@@ -58,6 +58,9 @@ NEEDS = {"telegram": "private",                    # v5.7: the bot is a door to 
 INITIATIVES = ("nudge", "news")                    # who may speak first: one member per initiative
 SINGLES = (*INITIATIVES, "digest", "transcribe")   # one member per simulation with each of these
 ENGINES = ("gemini", "claude-sdk")  # v4.4: Claude through the Agent SDK, on the subscription only
+# v6.3 (the owner, 2026-11-07: «вона буде вчитись грати на гітарі і час від часу записувати такі відео»): the
+# instruments a person may play on video — her TOML's `play`, the marker of her line in `agents/photo.py`
+PLAYS = ("guitar",)
 MODES = ("ranked", "ambient", "mention-only", "none")  # v5.1: `none` — a herald's, in no turn pool; v6.3: and a
 # person's not yet in the room (Устина before v6.4): a member, but no turn and no one addresses her
 
@@ -81,6 +84,7 @@ class Member:
     natal: str = ""  # v4.2: the natal file's path (agents with `mood`)
     memories: str = ""  # v4.3: the past-life theses file's path (agents with `pastlife`)
     voice_spec: str = ""  # v5.9: the palette file's path (agents with `emotion`)
+    play: str = ""  # v6.3: the instrument she plays and films herself playing (a person with `videos`; `PLAYS`)
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -139,6 +143,11 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
     if not isinstance(forms, list) or not forms or not all(isinstance(f, str) and f.strip() for f in forms):
         raise RosterError(f"{source}: 'name_forms' must be a non-empty list of strings")
     panel = data.get("panel", {})
+    play = str(data.get("play", "")).strip()
+    if play and play not in PLAYS:
+        raise RosterError(f"{source}: unknown instrument {play!r} for 'play' (known: {', '.join(PLAYS)})")
+    if play and (kind != "persona" or "videos" not in caps):
+        raise RosterError(f"{source}: 'play' needs 'videos' on a persona")
     return Member(
         localpart=localpart, user_id=str(data["user_id"]).strip(), name=name,
         name_forms=tuple(f.strip().lower() for f in forms), type=kind, engine=engine,
@@ -147,6 +156,7 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
         natal=str(data.get("natal", "")),
         memories=str(data.get("memories", "")),
         voice_spec=str(data.get("voice_spec", "")),
+        play=play,
     )
 
 

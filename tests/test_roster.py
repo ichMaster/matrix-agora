@@ -435,6 +435,18 @@ def test_a_person_not_yet_in_the_room_takes_no_turn_and_no_one_addresses_her(tmp
         assert next_speaker(f"$n{i}", "@ada:agora.lan", "Устю, а ти що скажеш?", roster) != "ustyna"
 
 
+def test_play_names_an_instrument_of_a_person_who_sends_videos():
+    """v6.3: her TOML's `play` — a known instrument, on a persona with `videos` only."""
+    caps = {"private": True, "telegram": True, "photos": True, "voice": True, "videos": True}
+    base = {"name": "Устина", "user_id": "@ustyna:agora.lan", "capabilities": caps}
+    assert parse_member("ustyna", {**base, "play": "guitar"}).play == "guitar"
+    assert parse_member("kira", {**base}).play == ""
+    with pytest.raises(RosterError, match="unknown instrument 'piano'"):
+        parse_member("ustyna", {**base, "play": "piano"})
+    with pytest.raises(RosterError, match="'play' needs 'videos' on a persona"):
+        parse_member("ustyna", {**base, "capabilities": {**caps, "videos": False}, "play": "guitar"})
+
+
 def test_a_simulation_has_at_most_one_herald(tmp_path):
     reg, agents = write_roster(tmp_path, 'name = "Кіт"\nuser_id = "@kit:agora.lan"\ntype = "herald"\n')
     roster = load_roster("sim", reg, agents)

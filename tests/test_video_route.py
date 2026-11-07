@@ -16,7 +16,16 @@ import pytest
 from agents import agent as agent_mod
 from agents.photo import Made, Shot
 from agents.private import PRIVATE_BRIEF
-from agents.video import CLIP_SKILL, FRAME_LINES, NOTE_SKILL, SKILL_TAIL, VIDEO_FAILED, Video, video_skill
+from agents.video import (
+    CLIP_SKILL,
+    FRAME_LINES,
+    NOTE_SKILL,
+    PLAY_SKILL,
+    SKILL_TAIL,
+    VIDEO_FAILED,
+    Video,
+    video_skill,
+)
 from tests.test_photo_route import her
 from tests.test_private_runtime import ms
 from tests.test_telegram_runtime import FakeTTS
@@ -41,8 +50,8 @@ class Clips:
     def __init__(self, made):
         self.made, self.calls = made, []
 
-    async def make(self, shot, moment, frame, mime):
-        self.calls.append((shot, frame, mime))
+    async def make(self, shot, moment, frame, mime, request=None):
+        self.calls.append((shot, frame, mime, request))
         return self.made
 
 
@@ -269,10 +278,66 @@ def test_the_skill_never_says_a_video_is_made():
     for words in (NOTE_SKILL, CLIP_SKILL, SKILL_TAIL, VIDEO_FAILED):
         low = words.lower()
         assert not any(w in low for w in ("модел", "бот", "штучн", "інтелект", "генер", "згенер", "ші "))
-    assert "КРУЖЕЧОК" in NOTE_SKILL and "ВІДЕО" in CLIP_SKILL
+    assert "КРУЖЕЧОК" in NOTE_SKILL and "ВІДЕО" in CLIP_SKILL and "ГІТАРА" in PLAY_SKILL
+    low = PLAY_SKILL.lower()
+    assert not any(w in low for w in ("модел", "бот", "штучн", "інтелект", "генер", "згенер", "ші "))
     assert video_skill(("clip",)) == f"{CLIP_SKILL} {SKILL_TAIL}" and video_skill(()) == ""
     assert video_skill(("note", "clip")) == f"{NOTE_SKILL} {CLIP_SKILL} {SKILL_TAIL}"
 
+
+
+def player(tmp_path, monkeypatch, *answers):
+    """v6.3: a person whose TOML names an instrument (`play = "guitar"`)."""
+    agent = kira(tmp_path, monkeypatch, *answers)
+    agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "play": "guitar"})
+    return agent
+
+
+def test_her_playing_follows_her_answer_from_her_own_vertical_frame(tmp_path, monkeypatch, media, caplog):
+    """v6.3 (the owner, 2026-11-07: «вона буде вчитись грати на гітарі і час від часу записувати такі відео»): her
+    `ГІТАРА:` line is cut, her answer goes at once, and the video is made from a 9:16 frame of her face on a shelf
+    camera, then Omni with the instrument's own sound — sent as a clip is, never a note of it in her history."""
+    caplog.set_level(logging.INFO)
+    agent = player(tmp_path, monkeypatch, f"ось, слухай 🙂\nГІТАРА: граю перебір на ліжку {SECRET}")
+    owner_says(agent, "зіграєш мені?", ms(17), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    assert agent.sent == ["voice", ("text", "ось, слухай 🙂")]
+    after(agent)
+    assert agent.sent[2:] == [("clip", b"CLIP", 8)]
+    assert agent.photos.shots == [Shot("selfie", f"граю перебір на ліжку {SECRET}")]      # her face
+    assert agent.photos.frames == [("9:16", FRAME_LINES["play"])]
+    (shot, _, _, request), = agent.clips.calls
+    assert shot == Shot("play", f"граю перебір на ліжку {SECRET}") and "acoustic guitar" in request
+    assert "no singing, no voice, no other music" in request
+    assert "[гітара" not in " ".join(her_lines(agent)).lower()
+    assert "video: sent (play, telegram, 0 s)" in caplog.text and SECRET not in caplog.text
+
+
+def test_only_a_person_with_an_instrument_is_offered_it_and_her_line_is_dropped_otherwise(tmp_path, monkeypatch, media,
+                                                                                          caplog):
+    caplog.set_level(logging.INFO)
+    agent = kira(tmp_path, monkeypatch, "ось\nГІТАРА: граю на ліжку")              # no `play` in her TOML
+    assert "play" not in agent._video_kinds("telegram") and agent._video_closed("telegram", "play") == "off"
+    owner_says(agent, "зіграй", ms(17), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    after(agent)
+    assert agent.clips.calls == [] and "video: dropped (off)" in caplog.text
+    guitar = player(tmp_path / "g", monkeypatch, "Ось")
+    assert "play" in guitar._video_kinds("telegram")
+    assert PLAY_SKILL.format(on="на гітарі") in video_skill(guitar._video_kinds("telegram"), "guitar")
+    assert "ГІТАРА" not in video_skill(guitar._video_kinds("telegram"), "")           # no instrument: no skill
+
+
+def test_her_playing_counts_with_her_other_videos(tmp_path, monkeypatch, media):
+    agent = player(tmp_path, monkeypatch, "Ось")
+    agent.video_window_max, agent.video_window_s = 2, 7200
+    videos_dir(agent).mkdir(parents=True)
+    for name in ("170000", "180000"):                                                  # a кружечок and a clip
+        (videos_dir(agent) / f"{name}.mp4").write_bytes(b"MP4")
+    agent.clock = lambda: ms(18, 30)
+    assert agent._video_closed("telegram", "play") == "window"
+    agent.video_window_max, agent.video_day_max = 0, 2
+    assert agent._video_closed("telegram", "play") == "cap"
 
 
 def test_at_most_so_many_videos_in_any_window(tmp_path, monkeypatch, media):

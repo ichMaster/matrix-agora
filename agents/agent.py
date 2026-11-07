@@ -350,6 +350,7 @@ from agents.video import (
     clip_maker,
     frame_shot,
     pcm_to_mp3,
+    play_request,
     shrink_frame,
     square_note,
     video_skill,
@@ -1294,7 +1295,7 @@ class Agent:
         if self._offer_photo:  # v5.17: her photo skill — Gemini's alone, never the backup's
             brief = f"{brief}\n\n{PHOTO_SKILL}"
         if self._offer_video:  # v5.18: her video skill, the same way
-            brief = f"{brief}\n\n{video_skill(self._offer_video)}"
+            brief = f"{brief}\n\n{video_skill(self._offer_video, self.cfg.play)}"
         facts = self.facts_now()  # v5.8 review #6: mirrored before the recall, so a deleted fact is not recalled
         if self.archive is not None:  # v5.8: alone with him she recalls both places and knows Agora today
             window, history = self._gemini_lines(), self.gemini_history()
@@ -2337,6 +2338,8 @@ class Agent:
         maker = self.notes if kind == "note" else self.clips
         if maker is None or self.photos is None or (kind == "note" and self.tts is None) or self.video_day_max <= 0:
             return "off"
+        if kind == "play" and not self.cfg.play:  # v6.3: only a person whose TOML names an instrument plays on video
+            return "off"
         if self.videos_today() >= self.video_day_max:
             return "cap"
         if self._window_full("videos", self.video_window_max, self.video_window_s):  # v5.22: «2 за 2 години»
@@ -2355,6 +2358,9 @@ class Agent:
             return Video(None, why=frame.why if frame.why != "ok" else "failed")
         if shot.kind == "clip":
             return await self.clips.make(shot, self._moment(), frame.image, frame.mime)
+        if shot.kind == "play":  # v6.3: her playing — Omni from her own frame, the instrument's sound only
+            return await self.clips.make(shot, self._moment(), frame.image, frame.mime,
+                                         play_request(shot, self._moment(), self.cfg.play))
         mp3 = await pcm_to_mp3(pcm or b"", self.video_note_lead_ms)
         if mp3 is None:
             return Video(None, why="failed")

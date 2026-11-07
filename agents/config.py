@@ -56,6 +56,7 @@ class AgentConfig:
     # (`[places] night`); her moves and nights are her life story's. None: she is where `LOCATION` and `TIMEZONE` say
     places: dict[str, Place] | None = None
     night_place: str | None = None
+    play: str = ""  # v6.3: the instrument she films herself playing (`play`, a person with `videos`); "": none
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -239,4 +240,5 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         reading=reading,
         places=places or None,
         night_place=night_place,
+        play=member.play,
     )
