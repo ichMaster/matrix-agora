@@ -8,10 +8,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONF="$REPO_DIR/server_con.yaml"
 COMPOSE="$REPO_DIR/server/docker-compose.yml"
 LOCAL_ENV="$REPO_DIR/server/.env"
-CLAUDE_ENV="$REPO_DIR/server/claude.env"   # v4.4: Claude's own env file (the subscription's OAuth token)
-HERMES_ENV="$REPO_DIR/server/hermes.env"   # v5.1: Hermes's own env file (his password, the Deepgram key)
 VOICE_ENV="$REPO_DIR/server/voice.env"     # v5.3: the ElevenLabs key, for the members who speak
-KIRA_ENV="$REPO_DIR/server/kira.env"       # v5.7: Кіра's bot token, the owner's Telegram id, her Deepgram key
 CANON_DIR="$REPO_DIR/agents/canon"        # v5.9.1: the private canon (gitignored) — only this Mac and the host hold it
 REMOTE_DIR="matrix-agora/server"
 KEEP_IMAGES="${KEEP_IMAGES:-2}"   # the newest tags of each image kept besides those a container uses (2026-11-02)
@@ -53,22 +50,19 @@ if [ -f "$LOCAL_ENV" ]; then
 else
   say "deploy: no local server/.env — leaving the host's .env untouched"
 fi
-if [ -f "$CLAUDE_ENV" ]; then   # never printed: rsync -i lists the file name only
-  CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$CLAUDE_ENV" "$TARGET:$REMOTE_DIR/claude.env")"
-  # private on the host too (the Mac's rsync cannot set modes): the subscription's token, Claude's password
-  [ "$DRY_RUN" = 1 ] || ssh "$TARGET" "chmod 600 ~/$REMOTE_DIR/claude.env"
-fi
-if [ -f "$HERMES_ENV" ]; then   # never printed: rsync -i lists the file name only
-  CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$HERMES_ENV" "$TARGET:$REMOTE_DIR/hermes.env")"
-  [ "$DRY_RUN" = 1 ] || ssh "$TARGET" "chmod 600 ~/$REMOTE_DIR/hermes.env"
-fi
+# v6.2: every member's own env file, `server/<name>.env` for each `agents/<name>.toml` that has one — Claude's
+# subscription token (v4.4), Hermes's password (v5.1), a companion's bot token and keys (v5.7) — no member named here
+for TOML in "$REPO_DIR"/agents/*.toml; do
+  NAME=$(basename "$TOML" .toml)
+  MEMBER_ENV="$REPO_DIR/server/$NAME.env"
+  [ -f "$MEMBER_ENV" ] || continue
+  CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$MEMBER_ENV" "$TARGET:$REMOTE_DIR/$NAME.env")"  # never printed: -i lists the name
+  # private on the host too (the Mac's rsync cannot set modes)
+  [ "$DRY_RUN" = 1 ] || ssh "$TARGET" "chmod 600 ~/$REMOTE_DIR/$NAME.env"
+done
 if [ -f "$VOICE_ENV" ]; then   # never printed: rsync -i lists the file name only
   CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$VOICE_ENV" "$TARGET:$REMOTE_DIR/voice.env")"
   [ "$DRY_RUN" = 1 ] || ssh "$TARGET" "chmod 600 ~/$REMOTE_DIR/voice.env"
-fi
-if [ -f "$KIRA_ENV" ]; then   # never printed: rsync -i lists the file name only
-  CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$KIRA_ENV" "$TARGET:$REMOTE_DIR/kira.env")"
-  [ "$DRY_RUN" = 1 ] || ssh "$TARGET" "chmod 600 ~/$REMOTE_DIR/kira.env"
 fi
 if [ -f "$CANON_DIR/common.md" ]; then   # never printed: rsync -i lists the file names only; nothing on the host is ever removed
   CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$CANON_DIR/" "$TARGET:matrix-agora/canon/")"

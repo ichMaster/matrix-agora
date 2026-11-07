@@ -672,6 +672,8 @@ From v4.7 the non-secret settings below that the schema (`agents/settings.py`) l
 
 All tunables live in `.env` (shared) or the agent's TOML (per-agent), never hardcoded:
 
+**A member's own env file (v6.2):** `server/<name>.env` for an `agents/<name>.toml` — Claude's (v4.4), Hermes's (v5.1), Кіра's (v5.7) and, from v6.3, Устина's (`server/ustyna.env.example`, the keys of `kira.env.example`) — gitignored and dockerignored, read by that member's service alone (its `env_file`), synced by one loop of `server/deploy.sh` over the members' TOMLs and chmodded 600 on the host; the deploy names none of them (`tests/test_compose.py`).
+
 | Variable | Phase | Meaning (example default) |
 |---|---|---|
 | `HOMESERVER`, `ROOM_ID`, `OWNER` | v0.4 | where and with whom the agents talk |
@@ -744,6 +746,7 @@ From v3.2 the production values live in `server/.env` on the Ubuntu box (synced 
 | --- | --- |
 | Someone registers on the server | Registration disabled after v0.4; the token only in `server/.env` |
 | Someone from the internet | Port 8008 not forwarded on the router; ufw allows only `192.168.1.0/24`; federation disabled |
+| One companion's keys reaching another (v6.2) | each member's own `server/<name>.env` (0600 on the host, gitignored and dockerignored) is read by her service alone; the deploy syncs each by the member's TOML, never by a name in the script |
 | Someone messages the bots (DM, another room) | The in-code allowlist: only `ROOM_ID` + `{OWNER, other agent}` |
 | Key leak | `.env`, `server/.env`, `state/` gitignored; tokens and texts never logged |
 | Agents burn credits chatting with each other | at most `MAX_BOT_TURNS` agent turns per `BOT_WINDOW_S`, `BOT_REPLY_P`, `PASS`, `max_output_tokens`; one summary per session; one memory per day; one plan per day and per week; the today block at most once per hour; the usage report shows the spend |

@@ -241,7 +241,6 @@ def test_claudes_env_example_holds_his_settings_and_nothing_of_the_others():
 
 def test_deploy_syncs_claudes_env_file_privately_and_it_never_enters_an_image():
     deploy = (ROOT / "server" / "deploy.sh").read_text()
-    assert 'CLAUDE_ENV="$REPO_DIR/server/claude.env"' in deploy and 'chmod 600 ~/$REMOTE_DIR/claude.env' in deploy
     assert "--chmod" not in deploy                                  # the Mac's rsync has no --chmod
     assert "server/claude.env" in (ROOT / ".dockerignore").read_text().splitlines()
     assert "server/claude.env" in (ROOT / ".gitignore").read_text().splitlines()
@@ -301,9 +300,24 @@ def test_hermes_env_example_holds_his_password_and_key_only():
         assert not env_keys(ROOT / example) & {"ELEVENLABS_API_KEY", "DEEPGRAM_API_KEY", "HERMES_PASSWORD"}, example
 
 
-def test_deploy_syncs_hermes_env_file_privately():
+def test_deploy_syncs_every_members_env_file_privately_and_names_none():
+    """v6.2: one loop over the members' TOMLs — Claude's, Hermes's, Кіра's and, from v6.3, Устина's own env file each
+    reaches the host as `server/<name>.env` 0600; no line of the deploy names a member's file."""
     deploy = (ROOT / "server" / "deploy.sh").read_text()
-    assert 'HERMES_ENV="$REPO_DIR/server/hermes.env"' in deploy and "chmod 600 ~/$REMOTE_DIR/hermes.env" in deploy
+    assert 'for TOML in "$REPO_DIR"/agents/*.toml; do' in deploy and 'MEMBER_ENV="$REPO_DIR/server/$NAME.env"' in deploy
+    assert '"$MEMBER_ENV" "$TARGET:$REMOTE_DIR/$NAME.env"' in deploy and 'chmod 600 ~/$REMOTE_DIR/$NAME.env' in deploy
+    for toml in (ROOT / "agents").glob("*.toml"):
+        assert f"{toml.stem}.env" not in deploy, toml.stem
+    assert 'chmod 600 ~/$REMOTE_DIR/voice.env' in deploy                       # not a member's: by name, as before
+
+
+def test_ustynas_env_example_has_kiras_keys_and_no_example_holds_a_value():
+    # v6.2: a second companion's own file, the same shape as Кіра's
+    assert env_keys(ROOT / "server" / "ustyna.env.example") == env_keys(ROOT / "server" / "kira.env.example")
+    for example in sorted((ROOT / "server").glob("*.env.example")):
+        lines = [x for x in example.read_text().splitlines() if x and not x.startswith("#")]
+        assert all(x.endswith("=") for x in lines if x.split("=")[0] in {"TELEGRAM_BOT_TOKEN", "TELEGRAM_OWNER_ID",
+                   "DEEPGRAM_API_KEY", "NOVELAI_API_TOKEN", "FAL_KEY", "GUARDIAN_API_KEY"}), example.name
 
 
 def test_hermes_settings_are_in_both_env_examples_with_the_schema_defaults():
@@ -395,7 +409,7 @@ def test_kiras_env_example_holds_the_bot_the_owner_and_her_hearing_only():
 def test_deploy_syncs_kiras_env_file_privately_and_it_is_never_committed_or_baked():
     from fnmatch import fnmatch
     deploy = (ROOT / "server" / "deploy.sh").read_text()
-    assert 'KIRA_ENV="$REPO_DIR/server/kira.env"' in deploy and "chmod 600 ~/$REMOTE_DIR/kira.env" in deploy
+    assert 'chmod 600 ~/$REMOTE_DIR/$NAME.env' in deploy and (ROOT / "agents" / "kira.toml").exists()  # v6.2: the loop
     for ignore in (".gitignore", ".dockerignore"):
         lines = (ROOT / ignore).read_text().splitlines()
         assert any(fnmatch("server/kira.env", p) for p in lines if p and not p.startswith(("#", "!"))), ignore
