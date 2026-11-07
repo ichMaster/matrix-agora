@@ -3789,10 +3789,11 @@ private chat and her own Telegram bot; not yet in Agora.
 - (Manual, owner) Her card, Talk, Prompt and Analytics in the panel; Кіра is unchanged, and nothing of one reaches
   the other.
 
-**Tests:** her TOML loads with every capability; the roster keeps her out of every turn pool while `none`; the persona
-scan covers her canon files (`canon`-marked); the playing tool — offered only with `play`, its line cut like `ВІДЕО:`,
-its frame with her face and its request with the instrument's sound and no voice (pure), its caps shared with her
-other videos, Omni and the image model mocked.
+**Tests:** her TOML loads with every capability; the roster keeps her out of every turn pool while `none`; her compose
+service reads `ustyna.env` and never `kira.env`, and Кіра's never `ustyna.env` (v6.2 review #4); the persona scan
+covers her canon files (`canon`-marked); the playing tool — offered only with `play`, its line cut like `ВІДЕО:`, its
+frame with her face and its request with the instrument's sound and no voice (pure), its caps shared with her other
+videos, Omni and the image model mocked.
 
 ### v6.4 — Agora meets her
 
