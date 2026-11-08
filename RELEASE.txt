@@ -1,3 +1,18 @@
+Version 6.4.0 (2026-11-08)
+---------------------------
+- Agora meets Устина: she takes her turns in the room, mode ranked with weight
+  1 like Кіра - one of nine speakers, named by her name forms, among the
+  owner's repliers about as often as each other person (AGORA-228)
+- Ten members in the room: simulated waves over the real roster pin the wave
+  limit, her share and the room's volume - a plain owner line draws 2.49 agent
+  messages against 2.48 without her (AGORA-229)
+- The room knows her: common.md, Hermes's and the others' canons name her,
+  Кіра's canon unchanged (AGORA-230, private canon)
+- Deployed, and she joined Agora at the owner's invite (AGORA-231)
+- The room checks over days waived by the owner - watched after the release,
+  bugs go to 6.4.x patches
+- v6.5 planned: her photos on fal.ai with the owner's /photos switch
+
 Version 6.3.0 (2026-11-08)
 ---------------------------
 - Устина live: her TOML (Кіра's capabilities, her own canon, Lviv), her
