@@ -29,8 +29,8 @@ are left in the v5 review docs, as backlog. The same day the owner opened two mo
   far away (her place, two clocks, nights at the telescope).
 
 v6 is under way: v6.1 (Устина's first version) and v6.2 (the code for a second companion) released as `v6.1.0`
-and `v6.2.0` on 2026-11-07; v6.3 (her: the face, the voice and the accounts) as `v6.3.0` on 2026-11-08; v6.4 is next,
-then v6.5 (her photos on fal.ai, the filter off, by the owner's command; added 2026-11-08).
+and `v6.2.0` on 2026-11-07; v6.3 (her: the face, the voice and the accounts) as `v6.3.0` on 2026-11-08; v6.4 (Agora meets her) as
+`v6.4.0` on 2026-11-08; v6.5 is next (her photos on fal.ai, the filter off, by the owner's command; added 2026-11-08).
 
 Then come v6–v10 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
@@ -87,7 +87,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v6.1 | Устина's first version: the name and the main canon | ✅ completed | `v6.1.0` (2026-11-07) |
 | v6.2 | The code for a second companion: everything Кіра has, by her TOML alone | ✅ completed | `v6.2.0` (2026-11-07) |
 | v6.3 | Her: the face, the voice and the accounts; her private chat and Telegram | ✅ completed | `v6.3.0` (2026-11-08) |
-| v6.4 | Agora meets her | ⏳ planned | — |
+| v6.4 | Agora meets her | ✅ completed | `v6.4.0` (2026-11-08) |
 | v6.5 | Her photos on fal.ai: the owner's switch, the filter off | ⏳ planned | — |
 | v7.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v7.2 | Лілі under the full rules | ⏳ planned | — |
@@ -3806,7 +3806,7 @@ videos, Omni and the image model mocked.
 
 ### v6.4 — Agora meets her
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v6.4.0` on 2026-11-08. AGORA-228–231; the owner kept the turn settings, Кіра's canon unchanged and accepted the canon lines; she joined Agora at his invite; the room checks over days were waived by the owner («закривай 6.4, якщо будуть баги то доробимо патчами») and are watched after the release; the review found no HIGH or MEDIUM finding, its two LOW ones deferred.
 
 **Goal:** she joins Agora as a person: invited, ranked like the others, and the room knows her.
 
