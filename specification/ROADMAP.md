@@ -29,7 +29,7 @@ are left in the v5 review docs, as backlog. The same day the owner opened two mo
   far away (her place, two clocks, nights at the telescope).
 
 v6 is under way: v6.1 (Устина's first version) and v6.2 (the code for a second companion) released as `v6.1.0`
-and `v6.2.0` on 2026-11-07; v6.3 and v6.4 are next.
+and `v6.2.0` on 2026-11-07; v6.3 (her: the face, the voice and the accounts) as `v6.3.0` on 2026-11-08; v6.4 is next.
 
 Then come v6–v10 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
@@ -3757,7 +3757,7 @@ content); two companions in one test — no file, setting or command of one reac
 
 ### v6.3 — Her: the face, the voice and the accounts; her private chat and Telegram
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v6.3.0` on 2026-11-08. AGORA-223–227; the owner confirmed her private chat, Telegram, voice, photos, кружечки and guitar videos, her panel tabs and Кіра unchanged («все працює ідеально»), and accepted her reading and shorter story as they are; the review's one fix-now finding is fixed (d7f0f69).
 
 **Goal:** she lives — her own name, canon, life story, birth chart, face and voice — and talks with the owner in her
 private chat and her own Telegram bot; not yet in Agora.

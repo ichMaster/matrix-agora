@@ -1,3 +1,19 @@
+Version 6.3.0 (2026-11-08)
+---------------------------
+- Устина live: her TOML (Кіра's capabilities, her own canon, Lviv), her
+  compose service reading only server/ustyna.env, her Matrix account and own
+  Telegram bot, her voice palette (AGORA-225..227)
+- A person not yet in the room: turn mode none for a persona - a member with
+  her card and private chat, in no turn pool, never asked or called
+  (AGORA-223)
+- Her own tool, a video of her playing the guitar: TOML play, the ГІТАРА:
+  line in capitals, a shelf-camera frame and Omni Flash with the guitar's
+  sound only, under the video caps (AGORA-224)
+- The owner's live fix: her playing's request all English with no words of
+  hers, so she plays instead of saying it
+- Code review v6.3 #1: the plans' room is the speakers - no member's plan
+  names a person not yet in the room, and hers names no one from it
+
 Version 6.2.1 (2026-11-07)
 ---------------------------
 - Her story's timed events fall at their time in any hour of her clock
