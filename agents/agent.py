@@ -2929,6 +2929,7 @@ class Agent:
             "week": week_label(monday),
             "day": day_label(today, today + timedelta(days=3)),  # plain weekday + date
         }
+        in_room = self.me.mode != "none"
         coarser: list[tuple[str, str]] = []
         for horizon in ("year", "month", "week", "day"):
             path = paths[horizon]
@@ -2947,8 +2948,11 @@ class Agent:
                     cur.body if cur else "", nxt.opening if nxt else None,
                     coarser, strip_tags(prev) if prev else None, yesterday,
                     mutations, self.plan_max_words,
-                    [m.name for m in self.roster.values() if m.user_id != self.cfg.user_id and m.type != "herald"],
+                    # v6.3 review #1: the room's speakers, as every other room list — a person not yet in the room
+                    # (mode `none`) is in no one's plan, and her own plan names no one from it
+                    [m.name for m in self.others.values()] if in_room else [],
                     self.events_between(since, today, today), self.events_ahead(today, until),
+                    in_room=in_room,
                 )
                 text = await self.llm.generate(contents, system, max_output_tokens=self.plan_max_words * 3,
                                                kind="plan")

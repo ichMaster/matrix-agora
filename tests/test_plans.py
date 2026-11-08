@@ -160,6 +160,44 @@ def test_ensure_plans_names_the_room_but_never_herself_or_the_herald(tmp_path):
     assert "Бруно" in room and "Ада" not in room and "Гермес" not in room
 
 
+def _roster_with_one_not_yet_in_the_room():
+    from agents.roster import Member
+    return {"ada": Member("ada", "@ada:agora.lan", "Ада", ("ада",)),
+            "bruno": Member("bruno", "@bruno:agora.lan", "Бруно", ("бруно",)),
+            "kira": Member("kira", "@kira:agora.lan", "Кіра", ("кіра",)),
+            "ustyna": Member("ustyna", "@ustyna:agora.lan", "Устина", ("устина",), mode="none")}
+
+
+def test_a_person_not_yet_in_the_room_is_in_no_other_members_plan(tmp_path):
+    """v6.3 review #1: the plan's room goes by `speakers`, as every other room list — her name never reaches Кіра's or
+    anyone's plan before v6.4."""
+    llm = FakeLLM("- перше\n- друге\n- третє\n- четверте\n- пʼяте\n- шосте")
+    agent = Agent(CFG, llm=llm, roster=_roster_with_one_not_yet_in_the_room())
+    agent.memory_file = tmp_path / "ada.memory.md"
+    agent.rng = lambda: 0.0
+    asyncio.run(agent.ensure_plans(date(2026, 10, 3)))
+    assert llm.calls
+    for asked, _ in llm.calls:
+        assert "Устин" not in asked
+        assert "Ich і люди з Агори (Бруно, Кіра)" in asked
+
+
+def test_a_person_not_yet_in_the_room_plans_toward_ich_alone(tmp_path):
+    """v6.3 review #1: her own plan names neither the room's people nor Агора — she has never been there."""
+    from agents.config import AgentConfig
+    cfg = AgentConfig(name="Устина", user_id="@ustyna:agora.lan", canon="Канон.", homeserver="http://hs",
+                      room_id="!room", owner="@ich:agora.lan", password="pw")
+    llm = FakeLLM("- перше\n- друге\n- третє\n- четверте\n- пʼяте\n- шосте")
+    agent = Agent(cfg, llm=llm, roster=_roster_with_one_not_yet_in_the_room())
+    agent.memory_file = tmp_path / "ustyna.memory.md"
+    agent.rng = lambda: 0.0
+    asyncio.run(agent.ensure_plans(date(2026, 10, 3)))
+    assert llm.calls
+    for asked, _ in llm.calls:
+        assert "Агор" not in asked and "Кіра" not in asked and "Ада" not in asked
+        assert "Ich теж може бути в планах — як твої наміри щодо нього, але нічого не обіцяй за нього." in asked
+
+
 def test_plan_request_forbids_hedging():
     from agents.plans import plan_request
     _, contents = plan_request("day", "Ада", "К.", "субота", "Розділ.", None, [], None, None, [None] * 5, 120)

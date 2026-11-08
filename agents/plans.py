@@ -84,17 +84,21 @@ def render_plan(items: list[str], mutations: list[str | None], max_words: int) -
     return "\n".join(lines)
 
 
-def areas(horizon: str, others: list[str]) -> str:
+def areas(horizon: str, others: list[str], in_room: bool = True) -> str:
     """The plan covers a whole life, not the pastimes alone (the owner, 2026-10-26: Кіра planned hobbies, never her
     work or her people): at least one work item and one about her own people, pastimes at most half. The room's
     members and Ich may be in it as her own intentions toward them, never committing them (the owner, 2026-10-26:
-    «навіть так ліпше», «хай будуть плани на мене»); what she keeps between her and him is her discretion line's."""
+    «навіть так ліпше», «хай будуть плани на мене»); what she keeps between her and him is her discretion line's.
+    v6.3 review #1: a person not yet in the room (`in_room` False) plans toward Ich alone."""
     workday = " (якщо цей день за твоїм звичним тижнем робочий)" if horizon == "day" else ""
-    room = f"Ich і люди з Агори ({', '.join(others)})" if others else "Ich і люди з Агори"
+    if in_room:
+        room = f"Ich і люди з Агори ({', '.join(others)})" if others else "Ich і люди з Агори"
+        who = f"{room} теж можуть бути в планах — як твої наміри щодо них, але нічого не обіцяй за них."
+    else:
+        who = "Ich теж може бути в планах — як твої наміри щодо нього, але нічого не обіцяй за нього."
     return (f"План — про все твоє життя, не лише про дозвілля: щонайменше один пункт про роботу{workday}, щонайменше "
             "один — про твоїх близьких чи особисте життя (рідні, друзі, колеги, стосунки), а захоплення — не більше "
-            f"половини пунктів. {room} теж можуть бути в планах — як твої наміри щодо них, але нічого не обіцяй за "
-            "них.")
+            f"половини пунктів. {who}")
 
 
 def plan_request(
@@ -112,12 +116,14 @@ def plan_request(
     others: list[str] | None = None,
     events: str | None = None,
     ahead: str | None = None,
+    in_room: bool = True,
 ) -> tuple[str, str]:
     """(system_instruction, contents) for one plan. The next chapter is a
     silent direction; the mutated items are bent but read as sincere intents.
     `others` names the room's members, never planned for. v5.11: `events` —
     what happened to her lately (a setback may call for a plan); `ahead` — the
-    known events of her story she expects, never a surprise."""
+    known events of her story she expects, never a surprise. v6.3 review #1:
+    `in_room` False — a person not yet in the room plans toward Ich alone."""
     n_items, phrase = HORIZONS[horizon]
     parts = [f"Твоє життя зараз:\n{chapter_body}"]
     if next_opening:
@@ -139,7 +145,7 @@ def plan_request(
     task = (
         f"Склади свій план {phrase} ({period_label}): рівно {n_items} пунктів, кожен з нового рядка, "
         f"що починається з «- », від першої особи, коротко, як щирі наміри, разом не більше {max_words} "
-        "слів. " + areas(horizon, others or [])
+        "слів. " + areas(horizon, others or [], in_room)
     )
     if bent:
         task += " Відхилення від твого звичного життя: " + "; ".join(bent) + \
