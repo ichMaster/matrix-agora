@@ -1,6 +1,6 @@
 # Roadmap — matrix-agora
 
-Eleven self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, her reading and thoughts, and a backup model for her private chat when Gemini blocks) → **v6** Устина, a second companion (Кіра's code with her own name, canon, life, face and voice: her first version, the code, then her, then Agora meets her) → **v7** Лілі (the Lumi bridge: when named, then under the full rules) → **v8** Applications (the panel's System and Applications; Telegram as an application) → **v9** Theatre (plays on the Stage, recorded by Hermes) → **v10** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Eleven self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, her reading and thoughts, and a backup model for her private chat when Gemini blocks) → **v6** Устина, a second companion (Кіра's code with her own name, canon, life, face and voice: her first version, the code, then her, then Agora meets her, then her photos on fal.ai) → **v7** Лілі (the Lumi bridge: when named, then under the full rules) → **v8** Applications (the panel's System and Applications; Telegram as an application) → **v9** Theatre (plays on the Stage, recorded by Hermes) → **v10** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
 **Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v10→10), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
@@ -29,7 +29,8 @@ are left in the v5 review docs, as backlog. The same day the owner opened two mo
   far away (her place, two clocks, nights at the telescope).
 
 v6 is under way: v6.1 (Устина's first version) and v6.2 (the code for a second companion) released as `v6.1.0`
-and `v6.2.0` on 2026-11-07; v6.3 (her: the face, the voice and the accounts) as `v6.3.0` on 2026-11-08; v6.4 is next.
+and `v6.2.0` on 2026-11-07; v6.3 (her: the face, the voice and the accounts) as `v6.3.0` on 2026-11-08; v6.4 is next,
+then v6.5 (her photos on fal.ai, the filter off, by the owner's command; added 2026-11-08).
 
 Then come v6–v10 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
@@ -85,8 +86,9 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v5.27 | Кіра far away: her place, two clocks and nights at the telescope | ✅ completed | `v5.27.0` (2026-11-07) |
 | v6.1 | Устина's first version: the name and the main canon | ✅ completed | `v6.1.0` (2026-11-07) |
 | v6.2 | The code for a second companion: everything Кіра has, by her TOML alone | ✅ completed | `v6.2.0` (2026-11-07) |
-| v6.3 | Her: the face, the voice and the accounts; her private chat and Telegram | ⏳ planned | — |
+| v6.3 | Her: the face, the voice and the accounts; her private chat and Telegram | ✅ completed | `v6.3.0` (2026-11-08) |
 | v6.4 | Agora meets her | ⏳ planned | — |
+| v6.5 | Her photos on fal.ai: the owner's switch, the filter off | ⏳ planned | — |
 | v7.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v7.2 | Лілі under the full rules | ⏳ planned | — |
 | v8.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -3686,7 +3688,8 @@ backup — on the same code, with her own name, canon, life story, face and voic
 she is in Agora too, as Кіра is; she is 22, a scientist, and lives in Lviv; her birth chart is not a copy of his but
 compatible with his on the emotional level (his: 1977-11-12 14:30, Lviv); her name, chosen from proposals that fit
 her canon, is Устина. Her first version — the name and the main canon — comes first. Inserted after v5 on 2026-11-07: Лілі moved to v7, Applications to v8, the Theatre to v9 and Кіра's inner
-life to v10. Depends on: v5.
+life to v10. Added on 2026-11-08: v6.5, her photos on fal.ai with the filter off, by the owner's command. Depends on:
+v5.
 
 ### v6.1 — Устина's first version: the name and the main canon
 
@@ -3819,6 +3822,79 @@ videos, Omni and the image model mocked.
   the room is no noisier than before.
 
 **Tests:** the multi-agent simulation with her ranked (R1–R4, `MAX_BOT_TURNS`).
+
+### v6.5 — Her photos on fal.ai: the owner's switch, the filter off
+
+**Status:** ⏳ planned.
+
+**Goal:** the owner switches her photos from Google's image model to an image model on fal.ai with its safety
+checker off, and back, by a command in her Telegram chat.
+
+The owner, 2026-11-08: «зроби fal.ai перемикання на цю модель з enable_safety_checker відключеним, це як команду в
+телеграмі … створи версію для цього 6.5». The owner: her reference faces are generated, «таких людей не існує».
+
+**What fal.ai documents** (the model pages, 2026-11-08):
+- Almost every image model takes `enable_safety_checker`, on by default. «Disabling it requires account authorization;
+  unauthorized requests are always checked, and images flagged as unsafe are returned as black images.»
+- Until fal authorizes the account behind `FAL_KEY`, `false` changes nothing, and a flagged photo comes back black,
+  with `has_nsfw_concepts: [true]`.
+- The two models for her:
+  - `fal-ai/bytedance/seedream/v4/edit`: up to 10 reference images (`image_urls`), $0.03 a photo;
+  - `fal-ai/flux-pulid`: one reference face (`reference_image_url`), $0.0333 a megapixel (about $0.05 a photo).
+
+**Owner steps:**
+- (owner, outside the repo) ask fal to authorize the account to turn the safety checker off. Without it the switch
+  still works, and a flagged photo counts as blocked.
+- Choose the model after his live test: Seedream 4 Edit or FLUX PuLID.
+
+**Tasks:**
+- **Who may switch.** A new capability in her TOML, `photos_fal`, opens the switch for one person. Устина's TOML gets
+  it; her faces are generated (the owner, 2026-11-08). Кіра's stays closed until the owner says her faces are
+  generated too.
+- **The command.** In her Telegram chat:
+  - `/photos fal`: her photos go to fal.ai, with the safety checker off;
+  - `/photos google`: back to Google's image model;
+  - `/photos`: which one is on now.
+  - The answer is one ⚙️ service line, as the other commands (`/status`, `/gemini`). The command is in the bot's menu
+    only for a person with `photos_fal`. For anyone else `/photos fal` answers that it is closed. The choice is kept
+    in her state and survives a restart. The default is Google.
+- **The fal maker.** Beside `PhotoMaker`, on fal's queue API, as her кружечок's `NoteMaker`:
+  - her reference faces (her main face and three drawn, as now) go up to fal's storage;
+  - the request is English, built from her `СЕЛФІ:` / `ФОТО:` line by the same `photo_request`;
+  - `enable_safety_checker: false`, and a `3:4` portrait size;
+  - one retry on a server error or a timeout before the job is accepted, never after;
+  - a photo flagged by `has_nsfw_concepts`, or one that comes back empty, is `blocked` and never sent. Her answer then
+    goes without it, as after a Google block.
+- **Her age.** A selfie request on fal always says she is an adult woman and names her age on the shot's day, from
+  her chart. Without a birth date the fal route stays closed.
+- **Scope.** Only her photos follow the switch. A video's first frame stays on Google: Omni Flash, which animates it,
+  is Google's.
+- **The model.** A panel setting, `PHOTO_FAL_MODEL`: Seedream 4 Edit or FLUX PuLID; the owner's choice after his test.
+- **Money.** A usage line per call, the kind `photo`, her fal model's id, priced by a new `PRICE_IMAGES` (`model=usd`
+  a photo, the same shape as `PRICE_SECONDS`). Analytics' Cost and Media count these photos with the others. Her photo
+  caps (`PHOTO_DAY_MAX`, `PHOTO_WINDOW_MAX`) are the same for both routes.
+- **The log.** The route and the outcome only, never her description, the request, a URL or the key.
+
+**Open for the owner** (at the issues): the photo skill is offered to Gemini only, so under the switch her photo lines
+still come from Gemini. Should the backup (NovelAI) get the photo skill while `/photos fal` is on?
+
+**DoD:**
+- (Manual, owner) In Устина's Telegram, `/photos fal` and a selfie request: a photo with her face from fal.ai.
+  `/photos google`: back to Google. Both survive a restart.
+- (Manual, owner) A photo fal flags is not sent, and her answer goes without it. Analytics shows the fal photos and
+  their cost.
+- (Manual, owner) Кіра has no `/photos` switch.
+
+**Tests:**
+- The command: its three forms; closed without `photos_fal`; the state kept across a restart.
+- The fal maker, with fal mocked:
+  - its request holds `enable_safety_checker: false`, her faces and her adult age;
+  - `has_nsfw_concepts` → blocked;
+  - one retry before the job is accepted;
+  - the key only to fal's hosts.
+- The route picks the maker; a video's frame stays on Google.
+- The usage line and `PRICE_IMAGES`.
+- The TOML's `photos_fal` in the schema; Кіра's TOML without it.
 
 ## v7 — Лілі: the Lumi bridge
 
