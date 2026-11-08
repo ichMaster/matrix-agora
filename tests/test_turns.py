@@ -431,7 +431,7 @@ def test_claude_is_chosen_by_r1_and_r2_like_the_others():
     picks = [tuple(sorted(owner_repliers(f"$o{i}", "як вам вечір?", roster, 2))) for i in range(600)]
     assert all(len(p) == 2 and set(p) <= ranked for p in picks)
     share = sum("claude" in p for p in picks) / len(picks)
-    assert 0.06 < share < 0.17                                   # weight 0.4 against six people at 1.0: ~11 %
+    assert 0.06 < share < 0.17                                   # weight 0.4 against seven people at 1.0: ~12 %
     nexts = {next_speaker(f"$a{i}", roster["ada"].user_id, "думка", roster) for i in range(400)}
     assert nexts == ranked - {"ada"}                              # never the sender, never the ambient cat
 
@@ -444,6 +444,47 @@ def test_simulated_waves_with_claude_ranked_never_exceed_the_limit(text):
         n_owner, sent, followers = simulate(roster, text, seed, purr_p=0.8)
         assert len(sent) <= max(3, n_owner), (seed, sent)
         assert all(f <= 2 for f in followers)
+
+
+# --- v6.4: ten members in the room — Устина ranked among them --------------------------------------------------------
+def _without_her(roster):
+    """The room as it was before v6.4: Устина a member, but at turn mode `none`."""
+    from dataclasses import replace
+    return {**roster, "ustyna": replace(roster["ustyna"], mode="none")}
+
+
+@pytest.mark.parametrize("text,ranked_repliers", [("як справи?", 2), ("всім привіт", 8), ("Устю, а ти?", 1)])
+def test_simulated_waves_with_ten_members_never_exceed_the_limit(text, ranked_repliers):
+    """v6.4: the owner, nine speakers and the herald — a wave never grows past `MAX_BOT_TURNS` beyond the owner's own
+    repliers, each agent message draws one R2 candidate (and at most the cat's own reaction), and the owner's ranked
+    repliers are `OWNER_REPLIERS`, every ranked member on a group address, or the one he names."""
+    roster = load_roster("agora")
+    for seed in range(300):
+        n_owner, sent, followers = simulate(roster, text, seed)
+        assert len(sent) <= max(3, n_owner), (seed, sent)
+        assert all(f <= 2 for f in followers)
+    assert len([n for n in owner_repliers("$owner", text, roster, 2) if roster[n].mode == "ranked"]) == ranked_repliers
+
+
+def test_she_answers_the_owner_about_as_often_as_the_other_people():
+    """v6.4: ranked with weight 1, she is among the owner's repliers as often as each other person, and Claude (0.4)
+    less often than any of them."""
+    roster = load_roster("agora")
+    people = [n for n, m in roster.items() if m.mode == "ranked" and m.type == "persona"]
+    picks = Counter(n for i in range(4000) for n in owner_repliers(f"$o{i}", "як вам вечір?", roster, 2))
+    shares = {n: picks[n] / 4000 for n in people}
+    mean = sum(shares[n] for n in people if n != "ustyna") / (len(people) - 1)
+    assert abs(shares["ustyna"] - mean) < 0.03, shares
+    assert picks["claude"] / 4000 < min(shares.values())
+
+
+def test_the_room_is_no_noisier_with_her_than_without():
+    """v6.4: the same owner lines and seeds with her at mode `none` and ranked — a plain line draws no more agent
+    messages with her than without (a group address draws one more answer: hers)."""
+    roster = load_roster("agora")
+    before, after = (sum(len(simulate(room, "як справи?", seed)[1]) for seed in range(300)) / 300
+                     for room in (_without_her(roster), roster))
+    assert after <= before + 0.1, (before, after)
 
 
 def test_the_cats_address_is_always_answered_too():
