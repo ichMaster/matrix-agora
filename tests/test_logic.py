@@ -275,7 +275,7 @@ def test_claudes_briefs_name_the_rooms_speakers_from_the_roster():
     cfg = AgentConfig(**{**CFG.__dict__, "name": "Клод", "user_id": "@claude:agora.lan", "type": "assistant",
                          "capabilities": frozenset(), "canon": ""})
     agent = Agent(cfg, llm=FakeLLM())
-    assert agent.members_phrase == "Ich, Ада, Бруно, Леон, Мія, Ірма, Кіра і Кіт"
+    assert agent.members_phrase == "Ich, Ада, Бруно, Леон, Мія, Ірма, Кіра, Устина і Кіт"  # v6.4: Устина
     personas = [m for m in load_roster("agora").values() if m.type == "persona"]
     for template in (CLAUDE_BRIEF_DIRECT, CLAUDE_BRIEF_PHILOSOPHER, CLAUDE_NEWS_BRIEF):
         brief = agent.brief(template)

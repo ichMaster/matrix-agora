@@ -158,6 +158,7 @@ def test_ensure_plans_names_the_room_but_never_herself_or_the_herald(tmp_path):
     asked = llm.calls[0][0]
     room = asked.split("Ich і люди з Агори (", 1)[1].split(")", 1)[0].split(", ")
     assert "Бруно" in room and "Ада" not in room and "Гермес" not in room
+    assert "Устина" in room  # v6.4: Agora meets her — in the room's plans, as the others
 
 
 def _roster_with_one_not_yet_in_the_room():

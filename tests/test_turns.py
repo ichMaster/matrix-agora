@@ -427,7 +427,7 @@ def test_claude_is_chosen_by_r1_and_r2_like_the_others():
     from agents.roster import load_roster
     roster = load_roster("agora")
     ranked = {n for n, m in roster.items() if m.mode == "ranked"}
-    assert ranked == {"ada", "bruno", "leon", "mia", "irma", "kira", "claude"}           # v5.5: six people + Claude
+    assert ranked == {"ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "claude"}  # v6.4: seven people + Claude
     picks = [tuple(sorted(owner_repliers(f"$o{i}", "як вам вечір?", roster, 2))) for i in range(600)]
     assert all(len(p) == 2 and set(p) <= ranked for p in picks)
     share = sum("claude" in p for p in picks) / len(picks)

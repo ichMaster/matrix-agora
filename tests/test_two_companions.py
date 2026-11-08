@@ -140,3 +140,25 @@ def test_the_panel_lists_both_with_their_capabilities(tmp_path):
     assert {"kira", "ustyna"} <= set(found)
     for name in ("kira", "ustyna"):
         assert {"private", "talk", "facts", "photos", "videos"} <= set(found[name].capabilities), name
+
+
+def test_in_agora_each_is_one_of_the_others_speakers(pair):
+    """v6.4: Agora meets her — each companion is among the other's speakers, so either may name, answer or ask the
+    other there."""
+    agents, _ = pair
+    assert "@ustyna:agora.lan" in agents["kira"].others and "@kira:agora.lan" in agents["ustyna"].others
+    assert all(agent.me.mode == "ranked" for agent in agents.values())
+
+
+def test_her_agora_prompt_keeps_what_is_between_her_and_him_out(pair):
+    """v6.4: in Agora her prompt is her main canon, closed by the discretion line — her private canon only alone with
+    him (made-up canon lines)."""
+    from agents.private import PRIVATE_BRIEF, PRIVATE_DISCRETION
+    agents, _ = pair
+    ustyna = agents["ustyna"]
+    ustyna.cfg = AgentConfig(**{**ustyna.cfg.__dict__, "canon": "СПІЛЬНЕ. ЇЇ КАНОН.", "canon_private": "НАОДИНЦІ."})
+    agora = ustyna.build_prompt()
+    assert agora.startswith("СПІЛЬНЕ. ЇЇ КАНОН.") and "НАОДИНЦІ." not in agora
+    assert agora.split("\n\n")[-1].endswith(PRIVATE_DISCRETION)
+    alone = ustyna.build_prompt(private=PRIVATE_BRIEF)
+    assert alone.startswith("НАОДИНЦІ.") and PRIVATE_DISCRETION not in alone

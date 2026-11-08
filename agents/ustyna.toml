@@ -29,7 +29,8 @@ videos = true            # her кружечок, short clips, and her playing
 talk = true              # her private chat in layers
 
 [turns]
-mode = "none"            # v6.3: not yet in the room — no turn, no one addresses her there; v6.4 makes her ranked
+mode = "ranked"          # v6.4: Agora meets her — ranked like the others (v6.3: "none", not yet in the room)
+weight = 1.0
 
 [places.lviv]            # her home: Lviv's weather and news
 name = "Львів, Україна"

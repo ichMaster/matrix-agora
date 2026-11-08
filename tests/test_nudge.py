@@ -234,7 +234,7 @@ def test_a_nudge_after_silence_opens_a_fresh_wave_with_one_next_speaker():
                 ("Кіт", now, "$nudge", False)]
     assert wave_count(timeline, "Ich", now, 600_000) == 1                               # the window emptied
     chosen = next_speaker("$nudge", kit.user_id, "рядок", roster)
-    people = ("ada", "bruno", "leon", "mia", "irma", "kira")                               # v5.5: six people
+    people = ("ada", "bruno", "leon", "mia", "irma", "kira", "ustyna")                     # v5.5: six people; v6.4 seven
     assert chosen in (*people, "claude")
     answers = []
     for name in (*people, "claude"):

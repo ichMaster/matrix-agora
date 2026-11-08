@@ -231,7 +231,7 @@ def test_world_tick_does_nothing_without_chronicle_or_plans():
 def test_the_agent_reads_its_members_from_the_roster():
     agent = Agent(CFG, llm=FakeLLM())
     assert set(agent.others) == {"@bruno:agora.lan", "@leon:agora.lan", "@mia:agora.lan", "@irma:agora.lan",
-                                 "@kira:agora.lan", "@kit:agora.lan", "@claude:agora.lan"}
+                                 "@kira:agora.lan", "@ustyna:agora.lan", "@kit:agora.lan", "@claude:agora.lan"}  # v6.4
     assert agent.names["@bruno:agora.lan"] == "Бруно" and agent.names["@ich:agora.lan"] == "Ich"
     assert "адо" in agent.me.name_forms
     injected = {"ada": Member("ada", "@ada:agora.lan", "Ада", ("ада",)),
@@ -415,12 +415,18 @@ def test_the_herald_rules_are_named_errors(data, match):
         parse_member("x", {"name": "X", "user_id": "@x:agora.lan", **data})
 
 
-def test_ustyna_is_a_second_companion_with_every_one_of_kiras_capabilities_not_yet_in_the_room():
-    """v6.3: her TOML — Кіра's capabilities, her own name forms, `mode = "none"` until v6.4, the guitar."""
+def test_ustyna_is_a_second_companion_with_every_one_of_kiras_capabilities_in_the_room():
+    """v6.3: her TOML — Кіра's capabilities, her own name forms, the guitar; v6.4: ranked, weight 1, as Кіра — one of
+    the room's nine speakers, and a name of hers in the room calls her."""
+    from agents.roster import speakers
+    from agents.turns import named
     roster = load_roster("agora")
     ustyna, kira = roster["ustyna"], roster["kira"]
-    assert (ustyna.user_id, ustyna.name, ustyna.type, ustyna.mode, ustyna.play) == (
-        "@ustyna:agora.lan", "Устина", "persona", "none", "guitar")
+    assert (ustyna.user_id, ustyna.name, ustyna.type, ustyna.mode, ustyna.weight, ustyna.play) == (
+        "@ustyna:agora.lan", "Устина", "persona", "ranked", 1.0, "guitar")
+    assert (kira.mode, kira.weight) == ("ranked", 1.0)
+    assert len(roster) == 10 and len(speakers(roster.values())) == 9 and ustyna in speakers(roster.values())
+    assert named("Устю, як ти?", roster.values()) == [ustyna]
     assert ustyna.capabilities == kira.capabilities and kira.play == ""
     assert {"устина", "устино", "устю", "ustyna"} <= set(ustyna.name_forms)
     assert ustyna.panel == {"name": "Ustyna", "role": "neuroscientist, 22, Lviv", "pronoun": "she"}

@@ -49,7 +49,7 @@ def test_the_addressee_is_never_oneself_and_everyone_is_asked():
         asked = {m.addressee for m in (draw(f"$a{i}", me) for i in range(3000)) if m.kind == "ask"}
         others = {m.name for m in ROOM.values() if m.user_id != me.user_id and m.mode != "none"} | {"Ich"}
         assert "Гермес" not in asked  # v5.1: the herald takes no turn — a question to him would hang
-        assert "Устина" not in asked  # v6.3: nor a person not yet in the room
+        assert "Устина" in asked  # v6.4: Agora meets her — asked like any other member
         assert asked == others and me.name not in asked
 
 
