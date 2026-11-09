@@ -3842,10 +3842,20 @@ The owner, 2026-11-08: «зроби fal.ai перемикання на цю мо
   - `fal-ai/bytedance/seedream/v4/edit`: up to 10 reference images (`image_urls`), $0.03 a photo;
   - `fal-ai/flux-pulid`: one reference face (`reference_image_url`), $0.0333 a megapixel (about $0.05 a photo).
 
+**The probes** (2026-11-09, ten photos, about $0.30): the same request as her Google route, the checker `false`.
+- Seedream 4 Edit: her face close to her main photo, three scenes of four as she named them, her figure as her look
+  file has it. It copied the references' sweater in three of four, despite the line on clothes. 38–47 s a photo,
+  1152×1536.
+- FLUX PuLID: her face close, but no scene at all — four alike studio portraits on a blurred background. 8–21 s.
+- Seedream 4 text-to-image (`fal-ai/bytedance/seedream/v4/text-to-image`), for a photo without her: good, though it
+  doesn't know Lviv's streets by name.
+- Seedream's answer has no `has_nsfw_concepts` (PuLID's has): a photo its checker flags is known only by being black.
+- The owner chose Seedream (2026-11-09), and the prompt written by the backup: «коли генерується промпт для Seedream
+  я б хотів щоб це була бакап мережа»; then «так все вірно» — with the backup's photo skill under the switch.
+
 **Owner steps:**
 - (owner, outside the repo) ask fal to authorize the account to turn the safety checker off. Without it the switch
   still works, and a flagged photo counts as blocked.
-- Choose the model after his live test: Seedream 4 Edit or FLUX PuLID.
 
 **Tasks:**
 - **Who may switch.** A new capability in her TOML, `photos_fal`, opens the switch for one person. Устина's TOML gets
@@ -3859,28 +3869,41 @@ The owner, 2026-11-08: «зроби fal.ai перемикання на цю мо
     only for a person with `photos_fal`. For anyone else `/photos fal` answers that it is closed. The choice is kept
     in her state and survives a restart. The default is Google.
 - **The fal maker.** Beside `PhotoMaker`, on fal's queue API, as her кружечок's `NoteMaker`:
+  - **the models:** Seedream 4 Edit for a selfie (her faces as references), Seedream 4 text-to-image for a photo
+    without her, so no reference puts her into it. FLUX PuLID is left out (the probes);
   - her reference faces (her main face and three drawn, as now) go up to fal's storage;
-  - the request is English, built from her `СЕЛФІ:` / `ФОТО:` line by the same `photo_request`;
-  - `enable_safety_checker: false`, and a `3:4` portrait size;
+  - `enable_safety_checker: false`, and a `3:4` portrait size, 1152×1536;
   - one retry on a server error or a timeout before the job is accepted, never after;
-  - a photo flagged by `has_nsfw_concepts`, or one that comes back empty, is `blocked` and never sent. Her answer then
-    goes without it, as after a Google block.
+  - a photo flagged by `has_nsfw_concepts`, one that comes back black (Seedream names no flag), or one that comes back
+    empty is `blocked` and never sent. Her answer then goes without it, as after a Google block.
+- **The request, by the backup.** Under the switch her `СЕЛФІ:` / `ФОТО:` line and her moment (the time, the season,
+  the city, the weather) go to her backup model (`FALLBACK_MODEL`, NovelAI), which writes the shot in English for the
+  image model: the scene, her pose and look on her face, her clothes named (to suit the weather and the scene unless
+  her line names them), the light and the framing of a phone photo.
+  - The code puts around it what never depends on the model: for a selfie, the line on her face from the references,
+    that she is an adult woman and her age on the shot's day, and her look file; for a photo without her, that no face
+    is in it unless the line names one; and the look of a phone snapshot.
+  - Without a backup model, or when it fails or answers nothing, the request is built as now (`photo_request`), and
+    the photo is still made.
+  - What the backup writes counts as the backup's talk: never logged, never kept, never in a test but made-up lines.
+    The log names the route, the outcome and the length only.
+- **The backup's photo skill.** While `/photos fal` is on, her backup's private answers get her photo skill too, and
+  a `СЕЛФІ:` / `ФОТО:` line in its answer makes a photo on fal as Gemini's does. Under `/photos google` the backup
+  has no photo skill, as now.
 - **Her age.** A selfie request on fal always says she is an adult woman and names her age on the shot's day, from
   her chart. Without a birth date the fal route stays closed.
 - **Scope.** Only her photos follow the switch. A video's first frame stays on Google: Omni Flash, which animates it,
   is Google's.
-- **The model.** A panel setting, `PHOTO_FAL_MODEL`: Seedream 4 Edit or FLUX PuLID; the owner's choice after his test.
 - **Money.** A usage line per call, the kind `photo`, her fal model's id, priced by a new `PRICE_IMAGES` (`model=usd`
-  a photo, the same shape as `PRICE_SECONDS`). Analytics' Cost and Media count these photos with the others. Her photo
-  caps (`PHOTO_DAY_MAX`, `PHOTO_WINDOW_MAX`) are the same for both routes.
+  a photo, the same shape as `PRICE_SECONDS`). The backup's call that writes the request is a usage line of its own,
+  as its other calls. Analytics' Cost and Media count these photos with the others. Her photo caps (`PHOTO_DAY_MAX`,
+  `PHOTO_WINDOW_MAX`) are the same for both routes.
 - **The log.** The route and the outcome only, never her description, the request, a URL or the key.
 
-**Open for the owner** (at the issues): the photo skill is offered to Gemini only, so under the switch her photo lines
-still come from Gemini. Should the backup (NovelAI) get the photo skill while `/photos fal` is on?
-
 **DoD:**
-- (Manual, owner) In Устина's Telegram, `/photos fal` and a selfie request: a photo with her face from fal.ai.
-  `/photos google`: back to Google. Both survive a restart.
+- (Manual, owner) In Устина's Telegram, `/photos fal` and a selfie request: a photo with her face from Seedream, in
+  clothes that suit the scene. `/photos google`: back to Google. Both survive a restart.
+- (Manual, owner) A photo without her under `/photos fal` comes from Seedream's text-to-image.
 - (Manual, owner) A photo fal flags is not sent, and her answer goes without it. Analytics shows the fal photos and
   their cost.
 - (Manual, owner) Кіра has no `/photos` switch.
@@ -3888,10 +3911,14 @@ still come from Gemini. Should the backup (NovelAI) get the photo skill while `/
 **Tests:**
 - The command: its three forms; closed without `photos_fal`; the state kept across a restart.
 - The fal maker, with fal mocked:
-  - its request holds `enable_safety_checker: false`, her faces and her adult age;
-  - `has_nsfw_concepts` → blocked;
+  - a selfie goes to Seedream 4 Edit with her faces, a photo without her to text-to-image with none;
+  - its request holds `enable_safety_checker: false` and her adult age;
+  - `has_nsfw_concepts`, a black image, no image → blocked;
   - one retry before the job is accepted;
   - the key only to fal's hosts.
+- The request by the backup, with the backup mocked: its text between the code's own lines; her age and face line
+  whatever it writes; the template when it fails or is absent; no text of it in the log.
+- The backup's photo skill: offered under `/photos fal` only; its photo line makes a fal photo.
 - The route picks the maker; a video's frame stays on Google.
 - The usage line and `PRICE_IMAGES`.
 - The TOML's `photos_fal` in the schema; Кіра's TOML without it.
