@@ -118,6 +118,7 @@ from agents.facts import (
 )
 from agents.fallback import TOKEN_VAR as FALLBACK_TOKEN_VAR
 from agents.fallback import FallbackClient, FallbackResponder
+from agents.falphoto import FalPhotoMaker, load_photo_route, save_photo_route
 from agents.guardian import KEY_VAR as GUARDIAN_KEY_VAR
 from agents.guardian import Guardian
 from agents.life import current_chapter, events_due, known_ahead, life_section, next_chapter
@@ -293,15 +294,15 @@ from agents.talk import (
 from agents.telegram import (
     ACTION_EVERY_S,
     CAPTION_MAX,
-    COMMAND_HELP,
-    COMMANDS,
     VOICE_MAX_BYTES,
     TelegramBot,
     Update,
     allowed,
     backoff_s,
     command_args,
+    command_help,
     command_of,
+    commands_for,
     load_telegram_state,
     next_offset,
     parse_update,
@@ -333,6 +334,7 @@ from agents.usage import (
     PROMPT_PARTS,
     answer_line,
     fallback_usage_line,
+    image_usage_line,
     parse_lines,
     sdk_usage_line,
     stt_usage_line,
@@ -579,6 +581,7 @@ class Agent:
         self._pending_shot: Shot | None = None
         self.photo_birth: date | None = None  # v6.5: her age and look for a photo on fal, as for Google's
         self.photo_look = ""
+        self.fal_photos: FalPhotoMaker | None = None  # v6.5: her photos on Seedream, by the owner's `/photos fal`
         if cfg.can("photos"):
             self.photo_day_max = int(os.environ.get("PHOTO_DAY_MAX", "40"))
             self.photo_window_max = int(os.environ.get("PHOTO_WINDOW_MAX", "3"))  # v5.22: at most so many in any
@@ -598,6 +601,11 @@ class Agent:
                 log.warning("photos: no faces — a selfie will not come out")
             if not look:  # v6.2 review #1: without it her selfie silently loses her look (Кіра's no-makeup rule)
                 log.warning("photos: no look file — her selfie has no look")
+            if cfg.can("photos_fal"):  # v6.5: the owner's switch to Seedream on fal, her faces and her adult age
+                if fal_key and self.photo_birth is not None:
+                    self.fal_photos = FalPhotoMaker(fal_key, faces, f"{cfg.localpart}.png", self.record_image_usage)
+                else:
+                    log.warning("photos: no fal (%s)", "no FAL_KEY" if not fal_key else "no birth date")
         # v5.18 — her videos in Telegram: her кружечок (Fabric 1.0 on fal, from her selfie and her voice; the key lives
         # only in the maker) and her clips (Omni Flash, from a photo of what she sees); one at a time, after her answer
         self.notes: NoteMaker | None = None
@@ -1928,7 +1936,8 @@ class Agent:
         One ⚙️ service line, sent as text, never voiced; never in her history, the archive, the facts, the session or a
         prompt, and never a reset of her writing-first timer. Logged by the command's name only."""
         name = command_of(text)
-        known = {n for n, _ in COMMANDS}
+        commands = commands_for(self.cfg.can("photos_fal"))
+        known = {n for n, _ in commands}
         if name in ("gemini", "backup") and not self.backup_open():
             answer = "⚙️ Backup вимкнено: її відповіді завжди через gemini"
         elif name in ("gemini", "backup"):
@@ -1942,11 +1951,42 @@ class Agent:
             answer = self.purge_answer(command_args(text))
         elif name == "scan":
             answer = self.scan_answer(command_args(text))
+        elif name == "photos":
+            answer = self.photos_answer(command_args(text))
         else:
-            answer = COMMAND_HELP
+            answer = command_help(commands)
         log.info("telegram: command %s", name if name in known else "unknown")
         if not await self.telegram.send_message(self.telegram_owner, answer):
             log.warning("telegram: the command's answer was not delivered")
+
+    @property
+    def photo_route_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.photos.json"
+
+    def photo_route(self) -> str:
+        """v6.5 — where her photos go now: `fal` when the owner switched them so and her fal maker is there, else
+        `google`; read fresh each time, so a `/photos` in between is never lost."""
+        return "fal" if self.fal_photos is not None and load_photo_route(self.photo_route_file) == "fal" else "google"
+
+    def photos_answer(self, args: list[str]) -> str:
+        """v6.5 — `/photos` (the owner, 2026-11-08: «зроби fal.ai перемикання … це як команду в телеграмі»): `fal`
+        sends her photos to Seedream with the safety checker off, `google` back to Google's image model, a bare one
+        names the route; only for a person with `photos_fal` (her faces generated — the owner's word), and `fal` only
+        with her fal maker. Kept in `state/<name>.photos.json`, so it survives a restart."""
+        if not self.cfg.can("photos_fal"):
+            return "⚙️ Перемикач фото закритий"
+        want = args[0] if args else None
+        if want == "fal" and self.fal_photos is None:
+            return "⚙️ fal недоступний: фото лишаються в google"
+        if want in ("fal", "google"):
+            try:
+                save_photo_route(self.photo_route_file, want)
+            except OSError as exc:
+                log.error("photos: the route was not saved (%s)", type(exc).__name__)
+                return "⚙️ Не збережено: стан не записався"
+            log.info("photos: the route is %s", want)
+        return ("⚙️ Фото: fal (Seedream, фільтр вимкнено)" if self.photo_route() == "fal"
+                else "⚙️ Фото: google")
 
     def unblock_answer(self) -> str:
         """v5.22 (the owner, 2026-11-02: «просто закриває попередню пару до початку блоку … я руками зроблю стільки раз
@@ -2308,8 +2348,8 @@ class Agent:
         меседжем … ліпше кількість на 30 хв»)."""
         if door != "telegram":
             return "element"
-        if self.photos is None or self.photo_day_max <= 0:
-            return "off"
+        if (self.photos if self.photo_route() == "google" else self.fal_photos) is None or self.photo_day_max <= 0:
+            return "off"  # v6.5: the maker of the route her photos take now
         if self.photos_today() >= self.photo_day_max:
             return "cap"
         if self._window_full("photos", self.photo_window_max, self.photo_window_s):
@@ -2500,6 +2540,9 @@ class Agent:
         """v5.17 — her photo for this moment; v5.18: a video's first frame takes its aspect and frame line (v5.22: and
         its usage line is the kind `frame`)."""
         try:
+            if kind == "photo" and self.photo_route() == "fal":  # v6.5: a video's frame stays on Google
+                moment = self._moment()
+                return await self.fal_photos.make(shot, await self._fal_prompt(shot, moment))
             return await self.photos.make(shot, self._moment(), aspect, extra, kind)
         except Exception as exc:  # noqa: BLE001 — her answer without it, never a crash
             log.warning("photo: failed (%s)", type(exc).__name__)
@@ -3025,6 +3068,11 @@ class Agent:
         """v5.18 — one line per call of her кружечок's model on fal: `fal`, priced per second by `PRICE_SECONDS`, no text."""
         self._append_usage(lambda ts: video_note_usage_line(ts, self.cfg.localpart, model, video_ms, ok, blocked,
                                                             latency_ms))
+
+    def record_image_usage(self, model: str, images: int | None, ok: bool, blocked: str | None = None,
+                           latency_ms: int | None = None) -> None:
+        """v6.5 — one line per call of her photo's model on fal: `fal`, priced per image by `PRICE_IMAGES`, no text."""
+        self._append_usage(lambda ts: image_usage_line(ts, self.cfg.localpart, model, images, ok, blocked, latency_ms))
 
     def record_fallback_usage(self, kind: str, model: str, ok: bool, latency_ms: int | None = None) -> None:
         """v5.14 — one line per call of her backup model: `novelai`, the subscription, never priced, no text."""
@@ -4448,8 +4496,10 @@ class Agent:
         stop_task = asyncio.create_task(stop.wait())
         tasks = [sync_task, watcher, stop_task]
         if self.telegram is not None:  # v5.7: her bot, polled beside the sync
-            if self.cfg.can("fallback") and not await self.telegram.set_commands(self.telegram_owner):
-                log.warning("telegram: the command list was not set")  # v5.14: the owner's chat only
+            if ((self.cfg.can("fallback") or self.cfg.can("photos_fal"))  # v5.14: the owner's chat only
+                    and not await self.telegram.set_commands(self.telegram_owner,
+                                                             commands_for(self.cfg.can("photos_fal")))):
+                log.warning("telegram: the command list was not set")
             log.info("telegram: polling")
             tasks.append(asyncio.create_task(self.telegram_poll()))
         await asyncio.wait({sync_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)

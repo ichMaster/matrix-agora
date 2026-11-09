@@ -114,7 +114,7 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         raise ConfigError(str(exc)) from exc
     # canon and life are required only when the agent's type has them (a persona has both)
     required = [k for k in ("name", "user_id", "canon", "life", "simulation") if k not in ("canon", "life") or member.can(k)]
-    if member.can("mood"):
+    if member.can("mood") or member.can("photos_fal"):  # v6.5: her age on fal comes from her chart
         required.append("natal")
     if member.can("pastlife"):
         required.append("memories")
@@ -160,7 +160,7 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         raise ConfigError(str(exc)) from exc
 
     natal = ""
-    if member.can("mood"):
+    if member.can("mood") or member.can("photos_fal"):
         natal_path = Path(str(data["natal"]))
         try:
             lines = natal_path.read_text(encoding="utf-8").splitlines()

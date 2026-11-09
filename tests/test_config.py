@@ -76,7 +76,17 @@ def test_ustynas_toml_loads_with_every_capability_and_her_own_files():
     story, backup canon, voice palette, chart and reading."""
     cfg = load_config("agents/ustyna.toml", env={**ENV, "USTYNA_PASSWORD": "pw-ustyna"})
     kira = load_config("agents/kira.toml", env={**ENV, "KIRA_PASSWORD": "pw-kira"})
-    assert cfg.localpart == "ustyna" and cfg.capabilities == kira.capabilities and cfg.play == "guitar"
+    assert cfg.localpart == "ustyna" and cfg.play == "guitar"
+    assert cfg.capabilities == kira.capabilities | {"photos_fal"}  # v6.5: the switch is hers, never Кіра's
     assert cfg.canon_private and cfg.canon_backup and cfg.life_private and cfg.voice_spec and cfg.reading
     assert "Устина" in cfg.canon and cfg.natal and cfg.places and cfg.places["lviv"].news
 
+
+
+def test_photos_fal_needs_her_chart_for_her_age(tmp_path):
+    """v6.5: a selfie on fal always names her adult age from her chart — without `natal` the TOML is refused."""
+    toml = tmp_path / "x.toml"
+    toml.write_text('name = "X"\nuser_id = "@x:agora.lan"\ncanon = "c.md"\nlife = "l.md"\nsimulation = "agora"\n'
+                    "[capabilities]\nprivate = true\ntelegram = true\nphotos = true\nphotos_fal = true\n")
+    with pytest.raises(ConfigError, match="missing 'natal'"):
+        load_config(str(toml), env={**ENV, "X_PASSWORD": "pw-x"})

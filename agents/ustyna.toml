@@ -27,6 +27,7 @@ fallback = true          # the backup answers her private chat when Gemini block
 photos = true            # her photos in Telegram, her face from agents/canon/ustyna.face/
 videos = true            # her кружечок, short clips, and her playing
 talk = true              # her private chat in layers
+photos_fal = true        # v6.5: /photos fal|google — her faces are generated (the owner, 2026-11-08)
 
 [turns]
 mode = "ranked"          # v6.4: Agora meets her — ranked like the others (v6.3: "none", not yet in the room)

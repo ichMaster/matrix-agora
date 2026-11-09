@@ -14,10 +14,13 @@ never the request, a URL or the key.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 import random
 import time
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 
 import aiohttp
 
@@ -158,3 +161,31 @@ class FalPhotoMaker(FalQueue):
         if not data:
             raise _Blocked
         return data, images[0].get("content_type") or "image/jpeg", len(images), flagged(result)
+
+
+# --- the owner's switch (`/photos fal|google`), kept in `state/<name>.photos.json` -----------------------------------
+ROUTES = ("google", "fal")
+
+
+def load_photo_route(path: Path) -> str:
+    """Where her photos go: `google` (the default; a missing or corrupt file too) or `fal`."""
+    try:
+        route = json.loads(path.read_text(encoding="utf-8")).get("route")
+    except (OSError, ValueError, AttributeError):
+        return "google"
+    return route if route in ROUTES else "google"
+
+
+def save_photo_route(path: Path, route: str) -> None:
+    """Atomic, private from birth (0600): the route only, never a text."""
+    if route not in ROUTES:
+        raise ValueError(f"unknown photo route {route!r}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, json.dumps({"route": route}).encode())
+    finally:
+        os.close(fd)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)

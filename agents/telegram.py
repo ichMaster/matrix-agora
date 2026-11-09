@@ -95,7 +95,19 @@ def parse_update(raw: Any) -> Update | None:
 COMMANDS = (("status", "Маршрут і блоки"), ("gemini", "Повернути gemini зараз"),
             ("backup", "Увімкнути backup до /gemini"), ("unblock", "Закрити пару перед блоком"),
             ("purge", "Видалити розмову через backup"), ("scan", "Знайти й пом'якшити години, що блокують gemini"))
-COMMAND_HELP = "⚙️ Команди: " + ", ".join(f"/{name} — {about.lower()}" for name, about in COMMANDS)
+PHOTOS_COMMAND = ("photos", "Фото: google чи fal")  # v6.5: only for a person with `photos_fal`
+
+
+def commands_for(photos_fal: bool) -> tuple[tuple[str, str], ...]:
+    """v6.5 — her chat's command list: the route's commands, and `/photos` only for a person with `photos_fal`."""
+    return (*COMMANDS, PHOTOS_COMMAND) if photos_fal else COMMANDS
+
+
+def command_help(commands: tuple[tuple[str, str], ...] = COMMANDS) -> str:
+    return "⚙️ Команди: " + ", ".join(f"/{name} — {about.lower()}" for name, about in commands)
+
+
+COMMAND_HELP = command_help()
 
 
 def command_args(text: str) -> list[str]:
@@ -247,9 +259,9 @@ class TelegramBot:
         """Plain text (no parse mode), cut to one message at a sentence."""
         return await self._send("sendMessage", CALL_TIMEOUT_S, json_body={"chat_id": chat_id, "text": fit_text(text)})
 
-    async def set_commands(self, chat_id: int) -> bool:
-        """v5.14 — the command list, shown in the owner's chat only (`BotCommandScopeChat`)."""
-        body = {"commands": [{"command": name, "description": about} for name, about in COMMANDS],
+    async def set_commands(self, chat_id: int, commands: tuple[tuple[str, str], ...] = COMMANDS) -> bool:
+        """v5.14 — the command list, shown in the owner's chat only (`BotCommandScopeChat`); v6.5: the person's own."""
+        body = {"commands": [{"command": name, "description": about} for name, about in commands],
                 "scope": {"type": "chat", "chat_id": chat_id}}
         return (await self._call("setMyCommands", CALL_TIMEOUT_S, json_body=body)).ok
 

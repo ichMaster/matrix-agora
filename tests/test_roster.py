@@ -54,7 +54,7 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
                                                                               "telegram", "recall", "facts",
                                                                               "emotion", "events", "thoughts",
                                                                               "fallback", "photos", "videos",
-                                                                              "talk"}
+                                                                              "talk", "photos_fal"}
     assert ada.panel["name"] == "Ada"
 
 
@@ -427,7 +427,7 @@ def test_ustyna_is_a_second_companion_with_every_one_of_kiras_capabilities_in_th
     assert (kira.mode, kira.weight) == ("ranked", 1.0)
     assert len(roster) == 10 and len(speakers(roster.values())) == 9 and ustyna in speakers(roster.values())
     assert named("Устю, як ти?", roster.values()) == [ustyna]
-    assert ustyna.capabilities == kira.capabilities and kira.play == ""
+    assert ustyna.capabilities == kira.capabilities | {"photos_fal"} and kira.play == ""  # v6.5: hers alone
     assert {"устина", "устино", "устю", "ustyna"} <= set(ustyna.name_forms)
     assert ustyna.panel == {"name": "Ustyna", "role": "neuroscientist, 22, Lviv", "pronoun": "she"}
 
@@ -544,3 +544,18 @@ def test_talk_needs_both_the_private_chat_and_the_archive(caps):
                            "capabilities": dict.fromkeys(caps, True)})
     assert parse_member("x", {"name": "X", "user_id": "@x:a", "type": "persona",
                               "capabilities": dict.fromkeys(("talk", "private", "recall"), True)}).can("talk")
+
+
+def test_photos_fal_is_a_persons_switch_never_without_her_photos_and_only_ustynas():
+    """v6.5: the owner's switch of her photos to fal — a person's only, never without `photos`; Устина's TOML holds
+    it (her faces are generated, the owner's word), Кіра's never until he says so."""
+    roster = load_roster("agora")
+    assert "photos_fal" in roster["ustyna"].capabilities and "photos_fal" not in roster["kira"].capabilities
+    assert [n for n, m in roster.items() if "photos_fal" in m.capabilities] == ["ustyna"]
+    base = {"name": "X", "user_id": "@x:agora.lan", "canon": "c.md", "life": "l.md", "simulation": "agora"}
+    caps = {"private": True, "telegram": True, "photos": True, "photos_fal": True}
+    assert "photos_fal" in parse_member("x", {**base, "capabilities": caps}, "x.toml").capabilities
+    with pytest.raises(RosterError, match="'photos_fal' needs 'photos'"):
+        parse_member("x", {**base, "capabilities": {**caps, "photos": False}}, "x.toml")
+    with pytest.raises(RosterError, match="persona type only"):
+        parse_member("x", {**base, "type": "creature", "capabilities": {"photos_fal": True}}, "x.toml")
