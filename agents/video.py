@@ -307,15 +307,93 @@ ClientSession = aiohttp.ClientSession  # the seam: a test passes its own (tests/
 NoteSink = Callable[[str, int | None, bool, str | None], None]  # (model, video ms, ok, blocked)
 
 
-class NoteMaker:
+class FalQueue:
+    """v6.5 — fal's queue API and its storage, shared by her кружечок (`NoteMaker`) and her photos on fal
+    (`agents/falphoto.py`): the key goes only to fal's queue and its upload host, never to a file's URL, and the log
+    names a status or a type, never fal's words, a URL or the key."""
+
+    _what = "video"  # the log lines' first word
+    _log = log
+
+    def __init__(self, key: str, poll_s: float, sleep: Callable[[float], Awaitable] = asyncio.sleep) -> None:
+        self._key, self._poll_s, self._sleep = key, poll_s, sleep
+
+    async def _queue(self, session, method: str, url: str, **kw) -> dict:
+        """One call to fal's queue or its upload — the key goes to those hosts only, never elsewhere."""
+        if urlsplit(url).hostname not in (QUEUE_HOST, UPLOAD_HOST):
+            raise ValueError("not fal's queue")
+        headers = {"Authorization": f"Key {self._key}", "Content-Type": "application/json"}
+        async with session.request(method, url, headers=headers, **kw) as resp:
+            try:
+                data = await resp.json(content_type=None)
+            except ValueError:
+                data = None
+            if resp.status >= 500:
+                raise _Retry(f"HTTP {resp.status}")
+            if resp.status >= 400:
+                detail = data.get("detail") if isinstance(data, dict) else None
+                if _blocked_words(str(detail)):
+                    raise _Blocked
+                # the live test: fal locks an account whose credits ran out — the log names that, never fal's words
+                self._log.warning("%s: fal HTTP %s%s", self._what, resp.status,
+                            " (balance exhausted)" if "balance" in str(detail).lower() else "")
+                raise RuntimeError(f"HTTP {resp.status}")
+            return data if isinstance(data, dict) else {}
+
+    async def _again(self, call):
+        """Review #2: once fal has the job, a 5xx or a dropped connection asks again (within `make`'s timeout)."""
+        while True:
+            try:
+                return await call()
+            except (_Retry, aiohttp.ClientConnectionError) as exc:
+                self._log.info("%s: %s while waiting — asking again", self._what, type(exc).__name__)
+                await self._sleep(self._poll_s)
+
+    async def _upload(self, session, data: bytes, mime: str) -> str:
+        """A file put on fal's storage for the job (the live test: Fabric takes no data URI): fal names a signed URL to
+        put it to — no key sent there — and the file's own URL, which the job names."""
+        init = await self._queue(session, "POST", UPLOAD_URL,
+                                 json={"content_type": mime, "file_name": FILE_NAMES.get(mime, "file")})
+        upload_url, file_url = init.get("upload_url"), init.get("file_url")
+        if not upload_url or not file_url:
+            raise RuntimeError("no upload")
+        async with session.put(upload_url, data=data, headers={"Content-Type": mime}) as resp:
+            if resp.status >= 500:
+                raise _Retry(f"HTTP {resp.status}")
+            if resp.status >= 300:
+                raise RuntimeError(f"HTTP {resp.status}")
+        return file_url
+
+    async def _download(self, session, url: str) -> bytes:
+        async with session.get(url) as resp:  # fal's storage: no key sent there
+            if resp.status >= 500:
+                raise _Retry(f"HTTP {resp.status}")
+            if resp.status != 200:
+                raise RuntimeError(f"HTTP {resp.status}")
+            return await resp.read()
+
+    async def _cancel(self, cancel_url: str | None) -> None:
+        """A job that ran out of time is cancelled, so fal never bills one still in its queue (one that already runs
+        cannot be); best effort, by outcome only."""
+        if not cancel_url:
+            return
+        try:
+            async with ClientSession() as session:
+                await asyncio.wait_for(self._queue(session, "PUT", cancel_url), 15)
+            self._log.info("%s: fal job cancelled", self._what)
+        except Exception as exc:  # noqa: BLE001 — already running or done: nothing to undo
+            self._log.info("%s: fal job not cancelled (%s)", self._what, type(exc).__name__)
+
+
+class NoteMaker(FalQueue):
     """Her кружечок's model on fal (the queue API; VEED Fabric 1.0 or Kling AI Avatar v2): her frame and her voice, put
     on fal's storage, → her face speaking it."""
 
     def __init__(self, key: str, model: str = NOTE_MODEL, sink: NoteSink | None = None, poll_s: float = NOTE_POLL_S,
                  timeout_s: float = TIMEOUT_S, sleep: Callable[[float], Awaitable] = asyncio.sleep) -> None:
-        self._key = key
+        super().__init__(key, poll_s, sleep)
         self.model = model if model in NOTE_MODELS else NOTE_MODEL
-        self._sink, self._poll_s, self._timeout_s, self._sleep = sink, poll_s, timeout_s, sleep
+        self._sink, self._timeout_s = sink, timeout_s
 
     _mono = staticmethod(time.monotonic)  # v5.22: the calls' clock — a test sets its own
 
@@ -358,72 +436,6 @@ class NoteMaker:
                 log.warning("video: failed (%s)", type(exc).__name__)
                 return Video(None, why="failed")
         return Video(None, why="failed")  # never reached: the loop returns
-
-    async def _queue(self, session, method: str, url: str, **kw) -> dict:
-        """One call to fal's queue or its upload — the key goes to those hosts only, never elsewhere."""
-        if urlsplit(url).hostname not in (QUEUE_HOST, UPLOAD_HOST):
-            raise ValueError("not fal's queue")
-        headers = {"Authorization": f"Key {self._key}", "Content-Type": "application/json"}
-        async with session.request(method, url, headers=headers, **kw) as resp:
-            try:
-                data = await resp.json(content_type=None)
-            except ValueError:
-                data = None
-            if resp.status >= 500:
-                raise _Retry(f"HTTP {resp.status}")
-            if resp.status >= 400:
-                detail = data.get("detail") if isinstance(data, dict) else None
-                if _blocked_words(str(detail)):
-                    raise _Blocked
-                # the live test: fal locks an account whose credits ran out — the log names that, never fal's words
-                log.warning("video: fal HTTP %s%s", resp.status,
-                            " (balance exhausted)" if "balance" in str(detail).lower() else "")
-                raise RuntimeError(f"HTTP {resp.status}")
-            return data if isinstance(data, dict) else {}
-
-    async def _again(self, call):
-        """Review #2: once fal has the job, a 5xx or a dropped connection asks again (within `make`'s timeout)."""
-        while True:
-            try:
-                return await call()
-            except (_Retry, aiohttp.ClientConnectionError) as exc:
-                log.info("video: %s while waiting — asking again", type(exc).__name__)
-                await self._sleep(self._poll_s)
-
-    async def _upload(self, session, data: bytes, mime: str) -> str:
-        """A file put on fal's storage for the job (the live test: Fabric takes no data URI): fal names a signed URL to
-        put it to — no key sent there — and the file's own URL, which the job names."""
-        init = await self._queue(session, "POST", UPLOAD_URL,
-                                 json={"content_type": mime, "file_name": FILE_NAMES.get(mime, "file")})
-        upload_url, file_url = init.get("upload_url"), init.get("file_url")
-        if not upload_url or not file_url:
-            raise RuntimeError("no upload")
-        async with session.put(upload_url, data=data, headers={"Content-Type": mime}) as resp:
-            if resp.status >= 500:
-                raise _Retry(f"HTTP {resp.status}")
-            if resp.status >= 300:
-                raise RuntimeError(f"HTTP {resp.status}")
-        return file_url
-
-    async def _download(self, session, url: str) -> bytes:
-        async with session.get(url) as resp:  # fal's storage: no key sent there
-            if resp.status >= 500:
-                raise _Retry(f"HTTP {resp.status}")
-            if resp.status != 200:
-                raise RuntimeError(f"HTTP {resp.status}")
-            return await resp.read()
-
-    async def _cancel(self, cancel_url: str | None) -> None:
-        """A job that ran out of time is cancelled, so fal never bills one still in its queue (one that already runs
-        cannot be); best effort, by outcome only."""
-        if not cancel_url:
-            return
-        try:
-            async with ClientSession() as session:
-                await asyncio.wait_for(self._queue(session, "PUT", cancel_url), 15)
-            log.info("video: fal job cancelled")
-        except Exception as exc:  # noqa: BLE001 — already running or done: nothing to undo
-            log.info("video: fal job not cancelled (%s)", type(exc).__name__)
 
     async def _run(self, files: tuple, hint: float | None, submitted: list) -> Video:
         async with ClientSession() as session:

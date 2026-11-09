@@ -69,5 +69,14 @@ def _no_network_fetchers(monkeypatch):
 
     monkeypatch.setattr(fallback_module, "ClientSession", NoSession)
 
+    from agents import video as video_module
+
+    class NoFal:  # v6.5: fal's queue — her кружечок and her photos on Seedream; a test passes its own session
+        def __init__(self, *_a, **_k):
+            reached.append("fal")
+            raise RuntimeError("a test reached the network: patch agents.video.ClientSession")
+
+    monkeypatch.setattr(video_module, "ClientSession", NoFal)
+
     yield
     assert not reached, f"a test reached the network through the default fetcher: {', '.join(reached)}"
