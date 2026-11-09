@@ -183,13 +183,17 @@ from agents.photo import MODEL as PHOTO_MODEL
 from agents.photo import (
     PHOTO_FAILED,
     PHOTO_SKILL,
+    SCENE_INSTRUCTION,
     Made,
     Moment,
     PhotoMaker,
     Shot,
+    fal_request,
     load_faces,
     load_look,
     photo_maker,
+    scene_check,
+    scene_input,
     split_photo,
     strip_notes,
 )
@@ -573,6 +577,8 @@ class Agent:
         self.photo_sent = False
         self._offer_photo = False
         self._pending_shot: Shot | None = None
+        self.photo_birth: date | None = None  # v6.5: her age and look for a photo on fal, as for Google's
+        self.photo_look = ""
         if cfg.can("photos"):
             self.photo_day_max = int(os.environ.get("PHOTO_DAY_MAX", "40"))
             self.photo_window_max = int(os.environ.get("PHOTO_WINDOW_MAX", "3"))  # v5.22: at most so many in any
@@ -580,6 +586,7 @@ class Agent:
             faces = load_faces(Path("agents/canon") / f"{cfg.localpart}.face")
             # v6.2: her own selfie — her main face photo, her age from her chart, her look file
             look = load_look(Path("agents/canon") / f"{cfg.localpart}.look.md")
+            self.photo_birth, self.photo_look = parse_birth_date(cfg.natal), look
             if isinstance(self.llm, GeminiClient):
                 self.photos = photo_maker(os.environ.get("PHOTO_MODEL", "gemini-nano-banana-2.1").strip() or PHOTO_MODEL,
                                           os.environ.get("PHOTO_SIZE", "1K").strip() or "1K", faces,
@@ -2466,6 +2473,27 @@ class Agent:
                 log.error("photo: the weather was not read (%s)", type(exc).__name__)
         city = here.name_en.split(",", 1)[0] if here.key == "home" else here.name_en
         return Moment(now, weather, city, here.south)
+
+    async def _fal_prompt(self, shot: Shot, moment: Moment) -> str:
+        """v6.5 (the owner, 2026-11-09: «коли генерується промпт для Seedream я б хотів щоб це була бакап мережа») —
+        her photo's request for fal: her backup model writes the scene from her line and her moment (whenever it has
+        its model and token — `FALLBACK_ROUTE` governs her answers, not this), and the code puts its own lines around
+        it (`fal_request`); without the backup, when it fails or answers in another script, the template. What the
+        backup writes is its talk: never logged, never kept — the log names the route and the length only."""
+        scene, why = None, "no backup"
+        if self.fallback is not None:
+            try:
+                got = await self.fallback.reply(scene_input(shot, moment), SCENE_INSTRUCTION, 400, kind="photo_prompt")
+            except Exception as exc:  # noqa: BLE001 — the template, never a crash
+                log.warning("photo: the backup's request failed (%s)", type(exc).__name__)
+                got = None
+            scene = scene_check(got[0]) if got else None
+            why = "failed" if not got else "not english"
+        if scene:
+            log.info("photo: the request by the backup (%d chars)", len(scene))
+        else:
+            log.info("photo: the request by the template (%s)", why)
+        return fal_request(shot, moment, scene, self.photo_birth, self.photo_look)
 
     async def _make_photo(self, shot: Shot, aspect: str = "3:4", extra: str | None = None,
                           kind: str = "photo") -> Made:

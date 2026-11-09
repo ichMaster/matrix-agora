@@ -330,3 +330,50 @@ def test_a_block_with_her_photo_skill_is_tried_once_more_without_it_never_the_ba
     agent.private_line("а так?", ms(17) + 60_000, "telegram", "tg:2")
     assert asyncio.run(agent.private_reply()) is True
     assert len(agent.fallback.calls) == 1
+
+
+# --- v6.5 (AGORA-234): her photo's request for fal, written by her backup ---------------------------------------------
+class Backup:
+    """Her backup model: answers with the given text (None: a failure), keeps each call."""
+
+    def __init__(self, text):
+        self.text, self.calls = text, []
+
+    async def reply(self, transcript, system_instruction, max_output_tokens=400, kind="private"):
+        self.calls.append((transcript, system_instruction, max_output_tokens, kind))
+        return (self.text, "stop") if self.text is not None else None
+
+
+def fal_prompt(agent, shot):
+    from datetime import date, datetime
+    from zoneinfo import ZoneInfo
+
+    from agents.photo import Moment
+    agent.photo_birth, agent.photo_look = date(2004, 11, 1), "Light grey eyes."
+    return asyncio.run(agent._fal_prompt(shot, Moment(datetime(2026, 11, 9, 9, 15, tzinfo=ZoneInfo("Europe/Kyiv")))))
+
+
+def test_the_backup_writes_the_scene_between_the_codes_own_lines_and_the_log_names_only_its_length(
+        tmp_path, monkeypatch, caplog):
+    from agents.photo import SCENE_INSTRUCTION
+    caplog.set_level(logging.INFO)
+    agent = her(tmp_path, monkeypatch)
+    scene = f"A made-up scene {SECRET}: she laughs on a tram in a red scarf, grey daylight."
+    agent.fallback = Backup(scene)
+    req = fal_prompt(agent, Shot("selfie", f"я в трамваї {SECRET}"))
+    assert scene in req and "She is an adult woman, 22 years old." in req and "Light grey eyes." in req
+    transcript, instruction, _, kind = agent.fallback.calls[0]
+    assert instruction == SCENE_INSTRUCTION and kind == "photo_prompt" and f"я в трамваї {SECRET}" in transcript
+    assert f"photo: the request by the backup ({len(scene)} chars)" in caplog.text and SECRET not in caplog.text
+
+
+@pytest.mark.parametrize("backup,why", [(None, "no backup"), (Backup(None), "failed"),
+                                        (Backup("Дівчина в трамваї, сміється."), "not english")])
+def test_the_template_without_a_backup_when_it_fails_or_answers_not_in_english(tmp_path, monkeypatch, caplog,
+                                                                                backup, why):
+    caplog.set_level(logging.INFO)
+    agent = her(tmp_path, monkeypatch)
+    agent.fallback = backup
+    req = fal_prompt(agent, Shot("selfie", "я в трамваї"))
+    assert "as she describes it (in Ukrainian): я в трамваї" in req and "She is an adult woman, 22" in req
+    assert f"photo: the request by the template ({why})" in caplog.text and "трамва" not in caplog.text

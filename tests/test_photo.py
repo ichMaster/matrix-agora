@@ -260,3 +260,39 @@ def test_every_look_file_in_the_canon_names_no_model_or_bot_and_kiras_keeps_her_
     for path in looks:
         assert not BANNED_RE.search(path.read_text(encoding="utf-8")), path.name
     assert "never wears makeup: a bare, natural face" in load_look(Path("agents/canon/kira.look.md"))
+
+
+# --- v6.5: her photo on fal — the scene by her backup, the code's own lines around it -------------------------------
+def test_the_backup_gets_the_shots_kind_her_line_and_her_moment():
+    from agents.logic import BANNED_RE
+    from agents.photo import SCENE_INSTRUCTION, Moment, scene_input
+    moment = Moment(datetime(2026, 11, 9, 9, 15, tzinfo=ZoneInfo("Europe/Kyiv")), "хмарно, +6", "Lviv")
+    text = scene_input(Shot("selfie", "я з чаєм біля вікна"), moment)
+    assert "a selfie — she is in it" in text and "я з чаєм біля вікна" in text and "around 09:15" in text
+    assert "she is not in it" in scene_input(Shot("photo", "чашка на підвіконні"), moment)
+    assert not BANNED_RE.search(SCENE_INSTRUCTION) and "Her face, hair and figure" in SCENE_INSTRUCTION
+
+
+def test_the_backups_scene_is_cleaned_cut_at_a_sentence_and_dropped_when_not_english():
+    from agents.photo import SCENE_MAX, scene_check
+    assert scene_check("<think>plan it</think>  A girl by a window with tea.  ") == "A girl by a window with tea."
+    assert scene_check("Дівчина біля вікна з чаєм, ранок.") is None                 # not English: the template
+    assert scene_check("") is None and scene_check(None) is None and scene_check("<think>only") is None
+    long = "A calm morning by the window. " * 80
+    cut = scene_check(long)
+    assert len(cut) <= SCENE_MAX and cut.endswith("window.")
+
+
+def test_her_age_face_and_look_are_in_a_fal_selfie_whatever_the_scene_says():
+    from agents.photo import NO_FACE, SELFIE_HEAD, SELFIE_TAIL, STYLE, Moment, fal_request
+    moment = Moment(datetime(2026, 11, 9, 9, 15, tzinfo=ZoneInfo("Europe/Kyiv")), None, "Lviv")
+    scene = "A made-up scene: she sits on a windowsill in a white knit sweater, soft morning light."
+    req = fal_request(Shot("selfie", "я на підвіконні"), moment, scene, date(2004, 11, 1), "Light grey eyes.")
+    assert req.splitlines()[0].startswith(SELFIE_HEAD)
+    assert "She is an adult woman, 22 years old." in req and "Light grey eyes." in req and SELFIE_TAIL in req
+    assert scene in req and req.endswith(STYLE) and "as she describes it" not in req
+    plain = fal_request(Shot("photo", "чашка на підвіконні"), moment, None, None, "")
+    assert plain.startswith(NO_FACE) and "as she describes it (in Ukrainian): чашка на підвіконні" in plain
+    assert "around 09:15" in plain and "adult woman" not in plain
+    with pytest.raises(ValueError):                                                     # no birth date: no selfie
+        fal_request(Shot("selfie", "я"), moment, scene, None, "")

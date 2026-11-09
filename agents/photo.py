@@ -185,11 +185,71 @@ def photo_request(shot: Shot, moment: Moment, extra: str | None = None, who: str
     if shot.kind == "selfie":
         parts = [who or selfie_line(None, "", moment.when.date())]
     else:
-        parts = ["Nobody's face is in the shot unless the description says so."]
+        parts = [NO_FACE]
     parts.append(f"The shot, as she describes it (in Ukrainian): {shot.description}")
     parts += [moment_line(moment), STYLE]
     if extra:
         parts.append(extra)
+    return "\n".join(parts)
+
+
+# v6.5 — her photo on fal (Seedream): the owner, 2026-11-09: «коли генерується промпт для Seedream я б хотів щоб це
+# була бакап мережа» — her backup model writes the scene from her line; the code puts around it what never depends on
+# a model: her face from the references, that she is an adult woman and her age, her look, the phone snapshot's look
+SCENE_INSTRUCTION = (
+    "You write the description of one phone photo for an image generator, in English. You get the kind of the shot, the "
+    "line its author wrote about it (in Ukrainian) and the moment it is taken. Describe what the camera sees: the "
+    "place and what is in it, the light of that moment and the framing of a casual phone snapshot; in a selfie also "
+    "her pose, the look on her face and her clothes, named one by one — clothes that suit the weather and the scene "
+    "unless the line names them. Keep everything the line says and add nothing it contradicts. Her face, hair and "
+    "figure are given to the generator separately: do not describe them. Plain prose, one paragraph of 60 to 150 "
+    "words: no names, no lists, no title, no text or caption on the image."
+)
+SCENE_MAX = 1500                   # characters of the backup's scene, cut at a sentence
+_THINK_RE = re.compile(r"<think>.*?(?:</think>|$)", re.DOTALL | re.IGNORECASE)
+_LATIN_RE = re.compile(r"[A-Za-z]")
+_CYRILLIC_RE = re.compile(r"[А-Яа-яІіЇїЄєҐґЁёЫыЭэЪъ]")
+NO_FACE = "Nobody's face is in the shot unless the description says so."
+
+
+def scene_input(shot: Shot, moment: Moment) -> str:
+    """What her backup gets to write the scene from (pure): the shot's kind, her line as she wrote it, her moment."""
+    kind = "a selfie — she is in it" if shot.kind == "selfie" else "a photo — she is not in it"
+    return f"Shot: {kind}\nHer line (in Ukrainian): {shot.description}\nThe moment: {moment_line(moment)}"
+
+
+def scene_check(text: str | None) -> str | None:
+    """The backup's scene as the request takes it (pure): a `<think>` block cut, trimmed, at most `SCENE_MAX`
+    characters at a sentence; None when nothing is left or it is not mostly Latin (then the template)."""
+    text = _THINK_RE.sub("", text or "").strip()
+    if not text or len(_LATIN_RE.findall(text)) <= len(_CYRILLIC_RE.findall(text)):
+        return None
+    if len(text) > SCENE_MAX:
+        cut = text[:SCENE_MAX]
+        end = max(cut.rfind(". "), cut.rfind("! "), cut.rfind("? "))
+        text = cut[:end + 1] if end > 0 else cut
+    return text
+
+
+def fal_selfie_line(birth: date | None, look: str, day: date) -> str:
+    """Who is in a selfie on fal (pure): the same person as in her references, an adult woman of her age on the shot's
+    day, her look, clothes that suit the scene. Without a birth date there is none (the fal route stays closed)."""
+    age = age_on(birth, day)
+    if age is None:
+        raise ValueError("a selfie on fal needs her birth date")
+    parts = [SELFIE_HEAD, f"She is an adult woman, {age} years old.", look.strip(), SELFIE_TAIL]
+    return " ".join(p for p in parts if p)
+
+
+def fal_request(shot: Shot, moment: Moment, scene: str | None, birth: date | None, look: str) -> str:
+    """Seedream's instruction (pure, English): who, if she is in it (`fal_selfie_line`), else no face; the backup's
+    scene — or, without one, her line and her moment as `photo_request` puts them; the look of a phone snapshot."""
+    parts = [fal_selfie_line(birth, look, moment.when.date()) if shot.kind == "selfie" else NO_FACE]
+    if scene:
+        parts.append(scene)
+    else:
+        parts += [f"The shot, as she describes it (in Ukrainian): {shot.description}", moment_line(moment)]
+    parts.append(STYLE)
     return "\n".join(parts)
 
 
