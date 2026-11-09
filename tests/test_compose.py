@@ -156,6 +156,7 @@ def test_the_panel_gets_only_its_own_settings_and_the_stack_at_its_host_path():
     assert set(svc["environment"]) == {"PANEL_TOKEN", "PRICE_INPUT_PER_1M", "PRICE_OUTPUT_PER_1M", "PRICE_MODELS",
                                        "PRICE_SECONDS",  # v5.18: her кружечки, per second
                                        "PRICE_SUBSCRIPTIONS",  # v5.19: the monthly fees, for the Analytics view
+                                       "PRICE_IMAGES",  # v6.5: her fal photos, per image
                                        "TIMEZONE", "TZ", "STACK_DIR", "COMPOSE_PROJECT"}  # v5.1: PRICE_MODELS
     assert svc["environment"]["COMPOSE_PROJECT"] == "server"
     assert not svc.get("privileged") and "cap_add" not in svc and "network_mode" not in svc
@@ -333,6 +334,7 @@ def test_the_panel_gets_the_model_prices():
     assert SERVICES["panel"]["environment"]["PRICE_MODELS"] == "${PRICE_MODELS:-}"
     assert SERVICES["panel"]["environment"]["PRICE_SECONDS"] == "${PRICE_SECONDS:-}"  # v5.18
     assert SERVICES["panel"]["environment"]["PRICE_SUBSCRIPTIONS"] == "${PRICE_SUBSCRIPTIONS:-}"  # v5.19
+    assert SERVICES["panel"]["environment"]["PRICE_IMAGES"] == "${PRICE_IMAGES:-}"  # v6.5
 
 
 def test_both_env_examples_price_her_kruzhechky_per_second():
@@ -344,6 +346,17 @@ def test_both_env_examples_price_her_kruzhechky_per_second():
         assert parse_second_prices(values["PRICE_SECONDS"]) == ({"veed/fabric-1.0": 0.08,
                                                                  "fal-ai/kling-video/ai-avatar/v2/standard": 0.0562,
                                                                  "fal-ai/kling-video/ai-avatar/v2/pro": 0.115}, []), path
+
+
+def test_both_env_examples_price_her_fal_photos_per_image():
+    """v6.5: her photos on fal (Seedream 4) bill per image — priced by PRICE_IMAGES, never by tokens."""
+    from agents.usage import parse_image_prices
+    for path in (ROOT / ".env.example", ROOT / "server" / ".env.example"):
+        values = dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines()
+                      if line and not line.startswith("#") and "=" in line)
+        assert parse_image_prices(values["PRICE_IMAGES"]) == ({"fal-ai/bytedance/seedream/v4/edit": 0.03,
+                                                               "fal-ai/bytedance/seedream/v4/text-to-image": 0.03},
+                                                              []), path
 
 
 

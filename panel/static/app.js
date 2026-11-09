@@ -4,7 +4,7 @@
 "use strict";
 
 const POLL_MS = 10000;  // one tick for everything — the dashboard, an open log, an open agent's memory (owner)
-const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood", "sky", "digest_voice", "ask", "tts", "stt", "private", "private_nudge", "embed", "facts", "event", "reading", "thought", "reflection", "judge", "probe", "photo", "video", "video_note", "frame", "scan"];
+const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today", "mood", "sky", "digest_voice", "ask", "tts", "stt", "private", "private_nudge", "embed", "facts", "event", "reading", "thought", "reflection", "judge", "probe", "photo", "video", "video_note", "frame", "scan", "photo_prompt"];
 // review #11: a kind not listed above still shows, after the listed ones — a tab's rows always add up to its total
 function kindsOf(byKind) { return [...KIND_ORDER.filter((k) => byKind[k]), ...Object.keys(byKind).filter((k) => !KIND_ORDER.includes(k)).sort()]; }
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
@@ -507,7 +507,8 @@ const PRESETS = [["today", "Today"], ["yesterday", "Yesterday"], ["7d", "7 days"
                  ["month", "This month"], ["lastmonth", "Last month"], ["custom", "Custom"]];
 const CSV_HEAD = ["day", "agent", "service", "model", "kind", "calls", "failed", "blocked", "input", "output", "tokens",
                   "characters", "audio_s", "video_s", "billing", "cost",
-                  "latency_median_ms", "latency_p95_ms"];  // v5.22: the calls' time
+                  "latency_median_ms", "latency_p95_ms",  // v5.22: the calls' time
+                  "images"];  // v6.5: her fal photos
 const AN_TABS = [["cost", "Cost"], ["speed", "Speed"], ["prompts", "Prompts"], ["media", "Media"]];  // v5.22
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const fmtCost = (c) => c == null ? "—" : c !== 0 && Math.abs(c) < 0.01 ? `$${c.toFixed(4)}` : `$${c.toFixed(2)}`;

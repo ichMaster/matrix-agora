@@ -26,9 +26,10 @@ def test_usage_line_shape_and_no_text():
                          "blocked",  # v5 (v5.13): a safety block's stage
                          "video_ms",  # v6 (v5.18): a video's length
                          "latency_ms",  # v7 (v5.22): the call's time
+                         "images",  # v8 (v6.5): a fal photo's count
                          "prompt_parts"}  # v7 (v5.22): an answer's prompt, its parts' sizes
     assert line["characters"] is None and line["audio_ms"] is None and line["blocked"] is None
-    assert line["video_ms"] is None and line["latency_ms"] is None
+    assert line["video_ms"] is None and line["latency_ms"] is None and line["images"] is None
     assert (line["engine"], line["billing"]) == ("gemini", "api")
     assert (line["prompt_tokens"], line["output_tokens"], line["total_tokens"], line["ok"]) == (1200, 80, 1280, True)
     assert usage_line("2026-10-28T14:00:00", "kira", "private", "m", None, False, "prompt")["blocked"] == "prompt"
@@ -91,7 +92,8 @@ def test_kind_list_is_the_contract():
                      "photo",                              # v5.17: her photos in Telegram
                      "video", "video_note",                # v5.18: her clips and her кружечки
                      "frame",                              # v5.22: a video's first frame
-                     "scan")                               # v5.24: Opus naming what may block her prompt
+                     "scan",                               # v5.24: Opus naming what may block her prompt
+                     "photo_prompt")                       # v6.5: her backup writing her fal photo's request
 
 
 def test_a_scan_line_from_before_agora_212_is_still_read_and_priced():
@@ -445,3 +447,67 @@ def test_a_video_note_is_priced_per_second_and_unpriced_is_none():
     report = render(rows, None, None, models=models, seconds={fal: 0.0562})
     assert "video s" in report and "0.8430" in report
     assert "video s" not in render(aggregate(recs[3:]), None, None, models=models)
+
+
+# --- v6.5: her photos on fal, priced per image (usage line v8 `images`) ---
+SEEDREAM = "fal-ai/bytedance/seedream/v4/edit"
+
+
+def test_a_fal_photo_line_counts_images_and_holds_no_text():
+    from agents.usage import (
+        fallback_usage_line,
+        image_usage_line,
+        judge_usage_line,
+        parse_lines,
+        sdk_usage_line,
+        stt_usage_line,
+        tts_usage_line,
+    )
+    line = image_usage_line("2026-11-09T12:00:00", "ustyna", SEEDREAM, 1, True, latency_ms=41_200)
+    assert set(line) == set(usage_line("t", "a", "k", "m", None, True))                # one line shape
+    assert (line["kind"], line["engine"], line["billing"], line["images"]) == ("photo", "fal", "api", 1)
+    assert line["prompt_tokens"] is None and line["blocked"] is None and line["latency_ms"] == 41_200
+    assert image_usage_line("t", "a", SEEDREAM, 1, False, "answer")["blocked"] == "answer"   # flagged or black
+    assert image_usage_line("t", "a", SEEDREAM, True, False)["images"] is None                # a bool is no count
+    for other in (usage_line("t", "a", "k", "m", META, True), tts_usage_line("t", "a", "m", 3, True),
+                  stt_usage_line("t", "a", "m", 5, True), fallback_usage_line("t", "a", "photo_prompt", "m", True),
+                  judge_usage_line("t", "a", "m", 1, 1, True), sdk_usage_line("t", "a", "reply", "m", None, True)):
+        assert other["images"] is None
+    records, bad = parse_lines([json.dumps(line), json.dumps({**line, "images": "one"}),
+                                json.dumps({k: v for k, v in line.items() if k != "images"})])
+    assert len(records) == 2 and bad == 1                                              # an older line still parses
+
+
+def test_the_backups_request_is_a_kind_of_its_own():
+    assert "photo_prompt" in KINDS
+
+
+@pytest.mark.parametrize("spec,prices,bad", [
+    (f"{SEEDREAM}=0.03", {SEEDREAM: 0.03}, []),
+    ("a=x,b=-1,c=0.05", {"c": 0.05}, ["a=x", "b=-1"]),
+    ("", {}, []),
+])
+def test_price_images_parsing(spec, prices, bad):
+    from agents.usage import parse_image_prices
+    assert parse_image_prices(spec) == (prices, bad)
+
+
+def test_a_fal_photo_is_priced_per_image_and_unpriced_is_none():
+    from agents.usage import aggregate, cost, daily_report, image_usage_line, render
+    recs = [image_usage_line("2026-11-09T12:00:00", "ustyna", SEEDREAM, 1, True),
+            image_usage_line("2026-11-09T12:05:00", "ustyna", SEEDREAM, 1, False, "answer"),  # black: still paid
+            image_usage_line("2026-11-09T12:10:00", "ustyna", SEEDREAM, None, False)]         # failed: nothing
+    rows = aggregate(recs)
+    photo = rows[("2026-11-09", "ustyna", "photo")]
+    assert (photo.calls, photo.failed, photo.blocked, photo.images) == (3, 2, 1, 2)
+    assert photo.images_by_model == {SEEDREAM: 2}
+    assert cost(photo, None, None, {}, {}, {SEEDREAM: 0.03}) == pytest.approx(0.06)
+    assert cost(photo, None, None, {}, {}, {}) is None                                   # no price: «—», never $0
+    assert "0.0600" in render(rows, None, None, images={SEEDREAM: 0.03})
+    report = daily_report(recs, datetime(2026, 11, 10, 7, 0, tzinfo=ZoneInfo("Europe/Kyiv")), images={SEEDREAM: 0.03})
+    assert f"{SEEDREAM} $0.03 per image" in report and "0.0600" in report
+
+
+def test_the_trace_line_names_a_fal_photos_images():
+    from agents.usage import image_usage_line, trace_line
+    assert "1 фото" in trace_line(image_usage_line("t", "ustyna", SEEDREAM, 1, True, latency_ms=40_000))

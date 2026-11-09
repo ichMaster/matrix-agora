@@ -37,6 +37,7 @@ from agents.usage import (
     aggregate,
     analyze,
     daily_report,
+    parse_image_prices,
     parse_lines,
     parse_model_prices,
     parse_second_prices,
@@ -91,8 +92,11 @@ def main(argv: list[str] | None = None) -> int:
     seconds, bad_seconds = parse_second_prices(os.environ.get("PRICE_SECONDS"))  # v5.18: her кружечки, per second
     for entry in bad_seconds:
         print(f"warning: PRICE_SECONDS entry {entry!r} is not model=usd — ignored", file=sys.stderr)
+    images, bad_images = parse_image_prices(os.environ.get("PRICE_IMAGES"))  # v6.5: her fal photos, per image
+    for entry in bad_images:
+        print(f"warning: PRICE_IMAGES entry {entry!r} is not model=usd — ignored", file=sys.stderr)
     if args.write:
-        print(write_daily(Path(args.write), daily_report(records, now, *prices, models, seconds), now.date()))
+        print(write_daily(Path(args.write), daily_report(records, now, *prices, models, seconds, images), now.date()))
         return 0
     if args.by:  # v5.19: the analytics, as the panel's
         fees, bad_fees = parse_subscription_prices(os.environ.get("PRICE_SUBSCRIPTIONS"))
@@ -103,10 +107,12 @@ def main(argv: list[str] | None = None) -> int:
         if since > until:
             print("error: --since is after --until", file=sys.stderr)
             return 2
-        report = analyze(records, since, until, args.agent, PriceBook(*prices, models, seconds, fees), now.date())
+        report = analyze(records, since, until, args.agent, PriceBook(*prices, models, seconds, fees, images),
+                         now.date())
         print(render_analysis(report, args.by, markdown=args.markdown, records=records))  # v5.22: the time
         return 0
-    print(render(aggregate(records, since), *prices, markdown=args.markdown, models=models, seconds=seconds))
+    print(render(aggregate(records, since), *prices, markdown=args.markdown, models=models, seconds=seconds,
+                 images=images))
     return 0
 
 

@@ -488,7 +488,8 @@ def test_the_csv_header_and_its_escaping():
     js = js_text()
     assert ('const CSV_HEAD = ["day", "agent", "service", "model", "kind", "calls", "failed", "blocked", "input", '
             '"output", "tokens",') in js
-    assert '"latency_median_ms", "latency_p95_ms"];  // v5.22: the calls\' time' in js
+    assert '"latency_median_ms", "latency_p95_ms",  // v5.22: the calls\' time' in js
+    assert '"images"];  // v6.5: her fal photos' in js
     assert "if (/^[=+\\-@]/.test(s)) s = `'${s}`;" in js                   # never a formula in a spreadsheet
     assert """return /[",\\r\\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;""" in js
     assert "link.download = `agora-usage-${d.agent || \"all\"}-${d.since}-${d.until}.csv`;" in js

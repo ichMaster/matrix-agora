@@ -29,6 +29,7 @@ from agents.usage import (
     cost,
     month_chars,
     parse_answers,
+    parse_image_prices,
     parse_lines,
     parse_model_prices,
     parse_second_prices,
@@ -465,12 +466,13 @@ def _price_book() -> PriceBook:
     models, bad_models = parse_model_prices(os.environ.get("PRICE_MODELS"))  # v5.1: Hermes's Pro calls priced as Pro
     seconds, bad_seconds = parse_second_prices(os.environ.get("PRICE_SECONDS"))  # v5.18: her кружечки, per second
     fees, bad_fees = parse_subscription_prices(os.environ.get("PRICE_SUBSCRIPTIONS"))  # v5.19: the monthly fees
+    images, bad_images = parse_image_prices(os.environ.get("PRICE_IMAGES"))  # v6.5: her fal photos, per image
     for name, shape, bad in (("PRICE_MODELS", "model=in/out", bad_models), ("PRICE_SECONDS", "model=usd", bad_seconds),
-                             ("PRICE_SUBSCRIPTIONS", "service=usd", bad_fees)):
+                             ("PRICE_SUBSCRIPTIONS", "service=usd", bad_fees), ("PRICE_IMAGES", "model=usd", bad_images)):
         for entry in sorted(set(bad) - _WARNED):
             log.warning("%s entry %r is not %s — ignored", name, entry, shape)
             _WARNED.add(entry)
-    return PriceBook(_price("PRICE_INPUT_PER_1M"), _price("PRICE_OUTPUT_PER_1M"), models, seconds, fees)
+    return PriceBook(_price("PRICE_INPUT_PER_1M"), _price("PRICE_OUTPUT_PER_1M"), models, seconds, fees, images)
 
 
 def analytics_period(since: str, until: str, max_days: int) -> tuple[date, date]:
@@ -516,7 +518,7 @@ def usage_view(state_dir: Path, days: int, today: date, agent: str | None = None
     priced = book.priced
 
     def money(r):  # v4.4: only `api` tokens are priced; a subscription row has no cost, never $0
-        c = cost(r, p_in, p_out, models, seconds) if priced else None
+        c = cost(r, p_in, p_out, models, seconds, book.images) if priced else None
         return round(c, 6) if c is not None else None
 
     out_rows, per_agent, per_day, agent_rows = [], {}, {}, {}

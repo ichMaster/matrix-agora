@@ -164,7 +164,8 @@ def test_the_kinds_carry_their_share_and_the_rows_their_atoms():
     row = next(x for x in r["rows"] if x["service"] == "deepgram")
     assert set(row) == {"day", "agent", "service", "model", "kind", "calls", "failed", "blocked", "input", "output",
                         "tokens", "characters", "audio_s", "video_s", "billing", "cost",
-                        "latency_median_ms", "latency_p95_ms"}  # v5.22: the CSV's call time
+                        "latency_median_ms", "latency_p95_ms",  # v5.22: the CSV's call time
+                        "images"}  # v6.5: her fal photos
     assert row["cost"] is None and row["audio_s"] == 4.0 and row["latency_median_ms"] is None
 
 
@@ -354,3 +355,23 @@ def test_the_prompts_structure_by_kind_each_part_in_tokens_by_the_hour_and_besid
     assert [p["part"] for p in r[0]["parts"]] == ["history", "talk", "canon", "recall"]
     assert (by["history"]["tokens"], by["history"]["share"], by["history"]["previous_tokens"]) == (15000, 0.5, 5000)
     assert by["canon"]["series"][8] == 4000 and by["canon"]["series"][9] == 2000 and by["canon"]["series"][10] is None
+
+
+def test_media_counts_and_prices_her_fal_photos_with_the_google_ones():
+    """v6.5: a fal photo is a `photo` line (engine fal, `images`), counted with Google's and priced by PRICE_IMAGES —
+    a black one is paid, never counted as sent."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from agents.usage import analyze_detail, image_usage_line
+    seedream = "fal-ai/bytedance/seedream/v4/edit"
+    lines = [timed("2026-11-09T08:10:00+02:00", "photo", model="gemini-nano-banana-2.1", prompt=4600, output=1500),
+             image_usage_line("2026-11-09T09:00:00+02:00", "ustyna", seedream, 1, True, latency_ms=40_000),
+             image_usage_line("2026-11-09T09:05:00+02:00", "ustyna", seedream, 1, False, "answer", 38_000)]
+    now = datetime(2026, 11, 9, 10, 0, tzinfo=ZoneInfo("Europe/Kyiv"))
+    prices = PriceBook(models={"gemini-nano-banana-2.1": (1.50, 30.0)}, images={seedream: 0.03})
+    m = analyze_detail(lines, [], date(2026, 11, 9), date(2026, 11, 9), now=now, prices=prices)["media"]
+    assert m["photos"] == 2
+    assert m["cost"]["photos"] == pytest.approx(0.0519 + 0.06)
+    r = analyze(lines, date(2026, 11, 9), date(2026, 11, 9), None, prices, date(2026, 11, 9))
+    assert r["total"]["images"] == 2 and r["total"]["complete"]

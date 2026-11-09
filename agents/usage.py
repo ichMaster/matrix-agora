@@ -25,8 +25,9 @@ KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
          "photo",                             # v5.17: Google's image model, her photo in Telegram
          "video", "video_note",               # v5.18: her clip (Omni Flash) and her кружечок (Fabric 1.0 on fal)
          "frame",                             # v5.22: the image model drawing a video's first frame
-         "scan")                              # v5.24: Opus naming what may block her prompt (`/scan`; gone in
+         "scan",                              # v5.24: Opus naming what may block her prompt (`/scan`; gone in
                                               # AGORA-212 — its lines stay readable)
+         "photo_prompt")                      # v6.5: her backup writing her fal photo's request
 # v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan; v5.1 also the ElevenLabs
 # plan's credits), `external` (Lumi's own)
 BILLING = ("api", "subscription", "external")
@@ -90,6 +91,7 @@ def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: b
         "blocked": blocked,
         "video_ms": None,  # v6 (v5.18): a video's length, on a `video_note` line only
         "latency_ms": _ms(latency_ms),  # v7 (v5.22): how long the call took
+        "images": None,  # v8 (v6.5): a fal photo's count, on its `photo` line only
         "prompt_parts": _parts(prompt_parts),  # v7 (v5.22): an answer's prompt, its parts' sizes in characters
     }
 
@@ -113,6 +115,8 @@ def trace_line(rec: dict, block: tuple | None = None) -> str:
     for name, label in (("audio_ms", "аудіо"), ("video_ms", "відео")):
         if isinstance(rec.get(name), int):
             parts.append(f"{label} {rec[name] / 1000:.1f} с")
+    if isinstance(rec.get("images"), int):  # v6.5: a fal photo's count
+        parts.append(f"{rec['images']} фото")
     if isinstance(rec.get("latency_ms"), int):
         parts.append(f"{rec['latency_ms'] / 1000:.1f} с")
     return " · ".join(parts)
@@ -132,6 +136,7 @@ def tts_usage_line(ts_iso: str, agent: str, model: str, characters: int, ok: boo
         "blocked": None,  # v5.13: one line shape — only a Gemini call is ever blocked
         "video_ms": None,
         "latency_ms": _ms(latency_ms),
+        "images": None,
         "prompt_parts": None,
     }
 
@@ -146,6 +151,7 @@ def fallback_usage_line(ts_iso: str, agent: str, kind: str, model: str, ok: bool
         "engine": "novelai", "billing": "subscription",
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
         "characters": None, "audio_ms": None, "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
+        "images": None,
         "prompt_parts": _parts(prompt_parts),
     }
 
@@ -162,6 +168,7 @@ def judge_usage_line(ts_iso: str, agent: str, model: str, prompt_tokens: int | N
         "engine": "openrouter", "billing": "api",
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": reported_cost,
         "characters": None, "audio_ms": None, "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
+        "images": None,
         "prompt_parts": None,
     }
 
@@ -177,6 +184,7 @@ def stt_usage_line(ts_iso: str, agent: str, model: str, audio_ms: int | None, ok
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
         "characters": None, "audio_ms": int(audio_ms) if isinstance(audio_ms, int) else None,
         "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
+        "images": None,
         "prompt_parts": None,
     }
 
@@ -194,6 +202,23 @@ def video_note_usage_line(ts_iso: str, agent: str, model: str, video_ms: int | N
         "characters": None, "audio_ms": None, "blocked": blocked,
         "video_ms": int(video_ms) if isinstance(video_ms, int) and not isinstance(video_ms, bool) else None,
         "latency_ms": _ms(latency_ms),
+        "images": None,
+        "prompt_parts": None,
+    }
+
+
+def image_usage_line(ts_iso: str, agent: str, model: str, images: int | None, ok: bool,
+                     blocked: str | None = None, latency_ms: int | None = None) -> dict:
+    """v6.5 — one record per call of her photo's model on fal (`agents/falphoto.py`): the kind `photo`, paid per
+    image (`api`, priced by `PRICE_IMAGES` under the model's id), counted by the images it returned (usage line v8,
+    `images`); no tokens; a flagged or black one `blocked: answer`. Never any text."""
+    return {
+        "ts": ts_iso, "agent": agent, "kind": "photo", "model": model,
+        "prompt_tokens": None, "output_tokens": None, "total_tokens": None, "ok": bool(ok),
+        "engine": "fal", "billing": "api",
+        "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
+        "characters": None, "audio_ms": None, "blocked": blocked, "video_ms": None, "latency_ms": _ms(latency_ms),
+        "images": int(images) if isinstance(images, int) and not isinstance(images, bool) else None,
         "prompt_parts": None,
     }
 
@@ -227,6 +252,7 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
         "blocked": None,
         "video_ms": None,
         "latency_ms": _ms(latency_ms),
+        "images": None,
         "prompt_parts": _parts(prompt_parts),
     }
 
@@ -249,7 +275,8 @@ def answer_line(ts_iso: str, agent: str, place: str, door: str, answered: str, w
 
 
 COUNT_FIELDS = ("prompt_tokens", "output_tokens", "total_tokens", "cache_read_tokens", "cache_write_tokens",
-                "characters", "audio_ms", "video_ms", "latency_ms")  # v5.22: the call's time
+                "characters", "audio_ms", "video_ms", "latency_ms",  # v5.22: the call's time
+                "images")  # v6.5: a fal photo's count
 
 
 def _valid(rec: Any) -> bool:
@@ -302,9 +329,11 @@ class Row:
     blocked: int = 0        # v5.13: calls Gemini's safety filter blocked
     video_ms: int = 0       # v5.18: the videos' length (fal's кружечки)
     audio_ms: int = 0       # v5.19: the audio heard (Deepgram), for the analytics
+    images: int = 0         # v6.5: the images fal made (her photos on Seedream)
     latencies: list[int] = field(default_factory=list)  # v5.22: the timed calls' `latency_ms`
     by_model: dict[str, list[int]] = field(default_factory=dict)  # v5.1: the `api` tokens per model, for its price
     ms_by_model: dict[str, int] = field(default_factory=dict)     # v5.18: the `api` video ms per model, for its price
+    images_by_model: dict[str, int] = field(default_factory=dict)  # v6.5: the `api` images per model, for its price
 
     def add(self, other: Row) -> None:
         self.calls += other.calls
@@ -320,9 +349,12 @@ class Row:
         self.blocked += other.blocked
         self.video_ms += other.video_ms
         self.audio_ms += other.audio_ms
+        self.images += other.images
         self.latencies += other.latencies
         for model, ms in other.ms_by_model.items():
             self.ms_by_model[model] = self.ms_by_model.get(model, 0) + ms
+        for model, n in other.images_by_model.items():
+            self.images_by_model[model] = self.images_by_model.get(model, 0) + n
         for model, (p, o) in other.by_model.items():
             mine = self.by_model.setdefault(model, [0, 0])
             mine[0] += p
@@ -365,11 +397,15 @@ def _add_line(row: Row, r: dict) -> None:
     row.blocked += 1 if r.get("blocked") else 0  # v5.13
     row.video_ms += r.get("video_ms") or 0       # v5.18
     row.audio_ms += r.get("audio_ms") or 0       # v5.19
+    row.images += r.get("images") or 0           # v6.5
     if isinstance(r.get("latency_ms"), int) and not isinstance(r.get("latency_ms"), bool):
         row.latencies.append(r["latency_ms"])    # v5.22
     if billing == "api" and r.get("video_ms"):
         model = str(r.get("model", ""))
         row.ms_by_model[model] = row.ms_by_model.get(model, 0) + r["video_ms"]
+    if billing == "api" and r.get("images"):     # v6.5: her fal photos, priced per image
+        model = str(r.get("model", ""))
+        row.images_by_model[model] = row.images_by_model.get(model, 0) + r["images"]
     if billing == "api":
         p, o = r.get("prompt_tokens") or 0, r.get("output_tokens") or 0
         row.priced_prompt += p
@@ -431,21 +467,38 @@ def parse_second_prices(spec: str | None) -> tuple[SecondPrices, list[str]]:
     return prices, bad
 
 
+ImagePrices = dict[str, float]
+
+
+def parse_image_prices(spec: str | None) -> tuple[ImagePrices, list[str]]:
+    """v6.5 — `PRICE_IMAGES`: comma-separated `model=usd` (USD per image), e.g.
+    `fal-ai/bytedance/seedream/v4/edit=0.03`; the same `model=usd` shape as `PRICE_SECONDS`. Returns the prices and
+    the malformed entries (to warn about, never fatal)."""
+    return parse_second_prices(spec)
+
+
 def cost(row: Row, price_in: float | None, price_out: float | None, models: Prices | None = None,
-         seconds: SecondPrices | None = None) -> float | None:
+         seconds: SecondPrices | None = None, images: ImagePrices | None = None) -> float | None:
     """The price of a row's `api` tokens: a model listed in `models` (v5.1, `PRICE_MODELS`) by its own pair, the rest
     by the PRICE_* pair (Gemini Flash's). A row with no `api` part — Claude on the subscription, the ElevenLabs
     credits, Lumi's own — has no cost, never $0 (v4.4); api tokens with no price known → None. v5.18: a row's `api`
-    video seconds are priced by `seconds` (`PRICE_SECONDS`) under their model — one with no price → None."""
-    if row.billing and row.billing != "api" and not (row.priced_prompt or row.priced_output or row.ms_by_model):
+    video seconds are priced by `seconds` (`PRICE_SECONDS`) under their model — one with no price → None; v6.5: and its
+    `api` images by `images` (`PRICE_IMAGES`) the same way."""
+    if row.billing and row.billing != "api" and not (row.priced_prompt or row.priced_output or row.ms_by_model
+                                                     or row.images_by_model):
         return None
     total = 0.0
-    if row.ms_by_model:
+    if row.ms_by_model or row.images_by_model:
         for model, ms in row.ms_by_model.items():
             price = (seconds or {}).get(model)
             if price is None:
                 return None
             total += ms / 1000 * price
+        for model, n in row.images_by_model.items():
+            price = (images or {}).get(model)
+            if price is None:
+                return None
+            total += n * price
         if not (row.priced_prompt or row.priced_output):
             return total
     models = models or {}
@@ -471,10 +524,11 @@ def month_chars(records: list[dict], agent: str, month: str) -> int:
 
 
 def render(rows: dict[tuple[str, str, str], Row], price_in: float | None, price_out: float | None,
-           markdown: bool = False, models: Prices | None = None, seconds: SecondPrices | None = None) -> str:
+           markdown: bool = False, models: Prices | None = None, seconds: SecondPrices | None = None,
+           images: ImagePrices | None = None) -> str:
     if not rows:
         return "no data"
-    with_cost = price_in is not None and price_out is not None or bool(models) or bool(seconds)
+    with_cost = price_in is not None and price_out is not None or bool(models) or bool(seconds) or bool(images)
     with_chars = any(r.characters for r in rows.values())  # v5.1: text to speech counts characters
     with_video = any(r.video_ms for r in rows.values())    # v5.18: her кружечки count seconds
     prices = (price_in, price_out)
@@ -485,7 +539,7 @@ def render(rows: dict[tuple[str, str, str], Row], price_in: float | None, price_
 
     def line(cells: list[str], r: Row) -> None:
         body.append(cells + ([str(r.characters)] if with_chars else []) + ([_secs(r.video_ms)] if with_video else [])
-                    + [r.billing or "api"] + ([_usd(r, prices, models, seconds)] if with_cost else []))
+                    + [r.billing or "api"] + ([_usd(r, prices, models, seconds, images)] if with_cost else []))
 
     per_agent: dict[str, Row] = defaultdict(Row)
     overall = Row()
@@ -539,19 +593,20 @@ def _secs(ms: int) -> str:
 
 
 def _usd(row: Row, prices: tuple[float | None, float | None], models: Prices | None = None,
-         seconds: SecondPrices | None = None) -> str:
-    c = cost(row, *prices, models, seconds)
+         seconds: SecondPrices | None = None, images: ImagePrices | None = None) -> str:
+    c = cost(row, *prices, models, seconds, images)
     return "—" if c is None else f"{c:.4f}"
 
 
 def _prices_line(price_in: float | None, price_out: float | None, models: Prices | None,
-                 seconds: SecondPrices | None = None) -> str:
+                 seconds: SecondPrices | None = None, images: ImagePrices | None = None) -> str:
     """The report's price line: the pairs that are set (v5.1 review #5 — a model's own pair alone is not "no
-    prices", and the models without one show «—», never $0); v5.18: the per-second prices."""
+    prices", and the models without one show «—», never $0); v5.18: the per-second prices; v6.5: the per-image."""
     parts = [f"${price_in:.2f} input / ${price_out:.2f} output per 1M tokens"] \
         if price_in is not None and price_out is not None else []
     parts += [f"{m} ${a:g} / ${b:g}" for m, (a, b) in sorted((models or {}).items())]
     parts += [f"{m} ${p:g} per second" for m, p in sorted((seconds or {}).items())]
+    parts += [f"{m} ${p:g} per image" for m, p in sorted((images or {}).items())]
     if not parts:
         return "No prices set (`PRICE_INPUT_PER_1M` / `PRICE_OUTPUT_PER_1M`) — tokens only."
     rest = "" if price_in is not None and price_out is not None else \
@@ -576,11 +631,11 @@ def _change(now: float, before: float) -> str:
 
 def daily_report(records: list[dict], now: datetime, price_in: float | None = None,
                  price_out: float | None = None, models: Prices | None = None,
-                 seconds: SecondPrices | None = None) -> str:
+                 seconds: SecondPrices | None = None, images: ImagePrices | None = None) -> str:
     """The daily markdown report for the local `now`: yesterday in detail, the day before for comparison,
     the last 7 complete days, the month of yesterday so far (+ a projection), and today so far."""
     prices = (price_in, price_out)
-    priced = price_in is not None and price_out is not None or bool(models) or bool(seconds)
+    priced = price_in is not None and price_out is not None or bool(models) or bool(seconds) or bool(images)
     today = now.date()
     yday = today - timedelta(days=1)
     usd = ["cost $"] if priced else []
@@ -588,10 +643,10 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
     video = ["video s"] if any(r.get("video_ms") for r in records) else []  # v5.18: her кружечки
 
     def cost(r: Row) -> float | None:  # every price the report knows
-        return _cost(r, *prices, models, seconds)
+        return _cost(r, *prices, models, seconds, images)
 
     def money(r: Row) -> list[str]:
-        return [_usd(r, prices, models, seconds)] if priced else []
+        return [_usd(r, prices, models, seconds, images)] if priced else []
 
     def spoken(r: Row) -> list[str]:
         return ([_n(r.characters)] if chars else []) + ([_secs(r.video_ms)] if video else [])
@@ -603,7 +658,7 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
     out = [f"# Token usage — {today.isoformat()}",
            "",
            f"Generated {now.strftime('%Y-%m-%d %H:%M')} ({now.tzname() or 'local'}). "
-           + _prices_line(price_in, price_out, models, seconds),
+           + _prices_line(price_in, price_out, models, seconds, images),
            ""]
 
     # yesterday
@@ -625,7 +680,7 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
                   for k, r in sorted(rollup(y_rows, 2).items(), key=lambda kv: -kv[1].total)]
         out += ["### By kind", "", table(k_head, k_body, markdown=True), ""]
         out += ["### By agent × kind", "", render(y_rows, price_in, price_out, markdown=True, models=models,
-                                                  seconds=seconds), ""]
+                                                  seconds=seconds, images=images), ""]
 
     # the last 7 complete days
     first = yday - timedelta(days=6)
@@ -667,17 +722,19 @@ def daily_report(records: list[dict], now: datetime, price_in: float | None = No
 # --- the analytics (v5.19): one period and one agent (or all), by service, model, kind, day and agent ---
 @dataclass(frozen=True)
 class PriceBook:
-    """Every price the analytics knows: the default pair, `PRICE_MODELS`, `PRICE_SECONDS` and, v5.19,
-    `PRICE_SUBSCRIPTIONS` (a service's monthly fee)."""
+    """Every price the analytics knows: the default pair, `PRICE_MODELS`, `PRICE_SECONDS`, v5.19
+    `PRICE_SUBSCRIPTIONS` (a service's monthly fee) and v6.5 `PRICE_IMAGES` (a fal photo's)."""
     price_in: float | None = None
     price_out: float | None = None
     models: Prices = field(default_factory=dict)
     seconds: SecondPrices = field(default_factory=dict)
     subscriptions: dict[str, float] = field(default_factory=dict)
+    images: ImagePrices = field(default_factory=dict)
 
     @property
     def priced(self) -> bool:
-        return self.price_in is not None and self.price_out is not None or bool(self.models) or bool(self.seconds)
+        return (self.price_in is not None and self.price_out is not None or bool(self.models) or bool(self.seconds)
+                or bool(self.images))
 
 
 def parse_subscription_prices(spec: str | None) -> tuple[dict[str, float], list[str]]:
@@ -704,9 +761,10 @@ def _atoms(records: list[dict], since: date, until: date) -> dict[Atom, Row]:
 def _atom_cost(row: Row, prices: PriceBook) -> float | None:
     """One atom's cost: a subscription's is None, never $0 (v4.4); an `api` atom with nothing billable (a failed
     call without counts) is $0; an `api` model with no price is None — named in `unpriced`."""
-    if row.billing == "api" and not (row.priced_prompt or row.priced_output or row.ms_by_model):
+    if row.billing == "api" and not (row.priced_prompt or row.priced_output or row.ms_by_model
+                                     or row.images_by_model):
         return 0.0
-    return cost(row, prices.price_in, prices.price_out, prices.models, prices.seconds)
+    return cost(row, prices.price_in, prices.price_out, prices.models, prices.seconds, prices.images)
 
 
 @dataclass
@@ -728,7 +786,7 @@ class _Sum:
         r = self.row
         return {"calls": r.calls, "failed": r.failed, "blocked": r.blocked, "input": r.prompt, "output": r.output,
                 "tokens": r.total, "characters": r.characters, "audio_s": round(r.audio_ms / 1000, 1),
-                "video_s": round(r.video_ms / 1000, 1), "billing": r.billing or "api",
+                "video_s": round(r.video_ms / 1000, 1), "images": r.images, "billing": r.billing or "api",
                 "cost": round(self.cost, 6) if self.priced else None, "complete": self.complete}
 
     def brief(self) -> dict:
