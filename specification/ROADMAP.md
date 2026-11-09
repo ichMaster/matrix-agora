@@ -3887,9 +3887,11 @@ The owner, 2026-11-08: «зроби fal.ai перемикання на цю мо
     the photo is still made.
   - What the backup writes counts as the backup's talk: never logged, never kept, never in a test but made-up lines.
     The log names the route, the outcome and the length only.
-- **The backup's photo skill.** While `/photos fal` is on, her backup's private answers get her photo skill too, and
-  a `СЕЛФІ:` / `ФОТО:` line in its answer makes a photo on fal as Gemini's does. Under `/photos google` the backup
-  has no photo skill, as now.
+- **The backup's photo skill.** Her backup's private answers get her photo skill too, and a `СЕЛФІ:` / `ФОТО:` line
+  in its answer makes a photo — always on fal, whatever `/photos` says, since the backup's talk never goes to Google
+  (the owner, 2026-11-09: «також треба мати можливіть генерувати фото коли зараз маршрут на бакап мережу а не
+  джемені»). `/photos` picks the route of Gemini's photos only. Without her fal maker the backup has no photo skill,
+  as now.
 - **Her age.** A selfie request on fal always says she is an adult woman and names her age on the shot's day, from
   her chart. Without a birth date the fal route stays closed.
 - **Scope.** Only her photos follow the switch. A video's first frame stays on Google: Omni Flash, which animates it,
@@ -3918,7 +3920,8 @@ The owner, 2026-11-08: «зроби fal.ai перемикання на цю мо
   - the key only to fal's hosts.
 - The request by the backup, with the backup mocked: its text between the code's own lines; her age and face line
   whatever it writes; the template when it fails or is absent; no text of it in the log.
-- The backup's photo skill: offered under `/photos fal` only; its photo line makes a fal photo.
+- The backup's photo skill: offered whenever her fal maker exists; its photo line makes a fal photo under either
+  `/photos` route; never offered without the fal maker.
 - The route picks the maker; a video's frame stays on Google.
 - The usage line and `PRICE_IMAGES`.
 - The TOML's `photos_fal` in the schema; Кіра's TOML without it.
