@@ -241,7 +241,14 @@ The invariants every reply path must honor:
    line, for a photo no face; then the phone snapshot's look. Without the backup, on its failure or a non-English
    scene, the template (her line and her moment). What the backup writes is its talk: never logged or kept — the log
    names the route and the length («photo: the request by the backup (N chars)» / «… by the template (why)»). Her
-   caps (`PHOTO_DAY_MAX`, `PHOTO_WINDOW_MAX`) and the kept file are the same on both routes.
+   caps (`PHOTO_DAY_MAX`, `PHOTO_WINDOW_MAX`) and the kept file are the same on both routes. **The backup's photos**
+   (AGORA-236; the owner, 2026-11-09: «також треба мати можливіть генерувати фото коли зараз маршрут на бакап мережу
+   а не джемені»): with her fal maker and a photo open now (`_photo_closed(door, fal=True)`), the backup's private
+   prompt gets `PHOTO_SKILL` too, and its `СЕЛФІ:` / `ФОТО:` line makes a photo on fal under either `/photos` route —
+   the backup's talk never goes to Google; `/photos` picks the route of Gemini's photos only. A photo of the backup's
+   that does not come out draws its answer once more from the backup with `PHOTO_FAILED` (`_without_photo`), never
+   from Gemini; a video line of the backup's is dropped (the video skill stays Gemini's). Without the fal maker the
+   backup has no photo skill and its line is dropped, as before.
    **From v5.18** (a person with `videos`) the same line may name a video: `КРУЖЕЧОК: <where she is>` (her round video
    message, her answer said in it) or `ВІДЕО: <what she sees>` (a short clip, no face, no speech); one media line per
    answer, the last counts. **From v6.3** (the owner, 2026-11-07: «вона буде вчитись грати на гітарі і час від часу

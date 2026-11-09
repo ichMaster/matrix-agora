@@ -582,6 +582,7 @@ class Agent:
         self.photo_birth: date | None = None  # v6.5: her age and look for a photo on fal, as for Google's
         self.photo_look = ""
         self.fal_photos: FalPhotoMaker | None = None  # v6.5: her photos on Seedream, by the owner's `/photos fal`
+        self._offer_backup_photo = False  # v6.5: her photo skill for the backup's prompt, its photo on fal
         if cfg.can("photos"):
             self.photo_day_max = int(os.environ.get("PHOTO_DAY_MAX", "40"))
             self.photo_window_max = int(os.environ.get("PHOTO_WINDOW_MAX", "3"))  # v5.22: at most so many in any
@@ -1132,6 +1133,7 @@ class Agent:
         delay_ms, self._private_delay_ms = (None if nudge else self._private_delay_ms), 0
         self._pending_shot = None
         self._offer_photo = self._photo_open(door)  # v5.17: her photo skill, for Gemini's prompt only
+        self._offer_backup_photo = self._photo_open(door, fal=True)  # v6.5: and for the backup's — always on fal
         self._offer_video = self._video_kinds(door)  # v5.18: the videos she may send now, for Gemini's prompt only
         kind = "private_nudge" if nudge else "private"
         by = None
@@ -1177,14 +1179,13 @@ class Agent:
             LAST_BLOCK.set(None)  # code review v5.22 #5: only this answer's own block and silence, never those
             LAST_SILENCE.set(None)  # of the today block's or the mood's calls made above
             text, by = await self._private_text(brief, nudge, seen)
-            shot, self._pending_shot = (self._pending_shot if by == "gemini" else None), None
-            self._offer_photo, self._offer_video = False, ()
+            shot, self._pending_shot = self._pending_shot, None  # v6.5: the backup's shot too, when it was offered
+            self._offer_photo, self._offer_video, self._offer_backup_photo = False, (), False
             if shot is not None and not shot.description:  # code review v5.21 #1: a photo line that names nothing
                 log.info("photo: dropped (no description)")
                 shot = None
                 if text is not None:  # her words may promise it: never «дивись» with nothing
-                    again, _ = await self._gemini_text(f"{brief}\n\n{PHOTO_FAILED}", kind)
-                    self._pending_shot = None
+                    again = await self._without_photo(brief, kind, by)
                     if again is not None:
                         text = again
             made: Made | None = None
@@ -1197,7 +1198,7 @@ class Agent:
                     video = shot
                 shot = None
             if text is not None and shot is not None:  # v5.17: her photo, made before anything is sent
-                why = self._photo_closed(door)
+                why = self._photo_closed(door, fal=by == "backup")
                 if why:
                     log.info("photo: dropped (%s)", why)
                 else:
@@ -1205,12 +1206,11 @@ class Agent:
                         action.cancel()
                     await self.telegram.send_chat_action(self.telegram_owner, "upload_photo")  # 11–40 s to make
                     action = asyncio.create_task(self._telegram_action("upload_photo"))
-                    made = await self._make_photo(shot)
+                    made = await self._make_photo(shot, fal=by == "backup")  # v6.5: the backup's photo on fal
                     if made.why != "ok":  # never «дивись» with nothing: her answer once more, without the photo
                         log.warning("photo: %s — her answer without it", made.why)
                         made = None
-                        again, _ = await self._gemini_text(f"{brief}\n\n{PHOTO_FAILED}", kind)
-                        self._pending_shot = None
+                        again = await self._without_photo(brief, kind, by)
                         if again is not None:
                             text = again
             if text is None:
@@ -1374,9 +1374,33 @@ class Agent:
                 return [(x.speaker, strip_notes(x.text)) for x in lines if strip_notes(x.text)]
         return [(who, strip_notes(t)) for who, t in self.private_history[-n:] if strip_notes(t)]
 
+    async def _without_photo(self, brief: str, kind: str, by: str | None) -> str | None:
+        """Her answer once more with `PHOTO_FAILED` and no photo skill, from the model that wrote it — v6.5: the
+        backup's from the backup, never from Gemini, which blocked it."""
+        self._offer_photo = self._offer_backup_photo = False
+        if by == "backup":
+            again = await self._backup_text(f"{brief}\n\n{PHOTO_FAILED}", kind)
+        else:
+            again, _ = await self._gemini_text(f"{brief}\n\n{PHOTO_FAILED}", kind)
+        self._pending_shot = None
+        return again
+
     async def _backup_text(self, brief: str, kind: str):
+        """The backup's line; v6.5 (the owner, 2026-11-09: «також треба мати можливіть генерувати фото коли зараз
+        маршрут на бакап мережу а не джемені»): with her fal maker and a photo open now, her photo skill too — its
+        photo is always made on fal, whatever `/photos` says, since the backup's talk never goes to Google. A video line
+        is dropped: the video skill stays Gemini's."""
+        shots = None
+        if getattr(self, "_offer_backup_photo", False):
+            brief, shots = f"{brief}\n\n{PHOTO_SKILL}", []
         prompt, lines = await self._backup_private_prompt(brief)
-        return await self._compose(prompt, lines=lines, kind=kind, responder=self.fallback_responder)
+        text = await self._compose(prompt, lines=lines, kind=kind, responder=self.fallback_responder, shots=shots)
+        photos = [s for s in shots or [] if s.kind in ("photo", "selfie")]
+        if text is not None and photos:
+            self._pending_shot = photos[-1]
+        elif shots and not photos:
+            log.info("photo: dropped (a video line from the backup)")
+        return text
 
     async def _gemini_answer(self, brief: str, kind: str):
         """`_gemini_text`, and v5.23 (the owner, 2026-11-03: «не треба переключати на бекап якщо блок на фото» —
@@ -2342,23 +2366,26 @@ class Agent:
         now = self.clock()
         return sum(1 for t in self.media_times(kind) if 0 <= now - t < window_s * 1000) >= most
 
-    def _photo_closed(self, door: str | None) -> str | None:
+    def _photo_closed(self, door: str | None, fal: bool = False) -> str | None:
         """Why her answer may not carry a photo now (None: it may) — v5.17: not Telegram, the image model off, the day's
         cap; v5.22: `PHOTO_WINDOW_MAX` photos already in the last `PHOTO_WINDOW_S` (the owner, 2026-11-02: «з кожним
-        меседжем … ліпше кількість на 30 хв»)."""
+        меседжем … ліпше кількість на 30 хв»); v6.5: the maker of the route her photos take now — `fal` for the
+        backup's, always."""
         if door != "telegram":
             return "element"
-        if (self.photos if self.photo_route() == "google" else self.fal_photos) is None or self.photo_day_max <= 0:
-            return "off"  # v6.5: the maker of the route her photos take now
+        maker = self.fal_photos if fal or self.photo_route() == "fal" else self.photos
+        if maker is None or self.photo_day_max <= 0:
+            return "off"
         if self.photos_today() >= self.photo_day_max:
             return "cap"
         if self._window_full("photos", self.photo_window_max, self.photo_window_s):
             return "window"
         return None
 
-    def _photo_open(self, door: str | None) -> bool:
-        """v5.17 — may her answer carry a photo (the skill offered to Gemini): `_photo_closed` names no reason."""
-        return self._photo_closed(door) is None
+    def _photo_open(self, door: str | None, fal: bool = False) -> bool:
+        """v5.17 — may her answer carry a photo (the skill offered to Gemini; v6.5 `fal`: to the backup):
+        `_photo_closed` names no reason."""
+        return self._photo_closed(door, fal) is None
 
     def videos_today(self) -> int:
         """v5.18 — her videos today, for the day's cap: the ones paid for (today's ok `video` / `video_note` lines in
@@ -2536,11 +2563,11 @@ class Agent:
         return fal_request(shot, moment, scene, self.photo_birth, self.photo_look)
 
     async def _make_photo(self, shot: Shot, aspect: str = "3:4", extra: str | None = None,
-                          kind: str = "photo") -> Made:
+                          kind: str = "photo", fal: bool = False) -> Made:
         """v5.17 — her photo for this moment; v5.18: a video's first frame takes its aspect and frame line (v5.22: and
-        its usage line is the kind `frame`)."""
+        its usage line is the kind `frame`); v6.5: on fal under `/photos fal`, and always for the backup's (`fal`)."""
         try:
-            if kind == "photo" and self.photo_route() == "fal":  # v6.5: a video's frame stays on Google
+            if kind == "photo" and self.fal_photos is not None and (fal or self.photo_route() == "fal"):
                 moment = self._moment()
                 return await self.fal_photos.make(shot, await self._fal_prompt(shot, moment))
             return await self.photos.make(shot, self._moment(), aspect, extra, kind)

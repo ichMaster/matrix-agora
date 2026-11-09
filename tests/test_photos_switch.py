@@ -116,3 +116,75 @@ def test_the_caps_and_the_door_are_the_same_on_both_routes(tmp_path, monkeypatch
     assert agent._photo_closed("telegram") is None and agent._photo_closed("matrix") == "element"
     agent.photo_day_max = 0
     assert agent._photo_closed("telegram") == "off"
+
+
+# --- AGORA-236: the backup's photo skill, its photo always on fal -----------------------------------------------------
+def backup_answers(tmp_path, monkeypatch, *texts, route="google", fal=True):
+    """Her in Telegram with the backup pinned by hand (`/backup`), its answers given in turn; Gemini never asked."""
+    from agents.fallback import FallbackResponder
+    from agents.route import Route, save_route
+    from tests.test_photo_route import her
+    from tests.test_private_route import Backup
+
+    class Turns(Backup):
+        def __init__(self, answers):
+            super().__init__()
+            self.answers = list(answers)
+
+        async def reply(self, transcript, instruction, max_tokens=400, kind="private"):
+            self.text = self.answers.pop(0) if self.answers else "ок"
+            return await super().reply(transcript, instruction, max_tokens, kind)
+
+    monkeypatch.setenv("FALLBACK_ROUTE", "on")
+    agent = switchable(her(tmp_path, monkeypatch), fal=fal)
+    agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "capabilities": agent.cfg.capabilities | {"fallback"}})
+    agent.fallback = Turns(texts)
+    agent.fallback_responder = FallbackResponder(agent.fallback)
+    agent.fallback_window_s, agent.fallback_hour_max, agent.fallback_lock_s = 300, 10, 3600
+    agent.fallback_context, agent.fallback_history_n = 32000, 60
+    save_route(agent.route_file, Route(pin="backup", pinned_at_ms=ms(17)))
+    save_photo_route(agent.photo_route_file, route)
+    agent.private_line("скинь селфі", ms(17, 30), "telegram", "tg:1")
+    return agent
+
+
+@pytest.mark.parametrize("route", ["google", "fal"])
+def test_the_backups_selfie_is_made_on_fal_whatever_photos_says(tmp_path, monkeypatch, route):
+    from agents.photo import PHOTO_SKILL
+    agent = backup_answers(tmp_path, monkeypatch, "Тримай 😊\nСЕЛФІ: я на балконі", "A made-up scene on a balcony.",
+                           route=route)
+    assert asyncio.run(agent.private_reply()) is True
+    answer, scene = agent.fallback.calls
+    assert PHOTO_SKILL in answer["instruction"] and scene["kind"] == "photo_prompt"
+    assert agent.llm.calls == [] and agent.photos.shots == []                             # Google never sees it
+    shot, prompt = agent.fal_photos.calls[0]
+    assert shot == Shot("selfie", "я на балконі") and "A made-up scene on a balcony." in prompt
+    assert ("photo", "⚙️ backup · вручну\nТримай 😊") in agent.sent                       # its mark, as ever
+
+
+def test_without_the_fal_maker_the_backup_has_no_photo_skill_and_its_line_is_dropped(tmp_path, monkeypatch, caplog):
+    from agents.photo import PHOTO_SKILL
+    caplog.set_level(logging.INFO)
+    agent = backup_answers(tmp_path, monkeypatch, "Тримай\nСЕЛФІ: я на балконі", fal=False)
+    assert asyncio.run(agent.private_reply()) is True
+    assert PHOTO_SKILL not in agent.fallback.calls[0]["instruction"] and len(agent.fallback.calls) == 1
+    assert agent.photos.shots == [] and "photo: dropped (backup)" in caplog.text
+    assert not any(isinstance(s, tuple) and s[0] == "photo" for s in agent.sent)
+
+
+def test_a_failed_backup_photo_asks_the_backup_again_never_gemini(tmp_path, monkeypatch):
+    from agents.photo import PHOTO_FAILED, PHOTO_SKILL
+    agent = backup_answers(tmp_path, monkeypatch, "Дивись!\nСЕЛФІ: я на балконі", "A made-up scene.",
+                           "Фото не вийшло, вибач")
+    agent.fal_photos.made = Made(None, why="blocked")
+    assert asyncio.run(agent.private_reply()) is True
+    _, _, again = agent.fallback.calls
+    assert PHOTO_FAILED in again["instruction"] and PHOTO_SKILL not in again["instruction"]
+    assert agent.llm.calls == [] and agent.sent[-1] == ("text", "⚙️ backup · вручну\nФото не вийшло, вибач")
+
+
+def test_the_backups_video_line_is_dropped(tmp_path, monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
+    agent = backup_answers(tmp_path, monkeypatch, "Ось\nКРУЖЕЧОК: я махаю рукою")
+    assert asyncio.run(agent.private_reply()) is True
+    assert agent.fal_photos.calls == [] and "photo: dropped (a video line from the backup)" in caplog.text
