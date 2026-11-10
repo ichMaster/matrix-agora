@@ -157,17 +157,19 @@ def repeats(her_lines: Sequence[str]) -> tuple[list[str], list[str]]:
     return words, openings
 
 
-def style_line(rng: Callable[[], float], her_lines: Sequence[str], tags: bool, own: str = "") -> str:
+def style_line(rng: Callable[[], float], her_lines: Sequence[str], tags: bool, own: str = "",
+               fillers: Sequence[str] = FILLERS) -> str:
     """The line for this answer: «Як сказати цього разу: …» — the words of live speech or none, maybe one turn of a
     real chat, maybe an open ending, else how the finished thought ends (v5.24), most often no send-off, where a voice
     tag may go (`tags`: she has a palette), what her last endings shared (v5.24), and her repeats. `own` (v5.25): the
     titles of her prompt's sections of her day («Сьогодні», «Що ти сьогодні думала»); with them, now and then
-    something of her own."""
+    something of her own. `fillers` (v6.5.1): her own words of live speech, from her TOML; empty, `FILLERS`."""
+    fillers = tuple(fillers) or FILLERS
     parts = []
     if rng() < FILLERS_P:
-        first = _pick(rng, FILLERS)
-        rest = [f for f in FILLERS if f != first]
-        picks = [first, _pick(rng, rest)] if rng() < 0.4 else [first]
+        first = _pick(rng, fillers)
+        rest = [f for f in fillers if f != first]
+        picks = [first, _pick(rng, rest)] if rest and rng() < 0.4 else [first]
         parts.append("можеш (але не мусиш) вплести " + " чи ".join(f"«{p}»" for p in picks) + ".")
     else:
         parts.append("без слів-паразитів.")

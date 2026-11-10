@@ -136,6 +136,7 @@ from agents.logic import (
     build_instruction,
     build_transcript,
     clean_reply,
+    cut_openings,
     fit_budget,
     history_entry,
     is_edit,
@@ -209,7 +210,6 @@ from agents.plans import (
     strip_tags,
 )
 from agents.private import (
-    PRIVATE_BRIEF,
     PRIVATE_CANT_LISTEN,
     PRIVATE_DISCRETION,
     PRIVATE_NOT_HEARD,
@@ -218,6 +218,7 @@ from agents.private import (
     live_room,
     load_private_state,
     pick_door,
+    private_brief,
     private_label,
     private_nudge_due,
     rediscover,
@@ -276,7 +277,7 @@ from agents.settings import VOICE_ID_RE, live_value
 from agents.settings import start as settings_start
 from agents.sky import SKY_MAX_TOKENS, clean_sky, load_sky, save_sky, sky_query
 from agents.speech import speakers_month_chars, voice_due, voice_message, voiceable
-from agents.style import style_line
+from agents.style import FILLERS, style_line
 from agents.talk import (
     FINER,
     TALK_CALLS_MAX,
@@ -1154,7 +1155,7 @@ class Agent:
                     await self.ensure_mood(local_now(self.clock(), self.tz))
                 except Exception:
                     log.exception("mood of the day failed (the private answer continues)")
-            brief = PRIVATE_NUDGE if nudge else PRIVATE_BRIEF
+            brief = PRIVATE_NUDGE if nudge else private_brief(self.cfg.private_lead)  # v6.5.1: hers, by her TOML
             if nudge and self.cfg.can("thoughts"):  # v5.12: she may share what she read or thought
                 brief = f"{brief} {PRIVATE_NUDGE_THOUGHTS}"
             if self.facts_dir is not None and not nudge:  # v5.8: «запам'ятай» — a skill, never a keyword
@@ -1169,11 +1170,13 @@ class Agent:
                          else [t for s, t in self.private_history if s == self.cfg.name])
             own = " чи ".join(t for c, t in (("today", "«Сьогодні»"), ("thoughts", "«Що ти сьогодні думала»"))
                              if self.cfg.can(c))  # v5.25: the sections of her day her prompt holds
-            brief = f"{brief}\n\n{style_line(self.rng, her_lines, self.cfg.can('emotion'), own)}"
+            brief = (f"{brief}\n\n"  # v6.5.1: her own words of live speech, when her TOML names them
+                     f"{style_line(self.rng, her_lines, self.cfg.can('emotion'), own, self.cfg.fillers or FILLERS)}")
             # v5.25 (the owner, 2026-11-04): what their last messages are about, and she picks which to go on with
             # v5.25 (the owner, 2026-11-05): Gemini's prompt alone — the list is of the talk open to Gemini, so on the
             # backup it named the talk before the scene and drew her away from it
-            self._topics_now = (topics_section(*self._topics) if self._topics and self.topics_lines > 0 and not nudge
+            self._topics_now = (topics_section(*self._topics, lead=self.cfg.private_lead)  # v6.5.1: she may lead
+                                if self._topics and self.topics_lines > 0 and not nudge
                                 else None)
             seen = list(self._unanswered)  # v5.13 review #2: the lines this call answers — never one that comes later
             LAST_BLOCK.set(None)  # code review v5.22 #5: only this answer's own block and silence, never those
@@ -2113,7 +2116,8 @@ class Agent:
         cut = next((x.ts_ms for x in lines if x.key in waiting), now + 1)
         spans = hour_spans([x.ts_ms for x in lines], cut)
         tail = [(cut, now + 1)] if cut <= now else []  # his lines still waiting: in every check, never softened
-        brief = f"{PRIVATE_BRIEF}\n\n{REMEMBER_SKILL}" if self.facts_dir is not None else PRIVATE_BRIEF
+        own_brief = private_brief(self.cfg.private_lead)  # v6.5.1: the brief her answers get
+        brief = f"{own_brief}\n\n{REMEMBER_SKILL}" if self.facts_dir is not None else own_brief
         system = await self._gemini_private_prompt(brief)
         canon = build_instruction(self.cfg.name, self.cfg.canon_private or self.cfg.canon, can_pass=False)
 
@@ -4180,6 +4184,8 @@ class Agent:
         if text is None:
             _silent("model passed")
             return None
+        if self.cfg.never_open:  # v6.5.1 (the owner, 2026-11-10): never a line of hers opening with «ой»
+            text = cut_openings(text, self.cfg.never_open)
         if self.cfg.type == "creature":  # v4.2: a small vocabulary, enforced
             text = cap_words(text, max_words or self.cat_max_words)
         if self.cfg.can("emotion"):  # v5.9: her words for every text, the tags only for her voice

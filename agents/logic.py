@@ -230,6 +230,39 @@ def clean_reply(text: str, own_name: str, other_names: list[str]) -> str | None:
     return out or None
 
 
+def _opening_re(words: Iterable[str]) -> re.Pattern:
+    """A line's opening word of `words`, any case, its letters drawn out («оййй», «ооой») and said again («ой-ой»,
+    «ой ой»), a whole word, and the signs and spaces after it."""
+    alts = "|".join("".join(re.escape(c) + "+" for c in w.lower()) for w in sorted(words, key=len, reverse=True))
+    return re.compile(rf"(?:{alts})(?:[-\s]*(?:{alts}))*(?![\w'’])[\s,.!?…:;—–-]*", re.IGNORECASE)
+
+
+def cut_openings(text: str, words: Iterable[str]) -> str:
+    """v6.5.1 (the owner, 2026-11-10: Устина «хай не починається на "ой" бо це вже набридло») — every line of hers
+    that opens with one of `words` (her TOML's `never_open`), past the voice tags it opens with, loses the word and
+    the signs after it; what follows takes the word's capital. A line left with no word is dropped, unless no line
+    would be left — then the text stays as it was. Pure; no words: the text as it was."""
+    words = [w.strip() for w in words if w.strip()]
+    if not words:
+        return text
+    opening = _opening_re(words)
+    kept: list[str] = []
+    for line in text.split("\n"):
+        tags = m.group() if (m := LEAD_TAGS_RE.match(line.lstrip())) else ""
+        body = line.lstrip()[len(tags):]
+        cut = opening.match(body)
+        if cut is None or not cut.group():
+            kept.append(line)
+            continue
+        rest = body[cut.end():]
+        if not re.search(r"\w", TAG_RE.sub("", rest)):
+            continue
+        if body[:1].isupper():
+            rest = rest[:1].upper() + rest[1:]
+        kept.append(tags + rest)
+    return "\n".join(kept) if any(re.search(r"\w", TAG_RE.sub("", ln)) for ln in kept) else text
+
+
 def same_message(a: str, b: str) -> bool:
     """Near-duplicate check: equal after case and punctuation are dropped."""
     norm = lambda s: "".join(ch for ch in s.lower() if ch.isalnum())

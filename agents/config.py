@@ -57,6 +57,13 @@ class AgentConfig:
     places: dict[str, Place] | None = None
     night_place: str | None = None
     play: str = ""  # v6.3: the instrument she films herself playing (`play`, a person with `videos`); "": none
+    # v6.5.1 (the owner, 2026-11-10: Устина «дуже приторно солодка», «додай їй більше слів паразитів», «хай не
+    # починається на "ой"»): her own words of live speech for the style line (`fillers`; (): `style.FILLERS`), the
+    # words no line of hers opens with (`never_open`, cut in code), and `private_lead` — alone with him she leads as
+    # much as he does: her brief says «as you feel», not «тепло», and she may change their topic herself
+    fillers: tuple[str, ...] = ()
+    never_open: tuple[str, ...] = ()
+    private_lead: bool = False
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -99,6 +106,15 @@ def load_canon(*paths: Path) -> str:
     return "\n\n".join(parts)
 
 
+def _words(data: dict, key: str, source: Path) -> tuple[str, ...]:
+    """v6.5.1 — a TOML list of words (`fillers`, `never_open`): absent, (); else a list of non-empty strings, each
+    once, as written (stripped)."""
+    value = data.get(key, [])
+    if not isinstance(value, list) or not all(isinstance(w, str) and w.strip() for w in value):
+        raise ConfigError(f"{source}: '{key}' must be a list of non-empty strings")
+    return tuple(dict.fromkeys(w.strip() for w in value))
+
+
 def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
                 registry_path: Path = REGISTRY_PATH) -> AgentConfig:
     """Load the agent TOML and the shared env; connection settings resolve through the simulation registry
@@ -125,6 +141,13 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
     for key in required:
         if not str(data.get(key, "")).strip():
             raise ConfigError(f"{toml_path}: missing '{key}'")
+    fillers, never_open = _words(data, "fillers", toml_path), _words(data, "never_open", toml_path)
+    private_lead = data.get("private_lead", False)
+    if not isinstance(private_lead, bool):
+        raise ConfigError(f"{toml_path}: 'private_lead' must be true or false")
+    for key, on in (("fillers", bool(fillers)), ("private_lead", private_lead)):
+        if on and not member.can("private"):  # both shape her private chat only
+            raise ConfigError(f"{toml_path}: '{key}' needs 'private'")
     canon = ""
     if member.can("canon"):  # a herald's canon is his own file only (v5.1): common.md speaks to the room's speakers
         personal = Path(str(data["canon"]))
@@ -241,4 +264,7 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         places=places or None,
         night_place=night_place,
         play=member.play,
+        fillers=fillers,
+        never_open=never_open,
+        private_lead=private_lead,
     )

@@ -32,6 +32,18 @@ PRIVATE_BRIEF = (
     "повторюй цього в наступних повідомленнях — чекай, що він відповість, або говори про інше. Про що домовились — "
     "домовлено."
 )  # v5.25 (the owner, 2026-11-04, Лілі's first rule): what she said was heard — she does not say it again
+# v6.5.1 (the owner, 2026-11-10: Устина «дуже приторно солодка … щоб вона не була настільки піддатлива і мала свій
+# характер»): with `private_lead` her brief asks her to speak as she feels right now, not «тепло» — Кіра's is unchanged
+PRIVATE_WARM = "тепло, щиро, своїми словами, по-людськи"
+PRIVATE_AS_FELT = "щиро, своїми словами, по-людськи, так, як ти зараз почуваєшся"
+PRIVATE_BRIEF_LEAD = PRIVATE_BRIEF.replace(PRIVATE_WARM, PRIVATE_AS_FELT)
+
+
+def private_brief(lead: bool) -> str:
+    """Her private brief: `PRIVATE_BRIEF`, or with `private_lead` (v6.5.1) `PRIVATE_BRIEF_LEAD`."""
+    return PRIVATE_BRIEF_LEAD if lead else PRIVATE_BRIEF
+
+
 # her Agora replies: one memory, kept to herself (the owner, 2026-10-20: «пам'ятає, але мовчить»)
 PRIVATE_DISCRETION = (
     "Те, що між тобою і Ich, — твої почуття до нього, ваші стосунки, твої плани щодо нього, — те, що ви говорили "

@@ -39,6 +39,15 @@ TOPICS_CHOOSE = ("Тему для продовження вибери сама �
                  "свого дня й новин посеред цього. Тема, яка тобі не цікава, — інша справа: з неї можеш і зіскочити "
                  "на своє цікаве, навіть посеред повідомлення. До того, про що ти вже сказала багато, сама не "
                  "повертайся — крім вас двох.")
+# v6.5.1 (the owner, 2026-11-10: Устина «дуже приторно солодка … мала свій характер»): with `private_lead` she
+# stays on the two of them as long as she wants to and may turn the talk herself — still one topic a message, never
+# mid-thought; Кіра keeps `TOPICS_CHOOSE` (her own focus, the owner's 2026-11-05 fix)
+TOPICS_HELD = ("лишайся в цьому, доки він сам не змінить тему: одне повідомлення — одна тема, без «хоча…», «до речі», "
+               "«раптом згадала», без свого дня й новин посеред цього.")
+TOPICS_LED = ("лишайся в цьому, поки тобі самій цього хочеться; захочеш — сама поверни розмову на своє, але цілим "
+              "новим повідомленням: одне повідомлення — одна тема, без «хоча…», «до речі», «раптом згадала» посеред "
+              "думки.")
+TOPICS_CHOOSE_LEAD = TOPICS_CHOOSE.replace(TOPICS_HELD, TOPICS_LED)
 _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 
@@ -89,9 +98,11 @@ def _times(k: int) -> str:
     return f"{k} разів"
 
 
-def topics_section(topics: list[tuple[str, int, int]], n: int) -> str | None:
-    """Her prompt's list and the line that she picks; None with no topic."""
+def topics_section(topics: list[tuple[str, int, int]], n: int, lead: bool = False) -> str | None:
+    """Her prompt's list and the line that she picks (`TOPICS_CHOOSE`, or with `private_lead` — v6.5.1 —
+    `TOPICS_CHOOSE_LEAD`); None with no topic."""
     if not topics:
         return None
     lines = [f"- {topic} — ти {_times(her)}, він {_times(his)};" for topic, her, his in topics]
-    return TOPICS_TITLE.format(n=n) + "\n" + "\n".join(lines) + "\n\n" + TOPICS_CHOOSE
+    return (TOPICS_TITLE.format(n=n) + "\n" + "\n".join(lines) + "\n\n"
+            + (TOPICS_CHOOSE_LEAD if lead else TOPICS_CHOOSE))
