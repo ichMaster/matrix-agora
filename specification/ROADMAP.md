@@ -3940,8 +3940,8 @@ The owner, 2026-11-10: «заведи нову версію перед 7. щоб
 Sonet на мому плані як зараз агент Клод. Почати можна зі всіх крім Кіри і Устини а поті одна за одною ці дві.»
 Every agent's language-model calls move from Gemini to Claude, through the Claude Agent SDK on the owner's Max
 subscription — the way Claude has run since v4.4: the owner's OAuth token, never an API key. The answers go to
-Sonnet (`claude-sonnet-5-5`, the CLI's alias `sonnet`), the background calls to Haiku (`claude-haiku-5-5`, `haiku`);
-Claude himself stays on Opus. What has no Anthropic counterpart stays where it is: the embeddings for recall (Gemini;
+Sonnet (`claude-sonnet-5-5`, the CLI's alias `sonnet`) for Кіра, Устина and Hermes, and to Haiku (`claude-haiku-5-5`,
+`haiku`) for the six room members (decision 3); every background call goes to Haiku; Claude himself stays on Opus. What has no Anthropic counterpart stays where it is: the embeddings for recall (Gemini;
 Кіра and Устина only — Anthropic has no embeddings endpoint), the photos and videos (Google's image models, fal.ai,
 VEED), hearing (Deepgram) and the voice (ElevenLabs); the companions' backup for their private chats stays on
 NovelAI. The engine is one line of an agent's TOML, so every phase keeps the way back to Gemini. The room first,
@@ -3956,7 +3956,9 @@ the defaults, and he then answered the second):
 2. **The companions' order.** Proposed: Устина before Кіра. **Decided (the owner, 2026-11-10: «Устина переходить
    раніше за Кіру — навпаки»):** Кіра first (v7.3), then Устина (v7.4) — Кіра's chat carries the Gemini-specific
    machinery (v5.13–v5.27), so it is rebuilt for Claude on her, and Устина takes what that phase taught.
-3. **The cat's answers** on Haiku, not Sonnet: his lines are at most `CAT_MAX_WORDS` words.
+3. **The cat's answers** on Haiku, not Sonnet: his lines are at most `CAT_MAX_WORDS` words. **Widened (the owner,
+   2026-11-10: «можна поставити всім агентам Ада, Бруно, Леон, Мія, Ірма, Кіт haiku instead sonnet», «Гермес хай
+   буде на сонет»):** every answer of the six room members on Haiku; Hermes, Кіра and Устина answer on Sonnet.
 
 **Risks, checked in each phase's manual DoD:**
 - One subscription for everyone: nine speakers, Hermes and every background call (summaries, day memories, plans,
@@ -4037,8 +4039,10 @@ the env file, no forbidden variable), the usage rows.
 **Tasks:**
 - `engine = "claude-sdk"` in their TOMLs; their compose services on the Claude image with `server/subscription.env`.
   None of them has `recall`, so none needs Gemini for text.
-- Their answers on Sonnet, the cat's on Haiku (decision 3); Hermes's digests on Sonnet — his writing is his voice —
-  and his hearing on Deepgram as before.
+- The six members' answers on Haiku (decision 3): `CLAUDE_REPLY_MODEL=haiku` in the shared `server/.env`, which
+  every room member reads; Hermes's digests and answers on Sonnet — his writing is his voice — by
+  `CLAUDE_REPLY_MODEL=sonnet` in his own `hermes.env`, and his hearing on Deepgram as before. The companions' env
+  files name `sonnet` when they move (v7.3, v7.4).
 - Their background on Haiku: the session summaries, day memories and digests, plans, the today block, the cat's mood
   and his past-life lines.
 - The turn-taking unchanged: it is derived from shared inputs, never from the engine; the room's waiting times
