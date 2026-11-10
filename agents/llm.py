@@ -29,7 +29,8 @@ THINKING_MODELS = frozenset({"gemini-3.1-pro-preview"})
 REPLY_TIMEOUT_S = 90  # v5.25 (the owner, 2026-11-04): an answer's call, at most so long
 REPLY_TRIES = 2       # … tried once more when it hangs
 # 2026-11-10 (the owner: «роби»): a thinking call (a summary, a digest) hung for hours on Pro and held up her idle
-# loop — no writing first, no events, no summary; the longest seen took 95 s
+# loop — no writing first, no events, no summary; the longest seen took 95 s. v6.5 code review #1: every other call
+# but an answer too (`complete`, `probe`, `embed`, `search`)
 THINK_TIMEOUT_S = 180
 EMBED_MODEL = "gemini-embedding-001"  # v5.8: the archive's meaning search (the owner, 2026-10-25: Gemini's)
 EMBED_DIM = 768
@@ -140,12 +141,14 @@ class GeminiClient:
         model: str | None = None, refusal: bool = False,
     ) -> tuple[str, str] | None:
         """(text, finish) — finish is "max_tokens" when the cap cut the reply, else "stop"; None on failure. `model`
-        (v5.8) overrides `GEMINI_MODEL` for this call — a model that runs with thinking off."""
+        (v5.8) overrides `GEMINI_MODEL` for this call — a model that runs with thinking off. v6.5 code review #1: at
+        most `REPLY_TIMEOUT_S` for an answer (`refusal`, from `reply`), `THINK_TIMEOUT_S` for any other call, tried
+        once more when it hangs."""
         LAST_BLOCK.set(None)
         model = model or self.model
         self._start()
         try:
-            resp = await self._client.aio.models.generate_content(
+            resp = await self._within(lambda: self._client.aio.models.generate_content(
                 model=model,
                 contents=transcript,
                 config=types.GenerateContentConfig(
@@ -155,7 +158,7 @@ class GeminiClient:
                     # no tools are passed: AFC only adds a log line per call (v3.4 review #3)
                     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                 ),
-            )
+            ), kind, REPLY_TIMEOUT_S if refusal else THINK_TIMEOUT_S)
         except Exception as exc:  # noqa: BLE001 — any provider failure means silence
             log.error("gemini call failed: %s", type(exc).__name__)
             self._report(kind, None, False, model)
@@ -231,7 +234,7 @@ class GeminiClient:
                     if model in THINKING_MODELS else types.ThinkingConfig(thinking_budget=0))
         self._start()
         try:
-            resp = await self._client.aio.models.generate_content(
+            resp = await self._within(lambda: self._client.aio.models.generate_content(
                 model=model,
                 contents=transcript,
                 config=types.GenerateContentConfig(
@@ -240,7 +243,7 @@ class GeminiClient:
                     thinking_config=thinking,
                     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                 ),
-            )
+            ), kind, THINK_TIMEOUT_S)  # v6.5 code review #1
         except Exception as exc:  # noqa: BLE001 — a failed probe closes nothing; its type reaches the log (review #1)
             log.warning("probe: failed (%s)", type(exc).__name__)
             self._report(kind, None, False, model)
@@ -259,9 +262,10 @@ class GeminiClient:
             return []
         self._start()
         try:
-            resp = await self._client.aio.models.embed_content(
+            resp = await self._within(lambda: self._client.aio.models.embed_content(
                 model=EMBED_MODEL, contents=texts,
-                config=types.EmbedContentConfig(task_type=task, output_dimensionality=EMBED_DIM))
+                config=types.EmbedContentConfig(task_type=task, output_dimensionality=EMBED_DIM)),
+                kind, THINK_TIMEOUT_S)  # v6.5 code review #1: `embed_tick` runs in the idle loop
         except Exception as exc:  # noqa: BLE001 — a failed embedding is retried later, never a blocked reply
             log.error("gemini embed failed: %s", type(exc).__name__)
             self._report(kind, None, False, EMBED_MODEL)
@@ -279,7 +283,7 @@ class GeminiClient:
         asked of the live internet; the sources stay out of the answer. None on failure (logged by type)."""
         self._start()
         try:
-            resp = await self._client.aio.models.generate_content(
+            resp = await self._within(lambda: self._client.aio.models.generate_content(
                 model=self.model,
                 contents=question,
                 config=types.GenerateContentConfig(
@@ -287,7 +291,7 @@ class GeminiClient:
                     thinking_config=types.ThinkingConfig(thinking_budget=0),
                     tools=[types.Tool(google_search=types.GoogleSearch())],
                 ),
-            )
+            ), kind, THINK_TIMEOUT_S)  # v6.5 code review #1
         except Exception as exc:  # noqa: BLE001
             log.error("gemini search failed: %s", type(exc).__name__)
             self._report(kind, None, False)

@@ -61,6 +61,31 @@ def test_a_thinking_call_that_hangs_is_asked_once_more_then_fails_never_holding_
     assert models.calls == 2 and seen == [("summary", False)] and "gemini think failed: TimeoutError" in caplog.text
 
 
+class HangingEmbed(Hanging):
+    async def embed_content(self, model, contents, config):
+        self.calls += 1
+        await asyncio.sleep(5)
+
+
+def test_every_other_call_is_cut_too_an_answer_on_flash_at_the_answers_timeout(monkeypatch, caplog):
+    # v6.5 code review #1: the idle loop awaits `complete` and `embed` as well — one hung call stopped it for hours
+    llm, seen = pro(monkeypatch, models := Hanging(10))
+    monkeypatch.setattr(llm_mod, "THINK_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(llm_mod, "REPLY_TIMEOUT_S", 60)                 # an answer is never cut at the other's
+    assert asyncio.run(llm.complete("Ich: привіт", "Підсумуй.", kind="summary")) is None
+    assert models.calls == 2 and seen == [("summary", False)] and "gemini call failed: TimeoutError" in caplog.text
+    assert asyncio.run(llm.probe("Ich: привіт", "Ти — Кіра.")) is None and models.calls == 4
+    assert asyncio.run(llm.search("Що на небі?")) is None and models.calls == 6
+    llm, _ = pro(monkeypatch, models := HangingEmbed(5))
+    monkeypatch.setattr(llm_mod, "THINK_TIMEOUT_S", 0.05)
+    assert asyncio.run(llm.embed(["рядок"])) is None and models.calls == 2
+    monkeypatch.setenv("GEMINI_REPLY_MODEL", "")                        # an answer on Flash: `REPLY_TIMEOUT_S`
+    llm, seen = pro(monkeypatch, models := Hanging(1))
+    monkeypatch.setattr(llm_mod, "THINK_TIMEOUT_S", 60)
+    assert asyncio.run(llm.reply("Ich: привіт", "Ти — Ада.", kind="reply")) == ("Привіт!", "stop")
+    assert models.calls == 2 and seen == [("reply", True)]
+
+
 def bot(monkeypatch, replies):
     """A bot whose `_call` gives `replies` in turn and records each try's body."""
     monkeypatch.setattr(tg_mod, "SEND_BACKOFF_S", (0, 0))
