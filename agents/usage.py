@@ -37,6 +37,10 @@ BILLING = ("api", "subscription", "external")
 # part's size in characters (the canon, the life story, the recall, the history, …), set by the agent around the call
 # and written into its usage line; a context variable, so a concurrent call never reads another's
 PROMPT_PARTS: ContextVar[dict | None] = ContextVar("prompt_parts", default=None)
+# v7.2 (AGORA-242) — the answer call's slow part: the prefix of its instruction that changes rarely (a persona's canon
+# and life section; Hermes's brief), set by the agent around the call like `PROMPT_PARTS`; `ClaudeClient` gives it to a
+# CLI started ahead as its system prompt (AGORA-243). None on any other call
+PROMPT_SLOW: ContextVar[str | None] = ContextVar("prompt_slow", default=None)
 
 
 def _parts(value: Any) -> dict | None:

@@ -149,6 +149,7 @@ from agents.logic import (
     same_message,
     should_handle,
     should_join_invite,
+    slow_part,
     transcript_of,
 )
 from agents.matrix import join_room as matrix_join
@@ -335,6 +336,7 @@ from agents.turns import (
 )
 from agents.usage import (
     PROMPT_PARTS,
+    PROMPT_SLOW,
     answer_line,
     fallback_usage_line,
     image_usage_line,
@@ -396,7 +398,8 @@ log = logging.getLogger("agent")
 BACKUP_FORGETS = frozenset({"day", "week", "month", "year", "summary"})
 # v5.22 — the prompt this task built last and its parts' sizes in characters (`build_prompt`), read by `_compose` for
 # the answer call's usage line when that very prompt is sent; a context variable, as concurrent answers never share it
-_LAST_PARTS: ContextVar[tuple[str, dict] | None] = ContextVar("last_prompt_parts", default=None)
+# v7.2 (AGORA-242): and its slow part — the canon and the life section, the instruction's prefix (None: none)
+_LAST_PARTS: ContextVar[tuple[str, dict, str | None] | None] = ContextVar("last_prompt_parts", default=None)
 PART_NAMES = {"private": "brief", "agora_now": "agora_today", "recalled": "recall"}  # a layer's name in the parts
 # v5.22 — why `_compose`'s last line in this task came to nothing (its `silent:` reason), for the owner's ⚙️ line
 LAST_SILENCE: ContextVar[str | None] = ContextVar("last_silence", default=None)
@@ -2888,7 +2891,7 @@ class Agent:
         brief is the instruction."""
         if self.cfg.type == "assistant":
             prompt = self.brief(CLAUDE_BRIEF_DIRECT)
-            _LAST_PARTS.set((prompt, {"brief": len(prompt)}))
+            _LAST_PARTS.set((prompt, {"brief": len(prompt)}, None))
             return prompt
         layers = self.prompt_layers(pastlife, nudge, move, private, recalled, agora_now, facts, skip_layers, talk,
                                     backup)
@@ -2896,7 +2899,7 @@ class Agent:
         # v5.22: its parts' sizes (the rules and the joins are what is left), for the answer call's usage line
         parts = {PART_NAMES.get(k, k): len(v) for k, v in layers.items() if k != "name" and isinstance(v, str) and v}
         parts["rules"] = max(0, len(prompt) - sum(parts.values()))
-        _LAST_PARTS.set((prompt, parts))
+        _LAST_PARTS.set((prompt, parts, slow_part(prompt, layers.get("canon"), layers.get("life"))))
         return prompt
 
     def prompt_layers(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None,
@@ -4152,10 +4155,12 @@ class Agent:
         built = _LAST_PARTS.get()  # v5.22: the prompt's parts, when this prompt is the one last built in this task
         parts = {**built[1], "history": len(build_transcript(history))} if built and built[0] is prompt else None
         token = PROMPT_PARTS.set(parts)
+        slow = PROMPT_SLOW.set(built[2] if built and built[0] is prompt else None)  # v7.2: its slow part
         try:
             reply = await (responder or self.responder).respond(Turn(history, prompt, self.reply_max_tokens, kind, effort,
                                                                      toolset))
         finally:
+            PROMPT_SLOW.reset(slow)
             PROMPT_PARTS.reset(token)
         if reply is None:
             return None  # already logged

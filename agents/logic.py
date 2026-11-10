@@ -295,6 +295,14 @@ def asked_section(questions: list[str]) -> str | None:
     return "Твої питання в цій розмові — не повторюй їх: " + "; ".join(f"«{q}»" for q in questions)
 
 
+def slow_part(prompt: str, canon: str | None, life: str | None) -> str | None:
+    """v7.2 (AGORA-242) — the slow part of an instruction `build_instruction` made: the canon, then the life section
+    when there is one — exactly its prefix (its parts are joined by a blank line); None when it has neither, or when
+    the prompt does not start with them."""
+    slow = "\n\n".join(s for s in (canon or "", life or "") if s)
+    return slow if slow and prompt.startswith(slow) else None
+
+
 def build_instruction(
     name: str,
     canon: str,

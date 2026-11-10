@@ -86,7 +86,15 @@ from agents.recording import (
 from agents.roster import Member, load_roster, speakers
 from agents.settings import VOICE_ID_RE
 from agents.speech import voice_message
-from agents.usage import month_chars, parse_lines, sdk_usage_line, stt_usage_line, tts_usage_line, usage_line
+from agents.usage import (
+    PROMPT_SLOW,
+    month_chars,
+    parse_lines,
+    sdk_usage_line,
+    stt_usage_line,
+    tts_usage_line,
+    usage_line,
+)
 from agents.voice import (
     STT_MODEL,
     TTS_MODEL,
@@ -361,7 +369,11 @@ class Herald:
         await self._typing(True)
         try:
             for _ in range(2):
-                out = await self.llm.think(contents, system, model=DIGEST_MODEL, kind=kind, level=level)
+                token = PROMPT_SLOW.set(system)  # v7.2 (AGORA-242): his brief is his whole slow part
+                try:
+                    out = await self.llm.think(contents, system, model=DIGEST_MODEL, kind=kind, level=level)
+                finally:
+                    PROMPT_SLOW.reset(token)
                 if out is None:
                     return None, False
                 out = trim_digest(out, cap)

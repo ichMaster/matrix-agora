@@ -582,6 +582,14 @@ def cli_error_kind(result: Any) -> str:
     return next((name for phrase, name in _CLI_ERRORS if phrase in line), "other" if line else "none")
 
 
+def split_prompt(system: str | None, slow: str | None) -> tuple[str, str] | None:
+    """v7.2 (AGORA-242) — a call's system prompt as its slow part and the rest: `(slow, rest)` when `system` starts
+    with `slow` (the rest without the blank line that joined them), else None."""
+    if not system or not slow or not system.startswith(slow):
+        return None
+    return slow, system[len(slow):].removeprefix("\n\n")
+
+
 def answer_of(result: Any, parts: list[str], toolset: str | None) -> str:
     """A call's answer: with no tools, every text block in order — an answer cut at the cap is continued by the CLI
     in a second request, and its result holds that part alone; with tools (a search) the result, the last turn's."""
