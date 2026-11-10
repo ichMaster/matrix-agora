@@ -259,3 +259,42 @@ def test_a_live_switch_is_the_agents_own_never_applied_at_the_start_and_read_at_
     save_json(tmp_path / OVERRIDES_FILE, {"services": {}, "agents": {"kira": {"TRACE_CALLS": "loud"}}})
     assert live_value(tmp_path, "kira", "TRACE_CALLS", {}) == "off"
     assert live_value(tmp_path, "ada", "TRACE_CALLS", {}) == "off"                        # another agent's: none
+
+
+# --- v7.1: the Claude client's settings ----------------------------------------------------------------------------
+CLIENT = ("CLAUDE_REPLY_MODEL", "CLAUDE_BACKGROUND_MODEL", "CLAUDE_CONCURRENCY", "CLAUDE_LIMIT_FALLBACK")
+
+
+def test_the_claude_clients_settings_concern_every_agent_on_it_but_claude_himself():
+    from dataclasses import replace as swap
+    ada_on_claude = swap(ROOM["ada"], engine="claude-sdk")
+    hermes_on_claude = swap(ROOM["hermes"], engine="claude-sdk")
+    for name in CLIENT:
+        s = BY_NAME[name]
+        assert s.scope == "client:claude-sdk" and s.group == "model" and s.service is None, name
+        assert concerns(s, ada_on_claude) and concerns(s, hermes_on_claude), name
+        assert not concerns(s, ROOM["ada"]) and not concerns(s, ROOM["claude"]), name
+    for name in ("CLAUDE_MODEL", "CLAUDE_TIMEOUT_S", "CLAUDE_CODE_MAX_OUTPUT_TOKENS"):  # Claude's own stay his
+        assert concerns(BY_NAME[name], ROOM["claude"]) and not concerns(BY_NAME[name], ada_on_claude), name
+    assert not concerns(BY_NAME["GEMINI_MODEL"], ada_on_claude)
+
+
+@pytest.mark.parametrize("name,raw,ok", [("CLAUDE_REPLY_MODEL", "opus", True), ("CLAUDE_REPLY_MODEL", "gpt", False),
+                                         ("CLAUDE_BACKGROUND_MODEL", "opus", False), ("CLAUDE_CONCURRENCY", "4", True),
+                                         ("CLAUDE_CONCURRENCY", "9", False), ("CLAUDE_LIMIT_FALLBACK", "silent", True),
+                                         ("CLAUDE_LIMIT_FALLBACK", "wait", False)])
+def test_the_claude_clients_settings_are_validated(name, raw, ok):
+    assert (validate(name, raw)[0] is not None) is ok
+
+
+def test_both_shared_env_examples_carry_the_claude_clients_settings_at_their_defaults():
+    for example in (".env.example", "server/.env.example"):
+        values = dict(line.split("=", 1) for line in Path(example).read_text(encoding="utf-8").splitlines()
+                      if "=" in line and not line.startswith("#"))
+        assert {n: values.get(n) for n in CLIENT} == {n: BY_NAME[n].default for n in CLIENT}, example
+
+
+def test_the_dev_run_gives_an_agent_on_claude_the_sdk():
+    script = Path("scripts/run-agent.sh").read_text(encoding="utf-8")
+    assert '''grep -qE '^engine[[:space:]]*=[[:space:]]*"claude-sdk"' "agents/$name.toml"''' in script
+    assert 'exec uv run --group claude agents/agent.py "agents/$name.toml"' in script

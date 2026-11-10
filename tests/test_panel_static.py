@@ -177,9 +177,11 @@ def test_the_settings_drawer_confirms_a_save_and_never_redraws_under_typing():
 
 
 def test_claudes_files_tab_lists_opens_downloads_uploads_and_confirms_a_delete_or_replace():
-    """v4.7 (the owner, 2026-10-11): Claude's folder from his card — the tab only for the claude-sdk engine."""
+    """v4.7 (the owner, 2026-10-11): Claude's folder from his card — the tab only for Claude himself (v7.1: an agent
+    on the Claude client has no folder)."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert '["files", "Files"]' in js and '(k !== "files" || a.engine === "claude-sdk")' in js
+    assert '["files", "Files"]' in js
+    assert '(k !== "files" || (a.engine === "claude-sdk" && a.type === "assistant"))' in js
     assert 'send("PUT", filePath(agent, path, overwrite ? "?overwrite=1" : ""), file, true)' in js
     assert 'await send("DELETE", filePath(agent, path));' in js and 'api(filePath(agent, path, "?download=1"), "blob")' in js
     assert "Claude loses this note — it is not kept anywhere else." in js
@@ -283,7 +285,9 @@ def test_the_models_lines_and_the_voice_tab():
     """v5.9 (AGORA-121): a Gemini speaker's card names its models and voice; a Voice tab lists the emotion palette."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert '["voice", "Voice"]' in js and "function voiceTabHtml(a, mem)" in js and "function modelLines(m)" in js
-    assert 'a.engine === "gemini" && mem.models' in js and "emotion: ${m.emotion.tags.length} tags" in js
+    # v7.1: any speaker with a models view — on Gemini, or on the Claude client («claude ·»)
+    assert "${mem.models ? `<div" in js and "emotion: ${m.emotion.tags.length} tags" in js
+    assert '(m.engine === "claude" ? "claude · " : "")' in js
     assert "performed by her voice · never shown in the text" in js
 
 

@@ -17,7 +17,8 @@ const SERIES = ["a", "b", "c", "d", "e"];  // stacked token bars: one tint of th
 const PRONOUN = {she: "She", he: "He", it: "It"};
 function can(a, cap) { return !a.capabilities || a.capabilities.includes(cap); }
 // v4.7: "Files" — Claude's own folder — only for the claude-sdk engine
-function agentTabs(a) { return TABS.filter(([k]) => (k !== "files" || a.engine === "claude-sdk") && (!TAB_CAP[k] || can(a, TAB_CAP[k]))); }
+// v7.1: an agent on the Claude client has no folder — the tab is Claude's alone
+function agentTabs(a) { return TABS.filter(([k]) => (k !== "files" || (a.engine === "claude-sdk" && a.type === "assistant")) && (!TAB_CAP[k] || can(a, TAB_CAP[k]))); }
 
 const S = {
   token: store(sessionStorage, "agora-token"),
@@ -420,7 +421,7 @@ function agentCardHtml(a) {
     ${a.capabilities && can(a, "recall") ? `<div class="muted" style="font-size:12px">${archiveLine(mem)}</div>` : ""}
     ${a.capabilities && can(a, "fallback") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Route</div><div class="muted" style="font-size:13px">${esc(routeLine(mem))}</div></div>` : ""}
     ${blocksLine(a.name)}
-    ${a.engine === "gemini" && mem.models ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Models</div>${modelLines(mem.models)}</div>` : ""}
+    ${mem.models ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Models</div>${modelLines(mem.models)}</div>` : ""}
     <div class="card-foot rule-t"><div class="meta">${tokens == null ? `${icon("database", 13)} Memory unavailable` : `7 days · ${esc(tokens)}`}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${actionButtons({kind: "agent", id: a.name, state: d.health.docker ? c.state : "unknown", big: true})}</div>
       <button class="btn btn-primary" data-act="agent" data-id="${esc(a.name)}">Details${icon("arrow-right", 14)}</button></div>
@@ -1089,10 +1090,11 @@ function digestLine(mem) {
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${full ? pill("warn", "monthly cap reached") : ""}<span class="muted" style="font-size:12px">${esc(voice)}</span></div>`;
 }
 
-// v5.9 (AGORA-121) — what a Gemini speaker runs on: «answers … · background …» and «voice … · emotion: N tags»
+// v5.9 (AGORA-121) — what a speaker runs on: «answers … · background …» and «voice … · emotion: N tags»;
+// v7.1: on the Claude client the line opens with «claude ·»
 function modelLines(m) {
-  const answers = m.answers === m.background ? `model ${m.answers}`
-    : `answers ${m.answers}${m.thinking ? ` (thinking ${m.thinking})` : ""} · background ${m.background}`;
+  const answers = (m.engine === "claude" ? "claude · " : "") + (m.answers === m.background ? `model ${m.answers}`
+    : `answers ${m.answers}${m.thinking ? ` (thinking ${m.thinking})` : ""} · background ${m.background}`);
   const v = m.voice;
   const voice = !v ? "" : `voice ${v.model} · stability ${v.stability}${v.speed !== "1.0" && v.speed !== "1" ? ` · speed ${v.speed}` : ""}`
     + (m.emotion ? ` · emotion: ${m.emotion.tags.length} tags` : "");

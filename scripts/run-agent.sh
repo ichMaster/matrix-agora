@@ -9,4 +9,8 @@ if [[ -z "$name" ]] || ! grep -qxF -- "$name" <<<"$agents"; then
   echo "usage: scripts/run-agent.sh <name>   (one of: $(tr '\n' ' ' <<<"$agents"))" >&2
   exit 2
 fi
+# v7.1: an agent on Claude needs the Agent SDK and its bundled CLI (the `claude` dependency group, as its image)
+if grep -qE '^engine[[:space:]]*=[[:space:]]*"claude-sdk"' "agents/$name.toml"; then
+  exec uv run --group claude agents/agent.py "agents/$name.toml"
+fi
 exec uv run agents/agent.py "agents/$name.toml"

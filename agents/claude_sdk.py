@@ -819,20 +819,21 @@ def secret_vars(env: Mapping[str, str]) -> list[str]:
     return sorted(k for k in env if k.endswith(SECRET_SUFFIXES) and k != OAUTH_VAR)
 
 
-def claude_client_for(env: MutableMapping[str, str], *, status_file: Path, sink: Callable[..., None],
+def claude_client_for(environ: MutableMapping[str, str], *, status_file: Path, sink: Callable[..., None],
                       gemini_sink: Callable[..., None], clock: Callable[[], int], recall: bool,
                       gemini=None) -> ClaudeClient:
     """v7.1 — the client of an agent on Claude that is not Claude himself (a persona, the cat, Hermes), from its
-    settings in `env`: v4.4's layers first (refuse a forbidden variable or no OAuth token, then scrub), then every
+    settings in `environ`: v4.4's layers first (refuse a forbidden variable or no OAuth token, then scrub), then every
     secret out of the environment the CLI inherits. A Gemini client beside it only when needed — `recall` (the
     embeddings) or `CLAUDE_LIMIT_FALLBACK=gemini` — with the key handed over, never left in the environment;
     `gemini` (tests) stands in for it."""
-    check_startup(env)
-    scrub(env)
-    gemini_key = str(env.get("GEMINI_API_KEY", "")).strip()
-    for name in secret_vars(env):
-        env.pop(name, None)
-    fallback = str(env.get("CLAUDE_LIMIT_FALLBACK", "gemini")).strip() or "gemini"
+    check_startup(environ)
+    scrub(environ)
+    env = environ.get
+    gemini_key = str(env("GEMINI_API_KEY", "")).strip()
+    for name in secret_vars(environ):
+        environ.pop(name, None)
+    fallback = str(env("CLAUDE_LIMIT_FALLBACK", "gemini")).strip()
     if fallback not in LIMIT_FALLBACKS:
         log.warning("CLAUDE_LIMIT_FALLBACK is not one of %s — using gemini", ", ".join(LIMIT_FALLBACKS))
         fallback = "gemini"
@@ -846,13 +847,13 @@ def claude_client_for(env: MutableMapping[str, str], *, status_file: Path, sink:
                 w for w, on in (("no meaning search in recall", recall),
                                 ("silent at the limit", fallback == "gemini")) if on))
     try:
-        concurrency = int(str(env.get("CLAUDE_CONCURRENCY", CONCURRENCY)))
+        concurrency = int(str(env("CLAUDE_CONCURRENCY", "2")))
     except ValueError:
         log.warning("CLAUDE_CONCURRENCY is not a number — using %d", CONCURRENCY)
         concurrency = CONCURRENCY
     return ClaudeClient(
-        reply_model=str(env.get("CLAUDE_REPLY_MODEL", "")).strip() or "sonnet",
-        background_model=str(env.get("CLAUDE_BACKGROUND_MODEL", "")).strip() or "haiku",
-        config_dir=str(env.get("CLAUDE_CONFIG_DIR", "/tmp/claude")),
+        reply_model=str(env("CLAUDE_REPLY_MODEL", "sonnet")).strip() or "sonnet",
+        background_model=str(env("CLAUDE_BACKGROUND_MODEL", "haiku")).strip() or "haiku",
+        config_dir=str(env("CLAUDE_CONFIG_DIR", "/tmp/claude")),
         status_file=status_file, sink=sink, clock=clock, concurrency=concurrency, limit_fallback=fallback,
         fallback=gemini if fallback == "gemini" else None, embedder=gemini if recall else None)

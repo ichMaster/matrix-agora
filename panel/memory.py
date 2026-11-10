@@ -337,8 +337,9 @@ def route_view(state_dir: Path, name: str, today: date, now_ms: int | None = Non
             "backup": backup}
 
 
-def models_view(state_dir: Path, name: str, voice_spec: Path | None = None) -> dict | None:
-    """v5.9 (AGORA-121) — what a Gemini speaker runs on, from what it wrote at its start (`<name>.settings.json`):
+def models_view(state_dir: Path, name: str, voice_spec: Path | None = None, engine: str = "gemini") -> dict | None:
+    """v5.9 (AGORA-121) — what a speaker runs on (from v7.1 a Gemini one or one on the Claude client, `engine`),
+    from what it wrote at its start (`<name>.settings.json`):
     the answers' and the background model, the thinking level, the voice's model and settings, and with a palette
     (`emotion`) its tags and whether the voice performs them. Never the voice id or the palette's text; unreadable is
     None, never a 500."""
@@ -347,12 +348,17 @@ def models_view(state_dir: Path, name: str, voice_spec: Path | None = None) -> d
         value = {k: str(v.get("value", "")) for k, v in data.items() if isinstance(v, dict)}
     except (OSError, ValueError, AttributeError):
         return None
-    background = value.get("GEMINI_MODEL") or "gemini-2.5-flash"
-    answers = value.get("GEMINI_REPLY_MODEL") or background
-    view = {"answers": answers, "background": background,
-            "thinking": value.get("GEMINI_THINKING_LEVEL") if answers != background or answers.startswith("gemini-3")
-            else None,
-            "voice": None, "emotion": None}
+    if engine == "claude-sdk":  # v7.1: an agent on the Claude client — its voice's model and every other call's
+        answers = value.get("CLAUDE_REPLY_MODEL") or "sonnet"
+        view = {"engine": "claude", "answers": answers, "background": value.get("CLAUDE_BACKGROUND_MODEL") or "haiku",
+                "thinking": None, "voice": None, "emotion": None}
+    else:
+        background = value.get("GEMINI_MODEL") or "gemini-2.5-flash"
+        answers = value.get("GEMINI_REPLY_MODEL") or background
+        view = {"engine": "gemini", "answers": answers, "background": background,
+                "thinking": value.get("GEMINI_THINKING_LEVEL")
+                if answers != background or answers.startswith("gemini-3") else None,
+                "voice": None, "emotion": None}
     if "ELEVENLABS_MODEL" in value or "VOICE_STABILITY" in value:
         model = value.get("ELEVENLABS_MODEL") or "eleven_turbo_v2_5"
         view["voice"] = {"model": model, "stability": value.get("VOICE_STABILITY") or "0.5",
@@ -371,7 +377,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
                 with_news: bool = False, with_digest: bool = False, with_facts: bool = False,
                 with_archive: bool = False, with_models: bool = False, voice_spec: Path | None = None,
                 with_events: bool = False, with_thoughts: bool = False, with_route: bool = False,
-                with_talk: bool = False) -> dict:
+                with_talk: bool = False, engine: str = "gemini") -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -419,7 +425,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "facts_pending": (state_dir / f"{name}.facts.request").exists() if with_facts else None,
         "archive": archive_view(state_dir, name) if with_archive else None,              # v5.8: her archive
         "talk": talk_view(state_dir, name) if with_talk else None,                       # v5.20: her chat in layers
-        "models": models_view(state_dir, name, voice_spec) if with_models else None,     # v5.9: models, voice
+        "models": models_view(state_dir, name, voice_spec, engine) if with_models else None,  # v5.9; v7.1 engine
         "events": events_view(state_dir, name, today) if with_events else None,          # v5.11: her events
         "thoughts": thoughts_view(state_dir, name, today) if with_thoughts else None,    # v5.12: her thoughts
         "route": route_view(state_dir, name, today) if with_route else None,             # v5.14: her backup

@@ -218,11 +218,12 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
         return memory_view(state_dir, found.name, local_today(), natal, "mood" in found.capabilities, theses,
                            "nudge" in found.capabilities, found.engine == "claude-sdk", "news" in found.capabilities,
                            "digest" in found.capabilities, "facts" in found.capabilities, "recall" in found.capabilities,
-                           found.engine == "gemini" and found.type != "herald",
+                           # v7.1: a speaker on Gemini or on the Claude client — never Claude himself, never Hermes
+                           found.type not in ("herald", "assistant") and found.engine in ("gemini", "claude-sdk"),
                            # v5.9: the palette by the registry's own path, never request data
                            Path(found.voice_spec) if found.voice_spec and "emotion" in found.capabilities else None,
                            "events" in found.capabilities, "thoughts" in found.capabilities,
-                           "fallback" in found.capabilities, "talk" in found.capabilities)
+                           "fallback" in found.capabilities, "talk" in found.capabilities, found.engine)
 
     @app.get("/api/agents/{name}/prompt")
     def agent_prompt(name: str) -> dict:

@@ -375,3 +375,25 @@ def test_media_counts_and_prices_her_fal_photos_with_the_google_ones():
     assert m["cost"]["photos"] == pytest.approx(0.0519 + 0.06)
     r = analyze(lines, date(2026, 11, 9), date(2026, 11, 9), None, prices, date(2026, 11, 9))
     assert r["total"]["images"] == 2 and r["total"]["complete"]
+
+
+def test_a_persona_on_claude_counts_as_the_claude_service_with_its_calls_and_time_never_priced():
+    """v7.1: an agent on the Claude client writes `claude-sdk` / `subscription` lines like Claude's — Analytics groups
+    them under the same service by the model the CLI ran, counts the calls, and times them in Speed."""
+    from datetime import datetime
+
+    from agents.usage import analyze_detail
+    lines = [sdk_usage_line("2026-11-10T10:00:00+02:00", "ada", "reply", "claude-sonnet-5-5",
+                            {"input_tokens": 900, "output_tokens": 40}, True, None, 4200),
+             sdk_usage_line("2026-11-10T10:05:00+02:00", "ada", "summary", "claude-haiku-5-5",
+                            {"input_tokens": 1200, "output_tokens": 90}, True, None, 2100),
+             sdk_usage_line("2026-11-10T10:06:00+02:00", "ada", "reply", "claude-sonnet-5-5", None, False, None, 900,
+                            blocked="refusal")]
+    r = analyze(lines, date(2026, 11, 10), date(2026, 11, 10), "ada", PRICES)
+    s = svc(r, "claude-sdk")
+    assert s["billing"] == "subscription" and s["calls"] == 3 and s["cost"] is None
+    assert {m["model"] for m in s["models"]} == {"claude-sonnet-5-5", "claude-haiku-5-5"}
+    d = analyze_detail(lines, [], date(2026, 11, 10), date(2026, 11, 10), "ada",
+                       now=datetime.fromisoformat("2026-11-10T12:00:00+02:00"), prices=PRICES)
+    speed = next(x for x in d["speed"]["services"] if x["service"] == "claude-sdk")
+    assert speed["max"] == 4200

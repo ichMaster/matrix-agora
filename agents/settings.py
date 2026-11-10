@@ -46,7 +46,8 @@ class Setting:
                                # weights (v5.11: the events' `kind:weight,…`)
     default: str               # the code default, as the environment would hold it
     group: str                 # a group within its scope (see GROUPS)
-    scope: str                 # the members it concerns: shared | type:<t> | cap:<c> | engine:<e>
+    scope: str                 # the members it concerns: shared | type:<t> | cap:<c> | engine:<e> | client:<e>
+                               # (v7.1: an agent on that engine's client — every one but Claude himself)
     service: str | None        # the simulation kind it belongs to, or None: the agent's own
     description: str
     unit: str = ""
@@ -86,7 +87,7 @@ SCHEMA: tuple[Setting, ...] = (
     _s("CAT_NUDGES_PER_DAY", "int", "6", "cat", "cap:nudge", CHAT, "Найбільше ініціатив Кота на день", "", 0, 1000),
     _s("CAT_NUDGE_HOURS", "hours", "09-22", "cat", "cap:nudge", CHAT, "Години, коли Кіт починає сам (HH-HH)"),
     # Claude in the room
-    _s("CLAUDE_HISTORY_N", "int", "150", "claude", "engine:claude-sdk", CHAT, "Вікно філософа", "msgs", 20, 500),
+    _s("CLAUDE_HISTORY_N", "int", "150", "claude", "type:assistant", CHAT, "Вікно філософа", "msgs", 20, 500),
     _s("CLAUDE_NEWS_EVERY_S", "int", "3600", "claude", "cap:news", CHAT, "Як часто Клод приносить новину", "s", 600, 86400),
     _s("CLAUDE_NEWS_IDLE_S", "int", "300", "claude", "cap:news", CHAT, "Тиша перед новиною", "s", 0, 86400),
     _s("CLAUDE_NEWS_PER_DAY", "int", "24", "claude", "cap:news", CHAT, "Найбільше новин на день", "", 0, 200),
@@ -266,10 +267,20 @@ SCHEMA: tuple[Setting, ...] = (
        choices=("low", "medium", "high")),
     _s("REPLY_THINK_MAX_TOKENS", "int", "4096", "model", "engine:gemini", None,
        "Межа токенів відповіді, що думає (з думанням)", "tokens", 1024, 32768),
-    _s("CLAUDE_MODEL", "choice", "opus", "model", "engine:claude-sdk", None, "Модель Клода", choices=("opus", "sonnet", "haiku")),
-    _s("CLAUDE_TIMEOUT_S", "int", "300", "model", "engine:claude-sdk", None, "Найдовша відповідь Клода", "s", 30, 1800),
-    _s("CLAUDE_CODE_MAX_OUTPUT_TOKENS", "int", "0", "model", "engine:claude-sdk", None, "Межа виводу (0 — без межі)",
+    _s("CLAUDE_MODEL", "choice", "opus", "model", "type:assistant", None, "Модель Клода", choices=("opus", "sonnet", "haiku")),
+    _s("CLAUDE_TIMEOUT_S", "int", "300", "model", "type:assistant", None, "Найдовша відповідь Клода", "s", 30, 1800),
+    _s("CLAUDE_CODE_MAX_OUTPUT_TOKENS", "int", "0", "model", "type:assistant", None, "Межа виводу (0 — без межі)",
        "tokens", 0, 64000),
+    # v7.1 — an agent on Claude that is not Claude himself (`ClaudeClient`): its voice's model, every other call's,
+    # the CLI processes at once in its container, and decision 1 of ROADMAP §v7 at the subscription's limit
+    _s("CLAUDE_REPLY_MODEL", "choice", "sonnet", "model", "client:claude-sdk", None, "Модель відповідей на Claude",
+       choices=("sonnet", "opus", "haiku")),
+    _s("CLAUDE_BACKGROUND_MODEL", "choice", "haiku", "model", "client:claude-sdk", None, "Фонова модель на Claude",
+       choices=("haiku", "sonnet")),
+    _s("CLAUDE_CONCURRENCY", "int", "2", "model", "client:claude-sdk", None, "Скільки викликів Claude водночас", "",
+       1, 4),
+    _s("CLAUDE_LIMIT_FALLBACK", "choice", "gemini", "model", "client:claude-sdk", None,
+       "На ліміті підписки: Gemini до скидання чи тиша", choices=("gemini", "silent")),
 )
 BY_NAME: dict[str, Setting] = {s.name: s for s in SCHEMA}
 # v5.22 — the switches an agent reads while it runs (`live_value`): the panel's change works at once and restarts
@@ -324,7 +335,7 @@ def concerns(setting: Setting, member: Member) -> bool:
     """Whether a setting changes what `member` does — the agents a change restarts. A herald (v5.1) reads only the
     settings of his own capabilities: a turn setting or the room's model never restarts him."""
     kind, _, value = setting.scope.partition(":")
-    if member.type == "herald" and kind != "cap":
+    if member.type == "herald" and kind not in ("cap", "client"):  # v7.1: Hermes on Claude reads his client's
         return False
     if setting.scope == "shared":
         return True
@@ -334,6 +345,8 @@ def concerns(setting: Setting, member: Member) -> bool:
         return value in member.capabilities
     if kind == "engine":
         return member.engine == value
+    if kind == "client":
+        return member.engine == value and member.type != "assistant"
     return False
 
 

@@ -87,3 +87,13 @@ def test_a_palette_that_is_not_utf8_shows_no_chips(state, tmp_path):
     bad.write_bytes(b"\xff\xfe [laughs] \xc3")
     m = models_view(state, "kira", bad)
     assert m["emotion"]["tags"] == [] and m["voice"]["model"] == "eleven_v4_turbo"
+
+
+def test_an_agent_on_the_claude_client_shows_its_engine_and_its_two_models(state):
+    """v7.1: a speaker on Claude names its voice's model and every other call's from its settings at start."""
+    (state / "ada.settings.json").write_text(settings(CLAUDE_REPLY_MODEL="sonnet", CLAUDE_BACKGROUND_MODEL="haiku",
+                                                      ELEVENLABS_MODEL="eleven_turbo_v2_5", VOICE_STABILITY="0.5"))
+    m = models_view(state, "ada", engine="claude-sdk")
+    assert (m["engine"], m["answers"], m["background"], m["thinking"]) == ("claude", "sonnet", "haiku", None)
+    assert m["voice"]["model"] == "eleven_turbo_v2_5"
+    assert models_view(state, "ada")["engine"] == "gemini"  # read as Gemini, it shows the Gemini defaults
