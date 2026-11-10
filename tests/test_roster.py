@@ -46,7 +46,7 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
     assert list(roster) == ["ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "kit", "claude", "hermes"]  # v5.1 the herald, v5.5 four people, v6.3 Устина
     ada = roster["ada"]
     assert (ada.user_id, ada.name, ada.type, ada.engine, ada.mode, ada.weight) == (
-        "@ada:agora.lan", "Ада", "persona", "gemini", "ranked", 1.0)
+        "@ada:agora.lan", "Ада", "persona", "claude-sdk", "ranked", 1.0)  # v7.2: the room on Claude
     assert "адо" in ada.name_forms  # the vocative lives in the TOML now, not in code
     assert roster["bruno"].name_forms == ("бруно", "bruno")  # v4.4 review #8: the Latin form too
     assert ada.capabilities == TYPES["persona"] == frozenset(CAPABILITIES) - {"mood", "pastlife", "nudge", "news",
@@ -68,7 +68,7 @@ def test_the_four_newcomers_are_people_like_ada_and_bruno(name, shown, forms):
     """v5.5 (the owner, 2026-10-20): four more persons, ranked with the same weight as Ada and Bruno, who speak."""
     m = load_roster("agora")[name]
     assert (m.user_id, m.name, m.type, m.engine, m.mode, m.weight) == (
-        f"@{name}:agora.lan", shown, "persona", "gemini", "ranked", 1.0)
+        f"@{name}:agora.lan", shown, "persona", "gemini" if name == "kira" else "claude-sdk", "ranked", 1.0)  # v7.2
     assert m.name_forms == forms and m.can("voice")
     # v5.10: her mood of the day is hers alone, with her natal chart; the others have neither
     assert m.capabilities == TYPES["persona"] | ({"private", "telegram", "recall", "facts", "emotion", "mood", "events",
@@ -178,7 +178,7 @@ def test_config_requires_canon_and_life_only_when_the_type_has_them(tmp_path, mo
 @pytest.mark.canon
 def test_the_real_tomls_load_as_personas():
     cfg = load_config("agents/ada.toml", env=ENV)
-    assert cfg.type == "persona" and cfg.engine == "gemini" and cfg.capabilities == TYPES["persona"]
+    assert cfg.type == "persona" and cfg.engine == "claude-sdk" and cfg.capabilities == TYPES["persona"]  # v7.2
 
 
 # --- the agent gates by capability; with the persona defaults nothing changes ---------------------------------
@@ -397,7 +397,7 @@ def test_news_belongs_to_the_assistant_and_one_member_per_initiative(tmp_path):
 def test_hermes_is_a_herald_with_no_turns_and_his_own_canon():
     from pathlib import Path
     hermes = load_member(Path("agents/hermes.toml"))
-    assert (hermes.type, hermes.engine, hermes.mode, hermes.name) == ("herald", "gemini", "none", "Гермес")
+    assert (hermes.type, hermes.engine, hermes.mode, hermes.name) == ("herald", "claude-sdk", "none", "Гермес")  # v7.2
     assert hermes.capabilities == TYPES["herald"] == frozenset({"canon", "digest", "transcribe"})  # v5.2: hearing
     assert hermes.panel == {"name": "Hermes", "role": "messenger god · voice digests", "pronoun": "he"}
 

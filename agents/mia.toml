@@ -4,7 +4,7 @@ canon = "agents/canon/mia.md"
 life = "agents/canon/mia.life.md"
 simulation = "agora"
 type = "persona"         # v5.5: one of the four newcomers — a person, like Ada and Bruno
-engine = "gemini"
+engine = "claude-sdk"         # v7.2: on Claude (ClaudeClient), the owner's subscription — answers on Haiku (server/.env)
 name_forms = ["мія", "мії", "мію", "мією", "міє", "мійко"]  # what addresses this agent in the room (any case, a whole word);
 # no Latin «mia»: it is an Italian word, and Ada studies Italian (v5.5 review #1)
 

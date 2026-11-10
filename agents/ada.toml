@@ -4,7 +4,7 @@ canon = "agents/canon/ada.md"
 life = "agents/canon/ada.life.md"
 simulation = "agora"
 type = "persona"         # v4.1: the type sets the capabilities (canon, life, memories, plans, today, …)
-engine = "gemini"
+engine = "claude-sdk"         # v7.2: on Claude (ClaudeClient), the owner's subscription — answers on Haiku (server/.env)
 name_forms = ["ада", "ади", "аді", "аду", "адою", "адо", "ada"]  # what addresses this agent in the room (any case, a whole word)
 
 [turns]

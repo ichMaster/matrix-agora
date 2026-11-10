@@ -3,7 +3,7 @@ user_id = "@hermes:agora.lan"
 canon = "agents/canon/hermes.md"
 simulation = "agora"
 type = "herald"          # v5.1: no turns, never a word in the room — he reads it and digests it for the owner
-engine = "gemini"        # his digests run on gemini-3.1-pro-preview with thinking (agents/llm.py DIGEST_MODEL)
+engine = "claude-sdk"         # v7.2: on Claude (ClaudeClient), the owner's subscription — answers on Sonnet with thinking (hermes.env)
 name_forms = ["гермес", "гермеса", "гермесу", "гермесом", "гермесе", "hermes"]  # naming him in the room chooses no one
 
 [panel]                  # shown by the panel only — never part of a prompt

@@ -62,7 +62,7 @@ def test_the_only_mutating_routes_are_the_v34_actions_and_the_v47_settings_and_f
 # --- v4.1: the agent view carries type, engine and capabilities ----------------------------------------------------
 def test_the_agent_view_carries_type_engine_and_capabilities(client):
     ada = client.get("/api/agents/ada", headers=AUTH).json()
-    assert (ada["type"], ada["engine"]) == ("persona", "gemini")
+    assert (ada["type"], ada["engine"]) == ("persona", "claude-sdk")  # v7.2: the room on Claude
     assert ada["capabilities"] == sorted(["canon", "life", "summary", "chronicle", "plans", "today", "world",
                                           "voice"])  # v5.3
     assert {a["name"]: a["type"] for a in client.get("/api/agents", headers=AUTH).json()} == {

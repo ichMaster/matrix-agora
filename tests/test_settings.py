@@ -209,7 +209,8 @@ def test_hermes_settings_are_the_chats_and_only_his():
     assert {(BY_NAME[n].service, BY_NAME[n].scope, BY_NAME[n].group) for n in names} == {("matrix-chat", "cap:digest", "hermes")}
     assert [BY_NAME[n].default for n in names] == ["14400", "5", "1500", "09-23", "150000", ""]
     hermes = load_member(Path("agents/hermes.toml"))
-    assert {s.name for s in SCHEMA if concerns(s, hermes)} == set(names)
+    client = {s.name for s in SCHEMA if s.scope == "client:claude-sdk"}  # v7.2: he is on the Claude client
+    assert {s.name for s in SCHEMA if concerns(s, hermes)} == set(names) | client
     assert ROOM["hermes"] == hermes                                   # the registry lists him (AGORA-084)
     assert not {s.name for m in ROOM.values() if m is not ROOM["hermes"] for s in SCHEMA if concerns(s, m)} & set(names)
     assert "ELEVENLABS_API_KEY" not in BY_NAME
@@ -274,10 +275,13 @@ def test_the_claude_clients_settings_concern_every_agent_on_it_but_claude_himsel
         s = BY_NAME[name]
         assert s.scope == "client:claude-sdk" and s.group == "model" and s.service is None, name
         assert concerns(s, ada_on_claude) and concerns(s, hermes_on_claude), name
-        assert not concerns(s, ROOM["ada"]) and not concerns(s, ROOM["claude"]), name
+        assert not concerns(s, ROOM["kira"]) and not concerns(s, ROOM["claude"]), name  # v7.2: Кіра still on Gemini
     for name in ("CLAUDE_MODEL", "CLAUDE_TIMEOUT_S", "CLAUDE_CODE_MAX_OUTPUT_TOKENS"):  # Claude's own stay his
         assert concerns(BY_NAME[name], ROOM["claude"]) and not concerns(BY_NAME[name], ada_on_claude), name
-    assert not concerns(BY_NAME["GEMINI_MODEL"], ada_on_claude)
+    # v7.2 (code review v7.1 #9): Gemini's own settings reach the Claude client's fallback; never Claude himself
+    for name in ("GEMINI_MODEL", "GEMINI_REPLY_MODEL", "GEMINI_THINKING_LEVEL", "REPLY_THINK_MAX_TOKENS"):
+        assert concerns(BY_NAME[name], ada_on_claude) and concerns(BY_NAME[name], ROOM["kira"]), name
+        assert not concerns(BY_NAME[name], ROOM["claude"]) and not concerns(BY_NAME[name], hermes_on_claude), name
 
 
 @pytest.mark.parametrize("name,raw,ok", [("CLAUDE_REPLY_MODEL", "opus", True), ("CLAUDE_REPLY_MODEL", "gpt", False),

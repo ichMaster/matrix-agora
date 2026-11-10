@@ -1094,7 +1094,8 @@ function digestLine(mem) {
 // v7.1: on the Claude client the line opens with «claude ·»
 function modelLines(m) {
   const answers = (m.engine === "claude" ? "claude · " : "") + (m.answers === m.background ? `model ${m.answers}`
-    : `answers ${m.answers}${m.thinking ? ` (thinking ${m.thinking})` : ""} · background ${m.background}`);
+    : `answers ${m.answers}${m.thinking ? ` (thinking ${m.thinking})` : ""} · background ${m.background}`)
+    + (m.fallback ? ` · at the limit ${m.fallback}` : "");  // v7.2: the Gemini fallback's model
   const v = m.voice;
   const voice = !v ? "" : `voice ${v.model} · stability ${v.stability}${v.speed !== "1.0" && v.speed !== "1" ? ` · speed ${v.speed}` : ""}`
     + (m.emotion ? ` · emotion: ${m.emotion.tags.length} tags` : "");

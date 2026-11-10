@@ -29,16 +29,22 @@ def test_the_homeserver_stays_closed():
     assert "@sha256:" in SERVICES["homeserver"]["image"]  # pinned, never an implicit pull
 
 
+ROOM_ON_CLAUDE = ("ada", "bruno", "leon", "mia", "irma", "kit")  # v7.2: the room on Claude
+
+
 def test_one_container_per_agent_from_one_image():
     for name in ("ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "kit"):  # v5.5: the newcomers, v6.3 Устина
         svc = SERVICES[name]
-        assert svc["image"] == IMAGE and svc["command"] == [f"agents/{name}.toml"]
+        on_claude = name in ROOM_ON_CLAUDE
+        image = "ghcr.io/ichmaster/matrix-agora-agent-claude:${AGENT_IMAGE_TAG:-latest}" if on_claude else IMAGE
+        assert svc["image"] == image and svc["command"] == [f"agents/{name}.toml"]
         assert svc["environment"]["HOMESERVER"] == "http://homeserver:8008"  # the compose network
         assert svc["volumes"] == ["../state:/app/state", CANON_MOUNT] and svc["user"] == "1000:1000"
         assert svc["stop_grace_period"] == "30s" and svc["restart"] == "unless-stopped"
         own = [{"path": f"{name}.env", "required": False}] if name in ("kira", "ustyna") else []  # v5.7, v6.3: her bot
+        sub = [{"path": "subscription.env", "required": False}] if on_claude else []  # v7.2: the token, last
         assert svc["env_file"] == [{"path": ".env", "required": False}, {"path": "voice.env", "required": False},
-                                   *own]  # v5.3: the voice key
+                                   *own, *sub]  # v5.3: the voice key
         assert "ports" not in svc  # agents listen on nothing
 
 
@@ -284,9 +290,10 @@ def test_both_env_examples_price_the_pro_model_by_its_own_pair():
 # --- v5.1: Hermes's own service and env file ---------------------------------------------------------------------------
 def test_hermes_runs_the_shared_image_with_the_shared_file_and_his_own():
     svc = SERVICES["hermes"]
-    assert svc["image"] == IMAGE and svc["command"] == ["agents/hermes.toml"] and svc["init"] is True
+    assert svc["image"] == CLAUDE_IMAGE and svc["command"] == ["agents/hermes.toml"] and svc["init"] is True  # v7.2
     assert svc["env_file"] == [{"path": ".env", "required": False}, {"path": "hermes.env", "required": False},
-                               {"path": "voice.env", "required": False}]
+                               {"path": "voice.env", "required": False},
+                               {"path": "subscription.env", "required": False}]
     assert svc["environment"]["HOMESERVER"] == "http://homeserver:8008" and svc["user"] == "1000:1000"
     assert svc["volumes"] == ["../state:/app/state", CANON_MOUNT] and "ports" not in svc and svc["stop_grace_period"] == "30s"
     others = [n for n, s in SERVICES.items() if n != "hermes"
@@ -491,7 +498,7 @@ def test_every_agent_on_claude_runs_the_claude_image_with_the_subscription_and_n
 
 
 def test_the_rule_holds_on_a_made_up_service_on_claude():
-    ada = SERVICES["ada"]
+    ada = SERVICES["kira"]  # v7.2: a service still on Gemini (Кіра until v7.3)
     assert claude_service_problems(ada) == ["image", "subscription.env", "config dir", "tmpfs"]
     moved = {**ada, "image": CLAUDE_IMAGE,
              "env_file": [*ada["env_file"], {"path": "subscription.env", "required": False}],

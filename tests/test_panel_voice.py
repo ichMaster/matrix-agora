@@ -53,7 +53,9 @@ def test_kiras_card_shows_her_models_her_voice_and_her_palette(client):
 
 def test_a_plain_speaker_has_one_model_and_no_palette(client):
     m = client.get("/api/agents/ada/memory", headers=AUTH).json()["models"]
-    assert (m["answers"], m["background"], m["thinking"]) == ("gemini-2.5-flash", "gemini-2.5-flash", None)
+    # v7.2: Ада is on Claude — her two models, and her Gemini fallback's at the limit
+    assert (m["engine"], m["answers"], m["background"], m["thinking"]) == ("claude", "sonnet", "haiku", None)
+    assert m["fallback"] == "gemini-2.5-flash"
     assert m["voice"]["model"] == "eleven_turbo_v2_5" and m["emotion"] is None
 
 

@@ -288,6 +288,7 @@ def test_the_models_lines_and_the_voice_tab():
     # v7.1: any speaker with a models view — on Gemini, or on the Claude client («claude ·»)
     assert "${mem.models ? `<div" in js and "emotion: ${m.emotion.tags.length} tags" in js
     assert '(m.engine === "claude" ? "claude · " : "")' in js
+    assert "(m.fallback ? ` · at the limit ${m.fallback}` : \"\")" in js  # v7.2: the Gemini fallback's model
     assert "performed by her voice · never shown in the text" in js
 
 

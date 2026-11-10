@@ -348,8 +348,9 @@ def concerns(setting: Setting, member: Member) -> bool:
         return member.type == value
     if kind == "cap":
         return value in member.capabilities
-    if kind == "engine":
-        return member.engine == value
+    if kind == "engine":  # v7.2 (code review v7.1 #9): Gemini's own settings reach the Claude client's fallback too
+        return member.engine == value or (value == "gemini" and member.engine == "claude-sdk"
+                                          and member.type != "assistant")
     if kind == "client":
         return member.engine == value and member.type != "assistant"
     return False

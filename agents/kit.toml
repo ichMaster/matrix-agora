@@ -6,7 +6,7 @@ natal = "agents/canon/kit.natal.md"   # v4.2: Lumi's natal format, read by the d
 memories = "agents/canon/kit.memories.md"  # v4.3: the past-life theses, `- [tags] text`, retold in his own words
 simulation = "agora"
 type = "creature"        # v4.2: canon, life, world, the daily horoscope; v4.3 the past-life theses — no plans
-engine = "gemini"
+engine = "claude-sdk"         # v7.2: on Claude (ClaudeClient), the owner's subscription — answers on Haiku (server/.env)
 name_forms = ["кіт", "кота", "коту", "котом", "коті", "коте", "кіте", "котик", "котику"]  # an ordinary cat-word addresses him: he is the only cat here
 
 [turns]

@@ -374,7 +374,7 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
     # ── Claude's files (v4.7): his folder only, every path through files.safe_path ──
     def files_root(name: str) -> Path:
         found = reg.agent(name)
-        if found is None or found.engine != "claude-sdk":
+        if found is None or found.engine != "claude-sdk" or found.type != "assistant":  # v7.2: Claude's folder alone
             raise HTTPException(404, "not found")
         return files_dir
 
