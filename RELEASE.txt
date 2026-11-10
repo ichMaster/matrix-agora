@@ -1,3 +1,26 @@
+Version 7.2.0 (2026-11-11)
+---------------------------
+- The room on Claude: Ада, Бруно, Леон, Мія, Ірма and Кіт answer on Haiku,
+  Гермес on Sonnet with thinking adaptive at low; their services on the
+  Claude image with server/subscription.env; Кіра and Устина stay on Gemini
+  until v7.3 and v7.4 (AGORA-244)
+- The answer from a CLI started ahead: one ClaudeSDKClient a call, its system
+  prompt the persona's canon and life (the slow part), the rest of the prompt
+  in the message; never two calls in one CLI (one long session was unsafe:
+  the context leaked between calls); a mismatch, a failed or a hung one goes
+  cold; live: cold 2.7 s, warm 1.1-1.3 s (AGORA-242, AGORA-243)
+- Usage line v9: warm on a Claude call; Analytics Speed shows warm and cold
+  apart
+- The Gemini settings reach the Claude client's fallback, and the card names
+  its model (v7.1 code review #9); the panel's Files API serves Claude's
+  folder to Claude alone
+- Code review: 6 fixes (Hermes's digests warm by his canon; the waiting CLI
+  ends after an hour unused, its close given the SDK's time, never started
+  while blocked or muted, taken inside the gate; the options' error kept),
+  1 deferred to v7.3 (the Gemini fallback's cap)
+- Deployed at the owner's word as sha-682440e; the day of the room waived -
+  watched after the release, bugs go to 7.2.x patches
+
 Version 7.1.0 (2026-11-11)
 ---------------------------
 - The Claude engine for a persona: an agent whose TOML says engine =
