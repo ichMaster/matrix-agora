@@ -79,8 +79,10 @@ _CALL_T0: ContextVar[float | None] = ContextVar("gemini_call_t0", default=None)
 class GeminiClient:
     _mono = staticmethod(time.monotonic)  # v5.22: the calls' clock — a test sets its own
 
-    def __init__(self, sink: UsageSink | None = None) -> None:
-        self._client = genai.Client()  # reads GEMINI_API_KEY from the environment
+    def __init__(self, sink: UsageSink | None = None, api_key: str | None = None) -> None:
+        # reads GEMINI_API_KEY from the environment; v7.1: an agent on Claude hands the key over, so it never stays in
+        # the environment the CLI inherits
+        self._client = genai.Client(api_key=api_key) if api_key else genai.Client()
         self._sink = sink
         self.model = os.environ.get("GEMINI_MODEL", MODEL).strip() or MODEL
         # v5.8 — the agent's answers on a model of their own (empty: the same as GEMINI_MODEL), and how hard a

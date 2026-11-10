@@ -74,6 +74,7 @@ from agents.claude_sdk import (
     ClaudeSdkResponder,
     ClaudeStatus,
     check_startup,
+    claude_client_for,
     scrub,
     write_status,
 )
@@ -456,7 +457,15 @@ class Agent:
         self.client = AsyncClient(cfg.homeserver, cfg.user_id)
         self.started = False  # flips True after the first sync; nothing earlier is handled
         self.started_ms: int | None = None  # when it did (v4.3: the silence before a nudge counts from here at least)
-        if cfg.engine == "claude-sdk":  # v4.4: the subscription only — refuse first, then scrub (agents/claude_sdk.py)
+        if cfg.engine == "claude-sdk" and cfg.type != "assistant":
+            # v7.1 — a persona or the cat on Claude: every call of hers through the Claude client on the subscription,
+            # v4.4's layers first and no secret left for the CLI; Gemini beside it for recall or the limit alone
+            self.llm = llm or claude_client_for(
+                os.environ, status_file=cfg.memory_file.parent / f"{cfg.localpart}.ratelimit.json",
+                sink=self.record_sdk_usage, gemini_sink=self.record_usage, clock=lambda: self.clock(),
+                recall=cfg.can("recall"))
+            self.responder = responder_for(cfg.engine, self.llm)
+        elif cfg.engine == "claude-sdk":  # v4.4: the subscription only — refuse first, then scrub (agents/claude_sdk.py)
             check_startup(os.environ)
             scrub(os.environ)
             self.llm = llm  # no Gemini client: Claude's container has no Gemini key
@@ -4491,6 +4500,8 @@ class Agent:
         await self.login()
         if hasattr(self.responder, "resume_status"):  # v4.4 review #6: a fresh card, a running mute kept
             self.responder.resume_status()
+        elif hasattr(self.llm, "resume_status"):  # v7.1: an agent on the Claude client, the same card
+            self.llm.resume_status()
         # First sync: only to obtain next_batch; its events are never handled.
         first = await self.client.sync(timeout=10000, full_state=True)
         if isinstance(first, SyncError):

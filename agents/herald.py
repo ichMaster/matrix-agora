@@ -39,6 +39,7 @@ from nio import (
     UploadResponse,
 )
 
+from agents.claude_sdk import claude_client_for
 from agents.config import AgentConfig
 from agents.digest import (
     ASK_MAX,
@@ -85,7 +86,7 @@ from agents.recording import (
 from agents.roster import Member, load_roster, speakers
 from agents.settings import VOICE_ID_RE
 from agents.speech import voice_message
-from agents.usage import month_chars, parse_lines, stt_usage_line, tts_usage_line, usage_line
+from agents.usage import month_chars, parse_lines, sdk_usage_line, stt_usage_line, tts_usage_line, usage_line
 from agents.voice import (
     STT_MODEL,
     TTS_MODEL,
@@ -167,7 +168,6 @@ class Herald:
         # who talks in the room, for the briefs — never himself
         self.members = ["Ich", *[m.name for m in speakers(roster.values()) if m.user_id != cfg.user_id]]
         self.client = client or AsyncClient(cfg.homeserver, cfg.user_id)
-        self.llm = llm or GeminiClient(sink=self.record_usage)
         env = os.environ.get
         self.tz = env("TIMEZONE", "Europe/Kyiv")
         self.every_ms = int(float(env("HERMES_DIGEST_EVERY_S", "14400")) * 1000)
@@ -198,6 +198,16 @@ class Herald:
         self.clock = lambda: int(time.time() * 1000)  # injectable
         self.state_file = state_dir / f"{cfg.localpart}.digest.json"
         self.usage_file = state_dir / f"{cfg.localpart}.usage.jsonl"
+        # his writing: Gemini, or from v7.1 Claude on the subscription (his TOML's `engine`) — built once his keys are
+        # out of the environment, so the CLI inherits none of them
+        if llm is not None:
+            self.llm = llm
+        elif cfg.engine == "claude-sdk":
+            self.llm = claude_client_for(os.environ, status_file=state_dir / f"{cfg.localpart}.ratelimit.json",
+                                         sink=self.record_sdk_usage, gemini_sink=self.record_usage,
+                                         clock=lambda: self.clock(), recall=False)
+        else:
+            self.llm = GeminiClient(sink=self.record_usage)
         self.state = load_digest_state(self.state_file)
         self.started = False
         self.new_count = 0
@@ -728,6 +738,12 @@ class Herald:
                      latency_ms: int | None = None) -> None:
         self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked, latency_ms))
 
+    def record_sdk_usage(self, kind: str, model: str, usage: dict | None, ok: bool, reported_cost: float | None,
+                         latency_ms: int | None = None, blocked: str | None = None) -> None:
+        """v7.1 — one line per call on Claude: always `subscription`, never priced."""
+        self._append_usage(lambda ts: sdk_usage_line(ts, self.cfg.localpart, kind, model, usage, ok, reported_cost,
+                                                     latency_ms, None, blocked))
+
     def record_stt(self, audio_ms: int | None, ok: bool, latency_ms: int | None = None) -> None:
         self._append_usage(lambda ts: stt_usage_line(ts, self.cfg.localpart, STT_MODEL, audio_ms, ok, latency_ms))
 
@@ -780,6 +796,8 @@ class Herald:
             log.warning("stop: a digest or answer still running after %.0fs — cancelled", timeout_s)
 
     async def run(self) -> None:
+        if hasattr(self.llm, "resume_status"):  # v7.1: on Claude, a fresh card and a running mute kept
+            self.llm.resume_status()
         await self.start()
         log.info("%s: entering sync_forever", self.cfg.localpart)
         stop = asyncio.Event()

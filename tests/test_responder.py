@@ -56,10 +56,12 @@ def test_a_generate_only_seam_is_never_cut():
     assert reply == Reply("текст", "stop")
 
 
-def test_only_the_gemini_engine_exists_in_v4_1():
+def test_both_engines_share_one_responder_over_their_client_and_nothing_else_has_one():
+    # v7.1: `claude-sdk` for every agent on Claude but Claude himself, whose `ClaudeSdkResponder` agent.py builds
     assert isinstance(responder_for("gemini", GenerateOnlyLLM()), GeminiResponder)
+    assert isinstance(responder_for("claude-sdk", GenerateOnlyLLM()), GeminiResponder)
     with pytest.raises(ValueError):
-        responder_for("claude-sdk", GenerateOnlyLLM())
+        responder_for("lumi", GenerateOnlyLLM())
 
 
 @pytest.mark.parametrize("reason,finish", [("MAX_TOKENS", "max_tokens"), ("STOP", "stop"), (None, "stop")])

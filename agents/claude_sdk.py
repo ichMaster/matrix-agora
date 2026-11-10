@@ -807,3 +807,52 @@ class ClaudeClient(_Subscription):
             self.status.last_error = None
             self._save()
         return text, "max_tokens" if getattr(result, "stop_reason", None) == "max_tokens" else "stop"
+
+
+SECRET_SUFFIXES = ("_PASSWORD", "_TOKEN", "_KEY", "_SECRET")  # every member's password, the registration and panel
+                                                             # tokens, a service's key
+
+
+def secret_vars(env: Mapping[str, str]) -> list[str]:
+    """v7.1 — the secrets an agent on Claude never hands its CLI (the SDK passes the whole environment on): every
+    `*_PASSWORD`, `*_TOKEN`, `*_KEY` and `*_SECRET` but the subscription's OAuth token, which the CLI needs."""
+    return sorted(k for k in env if k.endswith(SECRET_SUFFIXES) and k != OAUTH_VAR)
+
+
+def claude_client_for(env: MutableMapping[str, str], *, status_file: Path, sink: Callable[..., None],
+                      gemini_sink: Callable[..., None], clock: Callable[[], int], recall: bool,
+                      gemini=None) -> ClaudeClient:
+    """v7.1 — the client of an agent on Claude that is not Claude himself (a persona, the cat, Hermes), from its
+    settings in `env`: v4.4's layers first (refuse a forbidden variable or no OAuth token, then scrub), then every
+    secret out of the environment the CLI inherits. A Gemini client beside it only when needed — `recall` (the
+    embeddings) or `CLAUDE_LIMIT_FALLBACK=gemini` — with the key handed over, never left in the environment;
+    `gemini` (tests) stands in for it."""
+    check_startup(env)
+    scrub(env)
+    gemini_key = str(env.get("GEMINI_API_KEY", "")).strip()
+    for name in secret_vars(env):
+        env.pop(name, None)
+    fallback = str(env.get("CLAUDE_LIMIT_FALLBACK", "gemini")).strip() or "gemini"
+    if fallback not in LIMIT_FALLBACKS:
+        log.warning("CLAUDE_LIMIT_FALLBACK is not one of %s — using gemini", ", ".join(LIMIT_FALLBACKS))
+        fallback = "gemini"
+    needs_gemini = recall or fallback == "gemini"
+    if needs_gemini and gemini is None:
+        if gemini_key:
+            from agents.llm import GeminiClient
+            gemini = GeminiClient(sink=gemini_sink, api_key=gemini_key)
+        else:
+            log.warning("no GEMINI_API_KEY on claude: %s", ", ".join(
+                w for w, on in (("no meaning search in recall", recall),
+                                ("silent at the limit", fallback == "gemini")) if on))
+    try:
+        concurrency = int(str(env.get("CLAUDE_CONCURRENCY", CONCURRENCY)))
+    except ValueError:
+        log.warning("CLAUDE_CONCURRENCY is not a number — using %d", CONCURRENCY)
+        concurrency = CONCURRENCY
+    return ClaudeClient(
+        reply_model=str(env.get("CLAUDE_REPLY_MODEL", "")).strip() or "sonnet",
+        background_model=str(env.get("CLAUDE_BACKGROUND_MODEL", "")).strip() or "haiku",
+        config_dir=str(env.get("CLAUDE_CONFIG_DIR", "/tmp/claude")),
+        status_file=status_file, sink=sink, clock=clock, concurrency=concurrency, limit_fallback=fallback,
+        fallback=gemini if fallback == "gemini" else None, embedder=gemini if recall else None)

@@ -42,8 +42,9 @@ class Responder(Protocol):
 ANSWER_KINDS = ("reply", "private", "private_nudge")
 
 
-class GeminiResponder:
-    """Wraps the Gemini seam; usage accounting stays in its sink, unchanged."""
+class LlmResponder:
+    """Wraps the model seam — `GeminiClient`, or from v7.1 `ClaudeClient` (`agents/claude_sdk.py`), which has the same
+    calls; usage accounting stays in its sink, unchanged."""
 
     def __init__(self, llm) -> None:
         self.llm = llm
@@ -61,9 +62,14 @@ class GeminiResponder:
         return Reply(*out) if out else None
 
 
+GeminiResponder = LlmResponder  # its v4.1 name
+
+
 def responder_for(engine: str, llm) -> Responder:
-    if engine == "gemini":
-        return GeminiResponder(llm)
+    """The responder over an agent's model client: `gemini`, or `claude-sdk` for every agent on Claude but Claude
+    himself (v7.1 — he has `ClaudeSdkResponder`, his tools and his folder)."""
+    if engine in ("gemini", "claude-sdk"):
+        return LlmResponder(llm)
     raise ValueError(f"no responder for engine {engine!r}")
 
 
