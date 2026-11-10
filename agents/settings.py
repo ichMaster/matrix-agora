@@ -281,6 +281,11 @@ SCHEMA: tuple[Setting, ...] = (
        1, 4),
     _s("CLAUDE_LIMIT_FALLBACK", "choice", "gemini", "model", "client:claude-sdk", None,
        "На ліміті підписки: Gemini до скидання чи тиша", choices=("gemini", "silent")),
+    # v7.1 (the owner, 2026-11-10: «а Сонет має мислення?» — «додай»): the voice's calls think before they answer
+    _s("CLAUDE_THINKING", "choice", "off", "model", "client:claude-sdk", None,
+       "Мислення перед відповіддю на Claude", choices=("off", "adaptive")),
+    _s("CLAUDE_EFFORT", "choice", "low", "model", "client:claude-sdk", None,
+       "Глибина мислення (коли adaptive)", choices=("low", "medium", "high", "max")),
 )
 BY_NAME: dict[str, Setting] = {s.name: s for s in SCHEMA}
 # v5.22 — the switches an agent reads while it runs (`live_value`): the panel's change works at once and restarts

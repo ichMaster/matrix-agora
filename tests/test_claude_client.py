@@ -12,6 +12,7 @@ import pytest
 from agents.claude_sdk import (
     DISALLOWED_TOOLS,
     SEARCH_MAX_TURNS,
+    THINK_HEADROOM,
     VOICE_KINDS,
     WARN_MUTE_S,
     ClaudeClient,
@@ -139,6 +140,44 @@ def test_the_options_have_no_tools_no_settings_no_thinking_and_the_calls_cap():
 def test_a_search_has_the_web_search_alone_and_a_few_turns():
     o = client_options(None, model="haiku", max_output_tokens=800, config_dir="/c", toolset="search")
     assert o["tools"] == o["allowed_tools"] == ["WebSearch"] and o["max_turns"] == SEARCH_MAX_TURNS
+
+
+# --- thinking: the voice's calls alone, when adaptive (the owner, 2026-11-10: «додай») ------------------------------
+def test_an_effort_makes_the_call_think_adaptively_at_it():
+    o = client_options(None, model="sonnet", max_output_tokens=300, config_dir="/c", effort="low")
+    assert o["thinking"] == {"type": "adaptive"} and o["effort"] == "low"
+    assert "effort" not in client_options(None, model="sonnet", max_output_tokens=300, config_dir="/c")
+
+
+@pytest.mark.parametrize("kind,thinks", [("reply", True), ("private", True), ("digest_voice", True),
+                                         ("summary", False), ("day_memory", False), ("talk_summary", False)])
+def test_with_adaptive_thinking_only_the_voice_thinks_and_its_cap_grows_by_the_headroom(tmp_path, kind, thinks):
+    sdk = FakeSDK()
+    c, _ = client(tmp_path, sdk)
+    c.thinking, c.effort = "adaptive", "medium"
+    run(c.complete("Ich: привіт", "BRIEF", 300, kind=kind))
+    o = sdk.calls[-1][1]
+    assert (o.thinking == {"type": "adaptive"}, getattr(o, "effort", None)) == (thinks, "medium" if thinks else None)
+    assert o.env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == str(300 + THINK_HEADROOM if thinks else 300)
+
+
+def test_thinking_is_off_by_default_and_an_unknown_mode_or_effort_is_the_default(tmp_path):
+    sdk = FakeSDK()
+    c, _ = client(tmp_path, sdk)
+    run(c.complete("Ich: привіт", "BRIEF", 300, kind="reply"))
+    assert sdk.calls[-1][1].thinking == {"type": "disabled"} and c.effort_for("reply") is None
+    odd = ClaudeClient(reply_model="sonnet", background_model="haiku", config_dir="/c", status_file=tmp_path / "s",
+                       sink=None, thinking="always", effort="xhigh")
+    assert (odd.thinking, odd.effort) == ("off", "low")
+
+
+def test_the_thought_never_becomes_the_answer(tmp_path):
+    thought = SimpleNamespace(thinking="мабуть, вона хоче…", signature="sig")  # a ThinkingBlock has no text
+    sdk = FakeSDK([INIT_OK, AssistantMessage(content=[thought, TextBlock(text="Привіт!")]),
+                   result(text=None)])
+    c, _ = client(tmp_path, sdk)
+    c.thinking = "adaptive"
+    assert run(c.reply("Ich: привіт", "BRIEF", 300)) == ("Привіт!", "stop")
 
 
 # --- the model by the kind ------------------------------------------------------------------------------------------

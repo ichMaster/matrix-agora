@@ -59,6 +59,7 @@ def test_her_settings_pick_the_models_the_bound_and_the_limit(subscription):
     agent = Agent(replace(CFG, name="Кіт", user_id="@kit:agora.lan", type="creature", engine="claude-sdk",
                           capabilities=TYPES["creature"]), roster=v44_room())
     assert (agent.llm.reply_model, agent.llm.model, agent.llm.limit_fallback) == ("haiku", "sonnet", "silent")
+    assert (agent.llm.thinking, agent.llm.effort) == ("off", "low")  # the defaults: no thinking
     assert agent.llm.fallback is None and agent.llm._gate._value == 3
 
 
@@ -125,10 +126,20 @@ def test_without_a_gemini_key_she_says_what_she_loses(tmp_path, caplog):
 
 def test_a_bad_fallback_or_bound_falls_back_to_the_defaults(tmp_path, caplog):
     caplog.set_level(logging.WARNING)
-    env = {"CLAUDE_CODE_OAUTH_TOKEN": "oat", "CLAUDE_LIMIT_FALLBACK": "maybe", "CLAUDE_CONCURRENCY": "many"}
+    env = {"CLAUDE_CODE_OAUTH_TOKEN": "oat", "CLAUDE_LIMIT_FALLBACK": "maybe", "CLAUDE_CONCURRENCY": "many",
+           "CLAUDE_THINKING": "deep", "CLAUDE_EFFORT": "huge"}
     c = claude_client_for(env, status_file=tmp_path / "s.json", sink=None, gemini_sink=None, clock=lambda: 0,
                           recall=False, gemini=object())
-    assert c.limit_fallback == "gemini" and c._gate._value == 2
+    assert c.limit_fallback == "gemini" and c._gate._value == 2 and (c.thinking, c.effort) == ("off", "low")
+    assert "CLAUDE_THINKING is not one of off, adaptive" in caplog.text
+
+
+def test_her_thinking_comes_from_her_settings(tmp_path):
+    env = {"CLAUDE_CODE_OAUTH_TOKEN": "oat", "CLAUDE_THINKING": "adaptive", "CLAUDE_EFFORT": "medium"}
+    c = claude_client_for(env, status_file=tmp_path / "s.json", sink=None, gemini_sink=None, clock=lambda: 0,
+                          recall=False, gemini=object())
+    assert (c.thinking, c.effort, c.effort_for("private"), c.effort_for("summary")) == \
+        ("adaptive", "medium", "medium", None)
 
 
 # --- her calls through the client, on their models --------------------------------------------------------------

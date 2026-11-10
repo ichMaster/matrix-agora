@@ -97,3 +97,5 @@ def test_an_agent_on_the_claude_client_shows_its_engine_and_its_two_models(state
     assert (m["engine"], m["answers"], m["background"], m["thinking"]) == ("claude", "sonnet", "haiku", None)
     assert m["voice"]["model"] == "eleven_turbo_v2_5"
     assert models_view(state, "ada")["engine"] == "gemini"  # read as Gemini, it shows the Gemini defaults
+    (state / "kira.settings.json").write_text(settings(CLAUDE_THINKING="adaptive", CLAUDE_EFFORT="medium"))
+    assert models_view(state, "kira", engine="claude-sdk")["thinking"] == "medium"  # adaptive: its effort shown

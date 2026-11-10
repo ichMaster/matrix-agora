@@ -350,8 +350,9 @@ def models_view(state_dir: Path, name: str, voice_spec: Path | None = None, engi
         return None
     if engine == "claude-sdk":  # v7.1: an agent on the Claude client — its voice's model and every other call's
         answers = value.get("CLAUDE_REPLY_MODEL") or "sonnet"
+        thinks = value.get("CLAUDE_THINKING") == "adaptive"  # the voice's calls alone think, at their effort
         view = {"engine": "claude", "answers": answers, "background": value.get("CLAUDE_BACKGROUND_MODEL") or "haiku",
-                "thinking": None, "voice": None, "emotion": None}
+                "thinking": (value.get("CLAUDE_EFFORT") or "low") if thinks else None, "voice": None, "emotion": None}
     else:
         background = value.get("GEMINI_MODEL") or "gemini-2.5-flash"
         answers = value.get("GEMINI_REPLY_MODEL") or background

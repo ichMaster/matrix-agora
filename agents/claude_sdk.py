@@ -522,14 +522,18 @@ LIMIT_FALLBACKS = ("gemini", "silent")  # decision 1 (ROADMAP §v7): at the limi
 CONCURRENCY = 2               # CLI processes at once per container (each is a Node process)
 PROMPTS_DIR = "prompts"       # in the CLI's config dir (a tmpfs): one file a call, 0600, removed after it
 _LIMIT = object()             # `_query`'s answer when the subscription's limit stopped the call
+THINKING_MODES = ("off", "adaptive")  # v7.1 (the owner, 2026-11-10: «додай»): the voice's thinking on Claude
+EFFORTS = ("low", "medium", "high", "max")  # how deep an adaptive call thinks (the CLI's `--effort`)
+THINK_HEADROOM = 2048         # added to an answer's cap when it thinks: the cap counts the thinking too
 
 
 def client_options(system_file: str | None, *, model: str, max_output_tokens: int, config_dir: str,
-                   toolset: str | None = None) -> dict[str, Any]:
+                   toolset: str | None = None, effort: str | None = None) -> dict[str, Any]:
     """v7.1 — the `ClaudeAgentOptions` keyword arguments of one `ClaudeClient` call: the system prompt from a file (a
     persona's prompt holds her memories, which never go on a command line, and Кіра's is longer than one argument
-    may be), no settings, no MCP server, one turn, no tools (`search`: `WebSearch` alone, a few turns), thinking off
-    (as Gemini Flash's `thinking_budget=0`), the call's cap, no session transcript."""
+    may be), no settings, no MCP server, one turn, no tools (`search`: `WebSearch` alone, a few turns), the call's
+    cap, no session transcript. Thinking is off (as Gemini Flash's `thinking_budget=0`) unless `effort` is given:
+    then adaptive, at that effort (`CLAUDE_THINKING=adaptive`, the voice's calls alone)."""
     env = {
         "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
@@ -552,7 +556,8 @@ def client_options(system_file: str | None, *, model: str, max_output_tokens: in
         "max_turns": SEARCH_MAX_TURNS if toolset == "search" else 1,
         "model": model,
         "cwd": config_dir,
-        "thinking": {"type": "disabled"},
+        "thinking": {"type": "adaptive"} if effort else {"type": "disabled"},
+        **({"effort": effort} if effort else {}),
         "extra_args": {"no-session-persistence": None},
         "env": env,
     }
@@ -569,7 +574,7 @@ class ClaudeClient(_Subscription):
     def __init__(self, *, reply_model: str, background_model: str, config_dir: str, status_file: Path,
                  sink: Callable[..., None] | None, clock: Callable[[], int] = lambda: int(time.time() * 1000),
                  concurrency: int = CONCURRENCY, limit_fallback: str = "gemini", fallback: Any = None,
-                 embedder: Any = None, query=None, options=None) -> None:
+                 embedder: Any = None, query=None, options=None, thinking: str = "off", effort: str = "low") -> None:
         super().__init__(model=background_model, status_file=status_file, clock=clock)
         self.reply_model = reply_model
         self.status.model = reply_model  # the panel's card names the answers' model
@@ -579,6 +584,8 @@ class ClaudeClient(_Subscription):
         self.limit_fallback = limit_fallback if limit_fallback in LIMIT_FALLBACKS else "gemini"
         self.fallback = fallback
         self.embedder = embedder
+        self.thinking = thinking if thinking in THINKING_MODES else "off"
+        self.effort = effort if effort in EFFORTS else "low"
         self._query_fn = query
         self._options = options
         self._probe_logged = False
@@ -591,6 +598,10 @@ class ClaudeClient(_Subscription):
 
     def model_for(self, kind: str) -> str:
         return self.reply_model if kind in VOICE_KINDS else self.model
+
+    def effort_for(self, kind: str) -> str | None:
+        """The effort a call thinks at, or None — no thinking: only the voice's calls think, and only adaptive."""
+        return self.effort if self.thinking == "adaptive" and kind in VOICE_KINDS else None
 
     # --- the calls, as GeminiClient's ---------------------------------------------------------------------------
     async def generate(self, transcript: str, system_instruction: str, max_output_tokens: int = 400,
@@ -703,7 +714,9 @@ class ClaudeClient(_Subscription):
                      toolset: str | None) -> Any:
         """(text, finish), `_LIMIT`, or None: the call, bounded and checked, tried once more when it hangs, with one
         usage line a try."""
-        model = self.model_for(kind)
+        model, effort = self.model_for(kind), self.effort_for(kind)
+        if effort and cap > 0:
+            cap += THINK_HEADROOM  # the thinking never eats the answer
         timeout_s = REPLY_TIMEOUT_S if kind in ANSWER_KINDS else THINK_TIMEOUT_S
         query = self._query_fn or _default_query()
         try:
@@ -713,7 +726,8 @@ class ClaudeClient(_Subscription):
             return None
         try:
             options = (self._options or _default_options())(**client_options(
-                path, model=model, max_output_tokens=cap, config_dir=self.config_dir, toolset=toolset))
+                path, model=model, max_output_tokens=cap, config_dir=self.config_dir, toolset=toolset,
+                effort=effort))
             async with self._gate:
                 for attempt in range(1, REPLY_TRIES + 1):
                     started = self._mono()
@@ -846,6 +860,14 @@ def claude_client_for(environ: MutableMapping[str, str], *, status_file: Path, s
             log.warning("no GEMINI_API_KEY on claude: %s", ", ".join(
                 w for w, on in (("no meaning search in recall", recall),
                                 ("silent at the limit", fallback == "gemini")) if on))
+    thinking = str(env("CLAUDE_THINKING", "off")).strip()
+    effort = str(env("CLAUDE_EFFORT", "low")).strip()
+    if thinking not in THINKING_MODES:
+        log.warning("CLAUDE_THINKING is not one of %s — using off", ", ".join(THINKING_MODES))
+        thinking = "off"
+    if effort not in EFFORTS:
+        log.warning("CLAUDE_EFFORT is not one of %s — using low", ", ".join(EFFORTS))
+        effort = "low"
     try:
         concurrency = int(str(env("CLAUDE_CONCURRENCY", "2")))
     except ValueError:
@@ -856,4 +878,5 @@ def claude_client_for(environ: MutableMapping[str, str], *, status_file: Path, s
         background_model=str(env("CLAUDE_BACKGROUND_MODEL", "haiku")).strip() or "haiku",
         config_dir=str(env("CLAUDE_CONFIG_DIR", "/tmp/claude")),
         status_file=status_file, sink=sink, clock=clock, concurrency=concurrency, limit_fallback=fallback,
-        fallback=gemini if fallback == "gemini" else None, embedder=gemini if recall else None)
+        fallback=gemini if fallback == "gemini" else None, embedder=gemini if recall else None,
+        thinking=thinking, effort=effort)

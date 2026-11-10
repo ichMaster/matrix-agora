@@ -4043,6 +4043,9 @@ the env file, no forbidden variable), the usage rows.
   every room member reads; Hermes's digests and answers on Sonnet — his writing is his voice — by
   `CLAUDE_REPLY_MODEL=sonnet` in his own `hermes.env`, and his hearing on Deepgram as before. The companions' env
   files name `sonnet` when they move (v7.3, v7.4).
+- Thinking (v7.1's `CLAUDE_THINKING`, `CLAUDE_EFFORT`; the owner, 2026-11-10: «додай»): the six answer without it
+  (`off`, the default — as Gemini Flash today); Hermes thinks, `adaptive` at `low`, in his `hermes.env` — as his
+  digests on Gemini 3.1 Pro did; Кіра and Устина the same when they move (v7.3, v7.4).
 - Their background on Haiku: the session summaries, day memories and digests, plans, the today block, the cat's mood
   and his past-life lines.
 - The turn-taking unchanged: it is derived from shared inputs, never from the engine; the room's waiting times

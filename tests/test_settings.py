@@ -262,7 +262,8 @@ def test_a_live_switch_is_the_agents_own_never_applied_at_the_start_and_read_at_
 
 
 # --- v7.1: the Claude client's settings ----------------------------------------------------------------------------
-CLIENT = ("CLAUDE_REPLY_MODEL", "CLAUDE_BACKGROUND_MODEL", "CLAUDE_CONCURRENCY", "CLAUDE_LIMIT_FALLBACK")
+CLIENT = ("CLAUDE_REPLY_MODEL", "CLAUDE_BACKGROUND_MODEL", "CLAUDE_CONCURRENCY", "CLAUDE_LIMIT_FALLBACK",
+          "CLAUDE_THINKING", "CLAUDE_EFFORT")
 
 
 def test_the_claude_clients_settings_concern_every_agent_on_it_but_claude_himself():
@@ -282,7 +283,9 @@ def test_the_claude_clients_settings_concern_every_agent_on_it_but_claude_himsel
 @pytest.mark.parametrize("name,raw,ok", [("CLAUDE_REPLY_MODEL", "opus", True), ("CLAUDE_REPLY_MODEL", "gpt", False),
                                          ("CLAUDE_BACKGROUND_MODEL", "opus", False), ("CLAUDE_CONCURRENCY", "4", True),
                                          ("CLAUDE_CONCURRENCY", "9", False), ("CLAUDE_LIMIT_FALLBACK", "silent", True),
-                                         ("CLAUDE_LIMIT_FALLBACK", "wait", False)])
+                                         ("CLAUDE_LIMIT_FALLBACK", "wait", False), ("CLAUDE_THINKING", "adaptive", True),
+                                         ("CLAUDE_THINKING", "on", False), ("CLAUDE_EFFORT", "max", True),
+                                         ("CLAUDE_EFFORT", "xhigh", False)])
 def test_the_claude_clients_settings_are_validated(name, raw, ok):
     assert (validate(name, raw)[0] is not None) is ok
 
