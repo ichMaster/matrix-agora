@@ -110,6 +110,13 @@ def test_under_fal_a_photo_goes_through_the_request_and_seedream_and_a_frame_sta
     assert agent.photos.kinds == ["frame", "photo"] and len(agent.fal_photos.calls) == 1
 
 
+def test_the_backups_shot_without_the_fal_maker_never_goes_to_google(tmp_path, monkeypatch):
+    # v6.5 code review #2: the offer already closes, but `_make_photo` itself never falls through to Google
+    agent = switchable(kira(tmp_path, monkeypatch), fal=False)
+    assert asyncio.run(agent._make_photo(Shot("selfie", "я біля вікна"), fal=True)) == Made(None, why="off")
+    assert agent.photos.shots == []
+
+
 def test_the_caps_and_the_door_are_the_same_on_both_routes(tmp_path, monkeypatch):
     agent = switchable(kira(tmp_path, monkeypatch))
     save_photo_route(agent.photo_route_file, "fal")

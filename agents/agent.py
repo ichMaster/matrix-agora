@@ -2566,6 +2566,9 @@ class Agent:
                           kind: str = "photo", fal: bool = False) -> Made:
         """v5.17 — her photo for this moment; v5.18: a video's first frame takes its aspect and frame line (v5.22: and
         its usage line is the kind `frame`); v6.5: on fal under `/photos fal`, and always for the backup's (`fal`)."""
+        if fal and self.fal_photos is None:  # v6.5 code review #2: the backup's shot never reaches Google
+            log.info("photo: dropped (no fal for the backup's)")
+            return Made(None, why="off")
         try:
             if kind == "photo" and self.fal_photos is not None and (fal or self.photo_route() == "fal"):
                 moment = self._moment()
