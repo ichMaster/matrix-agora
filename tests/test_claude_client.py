@@ -372,8 +372,11 @@ def test_an_overage_answer_or_a_429_is_never_used(tmp_path):
     gemini = FakeGemini()
     over = RateLimitEvent(rate_limit_info=SimpleNamespace(status="allowed", resets_at=None, utilization=0.5,
                                                           rate_limit_type="overage", raw={"isUsingOverage": True}))
-    c, usage = client(tmp_path, FakeSDK([INIT_OK, over, result("платна відповідь.")]), fallback=gemini)
+    sdk = FakeSDK([INIT_OK, over, result("платна відповідь.")])
+    c, usage = client(tmp_path, sdk, fallback=gemini)
     assert run(c.reply("t", "s")) == ("gemini answer", "stop") and usage[-1][0][3] is False
+    assert c.muted() and c.status.muted_until == 1_000_000 + WARN_MUTE_S  # code review v7.1 #3: never billed again
+    assert run(c.reply("t", "s")) == ("gemini answer", "stop") and len(sdk.calls) == 1  # straight to Gemini
     c2, _ = client(tmp_path, FakeSDK([INIT_OK, result(is_error=True, api_error_status=429)]),
                    limit_fallback="silent")
     assert run(c2.reply("t", "s")) is None and c2.muted()

@@ -373,6 +373,16 @@ class _Subscription:
             self.status.muted_until = None
         self._save()
 
+    def _mute_over_limit(self) -> None:
+        """Code review v7.1 #3: an answer billed as extra usage is dropped, and the client waits for the window's
+        reset (or `WARN_MUTE_S`) — a status `allowed` with overage cleared the mute, so every next call was billed
+        so again and dropped again."""
+        now = self._now()
+        resets_at = self.status.resets_at
+        until = int(resets_at) if resets_at and int(resets_at) > now else now + WARN_MUTE_S
+        self.status.muted_until = max(int(self.status.muted_until or 0), until)
+        self._save()
+
     def _failed(self, why: str) -> None:
         """Review #14: an expired or revoked token fails every call — the card must not keep showing «OAuth ✓»."""
         self.status.last_error = why
@@ -488,7 +498,9 @@ class ClaudeSdkResponder(_Subscription):
         if self.blocked or refused:
             return None
         if over_limit:
-            log.warning("silent: claude is over the subscription's limit — no extra usage, ever")
+            self._mute_over_limit()
+            log.warning("silent: claude is over the subscription's limit — no extra usage, ever; muted until %s",
+                        self.status.muted_until)
             return None
         if getattr(result, "api_error_status", None) == 429:  # the limit, told as an error: wait as for a rejection
             self.status.muted_until = max(int(self.status.muted_until or 0), self._now() + WARN_MUTE_S)
@@ -859,7 +871,9 @@ class ClaudeClient(_Subscription):
         if self.blocked or seen["refused"]:
             return None
         if seen["over_limit"]:
-            log.warning("claude is over the subscription's limit — no extra usage, ever")
+            self._mute_over_limit()
+            log.warning("claude is over the subscription's limit — no extra usage, ever; muted until %s",
+                        self.status.muted_until)
             return _LIMIT
         if getattr(result, "api_error_status", None) == 429:
             self.status.muted_until = max(int(self.status.muted_until or 0), self._now() + WARN_MUTE_S)

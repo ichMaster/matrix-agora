@@ -303,6 +303,8 @@ def test_the_clis_error_text_never_reaches_the_room(tmp_path):
     SimpleNamespace(status="rejected", resets_at=1_000_600, rate_limit_type="five_hour", utilization=1.0, raw={}),
     SimpleNamespace(status="allowed_warning", resets_at=None, rate_limit_type="five_hour", utilization=0.9,
                     raw={"isUsingOverage": True}),
+    SimpleNamespace(status="allowed", resets_at=1_000_900, rate_limit_type="five_hour", utilization=1.0,
+                    raw={"isUsingOverage": True}),  # code review v7.1 #3: «allowed» cleared the mute
 ])
 def test_a_reply_billed_as_extra_usage_is_never_sent(tmp_path, info):
     """Review #4: a rejected window answered anyway is overage — dropped, counted, never ok."""
