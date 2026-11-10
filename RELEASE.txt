@@ -1,3 +1,37 @@
+Version 7.1.0 (2026-11-11)
+---------------------------
+- The Claude engine for a persona: an agent whose TOML says engine =
+  "claude-sdk" (a person, the cat, Hermes) gets ClaudeClient - Gemini's calls
+  over the Claude Agent SDK on the owner's subscription, the answers on
+  CLAUDE_REPLY_MODEL (sonnet), the background on CLAUDE_BACKGROUND_MODEL
+  (haiku), the system prompt by a 0600 file, never argv (AGORA-238, AGORA-239)
+- The subscription for every agent on Claude: server/subscription.env with the
+  OAuth token alone, the Claude image, v4.4's no-API-key layers, the compose
+  checks (AGORA-240)
+- Settings, the panel's models card and Analytics for an agent on Claude
+  (client:claude-sdk scope: CLAUDE_REPLY_MODEL, CLAUDE_BACKGROUND_MODEL,
+  CLAUDE_CONCURRENCY, CLAUDE_LIMIT_FALLBACK) and the dev run (AGORA-241; its
+  dev check waived by the owner)
+- At the limit: the same call on Gemini until the reset, or silence
+  (CLAUDE_LIMIT_FALLBACK); an answer billed as extra usage mutes Claude until
+  the window resets
+- Thinking (the owner): CLAUDE_THINKING off|adaptive and CLAUDE_EFFORT; a 5.5
+  model thinks whatever it is told, so every other call runs at effort low,
+  every capped call gets 4096 tokens more, and an answer is joined from all
+  its parts
+- A refusal or a 429 the CLI reports as an error result is read, not lost as
+  a failure (Claude himself too); the error kind named in the log, never its
+  text
+- Measured against Gemini: the speed of every kind of call, Кіра and Устина on
+  Gemini 3.1 Pro, Sonnet and Opus, and the prompt cache (the execution report)
+- Code review: 8 fixes (no probe on Claude - the talk summaries kept; the
+  answers' own gate; the overage mute; the blocked call to the fallback;
+  Hermes's refusal on his card; the fallback's answers counted as Gemini's;
+  the prompt file written whole; a missing SDK fails a call), 2 deferred
+- With it the unreleased 6.5.1 changes: Устина's own character alone with the
+  owner, and the event kind done
+- No agent moves in this phase: the room goes to Claude in v7.2
+
 Version 6.5.0 (2026-11-10)
 ---------------------------
 - Устина's photos on fal.ai: Seedream 4 Edit for a selfie with her faces,
