@@ -76,6 +76,7 @@ from agents.claude_sdk import (
     check_startup,
     claude_client_for,
     scrub,
+    served_by,
     write_status,
 )
 from agents.config import AgentConfig, load_config
@@ -4134,7 +4135,7 @@ class Agent:
             await self.send_line(room_id, text, answered_id, answering=answered_id)
             asked = self._event_at(answered_id) if answered_id else None  # v5.22: how long it waited
             self.record_answer("agora", "matrix", asked[1] if asked else "none", asked[0] if asked else None,
-                               delay_ms, "claude" if self.cfg.engine == "claude-sdk" else "gemini",
+                               delay_ms, served_by(self.cfg.engine),  # code review v7.1 #6: the fallback's own
                                ["voice"] if self.voice_sent else [])
             if memory is not None:
                 self.told.add(memory)

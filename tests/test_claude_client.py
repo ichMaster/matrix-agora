@@ -315,6 +315,20 @@ def test_an_api_key_source_blocks_every_later_call(tmp_path):
     assert json.loads((tmp_path / "ustyna.ratelimit.json").read_text())["auth"].startswith("blocked: ")
 
 
+def test_who_served_the_call_is_told_claude_or_the_gemini_fallback(tmp_path):
+    """Code review v7.1 #6: an answer line counted the fallback's answers as Claude's."""
+    from agents.claude_sdk import served_by
+    gemini = FakeGemini()
+    c, _ = client(tmp_path, FakeSDK([INIT_OK, result("так.")]), fallback=gemini)
+
+    async def go(mute):
+        c.status.muted_until = 1_000_000 + 60 if mute else None
+        await c.reply("t", "s")
+        return served_by("claude-sdk")
+    assert run(go(False)) == "claude" and run(go(True)) == "gemini"
+    assert served_by("gemini") == "gemini"
+
+
 def test_the_call_that_finds_it_blocked_goes_to_gemini_too(tmp_path, caplog):
     """Code review v7.1 #4: that first call got neither Claude nor Gemini."""
     caplog.set_level(logging.INFO)

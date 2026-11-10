@@ -24,6 +24,7 @@ import re
 import time
 import uuid
 from collections.abc import Callable, Mapping, MutableMapping
+from contextvars import ContextVar
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -539,6 +540,15 @@ LIMIT_FALLBACKS = ("gemini", "silent")  # decision 1 (ROADMAP §v7): at the limi
 CONCURRENCY = 2               # CLI processes at once per container (each is a Node process)
 PROMPTS_DIR = "prompts"       # in the CLI's config dir (a tmpfs): one file a call, 0600, removed after it
 _LIMIT = object()             # `_query`'s answer when the subscription's limit stopped the call
+# code review v7.1 #6: who served this task's last call — `claude`, or `gemini` when decision 1 took it (an answer
+# line counted the fallback's answers as Claude's); read by `served_by`
+LAST_SERVED: ContextVar[str | None] = ContextVar("LAST_SERVED", default=None)
+
+
+def served_by(engine: str) -> str:
+    """The engine of an answer just made in this task: an agent on Gemini is Gemini's; on Claude, `claude` unless
+    the Gemini fallback served the call."""
+    return (LAST_SERVED.get() or "claude") if engine == "claude-sdk" else "gemini"
 THINKING_MODES = ("off", "adaptive")  # v7.1 (the owner, 2026-11-10: «додай»): the voice's thinking on Claude
 EFFORTS = ("low", "medium", "high", "max")  # how deep an adaptive call thinks (the CLI's `--effort`)
 # Measured 2026-11-10: the 5.5 models think whatever the CLI is told — Haiku 5.5 600–1,300 thinking tokens with
@@ -726,12 +736,14 @@ class ClaudeClient(_Subscription):
         """Decision 1: the same call on Gemini until the reset, or silence."""
         if self.limit_fallback == "gemini" and self.fallback is not None:
             log.info("on gemini: claude %s", why)
+            LAST_SERVED.set("gemini")
             return await gemini(self.fallback)
         log.info("silent: claude %s", why)
         return None
 
     async def _run(self, kind: str, system: str | None, prompt: str, cap: int, *, answer: bool = False,
                    toolset: str | None = None, gemini) -> Any:
+        LAST_SERVED.set("claude")
         why = self._unavailable()
         if why:
             out = await self._instead(why, gemini)
