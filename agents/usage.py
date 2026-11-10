@@ -230,9 +230,10 @@ def _int(d: dict, key: str) -> int | None:
 
 def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict | None, ok: bool,
                    reported_cost: float | None = None, latency_ms: int | None = None,
-                   prompt_parts: dict | None = None) -> dict:
+                   prompt_parts: dict | None = None, blocked: str | None = None) -> dict:
     """v4.4 — one record per Claude Agent SDK call: always `claude-sdk` / `subscription` (the Max plan, never an API
-    key); the SDK's `total_cost_usd` is a client-side estimate, kept as reported and never billed."""
+    key); the SDK's `total_cost_usd` is a client-side estimate, kept as reported and never billed. v7.1: `blocked`
+    is `refusal` on a call Claude declined (`ClaudeClient`), else null."""
     usage = usage or {}
     fresh, output = _int(usage, "input_tokens"), _int(usage, "output_tokens")
     cache_read, cache_write = _int(usage, "cache_read_input_tokens"), _int(usage, "cache_creation_input_tokens")
@@ -249,7 +250,7 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
         "reported_cost_usd": cost,
         "characters": None,
         "audio_ms": None,
-        "blocked": None,
+        "blocked": blocked if blocked in ("refusal",) else None,
         "video_ms": None,
         "latency_ms": _ms(latency_ms),
         "images": None,

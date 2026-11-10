@@ -22,14 +22,24 @@ import logging
 import os
 import re
 import time
+import uuid
 from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 from agents import guardian
+from agents.llm import (
+    DIGEST_MODEL,
+    LAST_BLOCK,
+    REPLY_TIMEOUT_S,
+    REPLY_TRIES,
+    THINK_MAX_TOKENS,
+    THINK_TIMEOUT_S,
+    refusal_marker,
+)
 from agents.logic import build_transcript
-from agents.responder import Reply, Turn
+from agents.responder import ANSWER_KINDS, Reply, Turn
 
 log = logging.getLogger("agent.claude")
 
@@ -257,31 +267,32 @@ def _hook_matchers(hooks: Mapping[str, list]) -> dict[str, list]:
     return {event: [HookMatcher(matcher=None, hooks=list(fns))] for event, fns in hooks.items()}
 
 
-class ClaudeSdkResponder:
-    """One stateless `query()` per reply on the subscription; silent when blocked, muted or failed."""
+class _Subscription:
+    """v7.1 — what every call on the subscription shares (v4.4's layers 5 and 7): the init check, the limit and the
+    status file `state/<name>.ratelimit.json`. Claude as himself (`ClaudeSdkResponder`) and every other agent on
+    Claude (`ClaudeClient`) differ only in the tools a call may have."""
 
     _mono = staticmethod(time.monotonic)  # v5.22: the calls' clock — a test sets its own
 
-    def __init__(self, *, model: str, max_output_tokens: int, config_dir: str, status_file: Path,
-                 usage_sink: Callable[[str, str, dict | None, bool, float | None], None],
-                 clock: Callable[[], int] = lambda: int(time.time() * 1000), query=None, options=None,
-                 timeout_s: float = 90.0, workspace: str | None = None,
-                 news_source: guardian.Guardian | None = None) -> None:
+    def __init__(self, *, model: str, status_file: Path, clock: Callable[[], int]) -> None:
         self.model = model
-        self.max_output_tokens = max_output_tokens
-        self.config_dir = config_dir
         self.status_file = status_file
-        self.usage_sink = usage_sink
         self.clock = clock
-        self._query = query
-        self._options = options
-        self.timeout_s = timeout_s
-        self.workspace = workspace
-        self.news_source = news_source  # the Guardian's tools (agents/guardian.py), for the news call only
-        self._news_server: Any = None
         self._offered: dict[str | None, str] = {}
         self.status = ClaudeStatus(model=model)
         self.blocked: str | None = None
+
+    def _allowed(self, toolset: str | None) -> list[str]:
+        """The tools the CLI may offer on a call of this toolset."""
+        raise NotImplementedError
+
+    def _call_only(self, toolset: str | None) -> bool:
+        """A wrong tool list refuses this call only (True) or blocks every later one (False)."""
+        return False
+
+    def _servers_ok(self, names: list, toolset: str | None) -> bool:
+        """The MCP servers the CLI may report on a call of this toolset: none."""
+        return not names
 
     def resume_status(self) -> None:
         """Review #6: at start the card is refreshed — a refusal or a failure from an earlier run no longer shows —
@@ -308,29 +319,28 @@ class ClaudeSdkResponder:
         write_status(self.status_file, self.status)
 
     def _check_init(self, data: Mapping[str, Any], toolset: str | None = None) -> str | None:
-        """Layer 5: the CLI must say no API key is in use and only his tools are available — no MCP server but the
-        Guardian's own, in-process, on a news call. A wrong auth source blocks him until restarted; a wrong tool list
-        on a news call refuses that call only (returned), so the news can never silence his replies."""
+        """Layer 5: the CLI must say no API key is in use and only the call's tools are available (`_allowed`), with
+        no MCP server but those `_servers_ok` names. A wrong auth source blocks every later call until restarted; a
+        wrong tool list blocks them too, or refuses that call only (`_call_only`; returned) — Claude's news call, and
+        every call of `ClaudeClient`."""
         source = data.get("apiKeySource") if isinstance(data, Mapping) else None
         tools = data.get("tools") if isinstance(data, Mapping) else None
         servers = data.get("mcp_servers") if isinstance(data, Mapping) else None
-        # with an MCP server the CLI may list its resource tools too; the guard refuses them all the same
-        allowed = ([*guardian.TOOLS, *MCP_RESOURCE_TOOLS] if toolset == "news"
-                   else ALLOWED_TOOLS if self.workspace else [])
+        allowed = self._allowed(toolset)
         names = [s.get("name") if isinstance(s, Mapping) else s for s in (servers or [])]
         why = None
         offered = ", ".join(sorted(map(str, tools or []))) or "none"
         if offered != self._offered.get(toolset):  # what the CLI gives him, once per call kind — names only
             self._offered[toolset] = offered
-            log.info("claude tools offered%s: %s", " (news)" if toolset == "news" else "", offered)
+            log.info("claude tools offered%s: %s", f" ({toolset})" if toolset else "", offered)
         if source != "none":
             self.blocked = f"apiKeySource={source!r}"
         elif extra := [t for t in (tools or []) if t not in allowed]:
             why = f"tools={', '.join(map(str, extra))}"
-        elif [n for n in names if not (toolset == "news" and n == guardian.SERVER)]:
+        elif not self._servers_ok(names, toolset):
             why = f"mcp_servers={len(names)}"
-        if why and toolset == "news":
-            log.error("claude news call refused: %s", why)
+        if why and self._call_only(toolset):
+            log.error("claude %scall refused: %s", f"{toolset} " if toolset else "", why)
             self.status.auth = "oauth"
             self._save()
             return why
@@ -370,6 +380,37 @@ class ClaudeSdkResponder:
 
     def muted(self) -> bool:
         return bool(self.status.muted_until) and self._now() < int(self.status.muted_until)
+
+
+class ClaudeSdkResponder(_Subscription):
+    """One stateless `query()` per reply on the subscription; silent when blocked, muted or failed."""
+
+    def __init__(self, *, model: str, max_output_tokens: int, config_dir: str, status_file: Path,
+                 usage_sink: Callable[[str, str, dict | None, bool, float | None], None],
+                 clock: Callable[[], int] = lambda: int(time.time() * 1000), query=None, options=None,
+                 timeout_s: float = 90.0, workspace: str | None = None,
+                 news_source: guardian.Guardian | None = None) -> None:
+        super().__init__(model=model, status_file=status_file, clock=clock)
+        self.max_output_tokens = max_output_tokens
+        self.config_dir = config_dir
+        self.usage_sink = usage_sink
+        self._query = query
+        self._options = options
+        self.timeout_s = timeout_s
+        self.workspace = workspace
+        self.news_source = news_source  # the Guardian's tools (agents/guardian.py), for the news call only
+        self._news_server: Any = None
+
+    def _allowed(self, toolset: str | None) -> list[str]:
+        # with an MCP server the CLI may list its resource tools too; the guard refuses them all the same
+        return ([*guardian.TOOLS, *MCP_RESOURCE_TOOLS] if toolset == "news"
+                else ALLOWED_TOOLS if self.workspace else [])
+
+    def _call_only(self, toolset: str | None) -> bool:
+        return toolset == "news"  # the news can never silence his replies
+
+    def _servers_ok(self, names: list, toolset: str | None) -> bool:
+        return not [n for n in names if not (toolset == "news" and n == guardian.SERVER)]
 
     async def respond(self, turn: Turn) -> Reply | None:
         if self.blocked:
@@ -468,3 +509,301 @@ class ClaudeSdkResponder:
             self.status.last_error = None
             self._save()
         return Reply(text, "max_tokens" if getattr(result, "stop_reason", None) == "max_tokens" else "stop")
+
+
+# --- v7.1: every other agent on Claude ---------------------------------------------------------------------------
+# The kinds that are the agent's own voice — her answers, a line written first, Hermes's digest and his answers — on
+# the reply model (Sonnet); every other kind (the summaries, memories, plans, the today block, events, the mood, the
+# sky, topics, facts, thoughts) on the background model (Haiku).
+VOICE_KINDS = frozenset({*ANSWER_KINDS, "digest_voice", "ask"})
+SEARCH_TOOLS = ["WebSearch"]  # `search` (the cat's sky, a mood's reading): the web, nothing else
+SEARCH_MAX_TURNS = 4          # a search or two, then the answer
+LIMIT_FALLBACKS = ("gemini", "silent")  # decision 1 (ROADMAP §v7): at the limit — Gemini until the reset, or silence
+CONCURRENCY = 2               # CLI processes at once per container (each is a Node process)
+PROMPTS_DIR = "prompts"       # in the CLI's config dir (a tmpfs): one file a call, 0600, removed after it
+_LIMIT = object()             # `_query`'s answer when the subscription's limit stopped the call
+
+
+def client_options(system_file: str | None, *, model: str, max_output_tokens: int, config_dir: str,
+                   toolset: str | None = None) -> dict[str, Any]:
+    """v7.1 — the `ClaudeAgentOptions` keyword arguments of one `ClaudeClient` call: the system prompt from a file (a
+    persona's prompt holds her memories, which never go on a command line, and Кіра's is longer than one argument
+    may be), no settings, no MCP server, one turn, no tools (`search`: `WebSearch` alone, a few turns), thinking off
+    (as Gemini Flash's `thinking_budget=0`), the call's cap, no session transcript."""
+    env = {
+        "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
+        "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
+        "CLAUDE_CONFIG_DIR": config_dir,
+        "CLAUDE_CODE_MAX_RETRIES": "2",
+        "ENABLE_CLAUDEAI_MCP_SERVERS": "false",
+    }
+    if max_output_tokens > 0:
+        env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(max_output_tokens)
+    tools = list(SEARCH_TOOLS) if toolset == "search" else []
+    return {
+        "system_prompt": {"type": "file", "path": system_file} if system_file else None,
+        "tools": tools,
+        "allowed_tools": list(tools),
+        "disallowed_tools": list(DISALLOWED_TOOLS),
+        "permission_mode": "dontAsk",
+        "setting_sources": [],
+        "mcp_servers": {},
+        "strict_mcp_config": True,
+        "max_turns": SEARCH_MAX_TURNS if toolset == "search" else 1,
+        "model": model,
+        "cwd": config_dir,
+        "thinking": {"type": "disabled"},
+        "extra_args": {"no-session-persistence": None},
+        "env": env,
+    }
+
+
+class ClaudeClient(_Subscription):
+    """v7.1 — `GeminiClient`'s calls (`agents/llm.py`) over the Agent SDK, on the owner's subscription: one stateless
+    `query()` per call, on the model its kind asks for (`VOICE_KINDS` on `reply_model`, every other on `model`, the
+    background one). `embed` stays Gemini's (`embedder`); `probe` is Gemini's alone. At the limit, or blocked,
+    `limit_fallback` decides: `gemini` — the same call on `fallback`, its usage lines Gemini's own; `silent` — None.
+    A decline (the refusal stop, or a refusal formula in an answer) is None with `LAST_BLOCK` set, as a refusal on
+    Gemini is. Never a text in a log or a file but the call's own prompt file, removed after it."""
+
+    def __init__(self, *, reply_model: str, background_model: str, config_dir: str, status_file: Path,
+                 sink: Callable[..., None] | None, clock: Callable[[], int] = lambda: int(time.time() * 1000),
+                 concurrency: int = CONCURRENCY, limit_fallback: str = "gemini", fallback: Any = None,
+                 embedder: Any = None, query=None, options=None) -> None:
+        super().__init__(model=background_model, status_file=status_file, clock=clock)
+        self.reply_model = reply_model
+        self.status.model = reply_model  # the panel's card names the answers' model
+        self.config_dir = config_dir
+        self._sink = sink
+        self._gate = asyncio.Semaphore(max(1, int(concurrency)))
+        self.limit_fallback = limit_fallback if limit_fallback in LIMIT_FALLBACKS else "gemini"
+        self.fallback = fallback
+        self.embedder = embedder
+        self._query_fn = query
+        self._options = options
+        self._probe_logged = False
+
+    def _allowed(self, toolset: str | None) -> list[str]:
+        return list(SEARCH_TOOLS) if toolset == "search" else []
+
+    def _call_only(self, toolset: str | None) -> bool:
+        return True  # a call with tools it never asked for is not used; the next one is checked again
+
+    def model_for(self, kind: str) -> str:
+        return self.reply_model if kind in VOICE_KINDS else self.model
+
+    # --- the calls, as GeminiClient's ---------------------------------------------------------------------------
+    async def generate(self, transcript: str, system_instruction: str, max_output_tokens: int = 400,
+                       kind: str = "reply") -> str | None:
+        out = await self.complete(transcript, system_instruction, max_output_tokens, kind)
+        return out[0] if out else None
+
+    async def complete(self, transcript: str, system_instruction: str | None, max_output_tokens: int = 400,
+                       kind: str = "reply", model: str | None = None, refusal: bool = False) -> tuple[str, str] | None:
+        """(text, finish) — finish "max_tokens" when the cap cut it; None on failure. `model` (a Gemini id) is never
+        Claude's — the kind picks the model; it is used only on the Gemini fallback."""
+        LAST_BLOCK.set(None)
+        return await self._run(kind, system_instruction, transcript, max_output_tokens, answer=refusal,
+                               gemini=lambda g: g.complete(transcript, system_instruction, max_output_tokens, kind,
+                                                           model, refusal))
+
+    async def reply(self, transcript: str, system_instruction: str | None, max_output_tokens: int = 400,
+                    kind: str = "reply") -> tuple[str, str] | None:
+        """An answer: a refusal in it is a decline (v5.13's rule)."""
+        LAST_BLOCK.set(None)
+        return await self._run(kind, system_instruction, transcript, max_output_tokens, answer=True,
+                               gemini=lambda g: g.reply(transcript, system_instruction, max_output_tokens, kind))
+
+    async def think(self, contents: str, system_instruction: str, model: str | None = None,
+                    max_output_tokens: int = THINK_MAX_TOKENS, kind: str = "digest_voice",
+                    level: str | None = None) -> str | None:
+        """A long call (a digest, a talk summary): the text alone. `model` and `level` are Gemini's, for the fallback."""
+        def gemini(g):
+            name = model if isinstance(model, str) and model.startswith("gemini") else getattr(g, "reply_model", None)
+            return g.think(contents, system_instruction, model=name or DIGEST_MODEL,
+                           max_output_tokens=max_output_tokens, kind=kind, level=level)
+        out = await self._run(kind, system_instruction, contents, max_output_tokens, gemini=gemini)
+        return out[0] if out else None
+
+    async def search(self, question: str, max_output_tokens: int = 800, kind: str = "sky") -> str | None:
+        """A web answer — `WebSearch` alone, on the background model; the sources stay out of the answer."""
+        out = await self._run(kind, None, question, max_output_tokens, toolset="search",
+                              gemini=lambda g: g.search(question, max_output_tokens, kind))
+        return out[0] if out else None
+
+    async def embed(self, texts: list[str], task: str = "RETRIEVAL_DOCUMENT", kind: str = "embed") -> list | None:
+        """The embeddings stay Gemini's (Anthropic has none): on `embedder`, or None without one."""
+        if self.embedder is None:
+            return None
+        return await self.embedder.embed(texts, task=task, kind=kind)
+
+    async def probe(self, transcript: str, system_instruction: str | None, kind: str = "probe") -> bool | None:
+        """Gemini's prompt-stage check has no Claude counterpart: None, as a failed check (the scan stops)."""
+        if not self._probe_logged:
+            self._probe_logged = True
+            log.info("probe: none on claude")
+        return None
+
+    # --- one call -------------------------------------------------------------------------------------------------
+    def _unavailable(self) -> str | None:
+        if self.blocked:
+            return f"blocked ({self.blocked})"
+        if self.muted():
+            return f"rate limit (until {self.status.muted_until})"
+        return None
+
+    async def _instead(self, why: str, gemini) -> Any:
+        """Decision 1: the same call on Gemini until the reset, or silence."""
+        if self.limit_fallback == "gemini" and self.fallback is not None:
+            log.info("on gemini: claude %s", why)
+            return await gemini(self.fallback)
+        log.info("silent: claude %s", why)
+        return None
+
+    async def _run(self, kind: str, system: str | None, prompt: str, cap: int, *, answer: bool = False,
+                   toolset: str | None = None, gemini) -> Any:
+        why = self._unavailable()
+        if why:
+            out = await self._instead(why, gemini)
+            return (out, "stop") if isinstance(out, str) else out
+        out = await self._query(kind, system, prompt, cap, answer=answer, toolset=toolset)
+        if out is _LIMIT:
+            out = await self._instead(f"rate limit (until {self.status.muted_until})", gemini)
+            return (out, "stop") if isinstance(out, str) else out
+        return out
+
+    def _prompt_file(self, system: str | None) -> str | None:
+        """The call's system prompt in a file of its own (0600) in the CLI's config dir; None with no prompt."""
+        if not system:
+            return None
+        folder = Path(self.config_dir) / PROMPTS_DIR
+        folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+        path = folder / f"{uuid.uuid4().hex}.md"
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, system.encode("utf-8"))
+        finally:
+            os.close(fd)
+        return str(path)
+
+    def _report(self, kind: str, model: str, usage: Any, ok: bool, cost: Any, started: float,
+                blocked: str | None = None) -> None:
+        if self._sink is None:
+            return
+        latency = round((self._mono() - started) * 1000)
+        try:
+            if blocked:
+                self._sink(kind, model, usage, ok, cost, latency_ms=latency, blocked=blocked)
+            else:
+                self._sink(kind, model, usage, ok, cost, latency_ms=latency)
+        except Exception:
+            log.exception("usage accounting failed")
+
+    async def _query(self, kind: str, system: str | None, prompt: str, cap: int, *, answer: bool,
+                     toolset: str | None) -> Any:
+        """(text, finish), `_LIMIT`, or None: the call, bounded and checked, tried once more when it hangs, with one
+        usage line a try."""
+        model = self.model_for(kind)
+        timeout_s = REPLY_TIMEOUT_S if kind in ANSWER_KINDS else THINK_TIMEOUT_S
+        query = self._query_fn or _default_query()
+        try:
+            path = self._prompt_file(system)
+        except OSError as exc:
+            log.error("claude prompt file not written (%s)", type(exc).__name__)
+            return None
+        try:
+            options = (self._options or _default_options())(**client_options(
+                path, model=model, max_output_tokens=cap, config_dir=self.config_dir, toolset=toolset))
+            async with self._gate:
+                for attempt in range(1, REPLY_TRIES + 1):
+                    started = self._mono()
+                    try:
+                        seen = await asyncio.wait_for(self._consume(query, prompt, options, toolset), timeout_s)
+                    except TimeoutError:
+                        log.warning("claude %s timed out after %d s (try %d of %d)", kind, timeout_s, attempt,
+                                    REPLY_TRIES)
+                        self._report(kind, model, None, False, None, started)
+                        continue
+                    except Exception as exc:  # noqa: BLE001 — any SDK or CLI failure means silence
+                        log.error("claude call failed: %s", type(exc).__name__)
+                        self._report(kind, model, None, False, None, started)
+                        self._failed(type(exc).__name__)
+                        return None
+                    return self._judge(kind, model, seen, started, answer)
+                self._failed("timeout")
+                return None
+        finally:
+            if path:
+                with contextlib.suppress(OSError):
+                    os.unlink(path)
+
+    async def _consume(self, query, prompt: str, options: Any, toolset: str | None) -> dict[str, Any]:
+        seen: dict[str, Any] = {"result": None, "parts": [], "init": False, "over_limit": False, "refused": None}
+        async with contextlib.aclosing(query(prompt=prompt, options=options)) as stream:
+            async for msg in stream:
+                kind = type(msg).__name__
+                if getattr(msg, "subtype", None) == "init" and isinstance(getattr(msg, "data", None), Mapping):
+                    seen["init"] = True
+                    seen["refused"] = self._check_init(msg.data, toolset)
+                    if seen["refused"]:
+                        break
+                elif kind == "RateLimitEvent":
+                    info = getattr(msg, "rate_limit_info", None)
+                    self._rate_limit(info)
+                    raw = getattr(info, "raw", None)
+                    seen["over_limit"] = seen["over_limit"] or getattr(info, "status", None) == "rejected" or bool(
+                        isinstance(raw, Mapping) and raw.get("isUsingOverage"))
+                elif kind == "AssistantMessage" and not getattr(msg, "error", None):
+                    seen["parts"].extend(b.text for b in getattr(msg, "content", [])
+                                         if isinstance(getattr(b, "text", None), str))
+                elif kind == "ResultMessage":
+                    seen["result"] = msg
+        return seen
+
+    def _judge(self, kind: str, model: str, seen: dict[str, Any], started: float, answer: bool) -> Any:
+        """The checked call's answer — and its one usage line, `ok` only for a checked, successful, kept answer."""
+        result = seen["result"]
+        usage = getattr(result, "usage", None)
+        cost = getattr(result, "total_cost_usd", None)
+        model_usage = getattr(result, "model_usage", None)
+        named = next(iter(model_usage), None) if isinstance(model_usage, Mapping) and model_usage else None
+        model = named if isinstance(named, str) and named else model  # the id the CLI ran, else the alias
+        good = (result is not None and not getattr(result, "is_error", True) and self.blocked is None
+                and seen["init"] and not seen["over_limit"] and seen["refused"] is None)
+        text = ((getattr(result, "result", None) or "\n".join(seen["parts"])).strip() if good else "")
+        declined = None
+        if good and getattr(result, "stop_reason", None) == "refusal":
+            declined = "stop"
+        elif good and answer and text:
+            declined = refusal_marker(text)
+        if declined:
+            LAST_BLOCK.set(("refusal", declined, None))
+            self._report(kind, model, usage, False, cost, started, blocked="refusal")
+            log.warning("claude declined: reason=%s kind=%s model=%s", declined, kind, model)  # never a text
+            return None
+        self._report(kind, model, usage, good and bool(text), cost, started)
+        if self.blocked or seen["refused"]:
+            return None
+        if seen["over_limit"]:
+            log.warning("claude is over the subscription's limit — no extra usage, ever")
+            return _LIMIT
+        if getattr(result, "api_error_status", None) == 429:
+            self.status.muted_until = max(int(self.status.muted_until or 0), self._now() + WARN_MUTE_S)
+            self._save()
+            log.warning("claude rate limited (429) — muted until %s", self.status.muted_until)
+            return _LIMIT
+        if not seen["init"]:
+            log.error("claude: no init message — the auth source is unverified; no answer")
+            return None
+        if result is None or getattr(result, "is_error", True):
+            log.error("claude result error: %s (http %s)", getattr(result, "subtype", None),
+                      getattr(result, "api_error_status", None))
+            self._failed(f"{getattr(result, 'subtype', None)} (http {getattr(result, 'api_error_status', None)})")
+            return None
+        if not text:
+            log.error("claude returned an empty answer (kind %s)", kind)
+            return None
+        if self.status.last_error:
+            self.status.last_error = None
+            self._save()
+        return text, "max_tokens" if getattr(result, "stop_reason", None) == "max_tokens" else "stop"

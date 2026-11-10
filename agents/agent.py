@@ -3114,11 +3114,12 @@ class Agent:
         self._append_usage(lambda ts: fallback_usage_line(ts, self.cfg.localpart, kind, model, ok, latency_ms, parts))
 
     def record_sdk_usage(self, kind: str, model: str, usage: dict | None, ok: bool,
-                         reported_cost: float | None, latency_ms: int | None = None) -> None:
-        """v4.4 — one line per Claude Agent SDK call: always `subscription`, never priced."""
+                         reported_cost: float | None, latency_ms: int | None = None, blocked: str | None = None) -> None:
+        """v4.4 — one line per Claude Agent SDK call: always `subscription`, never priced; v7.1: `blocked` on a
+        declined one."""
         parts = PROMPT_PARTS.get()
         self._append_usage(lambda ts: sdk_usage_line(ts, self.cfg.localpart, kind, model, usage, ok, reported_cost,
-                                                     latency_ms, parts))
+                                                     latency_ms, parts, blocked))
 
     def _append_usage(self, build) -> None:
         if not self.trace_calls:
