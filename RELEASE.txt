@@ -1,3 +1,26 @@
+Version 6.5.0 (2026-11-10)
+---------------------------
+- Устина's photos on fal.ai: Seedream 4 Edit for a selfie with her faces,
+  Seedream 4 text-to-image for a photo without her, 3:4, the safety checker
+  asked off - a flagged, black or empty photo blocked, never sent (AGORA-233)
+- The request by the backup: her backup model writes the scene for Seedream,
+  the code adds her age, her look and the snapshot style; the template without
+  it; never logged (AGORA-234)
+- The owner's switch: /photos fal|google in her Telegram, photos_fal in her
+  TOML only, kept in state/<name>.photos.json across a restart; Кіра has none
+  (AGORA-235)
+- The backup's photo skill: when the route is on the backup her photos are
+  made on fal, whatever /photos says (AGORA-236)
+- The money: usage line v8 images, PRICE_IMAGES per image in the report, the
+  daily report and Analytics (AGORA-232)
+- Every Gemini call cut at a timeout and tried once more - a hung Pro summary
+  had held up Устина's writing first for three hours (20c3102, code review #1)
+- The backup's photo never falls through to Google (code review #2)
+- Deployed, the owner's live checks waived (AGORA-237) - watched after the
+  release, bugs go to 6.5.x patches
+- fal's authorization of the account to turn its checker off is the owner's
+  email, outstanding
+
 Version 6.4.0 (2026-11-08)
 ---------------------------
 - Agora meets Устина: she takes her turns in the room, mode ranked with weight
