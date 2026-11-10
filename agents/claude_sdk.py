@@ -924,6 +924,7 @@ class ClaudeClient(_Subscription):
         except OSError as exc:
             log.error("claude prompt file not written (%s)", type(exc).__name__)
             return None
+        key = None  # code review v7.2 #2: `finally` reads it, even when the options fail
         try:
             options = make_options(**client_options(
                 path, model=model, max_output_tokens=cap, config_dir=self.config_dir, toolset=toolset,
@@ -932,8 +933,8 @@ class ClaudeClient(_Subscription):
             # ahead for its key; a warm call that fails or hangs goes cold once (the next try), never silent for it
             split = split_prompt(system, PROMPT_SLOW.get()) if kind in VOICE_KINDS and toolset is None else None
             key = (split[0], model, effort, think, cap) if split else None
-            warm = self._take_warm(key)
             async with (self._voice_gate if kind in VOICE_KINDS else self._gate):
+                warm = self._take_warm(key)  # code review v7.2 #5: inside the gate — a call cancelled there takes none
                 for attempt in range(1, REPLY_TRIES + 1):
                     hot = warm is not None and attempt == 1
                     started = self._mono()
@@ -963,7 +964,7 @@ class ClaudeClient(_Subscription):
             if path:
                 with contextlib.suppress(OSError):
                     os.unlink(path)
-            if key:
+            if key and not self.blocked and not self.muted():  # code review v7.2 #3: never a CLI nobody may use
                 self._prewarm(key, make_options, model, effort, think, cap)
 
     # --- v7.2: the CLI started ahead ------------------------------------------------------------------------------

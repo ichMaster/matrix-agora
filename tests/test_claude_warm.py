@@ -305,3 +305,54 @@ def test_the_usage_line_marks_a_warm_call_and_speed_shows_warm_and_cold_apart():
     detail = analyze_detail([warm, cold, himself], [], date(2026, 11, 11), date(2026, 11, 11), None, now)
     names = {m["model"] for s in detail["speed"]["services"] for m in s["models"]}
     assert {"claude-haiku-5-5 · warm", "claude-haiku-5-5 · cold", "claude-opus-5-5"} <= names
+
+
+# --- code review v7.2 ------------------------------------------------------------------------------------------------
+def test_an_error_building_the_options_is_logged_as_itself(tmp_path, caplog):
+    """#2: `finally` read `key` before it was set, and `UnboundLocalError` hid the real error."""
+    def broken(**kw):
+        raise TypeError("bad option")
+    c = ClaudeClient(reply_model="haiku", background_model="haiku", config_dir=str(tmp_path / "cfg"),
+                     status_file=tmp_path / "s.json", sink=None, query=FakeSDK().query, options=broken,
+                     sdk_client=Clients())
+    with pytest.raises(TypeError, match="bad option"):
+        asyncio.run(voice(c))
+
+
+@pytest.mark.parametrize("why", ["blocked", "muted"])
+def test_no_cli_is_started_ahead_while_the_client_is_blocked_or_muted(tmp_path, why):
+    """#3: after a call that found the client blocked or muted, a CLI was started that nobody could use."""
+    bad = SystemMessage(subtype="init", data={"apiKeySource": "ANTHROPIC_API_KEY", "tools": []})
+    over = RateLimitEvent(rate_limit_info=SimpleNamespace(status="rejected", resets_at=None, utilization=1.0,
+                                                          rate_limit_type="five_hour", raw={}))
+    script = [bad, result()] if why == "blocked" else [INIT_OK, over, result()]
+    sdk, clients = FakeSDK(script), Clients()
+    c, _ = claude(tmp_path, sdk, clients, limit_fallback="silent")
+
+    async def go():
+        await voice(c)
+        await settle()
+    asyncio.run(go())
+    assert clients.made == [] and c._warm is None
+
+
+def test_a_call_cancelled_at_the_voice_gate_takes_no_cli(tmp_path):
+    """#5: the CLI was taken before the gate, and a call cancelled there left it connected, out of `close`'s reach."""
+    sdk, clients = FakeSDK([INIT_OK, result("Холодно.")]), Clients()
+    c, _ = claude(tmp_path, sdk, clients, concurrency=1)
+
+    async def go():
+        await voice(c)
+        await settle()
+        waiting = c._warm
+        async with c._voice_gate:                      # the gate held: the next call waits there
+            call = asyncio.create_task(voice(c))
+            await settle()
+            call.cancel()
+            await settle()
+        kept = c._warm is waiting                     # still the client's, never taken
+        await c.close()
+        await settle()
+        return kept, waiting
+    kept, waiting = asyncio.run(go())
+    assert kept and waiting.ready() is False and clients.made[0].closed
