@@ -396,6 +396,17 @@ def test_an_sdk_error_with_no_error_result_is_still_a_failure(tmp_path, caplog):
     assert usage[-1][0][3] is False
 
 
+@pytest.mark.parametrize("line,kind", [
+    ("API Error: Claude's response exceeded the 200 output token maximum.", "max_output"),
+    ("API Error: 529 Overloaded", "overloaded"), ("API Error: something new", "other"), (None, "none")])
+def test_an_error_result_is_logged_by_a_name_never_its_line(tmp_path, caplog, line, kind):
+    c, _ = client(tmp_path, FakeSDK([INIT_OK, result(line, is_error=True, terminal_reason="api_error"),
+                                     ResultError("exit 1")]))
+    assert run(c.reply("t", "s")) is None
+    assert f"claude result error: success (http None, stop end_turn, terminal api_error, {kind})" in caplog.text
+    assert "something new" not in caplog.text and "token maximum" not in caplog.text
+
+
 def test_a_refusal_formula_in_an_answer_is_a_decline_but_not_in_a_summary(tmp_path):
     text = "Я не можу виконати цей запит."
     c, _ = client(tmp_path, FakeSDK([INIT_OK, result(text)]))

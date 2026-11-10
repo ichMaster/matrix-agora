@@ -499,8 +499,9 @@ class ClaudeSdkResponder(_Subscription):
             log.error("claude: no init message — the auth source is unverified; silent")
             return None
         if result is None or getattr(result, "is_error", True):
-            log.error("claude result error: %s (http %s)", getattr(result, "subtype", None),
-                      getattr(result, "api_error_status", None))
+            log.error("claude result error: %s (http %s, stop %s, terminal %s, %s)", getattr(result, "subtype", None),
+                      getattr(result, "api_error_status", None), getattr(result, "stop_reason", None),
+                      getattr(result, "terminal_reason", None), cli_error_kind(result))  # names, never a text
             self._failed(f"{getattr(result, 'subtype', None)} (http {getattr(result, 'api_error_status', None)})")
             return None
         text = (getattr(result, "result", None) or "\n".join(parts)).strip()
@@ -539,6 +540,18 @@ def refusal_category(result: Any) -> str | None:
     error line, never the model's text."""
     found = _CATEGORY.search(str(getattr(result, "result", "") or "")) if getattr(result, "is_error", False) else None
     return found.group(1) if found else None
+
+
+_CLI_ERRORS = (("output token maximum", "max_output"), ("overloaded", "overloaded"), ("rate limit", "rate_limit"),
+               ("prompt is too long", "too_long"), ("timed out", "timeout"), ("timeout", "timeout"),
+               ("can't help", "refusal"), ("authentication", "auth"), ("oauth", "auth"))
+
+
+def cli_error_kind(result: Any) -> str:
+    """A name for the CLI's error line on an error result (`API Error: …`) — matched against known phrases, so the
+    log carries a name and never the line itself."""
+    line = str(getattr(result, "result", "") or "").lower() if getattr(result, "is_error", False) else ""
+    return next((name for phrase, name in _CLI_ERRORS if phrase in line), "other" if line else "none")
 
 
 def client_options(system_file: str | None, *, model: str, max_output_tokens: int, config_dir: str,
@@ -836,8 +849,9 @@ class ClaudeClient(_Subscription):
             log.error("claude: no init message — the auth source is unverified; no answer")
             return None
         if result is None or getattr(result, "is_error", True):
-            log.error("claude result error: %s (http %s)", getattr(result, "subtype", None),
-                      getattr(result, "api_error_status", None))
+            log.error("claude result error: %s (http %s, stop %s, terminal %s, %s)", getattr(result, "subtype", None),
+                      getattr(result, "api_error_status", None), getattr(result, "stop_reason", None),
+                      getattr(result, "terminal_reason", None), cli_error_kind(result))  # names, never a text
             self._failed(f"{getattr(result, 'subtype', None)} (http {getattr(result, 'api_error_status', None)})")
             return None
         if not text:
