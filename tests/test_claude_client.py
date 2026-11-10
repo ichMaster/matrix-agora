@@ -135,6 +135,7 @@ def test_the_options_have_no_tools_no_settings_no_thinking_and_the_calls_cap():
     assert o["thinking"] == {"type": "disabled"} and o["disallowed_tools"] == DISALLOWED_TOOLS
     assert o["system_prompt"] == {"type": "file", "path": "/tmp/claude/prompts/x.md"}  # never on a command line
     assert o["env"]["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == "300" and o["env"]["CLAUDE_CONFIG_DIR"] == "/tmp/claude"
+    assert "effort" not in o  # the client always passes one (`QUIET_EFFORT` at the least)
     assert o["extra_args"] == {"no-session-persistence": None} and o["model"] == "haiku"
     assert client_options(None, model="haiku", max_output_tokens=0, config_dir="/c")["system_prompt"] is None
 
@@ -145,9 +146,11 @@ def test_a_search_has_the_web_search_alone_and_a_few_turns():
 
 
 # --- thinking: the voice's calls alone, when adaptive (the owner, 2026-11-10: «додай») ------------------------------
-def test_an_effort_makes_the_call_think_adaptively_at_it():
-    o = client_options(None, model="sonnet", max_output_tokens=300, config_dir="/c", effort="low")
-    assert o["thinking"] == {"type": "adaptive"} and o["effort"] == "low"
+def test_think_asks_for_adaptive_thinking_and_the_effort_bounds_it_either_way():
+    o = client_options(None, model="sonnet", max_output_tokens=300, config_dir="/c", effort="medium", think=True)
+    assert o["thinking"] == {"type": "adaptive"} and o["effort"] == "medium"
+    quiet = client_options(None, model="haiku", max_output_tokens=300, config_dir="/c", effort="low")
+    assert quiet["thinking"] == {"type": "disabled"} and quiet["effort"] == "low"
     assert "effort" not in client_options(None, model="sonnet", max_output_tokens=300, config_dir="/c")
 
 
@@ -159,18 +162,34 @@ def test_with_adaptive_thinking_only_the_voice_thinks_and_its_cap_grows_by_the_h
     c.thinking, c.effort = "adaptive", "medium"
     run(c.complete("Ich: привіт", "BRIEF", 300, kind=kind))
     o = sdk.calls[-1][1]
-    assert (o.thinking == {"type": "adaptive"}, getattr(o, "effort", None)) == (thinks, "medium" if thinks else None)
-    assert o.env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == str(300 + THINK_HEADROOM if thinks else 300)
+    assert (o.thinking == {"type": "adaptive"}, o.effort) == (thinks, "medium" if thinks else "low")
+    assert o.env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == str(300 + THINK_HEADROOM)  # every capped call: it thinks anyway
 
 
 def test_thinking_is_off_by_default_and_an_unknown_mode_or_effort_is_the_default(tmp_path):
     sdk = FakeSDK()
     c, _ = client(tmp_path, sdk)
     run(c.complete("Ich: привіт", "BRIEF", 300, kind="reply"))
-    assert sdk.calls[-1][1].thinking == {"type": "disabled"} and c.effort_for("reply") is None
+    o = sdk.calls[-1][1]
+    assert o.thinking == {"type": "disabled"} and o.effort == "low" and c.effort_for("reply") == "low"
     odd = ClaudeClient(reply_model="sonnet", background_model="haiku", config_dir="/c", status_file=tmp_path / "s",
                        sink=None, thinking="always", effort="xhigh")
     assert (odd.thinking, odd.effort) == ("off", "low")
+
+
+def test_an_answer_the_cli_continued_past_the_cap_is_whole(tmp_path):
+    """2026-11-10: thinking ate the cap; the CLI continued the answer, and its result held the last part alone."""
+    sdk = FakeSDK([INIT_OK, AssistantMessage(content=[TextBlock(text="- 09:00 кава\n- 12:00 ")]),
+                   AssistantMessage(content=[TextBlock(text="ринок\n- 21:00 чай")]), result("ринок\n- 21:00 чай")])
+    c, _ = client(tmp_path, sdk)
+    assert run(c.complete("x", "S", 300, kind="today")) == ("- 09:00 кава\n- 12:00 ринок\n- 21:00 чай", "stop")
+
+
+def test_a_search_answer_is_the_last_turns_result(tmp_path):
+    sdk = FakeSDK([INIT_SEARCH, AssistantMessage(content=[TextBlock(text="Пошукаю.")]),
+                   AssistantMessage(content=[TextBlock(text="Ясно, зорі видно.")]), result("Ясно, зорі видно.")])
+    c, _ = client(tmp_path, sdk)
+    assert run(c.search("небо")) == "Ясно, зорі видно."
 
 
 def test_the_thought_never_becomes_the_answer(tmp_path):

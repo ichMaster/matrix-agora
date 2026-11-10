@@ -529,7 +529,13 @@ PROMPTS_DIR = "prompts"       # in the CLI's config dir (a tmpfs): one file a ca
 _LIMIT = object()             # `_query`'s answer when the subscription's limit stopped the call
 THINKING_MODES = ("off", "adaptive")  # v7.1 (the owner, 2026-11-10: «додай»): the voice's thinking on Claude
 EFFORTS = ("low", "medium", "high", "max")  # how deep an adaptive call thinks (the CLI's `--effort`)
-THINK_HEADROOM = 2048         # added to an answer's cap when it thinks: the cap counts the thinking too
+# Measured 2026-11-10: the 5.5 models think whatever the CLI is told — Haiku 5.5 600–1,300 thinking tokens with
+# `--thinking disabled` (also with `--max-thinking-tokens 0` or MAX_THINKING_TOKENS=0), 150–300 at `--effort low`,
+# and 2–3 s faster; the cap counts the thinking, and an answer cut at the cap is continued by the CLI in a second
+# request whose text alone is the result. So every call runs at least at `low`, and every cap gets the headroom
+# (the owner: «для хайку не треба думання», «тоді збільш кількість токенів»).
+THINK_HEADROOM = 4096         # added to every capped call: the thinking never eats the answer
+QUIET_EFFORT = "low"          # the least thinking a 5.5 model can be held to
 
 
 _CATEGORY = re.compile(r"Details: `\[([a-z_]{1,24})\]`")
@@ -554,13 +560,22 @@ def cli_error_kind(result: Any) -> str:
     return next((name for phrase, name in _CLI_ERRORS if phrase in line), "other" if line else "none")
 
 
+def answer_of(result: Any, parts: list[str], toolset: str | None) -> str:
+    """A call's answer: with no tools, every text block in order — an answer cut at the cap is continued by the CLI
+    in a second request, and its result holds that part alone; with tools (a search) the result, the last turn's."""
+    if toolset is None and len(parts) > 1:
+        return "".join(parts).strip()
+    return (getattr(result, "result", None) or "\n".join(parts)).strip()
+
+
 def client_options(system_file: str | None, *, model: str, max_output_tokens: int, config_dir: str,
-                   toolset: str | None = None, effort: str | None = None) -> dict[str, Any]:
+                   toolset: str | None = None, effort: str | None = None, think: bool = False) -> dict[str, Any]:
     """v7.1 — the `ClaudeAgentOptions` keyword arguments of one `ClaudeClient` call: the system prompt from a file (a
     persona's prompt holds her memories, which never go on a command line, and Кіра's is longer than one argument
     may be), no settings, no MCP server, one turn, no tools (`search`: `WebSearch` alone, a few turns), the call's
-    cap, no session transcript. Thinking is off (as Gemini Flash's `thinking_budget=0`) unless `effort` is given:
-    then adaptive, at that effort (`CLAUDE_THINKING=adaptive`, the voice's calls alone)."""
+    cap, no session transcript. Thinking is asked off (as Gemini Flash's `thinking_budget=0`) unless `think`: then
+    adaptive (`CLAUDE_THINKING=adaptive`, the voice's calls alone); `effort` bounds it either way, since a 5.5 model
+    thinks even when told not to."""
     env = {
         "CLAUDE_CODE_SKIP_PROMPT_HISTORY": "1",
         "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
@@ -583,7 +598,7 @@ def client_options(system_file: str | None, *, model: str, max_output_tokens: in
         "max_turns": SEARCH_MAX_TURNS if toolset == "search" else 1,
         "model": model,
         "cwd": config_dir,
-        "thinking": {"type": "adaptive"} if effort else {"type": "disabled"},
+        "thinking": {"type": "adaptive"} if think else {"type": "disabled"},
         **({"effort": effort} if effort else {}),
         "extra_args": {"no-session-persistence": None},
         "env": env,
@@ -626,9 +641,14 @@ class ClaudeClient(_Subscription):
     def model_for(self, kind: str) -> str:
         return self.reply_model if kind in VOICE_KINDS else self.model
 
-    def effort_for(self, kind: str) -> str | None:
-        """The effort a call thinks at, or None — no thinking: only the voice's calls think, and only adaptive."""
-        return self.effort if self.thinking == "adaptive" and kind in VOICE_KINDS else None
+    def thinks(self, kind: str) -> bool:
+        """Whether a call is asked to think: only the voice's calls, and only with `CLAUDE_THINKING=adaptive`."""
+        return self.thinking == "adaptive" and kind in VOICE_KINDS
+
+    def effort_for(self, kind: str) -> str:
+        """The effort a call runs at: `CLAUDE_EFFORT` when it thinks, else the least (`QUIET_EFFORT`) — a 5.5 model
+        thinks even when told not to."""
+        return self.effort if self.thinks(kind) else QUIET_EFFORT
 
     # --- the calls, as GeminiClient's ---------------------------------------------------------------------------
     async def generate(self, transcript: str, system_instruction: str, max_output_tokens: int = 400,
@@ -741,8 +761,8 @@ class ClaudeClient(_Subscription):
                      toolset: str | None) -> Any:
         """(text, finish), `_LIMIT`, or None: the call, bounded and checked, tried once more when it hangs, with one
         usage line a try."""
-        model, effort = self.model_for(kind), self.effort_for(kind)
-        if effort and cap > 0:
+        model, effort, think = self.model_for(kind), self.effort_for(kind), self.thinks(kind)
+        if cap > 0:
             cap += THINK_HEADROOM  # the thinking never eats the answer
         timeout_s = REPLY_TIMEOUT_S if kind in ANSWER_KINDS else THINK_TIMEOUT_S
         query = self._query_fn or _default_query()
@@ -754,7 +774,7 @@ class ClaudeClient(_Subscription):
         try:
             options = (self._options or _default_options())(**client_options(
                 path, model=model, max_output_tokens=cap, config_dir=self.config_dir, toolset=toolset,
-                effort=effort))
+                effort=effort, think=think))
             async with self._gate:
                 for attempt in range(1, REPLY_TRIES + 1):
                     started = self._mono()
@@ -779,7 +799,8 @@ class ClaudeClient(_Subscription):
                     os.unlink(path)
 
     async def _consume(self, query, prompt: str, options: Any, toolset: str | None) -> dict[str, Any]:
-        seen: dict[str, Any] = {"result": None, "parts": [], "init": False, "over_limit": False, "refused": None}
+        seen: dict[str, Any] = {"result": None, "parts": [], "init": False, "over_limit": False, "refused": None,
+                                "toolset": toolset}
         try:
             await self._stream(query, prompt, options, toolset, seen)
         except Exception:
@@ -822,7 +843,7 @@ class ClaudeClient(_Subscription):
         checked = (result is not None and self.blocked is None and seen["init"] and not seen["over_limit"]
                    and seen["refused"] is None)
         good = checked and not getattr(result, "is_error", True)
-        text = ((getattr(result, "result", None) or "\n".join(seen["parts"])).strip() if good else "")
+        text = (answer_of(result, seen["parts"], seen.get("toolset")) if good else "")
         declined = None
         if checked and getattr(result, "stop_reason", None) == "refusal":  # the CLI reports it as an error result
             declined = "stop"

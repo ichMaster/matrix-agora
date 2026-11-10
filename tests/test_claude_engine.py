@@ -139,7 +139,8 @@ def test_her_thinking_comes_from_her_settings(tmp_path):
     c = claude_client_for(env, status_file=tmp_path / "s.json", sink=None, gemini_sink=None, clock=lambda: 0,
                           recall=False, gemini=object())
     assert (c.thinking, c.effort, c.effort_for("private"), c.effort_for("summary")) == \
-        ("adaptive", "medium", "medium", None)
+        ("adaptive", "medium", "medium", "low")
+    assert c.thinks("private") and not c.thinks("summary")
 
 
 # --- her calls through the client, on their models --------------------------------------------------------------
