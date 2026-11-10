@@ -91,7 +91,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v6.3 | Her: the face, the voice and the accounts; her private chat and Telegram | ✅ completed | `v6.3.0` (2026-11-08) |
 | v6.4 | Agora meets her | ✅ completed | `v6.4.0` (2026-11-08) |
 | v6.5 | Her photos on fal.ai: the owner's switch, the filter off | ✅ completed | `v6.5.0` (2026-11-10) |
-| v7.1 | The Claude engine for a persona: answers on Sonnet, the background on Haiku | ⏳ planned | — |
+| v7.1 | The Claude engine for a persona: answers on Sonnet, the background on Haiku | ✅ completed | `v7.1.0` (2026-11-11) |
 | v7.2 | The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес | ⏳ planned | — |
 | v7.3 | Кіра on Claude | ⏳ planned | — |
 | v7.4 | Устина on Claude | ⏳ planned | — |
@@ -3935,7 +3935,7 @@ The owner, 2026-11-08: «зроби fal.ai перемикання на цю мо
 
 ## v7 — Claude for everyone: every agent on the owner's subscription
 
-**Status:** ⏳ planned.
+**Status:** 🔄 in progress — v7.1 released (`v7.1.0`, 2026-11-11).
 
 The owner, 2026-11-10: «заведи нову версію перед 7. щоб перевести всіх агентів ан Anthropic SDK і моделі Haiku +
 Sonet на мому плані як зараз агент Клод. Почати можна зі всіх крім Кіри і Устини а поті одна за одною ці дві.»
@@ -3984,7 +3984,11 @@ turn-taking (`REPLY_DELAY_S`, `FALLBACK_S`) is named there.
 
 ### v7.1 — The Claude engine for a persona: answers on Sonnet, the background on Haiku
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v7.1.0` on 2026-11-11. AGORA-238–241 on branch `v7.1-claude-engine`; with the owner's
+decisions during the phase: thinking (`CLAUDE_THINKING`, `CLAUDE_EFFORT`), no thinking on Haiku and 4096 tokens of headroom
+(a 5.5 model thinks whatever it is told), the CLI's error result read (a refusal, a 429), and the speed and the cache measured
+against Gemini (the execution report); the code review's 8 fixes. AGORA-241's dev run waived by the owner («релізь 7.1»):
+no agent moves in this phase, so the room's live checks are v7.2's.
 
 **Goal:** one line of an agent's TOML, `engine = "claude-sdk"`, moves every language-model call of a persona, the cat
 or Hermes to Claude on the subscription; an agent left on `gemini` is as before.
