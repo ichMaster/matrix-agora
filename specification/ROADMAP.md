@@ -1,6 +1,6 @@
 # Roadmap — matrix-agora
 
-Twelve self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, her reading and thoughts, and a backup model for her private chat when Gemini blocks) → **v6** Устина, a second companion (Кіра's code with her own name, canon, life, face and voice: her first version, the code, then her, then Agora meets her, then her photos on fal.ai) → **v7** Claude for everyone (every agent on the owner's subscription: the engine, then the room, then Устина, then Кіра) → **v8** Лілі (the Lumi bridge: when named, then under the full rules) → **v9** Applications (the panel's System and Applications; Telegram as an application) → **v10** Theatre (plays on the Stage, recorded by Hermes) → **v11** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Twelve self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, her reading and thoughts, and a backup model for her private chat when Gemini blocks) → **v6** Устина, a second companion (Кіра's code with her own name, canon, life, face and voice: her first version, the code, then her, then Agora meets her, then her photos on fal.ai) → **v7** Claude for everyone (every agent on the owner's subscription: the engine, then the room, then Кіра, then Устина) → **v8** Лілі (the Lumi bridge: when named, then under the full rules) → **v9** Applications (the panel's System and Applications; Telegram as an application) → **v10** Theatre (plays on the Stage, recorded by Hermes) → **v11** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
 **Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v11→11), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
@@ -93,8 +93,8 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v6.5 | Her photos on fal.ai: the owner's switch, the filter off | ✅ completed | `v6.5.0` (2026-11-10) |
 | v7.1 | The Claude engine for a persona: answers on Sonnet, the background on Haiku | ⏳ planned | — |
 | v7.2 | The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес | ⏳ planned | — |
-| v7.3 | Устина on Claude | ⏳ planned | — |
-| v7.4 | Кіра on Claude | ⏳ planned | — |
+| v7.3 | Кіра on Claude | ⏳ planned | — |
+| v7.4 | Устина on Claude | ⏳ planned | — |
 | v8.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v8.2 | Лілі under the full rules | ⏳ planned | — |
 | v9.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -3945,15 +3945,17 @@ Claude himself stays on Opus. What has no Anthropic counterpart stays where it i
 Кіра and Устина only — Anthropic has no embeddings endpoint), the photos and videos (Google's image models, fal.ai,
 VEED), hearing (Deepgram) and the voice (ElevenLabs); the companions' backup for their private chats stays on
 NovelAI. The engine is one line of an agent's TOML, so every phase keeps the way back to Gemini. The room first,
-then Устина, then Кіра, each in a phase of her own. Inserted before Лілі on 2026-11-10: Лілі moved to v8,
+then Кіра, then Устина (the owner, 2026-11-10: «навпаки» — decision 2), each in a phase of her own. Inserted before Лілі on 2026-11-10: Лілі moved to v8,
 Applications to v9, the Theatre to v10 and Кіра's inner life to v11. Depends on: v6.
 
-**The owner's open decisions** (asked before v7.1's issues):
+**The owner's decisions** (asked before v7.1's issues; when he started v7.1 without answering, the proposals became
+the defaults, and he then answered the second):
 1. **At the subscription's limit.** Claude falls silent until the reset (v4.4). Proposed for the others: an agent on
    Claude falls back to Gemini until the reset (`CLAUDE_LIMIT_FALLBACK=gemini`, shown in the panel), so the room and
    the private chats never go silent; `silent` makes them wait as Claude does.
-2. **The companions' order.** Proposed: Устина (v7.3) before Кіра (v7.4) — her chat is the younger one, and Кіра's
-   holds the most of the Gemini-specific machinery; swapping the two phases changes nothing else.
+2. **The companions' order.** Proposed: Устина before Кіра. **Decided (the owner, 2026-11-10: «Устина переходить
+   раніше за Кіру — навпаки»):** Кіра first (v7.3), then Устина (v7.4) — Кіра's chat carries the Gemini-specific
+   machinery (v5.13–v5.27), so it is rebuilt for Claude on her, and Устина takes what that phase taught.
 3. **The cat's answers** on Haiku, not Sonnet: his lines are at most `CAT_MAX_WORDS` words.
 
 **Risks, checked in each phase's manual DoD:**
@@ -3965,7 +3967,7 @@ Applications to v9, the Theatre to v10 and Кіра's inner life to v11. Depends
 - The persons believe they are human (VISION): no prompt may say otherwise, and a reply that says it is dropped
   (`outs_a_persona`); on Claude the owner checks it by hand in every phase.
 - Claude declines what Gemini blocked, and some of what it let pass: in a private chat a decline goes the backup's
-  way (v7.3).
+  way (v7.3, Кіра first).
 
 **How much slower** (the owner, 2026-11-10: «треба буде потім зробити заміри наскільки повільніше стали агенти»,
 «додай це до версії»). Every phase that moves an agent measures its answer time before and after the switch, from
@@ -4054,54 +4056,59 @@ the env file, no forbidden variable), the usage rows.
 **Tests:** the roster (their engine), the compose test (their image and env files, no forbidden variable), the
 turn-taking pins unchanged.
 
-### v7.3 — Устина on Claude
+### v7.3 — Кіра on Claude
 
 **Status:** ⏳ planned.
 
-**Goal:** Устина's Agora and her private chat run on Claude — her answers and her writing first on Sonnet, her
-background on Haiku; what Claude declines goes to her backup on NovelAI.
+**Goal:** Кіра's Agora and her private chat run on Claude — her answers and her writing first on Sonnet in place of
+Gemini 3.1 Pro, her background on Haiku; what Claude declines goes to her backup on NovelAI.
 
 **Why:** her private chat holds the machinery built around Gemini's blocks (v5.13–v5.24): a block's stage and reason,
-the switch to the backup, `blocked`, the scan. Claude does not block a prompt; it declines in its answer.
+the switch to the backup, `blocked`, the scan. Claude does not block a prompt; it declines in its answer. She is the
+first companion to move (the owner, 2026-11-10), so the machinery is rebuilt for Claude on her.
 
 **Tasks:**
-- Her TOML `engine = "claude-sdk"`; her topics, talk summaries, facts, today block, events, thoughts and her mood's
-  reading on Haiku; her photo and video lines as before — the images are made by Google and fal.
+- Her TOML `engine = "claude-sdk"`; `GEMINI_REPLY_MODEL` no longer read for her; her topics, talk summaries, facts,
+  today block, events, thoughts and her mood's reading on Haiku; her photo and video lines as before — the images are
+  made by Google and fal (their makers no longer wait for a Gemini client as `self.llm`).
 - A decline on Claude is a block at the answer stage: the backup answers, the exchange is `blocked`, the ⚙️ line says
   so; many declines switch her to the backup as many blocks do (v5.21); her `/gemini` becomes `/claude`.
 - The scan and its softened summaries (v5.24) are off for her — there are no prompt-stage blocks; a `blocked` line or
   fact never reaches Claude's prompt, as it never reached Gemini's.
 - Her recall's embeddings on Gemini.
+- Her places and two clocks, her nights at the telescope, her memory by time and her layered talk on Haiku — the
+  summaries still written as her own memory (`HUMAN_MEMORY`).
+- The owner's switches for her (`FALLBACK_ROUTE`, `TRACE_CALLS`, `PRIVATE_HISTORY_HOURS` and the rest, in
+  `server/kira.env` and the panel) reviewed with him, none reset.
 - Her private canon read once more for Claude: its length, and what Claude may decline.
 
 **DoD:**
 - (Manual, owner) A day of her private chat and her Telegram on Claude: her voice and her character, her photos and
   videos, her writing first; what Claude declines goes to the backup with the ⚙️ line; she never says she is a model.
-- Her answer time on Claude against her week on Gemini, in the private chat and in Agora apart (§v7 How much
+- Her answer time on Sonnet against her week on Gemini 3.1 Pro, in the private chat and in Agora apart (§v7 How much
   slower), in the execution report.
 
 **Tests:** a decline → the backup's route and `blocked`; the scan off on Claude; no `blocked` line in Claude's prompt;
-her TOML.
+her photos on Claude; her TOML.
 
-### v7.4 — Кіра on Claude
+### v7.4 — Устина on Claude
 
 **Status:** ⏳ planned.
 
-**Goal:** Кіра last, the same way, with what v7.3 taught: her Agora and her private chat on Claude — her answers on
+**Goal:** Устина last, the same way, with what v7.3 taught: her Agora and her private chat on Claude — her answers on
 Sonnet in place of Gemini 3.1 Pro, her background on Haiku, her backup on NovelAI.
 
 **Tasks:**
-- Her TOML `engine = "claude-sdk"`; `GEMINI_REPLY_MODEL` no longer read for her; the owner's switches for her
-  (`FALLBACK_ROUTE`, `TRACE_CALLS`, `PRIVATE_HISTORY_HOURS` and the rest, in `server/kira.env` and the panel) reviewed
-  with him, none reset.
-- What v7.3 changed for Устина, for her: a decline to the backup, the scan off, nothing `blocked` in Claude's prompt.
-- Her places and two clocks, her nights at the telescope, her memory by time and her layered talk on Haiku — the
-  summaries still written as her own memory (`HUMAN_MEMORY`).
+- Her TOML `engine = "claude-sdk"`; her own character (v6.5.1: her `fillers`, `never_open`, `private_lead`) kept on
+  Claude; her switches (`server/ustyna.env` and the panel: her photo and video caps, `/photos fal|google`) reviewed with
+  the owner, none reset.
+- What v7.3 changed for Кіра, for her: a decline to the backup, the scan off, nothing `blocked` in Claude's prompt, her
+  photos and her guitar videos on Claude.
 - After her, Gemini is left for the embeddings and the images alone; ARCHITECTURE says so.
 
 **DoD:**
-- (Manual, owner) A day of her private chat and her Telegram on Claude, as for Устина in v7.3.
-- Her answer time on Sonnet against her week on Gemini 3.1 Pro, as Устина's in v7.3, in the execution report.
+- (Manual, owner) A day of her private chat and her Telegram on Claude, as for Кіра in v7.3.
+- Her answer time on Sonnet against her week on Gemini 3.1 Pro, as Кіра's in v7.3, in the execution report.
 
 **Tests:** her TOML; v7.3's pins for her.
 
