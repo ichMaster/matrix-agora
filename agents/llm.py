@@ -28,6 +28,9 @@ THINK_MAX_TOKENS = 16384  # the cap counts the thinking too: room for it and a ~
 THINKING_MODELS = frozenset({"gemini-3.1-pro-preview"})
 REPLY_TIMEOUT_S = 90  # v5.25 (the owner, 2026-11-04): an answer's call, at most so long
 REPLY_TRIES = 2       # … tried once more when it hangs
+# 2026-11-10 (the owner: «роби»): a thinking call (a summary, a digest) hung for hours on Pro and held up her idle
+# loop — no writing first, no events, no summary; the longest seen took 95 s
+THINK_TIMEOUT_S = 180
 EMBED_MODEL = "gemini-embedding-001"  # v5.8: the archive's meaning search (the owner, 2026-10-25: Gemini's)
 EMBED_DIM = 768
 
@@ -167,16 +170,16 @@ class GeminiClient:
         self._report(kind, getattr(resp, "usage_metadata", None), True, model)
         return text, finish_of(resp)
 
-    async def _within(self, call, kind: str):
-        """v5.25 (the owner, 2026-11-04: «роби обидва») — an answer's call to Gemini, at most `REPLY_TIMEOUT_S`,
-        tried once more when it hangs (on 2026-11-04 at 19:28 one took 194 s on a bad network); raises
-        `TimeoutError` when the last try hangs too. `call` makes a fresh request each time."""
+    async def _within(self, call, kind: str, timeout_s: float | None = None):
+        """v5.25 (the owner, 2026-11-04: «роби обидва») — an answer's call to Gemini, at most `REPLY_TIMEOUT_S`
+        (a thinking call: `timeout_s`), tried once more when it hangs (on 2026-11-04 at 19:28 one took 194 s on a bad
+        network); raises `TimeoutError` when the last try hangs too. `call` makes a fresh request each time."""
+        timeout_s = timeout_s or REPLY_TIMEOUT_S
         for attempt in range(1, REPLY_TRIES + 1):
             try:
-                return await asyncio.wait_for(call(), timeout=REPLY_TIMEOUT_S)
+                return await asyncio.wait_for(call(), timeout=timeout_s)
             except TimeoutError:
-                log.warning("gemini %s timed out after %d s (try %d of %d)", kind, REPLY_TIMEOUT_S, attempt,
-                            REPLY_TRIES)
+                log.warning("gemini %s timed out after %d s (try %d of %d)", kind, timeout_s, attempt, REPLY_TRIES)
         raise TimeoutError
 
     async def reply(
@@ -299,10 +302,11 @@ class GeminiClient:
                     level: str | None = None) -> str | None:
         """v5.1 — one call with thinking on (a Pro model rejects a zero budget): the answer is the non-thought text;
         the usage line names this call's model. `level` (`low`, …) bounds the thinking — the chat with the owner
-        answers in seconds, the digest thinks at the model's default. None on failure or an empty answer."""
+        answers in seconds, the digest thinks at the model's default. None on failure or an empty answer. At most
+        `THINK_TIMEOUT_S`, tried once more when it hangs (2026-11-10)."""
         self._start()
         try:
-            resp = await self._client.aio.models.generate_content(
+            resp = await self._within(lambda: self._client.aio.models.generate_content(
                 model=model,
                 contents=contents,
                 config=types.GenerateContentConfig(
@@ -313,7 +317,7 @@ class GeminiClient:
                         thinking_level=getattr(types.ThinkingLevel, level.upper()) if level else None),
                     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                 ),
-            )
+            ), kind, THINK_TIMEOUT_S)
         except Exception as exc:  # noqa: BLE001 — any provider failure means silence
             log.error("gemini think failed: %s", type(exc).__name__)
             self._report(kind, None, False, model)

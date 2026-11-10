@@ -49,6 +49,18 @@ def test_an_answer_that_hangs_twice_is_a_failure_never_a_third_call(monkeypatch,
     assert models.calls == 2 and seen == [("private", False)] and "gemini reply failed: TimeoutError" in caplog.text
 
 
+def test_a_thinking_call_that_hangs_is_asked_once_more_then_fails_never_holding_the_loop(monkeypatch, caplog):
+    # 2026-11-10: Устина's session summary on Pro hung for three hours and held up her idle loop
+    llm, seen = pro(monkeypatch, models := Hanging(1))
+    monkeypatch.setattr(llm_mod, "THINK_TIMEOUT_S", 0.05)
+    assert asyncio.run(llm.think("Ich: привіт", "Підсумуй.", kind="summary", level="low")) == "Привіт!"
+    assert models.calls == 2 and seen == [("summary", True)] and "gemini summary timed out after" in caplog.text
+    caplog.set_level(logging.ERROR)
+    llm, seen = pro(monkeypatch, models := Hanging(5))
+    assert asyncio.run(llm.think("Ich: привіт", "Підсумуй.", kind="summary")) is None
+    assert models.calls == 2 and seen == [("summary", False)] and "gemini think failed: TimeoutError" in caplog.text
+
+
 def bot(monkeypatch, replies):
     """A bot whose `_call` gives `replies` in turn and records each try's body."""
     monkeypatch.setattr(tg_mod, "SEND_BACKOFF_S", (0, 0))
