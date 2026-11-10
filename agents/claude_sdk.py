@@ -738,7 +738,7 @@ class ClaudeClient(_Subscription):
             return (out, "stop") if isinstance(out, str) else out
         out = await self._query(kind, system, prompt, cap, answer=answer, toolset=toolset)
         if out is _LIMIT:
-            out = await self._instead(f"rate limit (until {self.status.muted_until})", gemini)
+            out = await self._instead(self._unavailable() or f"rate limit (until {self.status.muted_until})", gemini)
             return (out, "stop") if isinstance(out, str) else out
         return out
 
@@ -868,8 +868,10 @@ class ClaudeClient(_Subscription):
                         refusal_category(result))  # never a text: the classifier's label alone
             return None
         self._report(kind, model, usage, good and bool(text), cost, started)
-        if self.blocked or seen["refused"]:
-            return None
+        if self.blocked:
+            return _LIMIT  # code review v7.1 #4: the call that found it blocked takes decision 1, as every later one
+        if seen["refused"]:
+            return None  # this call's tools alone were wrong
         if seen["over_limit"]:
             self._mute_over_limit()
             log.warning("claude is over the subscription's limit — no extra usage, ever; muted until %s",

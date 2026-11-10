@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import os
 import stat
 from pathlib import Path
@@ -312,6 +313,16 @@ def test_an_api_key_source_blocks_every_later_call(tmp_path):
     assert run(c.reply("t", "s")) is None and c.blocked
     assert run(c.reply("t", "s")) is None and len(sdk.calls) == 1  # never called again
     assert json.loads((tmp_path / "ustyna.ratelimit.json").read_text())["auth"].startswith("blocked: ")
+
+
+def test_the_call_that_finds_it_blocked_goes_to_gemini_too(tmp_path, caplog):
+    """Code review v7.1 #4: that first call got neither Claude nor Gemini."""
+    caplog.set_level(logging.INFO)
+    bad = SystemMessage(subtype="init", data={"apiKeySource": "ANTHROPIC_API_KEY", "tools": []})
+    gemini = FakeGemini()
+    c, _ = client(tmp_path, FakeSDK([bad, result()]), fallback=gemini)
+    assert run(c.reply("t", "s")) == ("gemini answer", "stop") and c.blocked
+    assert "on gemini: claude blocked (apiKeySource=" in caplog.text
 
 
 def test_an_extra_tool_refuses_that_call_only(tmp_path):
