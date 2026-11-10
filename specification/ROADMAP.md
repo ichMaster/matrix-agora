@@ -4037,9 +4037,34 @@ the env file, no forbidden variable), the usage rows.
 
 **Status:** ⏳ planned.
 
-**Goal:** every agent but Кіра and Устина runs on Claude; Claude himself stays on Opus.
+**Goal:** every agent but Кіра and Устина runs on Claude, its answers from a CLI started ahead; Claude himself stays
+on Opus.
+
+**The answer from a CLI started ahead** (the owner, 2026-11-11: «перероби на ClaudeSDKClient» — then, of the three
+ways, «Canon in system», as v7.2's first task). Measured 2026-11-10/11: a new CLI per call (`query()`) costs ~1.4 s of
+its start in every call — 2.2–2.4 s against 0.9 s in a process already open. One long `ClaudeSDKClient` session for
+every call is not safe: a new `session_id` still knew the previous call (the context is the process's), `/clear`
+empties it but the model names it aloud («після команди /clear…» — no persona may), `set_model` is ignored, and the
+CLI reads its system prompt once, at its start. So a process is started ahead and takes exactly one call, then
+closes, and the next is started in the background; ~200 MB a waiting process (the host has ~9 GB free).
 
 **Tasks:**
+- **The waiting process** (`ClaudeClient`, `agents/claude_sdk.py`): for the voice's calls (`VOICE_KINDS`, on
+  `CLAUDE_REPLY_MODEL`, at their effort and cap) one `ClaudeSDKClient` connected ahead, its system prompt the
+  persona's **slow part** — her canon and her life — and the call's own part — everything else `build_instruction`
+  writes (place and time, memories, plans, today, mood, what she recalls, the rules) — in the message before the
+  transcript; after its one call it is closed and a new one started. A call whose slow part, model, effort or cap
+  differs from the waiting process's goes the cold way (`query()`, as v7.1) and the next process is started with the
+  new ones; the background calls stay cold. The checks of every call as before: the init's `apiKeySource` (now at
+  the connect), the rate-limit events, the error result, the decline, the semaphore, the timeout (a hung connect or
+  call is closed and the call goes cold once), the prompt files 0600 and removed. On a waiting process's failure the
+  call goes cold, never silent for that reason.
+- **The prompt in two parts** — the slow part and the call's own part — returned by `build_prompt` beside the whole
+  (Gemini gets the whole, as now); the persona invariants unchanged; part of v7.5 moved forward (v7.5 then orders
+  the call's own part by how often each layer changes). The canon stays in the system prompt, so she keeps it as her
+  own.
+- Its numbers: the usage line's `latency_ms` from the call to the result (the connect ahead is not the call's); a log
+  line names a warm or a cold call, never a text; Analytics · Speed shows the two apart.
 - `engine = "claude-sdk"` in their TOMLs; their compose services on the Claude image with `server/subscription.env`.
   None of them has `recall`, so none needs Gemini for text.
 - The six members' answers on Haiku (decision 3): `CLAUDE_REPLY_MODEL=haiku` in the shared `server/.env`, which
@@ -4061,10 +4086,13 @@ the env file, no forbidden variable), the usage rows.
 - (Manual, owner) A day of the room on Claude: every member speaks in character and in Ukrainian, no one says they are
   a model, the cat stays a cat, Hermes's digest arrives; the subscription holds, or decision 1 works.
 - Their day memories, plans, today blocks and events are written on Haiku.
-- Each member's answer time on Claude against its week on Gemini — the median and the p95 — in the execution report.
+- Each member's answer time on Claude against its week on Gemini — the median and the p95 — in the execution report,
+  warm and cold apart; a warm answer about 1.4 s faster than a cold one.
 
-**Tests:** the roster (their engine), the compose test (their image and env files, no forbidden variable), the
-turn-taking pins unchanged.
+**Tests:** the waiting process (one call each, closed after it, the next started; a changed slow part, model, effort
+or cap goes cold; a failed or hung connect goes cold; the checks of every call kept; never two calls in one
+process), the prompt's two parts (nothing lost: slow + own = the whole's layers), the roster (their engine), the
+compose test (their image and env files, no forbidden variable), the turn-taking pins unchanged.
 
 ### v7.3 — Кіра on Claude
 
