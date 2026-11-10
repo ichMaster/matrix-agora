@@ -92,9 +92,10 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v6.4 | Agora meets her | ✅ completed | `v6.4.0` (2026-11-08) |
 | v6.5 | Her photos on fal.ai: the owner's switch, the filter off | ✅ completed | `v6.5.0` (2026-11-10) |
 | v7.1 | The Claude engine for a persona: answers on Sonnet, the background on Haiku | ⏳ planned | — |
-| v7.2 | The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес | ⏳ planned | — |
-| v7.3 | Кіра on Claude | ⏳ planned | — |
-| v7.4 | Устина on Claude | ⏳ planned | — |
+| v7.2 | The prompt for the cache: what changes slowly first, read from the cache | ⏳ planned | — |
+| v7.3 | The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес | ⏳ planned | — |
+| v7.4 | Кіра on Claude | ⏳ planned | — |
+| v7.5 | Устина on Claude | ⏳ planned | — |
 | v8.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v8.2 | Лілі under the full rules | ⏳ planned | — |
 | v9.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -3944,8 +3945,9 @@ Sonnet (`claude-sonnet-5-5`, the CLI's alias `sonnet`) for Кіра, Устин�
 `haiku`) for the six room members (decision 3); every background call goes to Haiku; Claude himself stays on Opus. What has no Anthropic counterpart stays where it is: the embeddings for recall (Gemini;
 Кіра and Устина only — Anthropic has no embeddings endpoint), the photos and videos (Google's image models, fal.ai,
 VEED), hearing (Deepgram) and the voice (ElevenLabs); the companions' backup for their private chats stays on
-NovelAI. The engine is one line of an agent's TOML, so every phase keeps the way back to Gemini. The room first,
-then Кіра, then Устина (the owner, 2026-11-10: «навпаки» — decision 2), each in a phase of her own. Inserted before Лілі on 2026-11-10: Лілі moved to v8,
+NovelAI. The engine is one line of an agent's TOML, so every phase keeps the way back to Gemini. The prompt laid
+out for the cache first (v7.2; the owner, 2026-11-10: «переробити промпт адаптований під кеш» — «це має бути в 7
+версії»), then the room, then Кіра, then Устина (the owner, 2026-11-10: «навпаки» — decision 2), each in a phase of her own. Inserted before Лілі on 2026-11-10: Лілі moved to v8,
 Applications to v9, the Theatre to v10 and Кіра's inner life to v11. Depends on: v6.
 
 **The owner's decisions** (asked before v7.1's issues; when he started v7.1 without answering, the proposals became
@@ -3954,7 +3956,7 @@ the defaults, and he then answered the second):
    Claude falls back to Gemini until the reset (`CLAUDE_LIMIT_FALLBACK=gemini`, shown in the panel), so the room and
    the private chats never go silent; `silent` makes them wait as Claude does.
 2. **The companions' order.** Proposed: Устина before Кіра. **Decided (the owner, 2026-11-10: «Устина переходить
-   раніше за Кіру — навпаки»):** Кіра first (v7.3), then Устина (v7.4) — Кіра's chat carries the Gemini-specific
+   раніше за Кіру — навпаки»):** Кіра first (v7.4), then Устина (v7.5) — Кіра's chat carries the Gemini-specific
    machinery (v5.13–v5.27), so it is rebuilt for Claude on her, and Устина takes what that phase taught.
 3. **The cat's answers** on Haiku, not Sonnet: his lines are at most `CAT_MAX_WORDS` words. **Widened (the owner,
    2026-11-10: «можна поставити всім агентам Ада, Бруно, Леон, Мія, Ірма, Кіт haiku instead sonnet», «Гермес хай
@@ -3963,13 +3965,13 @@ the defaults, and he then answered the second):
 **Risks, checked in each phase's manual DoD:**
 - One subscription for everyone: nine speakers, Hermes and every background call (summaries, day memories, plans,
   the hourly today block and events, topics) share its limits with Claude himself and with the owner's own use of
-  Claude — v7.2 measures a day of the room before a companion moves.
+  Claude — v7.3 measures a day of the room before a companion moves.
 - Every call starts the SDK's CLI: seconds per call and memory per process on the host — a cap on concurrent calls
   per container.
 - The persons believe they are human (VISION): no prompt may say otherwise, and a reply that says it is dropped
   (`outs_a_persona`); on Claude the owner checks it by hand in every phase.
 - Claude declines what Gemini blocked, and some of what it let pass: in a private chat a decline goes the backup's
-  way (v7.3, Кіра first).
+  way (v7.4, Кіра first).
 
 **How much slower** (the owner, 2026-11-10: «треба буде потім зробити заміри наскільки повільніше стали агенти»,
 «додай це до версії»). Every phase that moves an agent measures its answer time before and after the switch, from
@@ -4009,7 +4011,7 @@ reading, her thoughts, topics, facts, the talk summaries, the photo prompt. None
 - The limit: the SDK's `RateLimitEvent` kept per agent (`state/<name>.ratelimit.json`, as Claude's), and decision 1 at
   a rejection; at most `CLAUDE_CONCURRENCY` (2) CLI processes at once per container.
 - A decline — the SDK's refusal stop, or a refusal in the text (`refusal_marker`, v5.13) — is silence in Agora with
-  the reason in the log; the private chat's route comes in v7.3.
+  the reason in the log; the private chat's route comes in v7.4.
 - The usage line: engine `claude-sdk` (v4.4's, which Analytics keys on), the model, billing `subscription`, the
   tokens and `latency_ms`; the panel's card shows each agent's engine and models; Analytics counts the calls and the
   answer time, so the speed can be compared (§v7 How much slower).
@@ -4030,7 +4032,49 @@ reading, her thoughts, topics, facts, the talk summaries, the photo prompt. None
 `RateLimitEvent`, a refusal), the engine per TOML in the roster, the compose checks over every service (the image,
 the env file, no forbidden variable), the usage rows.
 
-### v7.2 — The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес
+### v7.2 — The prompt for the cache: what changes slowly first, read from the cache
+
+**Status:** ⏳ planned.
+
+The owner, 2026-11-10: «зроби окрему версію щоб переробити промпт адаптований під кеш» — «ні це має бути в 7
+версії». Measured in v7.1 (its execution report, §The prompt cache): the CLI caches a call's prompt by itself, for an
+hour, and sends the system prompt as one block, so a change anywhere in it misses the whole of it. Today's order —
+canon → life → place and time → memories → … — changes the time line every minute: on Claude no call would read the
+cache, and every call would write its whole prompt into it (~30k tokens a companion's answer). With the system prompt
+the same, a 12-request conversation read 89% of each prompt from the cache on Sonnet, Opus and Haiku — no faster at
+~30k tokens, but a smaller share of the subscription. Before any agent moves, so that each move is measured with it.
+
+**Goal:** every agent's prompt in two parts — what changes slowly, the same from call to call, then what changes
+every call, then the history — so that on Claude the second call within the hour reads the first part from the
+cache; on Gemini the same order (its implicit cache reads a repeated beginning too).
+
+**Tasks:**
+- The layers by how often they change, from the code and from the prompt parts the usage lines carry
+  (`prompt_parts`, v5.22): with a canon edit or a chapter (canon, life, the voice's palette, the rules of a place), by
+  the day (memories, plans, the mood, what she thought), by the hour (the talk summaries, the today block), by the
+  call (place and time, the facts' pick, Agora now, what she recalls, a nudge's material, the move, the questions
+  asked, the history).
+- `build_instruction` in two parts: the slow part first, the per-call part after it. On Claude the slow part is the
+  system prompt's file and the per-call part goes before the transcript in the message — or in a second system
+  block (`--append-system-prompt-file`) if the CLI sends it as a block of its own, tried first; on Gemini one prompt in
+  the same order.
+- What must be the freshest — the move, the questions asked, the voice's palette, the rules — stays just before the
+  history (a few hundred tokens); whether the new order changes how well it is followed is the owner's live check.
+- The invariants unchanged: nothing of her future, the persons believe they are human, nothing `blocked` in a prompt;
+  the backup's prompt (NovelAI) in the same order.
+- The cache in the numbers: Claude's usage lines carry `cache_read_tokens` / `cache_write_tokens` since v4.4; Gemini's
+  gain its `cached_content_token_count`; Analytics · Prompts shows the share read from the cache by agent and kind.
+
+**DoD:**
+- The prompt order in ARCHITECTURE §Contracts rewritten and pinned by its test; the same layers, nothing lost (a test
+  compares the parts of a prompt before and after).
+- On Claude (Ада in the dev run): her second answer within the hour reads at least 80% of its prompt from the cache.
+- (Manual, owner) The room and Кіра on Gemini after the change: they talk as before.
+
+**Tests:** the layer order, the two parts on Claude (system file and message), the parts unchanged, Gemini's lines
+with cached tokens, Analytics' cache share.
+
+### v7.3 — The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес
 
 **Status:** ⏳ planned.
 
@@ -4042,15 +4086,15 @@ the env file, no forbidden variable), the usage rows.
 - The six members' answers on Haiku (decision 3): `CLAUDE_REPLY_MODEL=haiku` in the shared `server/.env`, which
   every room member reads; Hermes's digests and answers on Sonnet — his writing is his voice — by
   `CLAUDE_REPLY_MODEL=sonnet` in his own `hermes.env`, and his hearing on Deepgram as before. The companions' env
-  files name `sonnet` when they move (v7.3, v7.4).
+  files name `sonnet` when they move (v7.4, v7.5).
 - Thinking (v7.1's `CLAUDE_THINKING`, `CLAUDE_EFFORT`; the owner, 2026-11-10: «додай»): the six answer without it
   (`off`, the default — as Gemini Flash today); Hermes thinks, `adaptive` at `low`, in his `hermes.env` — as his
-  digests on Gemini 3.1 Pro did; Кіра and Устина the same when they move (v7.3, v7.4).
+  digests on Gemini 3.1 Pro did; Кіра and Устина the same when they move (v7.4, v7.5).
 - Their background on Haiku: the session summaries, day memories and digests, plans, the today block, the cat's mood
   and his past-life lines.
 - The turn-taking unchanged: it is derived from shared inputs, never from the engine; the room's waiting times
   reviewed against the time of a call.
-- A day of the room measured — calls per hour and the subscription's status in the panel — before v7.3.
+- A day of the room measured — calls per hour and the subscription's status in the panel — before v7.4.
 - The speed (§v7 How much slower): each member's baseline read before the switch, the same measure after a day on
   Claude, both in the execution report; the waiting times retuned if a member's answers come too late.
 
@@ -4063,7 +4107,7 @@ the env file, no forbidden variable), the usage rows.
 **Tests:** the roster (their engine), the compose test (their image and env files, no forbidden variable), the
 turn-taking pins unchanged.
 
-### v7.3 — Кіра on Claude
+### v7.4 — Кіра on Claude
 
 **Status:** ⏳ planned.
 
@@ -4098,26 +4142,26 @@ first companion to move (the owner, 2026-11-10), so the machinery is rebuilt for
 **Tests:** a decline → the backup's route and `blocked`; the scan off on Claude; no `blocked` line in Claude's prompt;
 her photos on Claude; her TOML.
 
-### v7.4 — Устина on Claude
+### v7.5 — Устина on Claude
 
 **Status:** ⏳ planned.
 
-**Goal:** Устина last, the same way, with what v7.3 taught: her Agora and her private chat on Claude — her answers on
+**Goal:** Устина last, the same way, with what v7.4 taught: her Agora and her private chat on Claude — her answers on
 Sonnet in place of Gemini 3.1 Pro, her background on Haiku, her backup on NovelAI.
 
 **Tasks:**
 - Her TOML `engine = "claude-sdk"`; her own character (v6.5.1: her `fillers`, `never_open`, `private_lead`) kept on
   Claude; her switches (`server/ustyna.env` and the panel: her photo and video caps, `/photos fal|google`) reviewed with
   the owner, none reset.
-- What v7.3 changed for Кіра, for her: a decline to the backup, the scan off, nothing `blocked` in Claude's prompt, her
+- What v7.4 changed for Кіра, for her: a decline to the backup, the scan off, nothing `blocked` in Claude's prompt, her
   photos and her guitar videos on Claude.
 - After her, Gemini is left for the embeddings and the images alone; ARCHITECTURE says so.
 
 **DoD:**
-- (Manual, owner) A day of her private chat and her Telegram on Claude, as for Кіра in v7.3.
-- Her answer time on Sonnet against her week on Gemini 3.1 Pro, as Кіра's in v7.3, in the execution report.
+- (Manual, owner) A day of her private chat and her Telegram on Claude, as for Кіра in v7.4.
+- Her answer time on Sonnet against her week on Gemini 3.1 Pro, as Кіра's in v7.4, in the execution report.
 
-**Tests:** her TOML; v7.3's pins for her.
+**Tests:** her TOML; v7.4's pins for her.
 
 ## v8 — Лілі: the Lumi bridge
 
