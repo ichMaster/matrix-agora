@@ -7,6 +7,7 @@ The nio callbacks stay thin adapters; every decision lives in agents/logic.py.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
 import json
 import logging
@@ -3127,12 +3128,13 @@ class Agent:
         self._append_usage(lambda ts: fallback_usage_line(ts, self.cfg.localpart, kind, model, ok, latency_ms, parts))
 
     def record_sdk_usage(self, kind: str, model: str, usage: dict | None, ok: bool,
-                         reported_cost: float | None, latency_ms: int | None = None, blocked: str | None = None) -> None:
+                         reported_cost: float | None, latency_ms: int | None = None, blocked: str | None = None,
+                         warm: bool | None = None) -> None:
         """v4.4 — one line per Claude Agent SDK call: always `subscription`, never priced; v7.1: `blocked` on a
-        declined one."""
+        declined one; v7.2: `warm` on a voice call taken warm or cold."""
         parts = PROMPT_PARTS.get()
         self._append_usage(lambda ts: sdk_usage_line(ts, self.cfg.localpart, kind, model, usage, ok, reported_cost,
-                                                     latency_ms, parts, blocked))
+                                                     latency_ms, parts, blocked, warm))
 
     def _append_usage(self, build) -> None:
         if not self.trace_calls:
@@ -4490,7 +4492,16 @@ class Agent:
                 await self.summarize()
 
     async def shutdown(self, timeout_s: float = 20.0) -> None:
-        """The shutdown summary, bounded so Ctrl+C never hangs."""
+        """The shutdown summary, bounded so Ctrl+C never hangs; then (v7.2) the CLI started ahead closed."""
+        try:
+            await self._shutdown_summary(timeout_s)
+        finally:
+            close = getattr(self.llm, "close", None)
+            if close is not None:
+                with contextlib.suppress(Exception):
+                    await close()
+
+    async def _shutdown_summary(self, timeout_s: float) -> None:
         if not self.cfg.can("summary"):
             return
         try:

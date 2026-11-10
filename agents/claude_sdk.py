@@ -41,6 +41,7 @@ from agents.llm import (
 )
 from agents.logic import build_transcript
 from agents.responder import ANSWER_KINDS, Reply, Turn
+from agents.usage import PROMPT_SLOW
 
 log = logging.getLogger("agent.claude")
 
@@ -251,6 +252,12 @@ def _default_options():
     from claude_agent_sdk import ClaudeAgentOptions
 
     return ClaudeAgentOptions
+
+
+def _default_client():
+    from claude_agent_sdk import ClaudeSDKClient
+
+    return ClaudeSDKClient
 
 
 def guardian_server(source: guardian.Guardian):
@@ -582,6 +589,105 @@ def cli_error_kind(result: Any) -> str:
     return next((name for phrase, name in _CLI_ERRORS if phrase in line), "other" if line else "none")
 
 
+WARM_IDLE_S = 3600     # v7.2: a waiting CLI unused this long (its prompt cache's life) is closed, the next call cold
+WARM_CONNECT_S = 30    # a connect that takes longer is a failed one: the call it was for goes cold
+_END = object()        # the end of a warm call's answer
+
+
+class WarmCli:
+    """v7.2 (AGORA-243) — one CLI started ahead for exactly one call. Measured 2026-11-10/11: a new CLI per call costs
+    ~1.4 s of its start; one long session for every call is not safe (a new `session_id` still knew the previous call,
+    `/clear` is named aloud by the model, `set_model` is ignored, the system prompt is read once at the start). So its
+    worker task owns a `ClaudeSDKClient` from connect to disconnect — the SDK's client must stay in the task that
+    connected it — takes one message, streams its answer back, disconnects and ends. Its system prompt is the call's
+    slow part, in a 0600 file of its own, removed when it ends; `key` is what a call must match to take it."""
+
+    def __init__(self, key: tuple, options: Any, path: str | None, make_client: Callable[..., Any],
+                 now: Callable[[], float]) -> None:
+        self.key = key
+        self.born = now()
+        self._now = now
+        self._path = path
+        self._requests: asyncio.Queue = asyncio.Queue(maxsize=1)
+        self._taken = False
+        self._ready: asyncio.Future = asyncio.get_running_loop().create_future()
+        self._task = asyncio.create_task(self._run(options, make_client))
+        self._task.add_done_callback(self._forget_file)  # however it ends — even cancelled before it ran
+
+    def _forget_file(self, _task: Any = None) -> None:
+        if self._path:
+            with contextlib.suppress(OSError):
+                os.unlink(self._path)
+
+    def ready(self) -> bool:
+        """Connected and waiting: a call may take it (one still connecting is left for the next call)."""
+        return self._ready.done() and self._ready.result() is True and not self._task.done()
+
+    def stale(self) -> bool:
+        return self._now() - self.born > WARM_IDLE_S or self._task.done()
+
+    def close(self) -> None:
+        self._task.cancel()
+
+    async def aclose(self) -> None:
+        """Closed and waited for: its CLI disconnected and its prompt file removed."""
+        self._task.cancel()
+        with contextlib.suppress(BaseException):
+            await asyncio.wait_for(asyncio.shield(self._task), 15)
+
+    async def _run(self, options: Any, make_client: Callable[..., Any]) -> None:
+        client, out = None, None
+        try:
+            client = make_client(options=options)
+            await asyncio.wait_for(client.connect(), WARM_CONNECT_S)
+            self._ready.set_result(True)
+            prompt, out = await self._requests.get()
+            await client.query(prompt)
+            async for msg in client.receive_response():
+                out.put_nowait(msg)
+            out.put_nowait(_END)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — a failed CLI fails its one call, which then goes cold
+            log.warning("claude warm cli failed: %s", type(exc).__name__)
+            if out is not None:
+                out.put_nowait(exc)
+        finally:
+            if not self._ready.done():
+                self._ready.set_result(False)
+            self._forget_file()  # first, before any await: a cancel while it disconnects never leaves the file
+            if client is not None:
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(client.disconnect(), 10)
+
+    def query(self, *, prompt: str, options: Any = None):
+        """Its one call, shaped as the SDK's `query()`: the answer's messages; closing it early ends the CLI. A second
+        call is refused: a CLI keeps its context, so it never takes two."""
+        if self._taken:
+            raise RuntimeError("a CLI started ahead takes one call")
+        self._taken = True
+        out: asyncio.Queue = asyncio.Queue()
+        self._requests.put_nowait((prompt, out))
+        task = self._task
+
+        async def answer():
+            done = False
+            try:
+                while True:
+                    item = await out.get()
+                    if item is _END:
+                        done = True
+                        return
+                    if isinstance(item, BaseException):
+                        done = True
+                        raise item
+                    yield item
+            finally:
+                if not done:
+                    task.cancel()
+        return answer()
+
+
 def split_prompt(system: str | None, slow: str | None) -> tuple[str, str] | None:
     """v7.2 (AGORA-242) — a call's system prompt as its slow part and the rest: `(slow, rest)` when `system` starts
     with `slow` (the rest without the blank line that joined them), else None."""
@@ -646,7 +752,8 @@ class ClaudeClient(_Subscription):
     def __init__(self, *, reply_model: str, background_model: str, config_dir: str, status_file: Path,
                  sink: Callable[..., None] | None, clock: Callable[[], int] = lambda: int(time.time() * 1000),
                  concurrency: int = CONCURRENCY, limit_fallback: str = "gemini", fallback: Any = None,
-                 embedder: Any = None, query=None, options=None, thinking: str = "off", effort: str = "low") -> None:
+                 embedder: Any = None, query=None, options=None, thinking: str = "off", effort: str = "low",
+                 sdk_client=None) -> None:
         super().__init__(model=background_model, status_file=status_file, clock=clock)
         self.reply_model = reply_model
         self.status.model = reply_model  # the panel's card names the answers' model
@@ -663,6 +770,10 @@ class ClaudeClient(_Subscription):
         self.effort = effort if effort in EFFORTS else "low"
         self._query_fn = query
         self._options = options
+        self._client_cls = sdk_client  # v7.2: the SDK's `ClaudeSDKClient` (tests: a fake)
+        self._warm: WarmCli | None = None
+        # a test that fakes `query` and no client never starts a real CLI ahead
+        self._warm_on = sdk_client is not None or query is None
 
     def _allowed(self, toolset: str | None) -> list[str]:
         return list(SEARCH_TOOLS) if toolset == "search" else []
@@ -784,15 +895,13 @@ class ClaudeClient(_Subscription):
         return str(path)
 
     def _report(self, kind: str, model: str, usage: Any, ok: bool, cost: Any, started: float,
-                blocked: str | None = None) -> None:
+                blocked: str | None = None, warm: bool | None = None) -> None:
         if self._sink is None:
             return
         latency = round((self._mono() - started) * 1000)
+        extra = {k: v for k, v in (("blocked", blocked), ("warm", warm)) if v is not None}  # a 5-argument sink keeps
         try:
-            if blocked:
-                self._sink(kind, model, usage, ok, cost, latency_ms=latency, blocked=blocked)
-            else:
-                self._sink(kind, model, usage, ok, cost, latency_ms=latency)
+            self._sink(kind, model, usage, ok, cost, latency_ms=latency, **extra)
         except Exception:
             log.exception("usage accounting failed")
 
@@ -819,28 +928,90 @@ class ClaudeClient(_Subscription):
             options = make_options(**client_options(
                 path, model=model, max_output_tokens=cap, config_dir=self.config_dir, toolset=toolset,
                 effort=effort, think=think))
+            # v7.2 (AGORA-243): a voice call whose slow part splits its prompt may go warm, through the CLI started
+            # ahead for its key; a warm call that fails or hangs goes cold once (the next try), never silent for it
+            split = split_prompt(system, PROMPT_SLOW.get()) if kind in VOICE_KINDS and toolset is None else None
+            key = (split[0], model, effort, think, cap) if split else None
+            warm = self._take_warm(key)
             async with (self._voice_gate if kind in VOICE_KINDS else self._gate):
                 for attempt in range(1, REPLY_TRIES + 1):
+                    hot = warm is not None and attempt == 1
                     started = self._mono()
+                    call = (warm.query, f"{split[1]}\n\n{prompt}" if split[1] else prompt, None) if hot else \
+                        (query, prompt, options)
                     try:
-                        seen = await asyncio.wait_for(self._consume(query, prompt, options, toolset), timeout_s)
+                        seen = await asyncio.wait_for(self._consume(call[0], call[1], call[2], toolset), timeout_s)
                     except TimeoutError:
-                        log.warning("claude %s timed out after %d s (try %d of %d)", kind, timeout_s, attempt,
-                                    REPLY_TRIES)
-                        self._report(kind, model, None, False, None, started)
+                        log.warning("claude %s timed out after %d s (try %d of %d%s)", kind, timeout_s, attempt,
+                                    REPLY_TRIES, ", warm" if hot else "")
+                        self._report(kind, model, None, False, None, started, warm=hot if key else None)
                         continue
                     except Exception as exc:  # noqa: BLE001 — any SDK or CLI failure means silence
+                        self._report(kind, model, None, False, None, started, warm=hot if key else None)
+                        if hot:  # the CLI started ahead failed: this call goes cold once
+                            log.warning("claude %s warm failed: %s — cold", kind, type(exc).__name__)
+                            continue
                         log.error("claude call failed: %s", type(exc).__name__)
-                        self._report(kind, model, None, False, None, started)
                         self._failed(type(exc).__name__)
                         return None
-                    return self._judge(kind, model, seen, started, answer)
+                    if key:
+                        log.info("claude %s %s", kind, "warm" if hot else "cold")  # never a text
+                    return self._judge(kind, model, seen, started, answer, warm=hot if key else None)
                 self._failed("timeout")
                 return None
         finally:
             if path:
                 with contextlib.suppress(OSError):
                     os.unlink(path)
+            if key:
+                self._prewarm(key, make_options, model, effort, think, cap)
+
+    # --- v7.2: the CLI started ahead ------------------------------------------------------------------------------
+    def _take_warm(self, key: tuple | None) -> WarmCli | None:
+        """The waiting CLI when it is ready for this very key — then it is taken (one call each); one for another
+        key, or past its life, is closed; one still connecting is left for the next call."""
+        warm = self._warm
+        if warm is None or key is None:
+            return None
+        if warm.key != key or warm.stale():
+            warm.close()
+            self._warm = None
+            return None
+        if not warm.ready():
+            return None
+        self._warm = None
+        return warm
+
+    def _prewarm(self, key: tuple, make_options: Callable[..., Any], model: str, effort: str, think: bool,
+                 cap: int) -> None:
+        """After a voice call, the CLI for the next: started with this call's key, unless one for it already waits."""
+        if not self._warm_on:
+            return
+        if self._warm is not None and self._warm.key == key and not self._warm.stale():
+            return
+        if self._warm is not None:
+            self._warm.close()
+            self._warm = None
+        try:
+            make_client = self._client_cls or _default_client()
+            path = self._prompt_file(key[0])
+        except (ImportError, OSError) as exc:
+            log.warning("claude warm cli not started: %s", type(exc).__name__)
+            return
+        try:
+            options = make_options(**client_options(path, model=model, max_output_tokens=cap,
+                                                    config_dir=self.config_dir, effort=effort, think=think))
+            self._warm = WarmCli(key, options, path, make_client, time.monotonic)
+        except Exception as exc:  # noqa: BLE001 — no waiting CLI is a cold next call, never a failure
+            log.warning("claude warm cli not started: %s", type(exc).__name__)
+            with contextlib.suppress(OSError):
+                os.unlink(path)
+
+    async def close(self) -> None:
+        """At the agent's stop: the waiting CLI closed and waited for."""
+        warm, self._warm = self._warm, None
+        if warm is not None:
+            await warm.aclose()
 
     async def _consume(self, query, prompt: str, options: Any, toolset: str | None) -> dict[str, Any]:
         seen: dict[str, Any] = {"result": None, "parts": [], "init": False, "over_limit": False, "refused": None,
@@ -876,7 +1047,8 @@ class ClaudeClient(_Subscription):
                 elif kind == "ResultMessage":
                     seen["result"] = msg
 
-    def _judge(self, kind: str, model: str, seen: dict[str, Any], started: float, answer: bool) -> Any:
+    def _judge(self, kind: str, model: str, seen: dict[str, Any], started: float, answer: bool,
+               warm: bool | None = None) -> Any:
         """The checked call's answer — and its one usage line, `ok` only for a checked, successful, kept answer."""
         result = seen["result"]
         usage = getattr(result, "usage", None)
@@ -895,11 +1067,11 @@ class ClaudeClient(_Subscription):
             declined = refusal_marker(text)
         if declined:
             LAST_BLOCK.set(("refusal", declined, None))
-            self._report(kind, model, usage, False, cost, started, blocked="refusal")
+            self._report(kind, model, usage, False, cost, started, blocked="refusal", warm=warm)
             log.warning("claude declined: reason=%s kind=%s model=%s category=%s", declined, kind, model,
                         refusal_category(result))  # never a text: the classifier's label alone
             return None
-        self._report(kind, model, usage, good and bool(text), cost, started)
+        self._report(kind, model, usage, good and bool(text), cost, started, warm=warm)
         if self.blocked:
             return _LIMIT  # code review v7.1 #4: the call that found it blocked takes decision 1, as every later one
         if seen["refused"]:

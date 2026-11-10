@@ -96,6 +96,7 @@ def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: b
         "video_ms": None,  # v6 (v5.18): a video's length, on a `video_note` line only
         "latency_ms": _ms(latency_ms),  # v7 (v5.22): how long the call took
         "images": None,  # v8 (v6.5): a fal photo's count, on its `photo` line only
+        "warm": None,
         "prompt_parts": _parts(prompt_parts),  # v7 (v5.22): an answer's prompt, its parts' sizes in characters
     }
 
@@ -141,6 +142,7 @@ def tts_usage_line(ts_iso: str, agent: str, model: str, characters: int, ok: boo
         "video_ms": None,
         "latency_ms": _ms(latency_ms),
         "images": None,
+        "warm": None,
         "prompt_parts": None,
     }
 
@@ -156,6 +158,7 @@ def fallback_usage_line(ts_iso: str, agent: str, kind: str, model: str, ok: bool
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
         "characters": None, "audio_ms": None, "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
         "images": None,
+        "warm": None,
         "prompt_parts": _parts(prompt_parts),
     }
 
@@ -173,6 +176,7 @@ def judge_usage_line(ts_iso: str, agent: str, model: str, prompt_tokens: int | N
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": reported_cost,
         "characters": None, "audio_ms": None, "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
         "images": None,
+        "warm": None,
         "prompt_parts": None,
     }
 
@@ -189,6 +193,7 @@ def stt_usage_line(ts_iso: str, agent: str, model: str, audio_ms: int | None, ok
         "characters": None, "audio_ms": int(audio_ms) if isinstance(audio_ms, int) else None,
         "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms),
         "images": None,
+        "warm": None,
         "prompt_parts": None,
     }
 
@@ -207,6 +212,7 @@ def video_note_usage_line(ts_iso: str, agent: str, model: str, video_ms: int | N
         "video_ms": int(video_ms) if isinstance(video_ms, int) and not isinstance(video_ms, bool) else None,
         "latency_ms": _ms(latency_ms),
         "images": None,
+        "warm": None,
         "prompt_parts": None,
     }
 
@@ -223,6 +229,7 @@ def image_usage_line(ts_iso: str, agent: str, model: str, images: int | None, ok
         "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None,
         "characters": None, "audio_ms": None, "blocked": blocked, "video_ms": None, "latency_ms": _ms(latency_ms),
         "images": int(images) if isinstance(images, int) and not isinstance(images, bool) else None,
+        "warm": None,
         "prompt_parts": None,
     }
 
@@ -234,10 +241,11 @@ def _int(d: dict, key: str) -> int | None:
 
 def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict | None, ok: bool,
                    reported_cost: float | None = None, latency_ms: int | None = None,
-                   prompt_parts: dict | None = None, blocked: str | None = None) -> dict:
+                   prompt_parts: dict | None = None, blocked: str | None = None, warm: bool | None = None) -> dict:
     """v4.4 — one record per Claude Agent SDK call: always `claude-sdk` / `subscription` (the Max plan, never an API
     key); the SDK's `total_cost_usd` is a client-side estimate, kept as reported and never billed. v7.1: `blocked`
-    is `refusal` on a call Claude declined (`ClaudeClient`), else null."""
+    is `refusal` on a call Claude declined (`ClaudeClient`), else null. v7.2 (usage line v9): `warm` — true on a call
+    a CLI started ahead took, false on one a new CLI took, null on Claude himself's (`ClaudeSdkResponder`)."""
     usage = usage or {}
     fresh, output = _int(usage, "input_tokens"), _int(usage, "output_tokens")
     cache_read, cache_write = _int(usage, "cache_read_input_tokens"), _int(usage, "cache_creation_input_tokens")
@@ -258,8 +266,16 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
         "video_ms": None,
         "latency_ms": _ms(latency_ms),
         "images": None,
+        "warm": warm if isinstance(warm, bool) else None,
         "prompt_parts": _parts(prompt_parts),
     }
+
+
+def _speed_model(r: dict) -> str:
+    """Analytics · Speed's model row: v7.2 — a Claude call taken warm or cold shown apart (`warm`, usage line v9)."""
+    model = str(r.get("model") or "?")
+    warm = r.get("warm")
+    return f"{model} · warm" if warm is True else f"{model} · cold" if warm is False else model
 
 
 ANSWER_PLACES = ("agora", "private")
@@ -298,6 +314,7 @@ def _valid(rec: Any) -> bool:
             and isinstance(rec.get("agent"), str) and isinstance(rec.get("kind"), str)
             and rec.get("billing", "api") in BILLING and isinstance(rec.get("engine", "gemini"), str)
             and isinstance(rec.get("blocked") or "", str)  # v5.13: missing or null on an older line
+            and (rec.get("warm") is None or isinstance(rec["warm"], bool))  # v9 (v7.2): a warm call, on Claude
             and (rec.get("prompt_parts") is None or (isinstance(rec["prompt_parts"], dict) and all(  # v5.22
                 isinstance(v, int) and not isinstance(v, bool) for v in rec["prompt_parts"].values()))))
 
@@ -1128,8 +1145,8 @@ def analyze_detail(records: list[dict], answers: list[dict], since: date, until:
 
     services = []
     for svc, rows in grouped(timed, _engine).items():
-        models = [{"model": m, **speed_row(mr, [r for r in p_timed.get(svc, []) if str(r.get("model")) == m])}
-                  for m, mr in sorted(grouped(rows, lambda r: str(r.get("model") or "?")).items())]
+        models = [{"model": m, **speed_row(mr, [r for r in p_timed.get(svc, []) if _speed_model(r) == m])}
+                  for m, mr in sorted(grouped(rows, _speed_model).items())]
         services.append({"service": svc, **speed_row(rows, p_timed.get(svc, [])),
                          "series": series(rows, lat, median_of), "models": models})
     services.sort(key=lambda s: (-(s["p95"] or 0), s["service"]))

@@ -27,9 +27,11 @@ def test_usage_line_shape_and_no_text():
                          "video_ms",  # v6 (v5.18): a video's length
                          "latency_ms",  # v7 (v5.22): the call's time
                          "images",  # v8 (v6.5): a fal photo's count
+                         "warm",  # v9 (v7.2): a Claude call taken by a CLI started ahead
                          "prompt_parts"}  # v7 (v5.22): an answer's prompt, its parts' sizes
     assert line["characters"] is None and line["audio_ms"] is None and line["blocked"] is None
     assert line["video_ms"] is None and line["latency_ms"] is None and line["images"] is None
+    assert line["warm"] is None
     assert (line["engine"], line["billing"]) == ("gemini", "api")
     assert (line["prompt_tokens"], line["output_tokens"], line["total_tokens"], line["ok"]) == (1200, 80, 1280, True)
     assert usage_line("2026-10-28T14:00:00", "kira", "private", "m", None, False, "prompt")["blocked"] == "prompt"

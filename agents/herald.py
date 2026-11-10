@@ -13,6 +13,7 @@ digest or answer text ever reaches a log.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
 import json
 import logging
@@ -751,10 +752,10 @@ class Herald:
         self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked, latency_ms))
 
     def record_sdk_usage(self, kind: str, model: str, usage: dict | None, ok: bool, reported_cost: float | None,
-                         latency_ms: int | None = None, blocked: str | None = None) -> None:
-        """v7.1 — one line per call on Claude: always `subscription`, never priced."""
+                         latency_ms: int | None = None, blocked: str | None = None, warm: bool | None = None) -> None:
+        """v7.1 — one line per call on Claude: always `subscription`, never priced; v7.2: `warm`."""
         self._append_usage(lambda ts: sdk_usage_line(ts, self.cfg.localpart, kind, model, usage, ok, reported_cost,
-                                                     latency_ms, None, blocked))
+                                                     latency_ms, None, blocked, warm))
 
     def record_stt(self, audio_ms: int | None, ok: bool, latency_ms: int | None = None) -> None:
         self._append_usage(lambda ts: stt_usage_line(ts, self.cfg.localpart, STT_MODEL, audio_ms, ok, latency_ms))
@@ -825,5 +826,9 @@ class Herald:
         await self.drain()  # review #8: a digest on its way finishes — its voice sent, its state saved
         for t in (watcher, *self._tasks):
             t.cancel()
+        close = getattr(self.llm, "close", None)  # v7.2: the CLI started ahead
+        if close is not None:
+            with contextlib.suppress(Exception):
+                await close()
         await self.client.close()
         log.info("%s: stopped", self.cfg.localpart)
