@@ -77,6 +77,8 @@ class FakeSDK:
                     await asyncio.sleep(3600)
                 await asyncio.sleep(0.01)
                 for m in script:
+                    if isinstance(m, BaseException):  # the SDK raises after an error result (the CLI exits 1)
+                        raise m
                     yield m
             finally:
                 self.running -= 1
@@ -357,6 +359,41 @@ def test_the_refusal_stop_is_a_decline_with_its_reason_never_its_text(tmp_path, 
     args, kw = usage[-1]
     assert args[3] is False and kw["blocked"] == "refusal"
     assert "claude declined: reason=stop kind=private" in caplog.text and "не можу" not in caplog.text
+
+
+class ResultError(Exception):
+    """The SDK's: raised after the CLI's error result, once the CLI exits 1."""
+
+
+CLI_REFUSAL = ("API Error: Haiku 5.5 can't help with this. Start a new session to continue.\n"
+               "Learn more: https://www.anthropic.com/legal/aup\nDetails: `[bio]`\nRequest ID: req_x")
+
+
+def test_a_refusal_as_the_cli_ends_it_is_a_decline_with_its_category(tmp_path, caplog):
+    """2026-11-10: a made-up prompt tripped Haiku's classifier — the CLI's error result, then exit 1 (ResultError)."""
+    sdk = FakeSDK([INIT_OK, result(CLI_REFUSAL, is_error=True, stop_reason="refusal"), ResultError("exit 1")])
+    c, usage = client(tmp_path, sdk)
+    LAST_BLOCK.set(None)
+
+    async def go():
+        out = await c.reply("t", "s", kind="private")
+        return out, LAST_BLOCK.get()
+    out, block = run(go())
+    assert out is None and block == ("refusal", "stop", None) and usage[-1][1]["blocked"] == "refusal"
+    assert "claude declined: reason=stop kind=private model=claude-sonnet-5-5 category=bio" in caplog.text
+    assert "call failed" not in caplog.text and "can't help" not in caplog.text
+
+
+def test_a_429_as_the_cli_ends_it_mutes_the_client(tmp_path):
+    sdk = FakeSDK([INIT_OK, result(None, is_error=True, api_error_status=429), ResultError("exit 1")])
+    c, _ = client(tmp_path, sdk, limit_fallback="silent")
+    assert run(c.reply("t", "s")) is None and c.muted()
+
+
+def test_an_sdk_error_with_no_error_result_is_still_a_failure(tmp_path, caplog):
+    c, usage = client(tmp_path, FakeSDK([INIT_OK, ResultError("exit 1")]))
+    assert run(c.reply("t", "s")) is None and "claude call failed: ResultError" in caplog.text
+    assert usage[-1][0][3] is False
 
 
 def test_a_refusal_formula_in_an_answer_is_a_decline_but_not_in_a_summary(tmp_path):

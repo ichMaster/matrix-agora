@@ -68,6 +68,8 @@ class FakeSDK:
             if self.raises:
                 raise self.raises
             for m in self.messages:
+                if isinstance(m, BaseException):  # the SDK raises after an error result, once the CLI exits 1
+                    raise m
                 yield m
         return gen()
 
@@ -311,6 +313,22 @@ def test_a_reply_billed_as_extra_usage_is_never_sent(tmp_path, info):
 def test_a_429_result_mutes_him(tmp_path):
     r, _ = responder(tmp_path, FakeSDK(INIT_OK, result(is_error=True, result=None, api_error_status=429)))
     assert run(r) is None and r.muted()
+
+
+class ResultError(Exception):
+    """The SDK's: raised after the CLI's error result, once the CLI exits 1."""
+
+
+def test_a_429_as_the_cli_ends_it_still_mutes_him(tmp_path, caplog):
+    """v7.1 (found 2026-11-10): the CLI exits 1 after an error result and the SDK raises — the result still counts."""
+    r, _ = responder(tmp_path, FakeSDK(INIT_OK, result(is_error=True, result=None, api_error_status=429),
+                                       ResultError("exit 1")))
+    assert run(r) is None and r.muted() and "query failed" not in caplog.text
+
+
+def test_an_sdk_error_before_any_result_is_still_a_failure(tmp_path, caplog):
+    r, usage = responder(tmp_path, FakeSDK(INIT_OK, ResultError("exit 1")))
+    assert run(r) is None and "claude query failed: ResultError" in caplog.text and usage[-1][3] is False
 
 
 

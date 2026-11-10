@@ -472,10 +472,14 @@ class ClaudeSdkResponder(_Subscription):
             self._failed("timeout")
             return None
         except Exception as exc:  # noqa: BLE001 — any SDK or CLI failure means silence
-            log.error("claude query failed: %s", type(exc).__name__)
-            self.usage_sink(turn.kind, self.model, None, False, None, latency_ms=round((self._mono() - started) * 1000))
-            self._failed(type(exc).__name__)
-            return None
+            # v7.1: an error result (a 429, a refusal) ends with the CLI's exit 1, raised by the SDK as `ResultError`
+            # after the result — read the result below, so a 429 still mutes him
+            if result is None or not getattr(result, "is_error", False):
+                log.error("claude query failed: %s", type(exc).__name__)
+                self.usage_sink(turn.kind, self.model, None, False, None,
+                                latency_ms=round((self._mono() - started) * 1000))
+                self._failed(type(exc).__name__)
+                return None
         # one usage line per call, ok only for a checked, successful one
         ok = (result is not None and not getattr(result, "is_error", True) and self.blocked is None and saw_init
               and not over_limit and refused is None)
@@ -525,6 +529,16 @@ _LIMIT = object()             # `_query`'s answer when the subscription's limit 
 THINKING_MODES = ("off", "adaptive")  # v7.1 (the owner, 2026-11-10: «додай»): the voice's thinking on Claude
 EFFORTS = ("low", "medium", "high", "max")  # how deep an adaptive call thinks (the CLI's `--effort`)
 THINK_HEADROOM = 2048         # added to an answer's cap when it thinks: the cap counts the thinking too
+
+
+_CATEGORY = re.compile(r"Details: `\[([a-z_]{1,24})\]`")
+
+
+def refusal_category(result: Any) -> str | None:
+    """The safety classifier's label (`bio`, …) the CLI names in a refusal's error result, or None — the CLI's own
+    error line, never the model's text."""
+    found = _CATEGORY.search(str(getattr(result, "result", "") or "")) if getattr(result, "is_error", False) else None
+    return found.group(1) if found else None
 
 
 def client_options(system_file: str | None, *, model: str, max_output_tokens: int, config_dir: str,
@@ -753,6 +767,17 @@ class ClaudeClient(_Subscription):
 
     async def _consume(self, query, prompt: str, options: Any, toolset: str | None) -> dict[str, Any]:
         seen: dict[str, Any] = {"result": None, "parts": [], "init": False, "over_limit": False, "refused": None}
+        try:
+            await self._stream(query, prompt, options, toolset, seen)
+        except Exception:
+            # the CLI ends an error result — a refusal, a 429, an API failure — by exiting 1, and the SDK raises that
+            # as `ResultError` after the result message: the result is what `_judge` reads (found 2026-11-10, when
+            # Haiku's safety classifier declined a made-up prompt and the decline came out as a failure)
+            if seen["result"] is None or not getattr(seen["result"], "is_error", False):
+                raise
+        return seen
+
+    async def _stream(self, query, prompt: str, options: Any, toolset: str | None, seen: dict[str, Any]) -> None:
         async with contextlib.aclosing(query(prompt=prompt, options=options)) as stream:
             async for msg in stream:
                 kind = type(msg).__name__
@@ -772,7 +797,6 @@ class ClaudeClient(_Subscription):
                                          if isinstance(getattr(b, "text", None), str))
                 elif kind == "ResultMessage":
                     seen["result"] = msg
-        return seen
 
     def _judge(self, kind: str, model: str, seen: dict[str, Any], started: float, answer: bool) -> Any:
         """The checked call's answer — and its one usage line, `ok` only for a checked, successful, kept answer."""
@@ -782,18 +806,20 @@ class ClaudeClient(_Subscription):
         model_usage = getattr(result, "model_usage", None)
         named = next(iter(model_usage), None) if isinstance(model_usage, Mapping) and model_usage else None
         model = named if isinstance(named, str) and named else model  # the id the CLI ran, else the alias
-        good = (result is not None and not getattr(result, "is_error", True) and self.blocked is None
-                and seen["init"] and not seen["over_limit"] and seen["refused"] is None)
+        checked = (result is not None and self.blocked is None and seen["init"] and not seen["over_limit"]
+                   and seen["refused"] is None)
+        good = checked and not getattr(result, "is_error", True)
         text = ((getattr(result, "result", None) or "\n".join(seen["parts"])).strip() if good else "")
         declined = None
-        if good and getattr(result, "stop_reason", None) == "refusal":
+        if checked and getattr(result, "stop_reason", None) == "refusal":  # the CLI reports it as an error result
             declined = "stop"
         elif good and answer and text:
             declined = refusal_marker(text)
         if declined:
             LAST_BLOCK.set(("refusal", declined, None))
             self._report(kind, model, usage, False, cost, started, blocked="refusal")
-            log.warning("claude declined: reason=%s kind=%s model=%s", declined, kind, model)  # never a text
+            log.warning("claude declined: reason=%s kind=%s model=%s category=%s", declined, kind, model,
+                        refusal_category(result))  # never a text: the classifier's label alone
             return None
         self._report(kind, model, usage, good and bool(text), cost, started)
         if self.blocked or seen["refused"]:
