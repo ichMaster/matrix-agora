@@ -762,10 +762,17 @@ class ClaudeClient(_Subscription):
         folder.mkdir(mode=0o700, parents=True, exist_ok=True)
         path = folder / f"{uuid.uuid4().hex}.md"
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        try:
-            os.write(fd, system.encode("utf-8"))
-        finally:
-            os.close(fd)
+        try:  # code review v7.1 #7: written whole, and never left behind half written
+            try:
+                view = memoryview(system.encode("utf-8"))
+                while view:
+                    view = view[os.write(fd, view):]
+            finally:
+                os.close(fd)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(path)
+            raise
         return str(path)
 
     def _report(self, kind: str, model: str, usage: Any, ok: bool, cost: Any, started: float,

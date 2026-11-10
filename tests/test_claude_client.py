@@ -243,6 +243,24 @@ def test_the_system_prompt_is_a_private_file_for_the_call_alone(tmp_path):
     assert list((tmp_path / "cfg" / "prompts").iterdir()) == []  # removed after the call
 
 
+def test_the_prompt_file_is_written_whole_or_not_left_behind(tmp_path, monkeypatch, caplog):
+    """Code review v7.1 #7: a short write was not checked, and a failed one left a partial prompt behind."""
+    import agents.claude_sdk as sdk_mod
+    real = os.write
+    monkeypatch.setattr(sdk_mod.os, "write", lambda fd, data: real(fd, bytes(data[:7])))  # 7 bytes at a time
+    sdk = FakeSDK()
+    c, _ = client(tmp_path, sdk)
+    run(c.reply("Ich: привіт", "Ти — Устина. Довгий промпт її пам'яті."))
+    assert sdk.prompt_files == [("Ти — Устина. Довгий промпт її пам'яті.", 0o600)]
+
+    def full(fd, data):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(sdk_mod.os, "write", full)
+    assert run(c.reply("Ich: привіт", "Ти — Устина.")) is None
+    assert list((tmp_path / "cfg" / "prompts").iterdir()) == []  # nothing half written left
+    assert "claude prompt file not written (OSError)" in caplog.text
+
+
 def test_embed_is_geminis_and_probe_is_none(tmp_path):
     gemini = FakeGemini()
     c, _ = client(tmp_path, FakeSDK(), embedder=gemini)
