@@ -92,7 +92,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v6.4 | Agora meets her | ✅ completed | `v6.4.0` (2026-11-08) |
 | v6.5 | Her photos on fal.ai: the owner's switch, the filter off | ✅ completed | `v6.5.0` (2026-11-10) |
 | v7.1 | The Claude engine for a persona: answers on Sonnet, the background on Haiku | ✅ completed | `v7.1.0` (2026-11-11) |
-| v7.2 | The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес | ⏳ planned | — |
+| v7.2 | The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес | ✅ completed | `v7.2.0` (2026-11-11) |
 | v7.3 | Кіра on Claude | ⏳ planned | — |
 | v7.4 | Устина on Claude | ⏳ planned | — |
 | v7.5 | The prompt for the cache: what changes slowly first, read from the cache | ⏳ planned | — |
@@ -3936,7 +3936,7 @@ The owner, 2026-11-08: «зроби fal.ai перемикання на цю мо
 
 ## v7 — Claude for everyone: every agent on the owner's subscription
 
-**Status:** 🔄 in progress — v7.1 released (`v7.1.0`, 2026-11-11).
+**Status:** 🔄 in progress — v7.1 and v7.2 released (`v7.1.0`, `v7.2.0`, 2026-11-11).
 
 The owner, 2026-11-10: «заведи нову версію перед 7. щоб перевести всіх агентів ан Anthropic SDK і моделі Haiku +
 Sonet на мому плані як зараз агент Клод. Почати можна зі всіх крім Кіри і Устини а поті одна за одною ці дві.»
@@ -4041,7 +4041,11 @@ the env file, no forbidden variable), the usage rows.
 
 ### v7.2 — The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v7.2.0` on 2026-11-11. AGORA-242–245: the slow part of a prompt, the CLI
+started ahead (one `ClaudeSDKClient` a call; usage line v9 `warm`), the room's seven on Claude; deployed at the owner's
+«деплой» (`sha-682440e`) — live, Ада's and Бруно's answers cold 2.7 s, warm 1.1/1.3 s; the day of the room waived
+(«релізь»), watched after the release, bugs go to 7.2.x patches; the code review's 6 fixes (Hermes's digests warm by
+his canon, the waiting CLI's life and close), 1 deferred to v7.3 (the fallback's cap).
 
 **Goal:** every agent but Кіра and Устина runs on Claude, its answers from a CLI started ahead; Claude himself stays
 on Opus.
