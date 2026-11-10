@@ -3967,6 +3967,14 @@ Applications to v9, the Theatre to v10 and Кіра's inner life to v11. Depends
 - Claude declines what Gemini blocked, and some of what it let pass: in a private chat a decline goes the backup's
   way (v7.3).
 
+**How much slower** (the owner, 2026-11-10: «треба буде потім зробити заміри наскільки повільніше стали агенти»,
+«додай це до версії»). Every phase that moves an agent measures its answer time before and after the switch, from
+Analytics · Speed (v5.22): the median and the p95 of a call's `latency_ms` by service and kind, and of an answer from
+the message to the reply (`state/<name>.answers.jsonl`), per agent, the answers and the background apart. The
+baseline is the agent's last 7 days on Gemini, read before the switch; the comparison is its first full day on
+Claude. The numbers go into the phase's execution report, and a member whose answer comes too late for the room's
+turn-taking (`REPLY_DELAY_S`, `FALLBACK_S`) is named there.
+
 ### v7.1 — The Claude engine for a persona: answers on Sonnet, the background on Haiku
 
 **Status:** ⏳ planned.
@@ -3998,8 +4006,9 @@ reading, her thoughts, topics, facts, the talk summaries, the photo prompt. None
   a rejection; at most `CLAUDE_CONCURRENCY` (2) CLI processes at once per container.
 - A decline — the SDK's refusal stop, or a refusal in the text (`refusal_marker`, v5.13) — is silence in Agora with
   the reason in the log; the private chat's route comes in v7.3.
-- The usage line: engine `claude`, the model, billing `subscription`, the tokens and `latency_ms`; the panel's card
-  shows each agent's engine and models; Analytics counts the calls and the answer time.
+- The usage line: engine `claude-sdk` (v4.4's, which Analytics keys on), the model, billing `subscription`, the
+  tokens and `latency_ms`; the panel's card shows each agent's engine and models; Analytics counts the calls and the
+  answer time, so the speed can be compared (§v7 How much slower).
 - ARCHITECTURE: §Components (the engine per agent), §Configuration (`CLAUDE_REPLY_MODEL`, `CLAUDE_BACKGROUND_MODEL`,
   `CLAUDE_CONCURRENCY`, `CLAUDE_LIMIT_FALLBACK`, `server/subscription.env`), §Security (the subscription's layers for
   every agent), §Contracts (the TOML's `engine`).
@@ -4010,7 +4019,8 @@ reading, her thoughts, topics, facts, the talk summaries, the photo prompt. None
 - An agent on Claude: each call kind on its model, the init check, the refusal of a forbidden variable, `embed` on
   Gemini, the usage rows `subscription`, both behaviours at the limit.
 - (Manual, owner) In dev on the Mac, one persona on Claude answers in the room in her own voice, in Ukrainian, and her
-  background calls run; the time of a call is noted.
+  background calls run; the time of her calls is noted beside her last 7 days on Gemini (the first measure of §v7
+  How much slower).
 
 **Tests:** unit — the client against a mocked SDK (every call kind and its model, the timeout, `is_error`,
 `RateLimitEvent`, a refusal), the engine per TOML in the roster, the compose checks over every service (the image,
@@ -4032,11 +4042,14 @@ the env file, no forbidden variable), the usage rows.
 - The turn-taking unchanged: it is derived from shared inputs, never from the engine; the room's waiting times
   reviewed against the time of a call.
 - A day of the room measured — calls per hour and the subscription's status in the panel — before v7.3.
+- The speed (§v7 How much slower): each member's baseline read before the switch, the same measure after a day on
+  Claude, both in the execution report; the waiting times retuned if a member's answers come too late.
 
 **DoD:**
 - (Manual, owner) A day of the room on Claude: every member speaks in character and in Ukrainian, no one says they are
   a model, the cat stays a cat, Hermes's digest arrives; the subscription holds, or decision 1 works.
 - Their day memories, plans, today blocks and events are written on Haiku.
+- Each member's answer time on Claude against its week on Gemini — the median and the p95 — in the execution report.
 
 **Tests:** the roster (their engine), the compose test (their image and env files, no forbidden variable), the
 turn-taking pins unchanged.
@@ -4064,6 +4077,8 @@ the switch to the backup, `blocked`, the scan. Claude does not block a prompt; i
 **DoD:**
 - (Manual, owner) A day of her private chat and her Telegram on Claude: her voice and her character, her photos and
   videos, her writing first; what Claude declines goes to the backup with the ⚙️ line; she never says she is a model.
+- Her answer time on Claude against her week on Gemini, in the private chat and in Agora apart (§v7 How much
+  slower), in the execution report.
 
 **Tests:** a decline → the backup's route and `blocked`; the scan off on Claude; no `blocked` line in Claude's prompt;
 her TOML.
@@ -4086,6 +4101,7 @@ Sonnet in place of Gemini 3.1 Pro, her background on Haiku, her backup on NovelA
 
 **DoD:**
 - (Manual, owner) A day of her private chat and her Telegram on Claude, as for Устина in v7.3.
+- Her answer time on Sonnet against her week on Gemini 3.1 Pro, as Устина's in v7.3, in the execution report.
 
 **Tests:** her TOML; v7.3's pins for her.
 
