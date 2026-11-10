@@ -30,7 +30,7 @@ are left in the v5 review docs, as backlog. The same day the owner opened two mo
 
 v6 is under way: v6.1 (Устина's first version) and v6.2 (the code for a second companion) released as `v6.1.0`
 and `v6.2.0` on 2026-11-07; v6.3 (her: the face, the voice and the accounts) as `v6.3.0` on 2026-11-08; v6.4 (Agora meets her) as
-`v6.4.0` on 2026-11-08; v6.5 is next (her photos on fal.ai, the filter off, by the owner's command; added 2026-11-08).
+`v6.4.0` on 2026-11-08; v6.5 (her photos on fal.ai, by the owner's `/photos`) as `v6.5.0` on 2026-11-10.
 
 Then come v6–v10 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
@@ -88,7 +88,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v6.2 | The code for a second companion: everything Кіра has, by her TOML alone | ✅ completed | `v6.2.0` (2026-11-07) |
 | v6.3 | Her: the face, the voice and the accounts; her private chat and Telegram | ✅ completed | `v6.3.0` (2026-11-08) |
 | v6.4 | Agora meets her | ✅ completed | `v6.4.0` (2026-11-08) |
-| v6.5 | Her photos on fal.ai: the owner's switch, the filter off | ⏳ planned | — |
+| v6.5 | Her photos on fal.ai: the owner's switch, the filter off | ✅ completed | `v6.5.0` (2026-11-10) |
 | v7.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v7.2 | Лілі under the full rules | ⏳ planned | — |
 | v8.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -3825,7 +3825,7 @@ videos, Omni and the image model mocked.
 
 ### v6.5 — Her photos on fal.ai: the owner's switch, the filter off
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v6.5.0` on 2026-11-10. AGORA-232–237; Seedream chosen after the probes, the request written by her backup, the backup's photos always on fal (the owner, during the phase); deployed at his «деплой»; the live checks were waived by the owner («деплой» — «і після того закривай 6.5»), watched after the release, bugs go to 6.5.x patches; fal's authorization of the account to turn its checker off is his email, outstanding. Found live and fixed in the phase: every Gemini call cut at a timeout (a hung Pro summary had held up Устина's writing first for three hours).
 
 **Goal:** the owner switches her photos from Google's image model to an image model on fal.ai with its safety
 checker off, and back, by a command in her Telegram chat.
