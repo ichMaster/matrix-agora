@@ -591,6 +591,7 @@ def cli_error_kind(result: Any) -> str:
 
 WARM_IDLE_S = 3600     # v7.2: a waiting CLI unused this long (its prompt cache's life) is closed, the next call cold
 WARM_CONNECT_S = 30    # a connect that takes longer is a failed one: the call it was for goes cold
+WARM_CLOSE_S = 25      # the SDK's own close: ~5 s after stdin, then SIGTERM and 5 s, then SIGKILL (code review v7.2 #4)
 _END = object()        # the end of a warm call's answer
 
 
@@ -641,7 +642,11 @@ class WarmCli:
             client = make_client(options=options)
             await asyncio.wait_for(client.connect(), WARM_CONNECT_S)
             self._ready.set_result(True)
-            prompt, out = await self._requests.get()
+            try:  # code review v7.2 #7: a CLI nobody takes within its life ends on its own, never kept all night
+                prompt, out = await asyncio.wait_for(self._requests.get(), WARM_IDLE_S)
+            except TimeoutError:
+                log.info("claude warm cli unused for %d s — closed", WARM_IDLE_S)
+                return
             await client.query(prompt)
             async for msg in client.receive_response():
                 out.put_nowait(msg)
@@ -658,7 +663,7 @@ class WarmCli:
             self._forget_file()  # first, before any await: a cancel while it disconnects never leaves the file
             if client is not None:
                 with contextlib.suppress(Exception):
-                    await asyncio.wait_for(client.disconnect(), 10)
+                    await asyncio.wait_for(client.disconnect(), WARM_CLOSE_S)
 
     def query(self, *, prompt: str, options: Any = None):
         """Its one call, shaped as the SDK's `query()`: the answer's messages; closing it early ends the CLI. A second

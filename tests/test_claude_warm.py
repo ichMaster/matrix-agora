@@ -356,3 +356,22 @@ def test_a_call_cancelled_at_the_voice_gate_takes_no_cli(tmp_path):
         return kept, waiting
     kept, waiting = asyncio.run(go())
     assert kept and waiting.ready() is False and clients.made[0].closed
+
+
+def test_a_cli_nobody_takes_within_its_life_closes_on_its_own(tmp_path, monkeypatch):
+    """#7: an idle CLI was checked only by the next call, so a quiet agent kept it (and ~200 MB) all night."""
+    monkeypatch.setattr(sdk_mod, "WARM_IDLE_S", 0.05)
+    sdk, clients = FakeSDK([INIT_OK, result("Холодно.")]), Clients()
+    c, _ = claude(tmp_path, sdk, clients)
+
+    async def go():
+        await voice(c)
+        await asyncio.sleep(0.2)                       # no call comes
+        return c._warm.stale(), prompts_left(tmp_path)
+    stale, left = asyncio.run(go())
+    assert stale and clients.made[0].closed and left == []
+
+
+def test_the_disconnect_has_the_sdks_own_close_time():
+    """#4: 10 s cut the SDK's close (stdin, SIGTERM, SIGKILL, ~5 s each) short."""
+    assert sdk_mod.WARM_CLOSE_S >= 20
