@@ -261,6 +261,19 @@ def test_the_prompt_file_is_written_whole_or_not_left_behind(tmp_path, monkeypat
     assert "claude prompt file not written (OSError)" in caplog.text
 
 
+def test_without_the_sdk_a_call_fails_and_never_raises(tmp_path, monkeypatch, caplog):
+    """Code review v7.1 #8: on a service started from the wrong image every call raised ImportError."""
+    import agents.claude_sdk as sdk_mod
+
+    def missing():
+        raise ImportError("No module named 'claude_agent_sdk'")
+    monkeypatch.setattr(sdk_mod, "_default_query", missing)
+    c = ClaudeClient(reply_model="sonnet", background_model="haiku", config_dir=str(tmp_path / "cfg"),
+                     status_file=tmp_path / "s.json", sink=None, limit_fallback="silent")
+    assert run(c.reply("t", "s")) is None and run(c.think("x", "S", kind="summary")) is None
+    assert "claude call failed: ImportError — the SDK is not installed" in caplog.text
+
+
 def test_embed_is_geminis_and_probe_is_none(tmp_path):
     gemini = FakeGemini()
     c, _ = client(tmp_path, FakeSDK(), embedder=gemini)

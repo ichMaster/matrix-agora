@@ -796,14 +796,19 @@ class ClaudeClient(_Subscription):
         if cap > 0:
             cap += THINK_HEADROOM  # the thinking never eats the answer
         timeout_s = REPLY_TIMEOUT_S if kind in ANSWER_KINDS else THINK_TIMEOUT_S
-        query = self._query_fn or _default_query()
+        try:  # code review v7.1 #8: a service on the wrong image fails its calls, never raises out of them
+            query, make_options = self._query_fn or _default_query(), self._options or _default_options()
+        except ImportError as exc:
+            log.error("claude call failed: %s — the SDK is not installed", type(exc).__name__)
+            self._failed(type(exc).__name__)
+            return None
         try:
             path = self._prompt_file(system)
         except OSError as exc:
             log.error("claude prompt file not written (%s)", type(exc).__name__)
             return None
         try:
-            options = (self._options or _default_options())(**client_options(
+            options = make_options(**client_options(
                 path, model=model, max_output_tokens=cap, config_dir=self.config_dir, toolset=toolset,
                 effort=effort, think=think))
             async with (self._voice_gate if kind in VOICE_KINDS else self._gate):
