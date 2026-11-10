@@ -63,7 +63,10 @@ def test_a_call_with_a_prompt_not_built_last_carries_none(tmp_path):
 
 
 # --- Hermes: his brief is his slow part ------------------------------------------------------------------------------
-def test_hermess_think_call_carries_his_whole_brief_as_its_slow_part(tmp_path):
+def test_hermess_slow_part_is_his_canon_the_same_for_every_digest(tmp_path):
+    """Code review v7.2 #1: his brief names the period and the count — with the whole system as the slow part no
+    digest ever went warm; his canon, the prefix of every digest's and answer's system, is the slow part."""
+    from agents.digest import chat_request, digest_request
     from agents.herald import Herald
     from tests.test_herald import CFG, ROSTER
     seen = []
@@ -78,5 +81,13 @@ def test_hermess_think_call_carries_his_whole_brief_as_its_slow_part(tmp_path):
     async def no_typing(on):
         return None
     h._typing = no_typing
-    out, _ = asyncio.run(h._think("розмова", "БРИФ ГЕРМЕСА", "digest_voice", 1500))
-    assert out and seen == [("БРИФ ГЕРМЕСА", "БРИФ ГЕРМЕСА")] and PROMPT_SLOW.get() is None
+    first, _ = digest_request(CFG.canon, ["Ада: привіт"], "з 9:00 до 13:00", 1, 600, 1500, ["Ада"])
+    second, _ = digest_request(CFG.canon, ["Бруно: так"], "з 13:00 до 17:00", 5, 900, 1500, ["Бруно"])
+    for system in (first, second):
+        out, _ = asyncio.run(h._think("розмова", system, "digest_voice", 1500))
+        assert out
+    assert first != second and [slow for slow, _ in seen] == [CFG.canon, CFG.canon]   # the same: the CLI waits
+    assert all(split_prompt(system, slow) for slow, system in seen) and PROMPT_SLOW.get() is None
+    asyncio.run(h._think("розмова", "ІНШИЙ БРИФ", "ask", 400))
+    assert seen[-1][0] is None                                     # a system that is not his canon's: none
+    assert chat_request  # his answers' system starts with his canon too (agents/digest.py)

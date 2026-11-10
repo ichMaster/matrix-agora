@@ -370,7 +370,10 @@ class Herald:
         await self._typing(True)
         try:
             for _ in range(2):
-                token = PROMPT_SLOW.set(system)  # v7.2 (AGORA-242): his brief is his whole slow part
+                # v7.2 (code review #1): his slow part is his canon — every digest's and answer's system starts with
+                # it, while the brief after it names the period, the count and the target, different every digest
+                canon = self.cfg.canon
+                token = PROMPT_SLOW.set(canon if canon and system.startswith(canon) else None)
                 try:
                     out = await self.llm.think(contents, system, model=DIGEST_MODEL, kind=kind, level=level)
                 finally:
