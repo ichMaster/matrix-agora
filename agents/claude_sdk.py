@@ -630,7 +630,6 @@ class ClaudeClient(_Subscription):
         self.effort = effort if effort in EFFORTS else "low"
         self._query_fn = query
         self._options = options
-        self._probe_logged = False
 
     def _allowed(self, toolset: str | None) -> list[str]:
         return list(SEARCH_TOOLS) if toolset == "search" else []
@@ -695,12 +694,10 @@ class ClaudeClient(_Subscription):
             return None
         return await self.embedder.embed(texts, task=task, kind=kind)
 
-    async def probe(self, transcript: str, system_instruction: str | None, kind: str = "probe") -> bool | None:
-        """Gemini's prompt-stage check has no Claude counterpart: None, as a failed check (the scan stops)."""
-        if not self._probe_logged:
-            self._probe_logged = True
-            log.info("probe: none on claude")
-        return None
+    # Gemini's prompt-stage check has no Claude counterpart: no `probe` at all, so its callers skip the check — the
+    # talk summaries are kept as written and the scan is off (code review v7.1 #1: a probe that answered None was an
+    # outage to the talk writer, which then never kept a summary and tried again every 10 minutes, for good)
+    probe = None
 
     # --- one call -------------------------------------------------------------------------------------------------
     def _unavailable(self) -> str | None:

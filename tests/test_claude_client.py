@@ -247,7 +247,7 @@ def test_embed_is_geminis_and_probe_is_none(tmp_path):
     c, _ = client(tmp_path, FakeSDK(), embedder=gemini)
     assert run(c.embed(["a", "b"], task="RETRIEVAL_QUERY")) == [[0.1] * 3, [0.1] * 3]
     assert gemini.calls == [("embed", "RETRIEVAL_QUERY")]
-    assert run(c.probe("t", "s", kind="scan_check")) is None
+    assert c.probe is None  # no prompt-stage check on Claude: its callers skip it (code review v7.1 #1)
     c2, _ = client(tmp_path, FakeSDK())
     assert run(c2.embed(["a"])) is None
 

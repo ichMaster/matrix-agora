@@ -187,3 +187,21 @@ def test_hermes_on_claude_writes_his_digest_on_the_reply_model(subscription, tmp
 def test_claude_sdk_is_an_engine_of_every_type(kind):
     m = parse_member("x", {"name": "X", "user_id": "@x:agora.lan", "type": kind, "engine": "claude-sdk"})
     assert m.engine == "claude-sdk"
+
+
+# --- code review v7.1 #1: her talk summaries on Claude are kept, the scan is off ----------------------------------
+def test_her_talk_summaries_on_claude_are_written_and_kept_and_the_scan_is_off(tmp_path, monkeypatch):
+    from tests.test_archive import EmbedLLM
+    from tests.test_talk_writer import drain, ms, say, talking
+    sdk = FakeSDK([INIT_OK, result("Пам'ятаю, як ми гуляли.")])
+    llm = ClaudeClient(reply_model="sonnet", background_model="haiku", config_dir=str(tmp_path / "cfg"),
+                       status_file=tmp_path / "kira.ratelimit.json", sink=None, embedder=EmbedLLM(),
+                       query=sdk.query, options=lambda **kw: SimpleNamespace(**kw))
+    agent = talking(tmp_path, monkeypatch, llm)
+    say(agent, "tg:1", ms(2026, 11, 2, 10, 1), "Ich", "Привіт")
+    say(agent, "tg:2", ms(2026, 11, 2, 10, 2), "Кіра", "Привіт!")
+    drain(agent)
+    rows = agent.llm and agent.archive.talk_rows("hour")
+    assert rows and rows[0].text == "Пам'ятаю, як ми гуляли." and rows[0].left_out == 0
+    assert all(o.model == "haiku" for _, o in sdk.calls)  # the background model, no check call
+    assert agent._scan_open() is False
