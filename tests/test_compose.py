@@ -229,7 +229,8 @@ def test_no_service_and_no_env_example_names_a_forbidden_variable():
         env = svc.get("environment") or {}
         keys = env if isinstance(env, dict) else [e.split("=", 1)[0] for e in env]
         assert not [k for k in keys if _forbidden(k)], name
-    for example in (".env.example", "server/.env.example", "server/claude.env.example"):
+    for example in (".env.example", "server/.env.example", "server/claude.env.example",
+                    "server/subscription.env.example"):  # v7.1: the subscription's file too
         assert not [k for k in env_keys(ROOT / example) if _forbidden(k)], example
 
 
@@ -443,3 +444,72 @@ def test_both_env_examples_name_the_subscriptions_fees_empty():
     """v5.19: the monthly fees are the owner's to set; the examples carry the name, empty."""
     for path in (ROOT / ".env.example", ROOT / "server" / ".env.example"):
         assert "\nPRICE_SUBSCRIPTIONS=\n" in path.read_text(encoding="utf-8"), path
+
+
+# --- v7.1: every agent on Claude, by its TOML's engine ---------------------------------------------------------------
+CLAUDE_IMAGE = "ghcr.io/ichmaster/matrix-agora-agent-claude:${AGENT_IMAGE_TAG:-latest}"
+
+
+def env_files(svc: dict) -> list[str]:
+    return [f["path"] if isinstance(f, dict) else f for f in svc.get("env_file") or []]
+
+
+def claude_service_problems(svc: dict) -> list[str]:
+    """What a service of an agent on Claude (not Claude himself) lacks: the Claude image (the SDK's bundled CLI), the
+    subscription's file last of its env files, and the CLI's home and config on a bounded tmpfs."""
+    problems = []
+    if svc.get("image") != CLAUDE_IMAGE:
+        problems.append("image")
+    files = env_files(svc)
+    if not files or files[-1] != "subscription.env" or ".env" not in files:
+        problems.append("subscription.env")
+    env = svc.get("environment") or {}
+    if not (env.get("HOME") == env.get("CLAUDE_CONFIG_DIR") == "/tmp/claude"):
+        problems.append("config dir")
+    if not any(t.startswith("/tmp/claude:") and "size=" in t for t in svc.get("tmpfs") or []):
+        problems.append("tmpfs")
+    return problems
+
+
+def agent_services():
+    from agents.roster import load_member
+    for name, svc in SERVICES.items():
+        command = svc.get("command") or []
+        if command and str(command[0]).startswith("agents/") and str(command[0]).endswith(".toml"):
+            yield name, svc, load_member(ROOT / command[0])
+
+
+def test_every_agent_on_claude_runs_the_claude_image_with_the_subscription_and_none_on_gemini_sees_it():
+    seen = 0
+    for name, svc, member in agent_services():
+        seen += 1
+        if member.engine == "claude-sdk" and member.type != "assistant":
+            assert claude_service_problems(svc) == [], name
+        else:
+            assert "subscription.env" not in env_files(svc), name  # the token never reaches a Gemini agent
+    assert seen >= 10
+
+
+def test_the_rule_holds_on_a_made_up_service_on_claude():
+    ada = SERVICES["ada"]
+    assert claude_service_problems(ada) == ["image", "subscription.env", "config dir", "tmpfs"]
+    moved = {**ada, "image": CLAUDE_IMAGE,
+             "env_file": [*ada["env_file"], {"path": "subscription.env", "required": False}],
+             "environment": {**ada["environment"], "HOME": "/tmp/claude", "CLAUDE_CONFIG_DIR": "/tmp/claude"},
+             "tmpfs": ["/tmp/claude:uid=1000,gid=1000,mode=0700,size=64m"]}
+    assert claude_service_problems(moved) == []
+    early = {**moved, "env_file": [{"path": "subscription.env", "required": False}, *ada["env_file"]]}
+    assert claude_service_problems(early) == ["subscription.env"]  # last: no other file may override the token
+
+
+def test_the_subscription_file_holds_the_token_alone_and_is_synced_privately_never_committed():
+    import fnmatch
+    example = ROOT / "server" / "subscription.env.example"
+    lines = [x for x in example.read_text().splitlines() if x and not x.startswith("#")]
+    assert lines == ["CLAUDE_CODE_OAUTH_TOKEN="]
+    deploy = (ROOT / "server" / "deploy.sh").read_text()
+    assert '"$SUBSCRIPTION_ENV" "$TARGET:$REMOTE_DIR/subscription.env"' in deploy
+    assert "chmod 600 ~/$REMOTE_DIR/subscription.env" in deploy
+    for ignore in (".gitignore", ".dockerignore"):
+        patterns = [x for x in (ROOT / ignore).read_text().splitlines() if x and not x.startswith(("#", "!"))]
+        assert any(fnmatch.fnmatch("server/subscription.env", p) for p in patterns), ignore

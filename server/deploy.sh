@@ -9,6 +9,7 @@ CONF="$REPO_DIR/server_con.yaml"
 COMPOSE="$REPO_DIR/server/docker-compose.yml"
 LOCAL_ENV="$REPO_DIR/server/.env"
 VOICE_ENV="$REPO_DIR/server/voice.env"     # v5.3: the ElevenLabs key, for the members who speak
+SUBSCRIPTION_ENV="$REPO_DIR/server/subscription.env"  # v7.1: the Claude OAuth token, for every agent on Claude
 CANON_DIR="$REPO_DIR/agents/canon"        # v5.9.1: the private canon (gitignored) — only this Mac and the host hold it
 REMOTE_DIR="matrix-agora/server"
 KEEP_IMAGES="${KEEP_IMAGES:-2}"   # the newest tags of each image kept besides those a container uses (2026-11-02)
@@ -63,6 +64,10 @@ done
 if [ -f "$VOICE_ENV" ]; then   # never printed: rsync -i lists the file name only
   CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$VOICE_ENV" "$TARGET:$REMOTE_DIR/voice.env")"
   [ "$DRY_RUN" = 1 ] || ssh "$TARGET" "chmod 600 ~/$REMOTE_DIR/voice.env"
+fi
+if [ -f "$SUBSCRIPTION_ENV" ]; then   # v7.1 — never printed: rsync -i lists the file name only
+  CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$SUBSCRIPTION_ENV" "$TARGET:$REMOTE_DIR/subscription.env")"
+  [ "$DRY_RUN" = 1 ] || ssh "$TARGET" "chmod 600 ~/$REMOTE_DIR/subscription.env"
 fi
 if [ -f "$CANON_DIR/common.md" ]; then   # never printed: rsync -i lists the file names only; nothing on the host is ever removed
   CHANGES+=$'\n'"$(rsync "${RSYNC_FLAGS[@]}" "$CANON_DIR/" "$TARGET:matrix-agora/canon/")"
