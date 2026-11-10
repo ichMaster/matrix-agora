@@ -4570,12 +4570,12 @@ def main() -> None:
         log.error("%s: another instance is running (pid %s) — exiting", cfg.localpart, lock_holder(cfg.lock_file))
         raise SystemExit(1)
     settings_start(os.environ, cfg.memory_file.parent, cfg)  # v4.7: the panel's overrides, before anything reads them
-    if cfg.type == "herald":  # v5.1: Hermes — his own process, no turns, never a word in the room
-        from agents.herald import Herald
-        asyncio.run(Herald(cfg).run())
-        return
     try:
-        agent = Agent(cfg)
+        if cfg.type == "herald":  # v5.1: Hermes — his own process, no turns, never a word in the room
+            from agents.herald import Herald
+            agent = Herald(cfg)  # code review v7.1 #5: on Claude he is refused as any agent is
+        else:
+            agent = Agent(cfg)
     except AuthRefused as exc:  # v4.4: the names of what tripped it, never a value
         log.error("%s: %s", cfg.localpart, exc)
         write_status(cfg.memory_file.parent / f"{cfg.localpart}.ratelimit.json",
