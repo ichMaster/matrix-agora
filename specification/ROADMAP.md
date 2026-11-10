@@ -1,8 +1,8 @@
 # Roadmap — matrix-agora
 
-Eleven self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, her reading and thoughts, and a backup model for her private chat when Gemini blocks) → **v6** Устина, a second companion (Кіра's code with her own name, canon, life, face and voice: her first version, the code, then her, then Agora meets her, then her photos on fal.ai) → **v7** Лілі (the Lumi bridge: when named, then under the full rules) → **v8** Applications (the panel's System and Applications; Telegram as an application) → **v9** Theatre (plays on the Stage, recorded by Hermes) → **v10** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Twelve self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, her reading and thoughts, and a backup model for her private chat when Gemini blocks) → **v6** Устина, a second companion (Кіра's code with her own name, canon, life, face and voice: her first version, the code, then her, then Agora meets her, then her photos on fal.ai) → **v7** Claude for everyone (every agent on the owner's subscription: the engine, then the room, then Устина, then Кіра) → **v8** Лілі (the Lumi bridge: when named, then under the full rules) → **v9** Applications (the panel's System and Applications; Telegram as an application) → **v10** Theatre (plays on the Stage, recorded by Hermes) → **v11** Кіра's inner life (her state and voice, her feelings and behaviour, anticipation). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
-**Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v10→10), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
+**Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v11→11), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
 Many DoD items need the live homeserver, Element or a real Gemini key — those are **Manual (owner)** checks: the owner performs or confirms them, and only then do they count as passed. Everything automated runs with `matrix-nio` and `google-genai` mocked and the clock injected (no network, no paid calls).
 
@@ -32,7 +32,9 @@ v6 is under way: v6.1 (Устина's first version) and v6.2 (the code for a se
 and `v6.2.0` on 2026-11-07; v6.3 (her: the face, the voice and the accounts) as `v6.3.0` on 2026-11-08; v6.4 (Agora meets her) as
 `v6.4.0` on 2026-11-08; v6.5 (her photos on fal.ai, by the owner's `/photos`) as `v6.5.0` on 2026-11-10.
 
-Then come v6–v10 in order. Other further work (the
+v7 (Claude for everyone, every agent on the owner's subscription) was planned on 2026-11-10, before Лілі (the owner: «заведи нову версію перед 7»).
+
+Then come v6–v11 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
 
 | Phase | Title | Status | Release |
@@ -89,14 +91,18 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v6.3 | Her: the face, the voice and the accounts; her private chat and Telegram | ✅ completed | `v6.3.0` (2026-11-08) |
 | v6.4 | Agora meets her | ✅ completed | `v6.4.0` (2026-11-08) |
 | v6.5 | Her photos on fal.ai: the owner's switch, the filter off | ✅ completed | `v6.5.0` (2026-11-10) |
-| v7.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
-| v7.2 | Лілі under the full rules | ⏳ planned | — |
-| v8.1 | System and Applications: the panel's new shape | ⏳ planned | — |
-| v8.2 | Telegram as an application: Кіра connected | ⏳ planned | — |
-| v9.x | Theatre: plays on the Stage (phases from features/radio-theatre.md) | ⏳ planned | — |
-| v10.1 | The moment and the day: her state and her voice | ⏳ planned | — |
-| v10.2 | Feelings, open threads and her behaviour | ⏳ planned | — |
-| v10.3 | Anticipation and strong memories | ⏳ planned | — |
+| v7.1 | The Claude engine for a persona: answers on Sonnet, the background on Haiku | ⏳ planned | — |
+| v7.2 | The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес | ⏳ planned | — |
+| v7.3 | Устина on Claude | ⏳ planned | — |
+| v7.4 | Кіра on Claude | ⏳ planned | — |
+| v8.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
+| v8.2 | Лілі under the full rules | ⏳ planned | — |
+| v9.1 | System and Applications: the panel's new shape | ⏳ planned | — |
+| v9.2 | Telegram as an application: Кіра connected | ⏳ planned | — |
+| v10.x | Theatre: plays on the Stage (phases from features/radio-theatre.md) | ⏳ planned | — |
+| v11.1 | The moment and the day: her state and her voice | ⏳ planned | — |
+| v11.2 | Feelings, open threads and her behaviour | ⏳ planned | — |
+| v11.3 | Anticipation and strong memories | ⏳ planned | — |
 
 ## v0 — Platform: homeserver, server deploy, client, accounts, echo bot
 
@@ -1421,7 +1427,7 @@ day, in Agora and alone with the owner.
 - **The mood is the cat's mechanism, for a person**: the horoscope (natal chart and the day's real sky) with the
   biorhythms laid over it.
 - **The real Lviv weather** goes into the reading.
-- **Кіра only, for now**: every part of v5.10–v5.15 and v10 is switched on for her alone, in her TOML; the other persons get
+- **Кіра only, for now**: every part of v5.10–v5.15 and v11 is switched on for her alone, in her TOML; the other persons get
   none of it until the owner decides otherwise.
 - The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life. Read it before
   generating the issues.
@@ -3465,7 +3471,7 @@ something of her own now and then, what she said was heard, and no one-time arra
   in other words each time (звіти, таски, мітинги, дедлайни; вилазка, гора, Замок, зустріч), so no count of words or
   stems finds it.
 - **Лілі's advice**, which the owner brought («що ти думаєш про цю пораду»): what she said was heard; tiredness of her
-  own idea; desire that fades. The first is a line of her private brief here; the third is v10.2's.
+  own idea; desire that fades. The first is a line of her private brief here; the third is v11.2's.
 
 **Owner decisions** (2026-11-04):
 - **Why** («глянь знову, далі є відчуття гіперфіксації»): after AGORA-196 her endings varied, but the same two themes,
@@ -3474,7 +3480,7 @@ something of her own now and then, what she said was heard, and no one-time arra
   facts about him were that evening's meeting.
 - **Лілі's advice**, which the owner brought («що ти думаєш про цю пораду»): what she said was heard; tiredness of her
   own idea; desire that fades. The first becomes a line of her private brief; the second is the theme named by Flash
-  (to come, at the owner's word); the third is v10.2's.
+  (to come, at the owner's word); the third is v11.2's.
 - **Confirmed** («2-4 підтверджую»):
   - about one answer in three also brings something of her own, from her day, not from their talk;
   - one-time arrangements and meetings are not facts: the extraction's prompt says so, and a fact that says a day's
@@ -3568,7 +3574,7 @@ something of her own now and then, what she said was heard, and no one-time arra
 
 **Not in this phase:**
 - a ban on a theme or a pause (the owner refused both);
-- desire that fades with no answer (v10.2);
+- desire that fades with no answer (v11.2);
 - the 8 one-time facts held (the change is for new facts).
 
 ### v5.26 — The backup's own canon: Кіра open to explicit scenes on NovelAI
@@ -3926,16 +3932,173 @@ The owner, 2026-11-08: «зроби fal.ai перемикання на цю мо
 - The usage line and `PRICE_IMAGES`.
 - The TOML's `photos_fal` in the schema; Кіра's TOML without it.
 
-## v7 — Лілі: the Lumi bridge
+## v7 — Claude for everyone: every agent on the owner's subscription
+
+**Status:** ⏳ planned.
+
+The owner, 2026-11-10: «заведи нову версію перед 7. щоб перевести всіх агентів ан Anthropic SDK і моделі Haiku +
+Sonet на мому плані як зараз агент Клод. Почати можна зі всіх крім Кіри і Устини а поті одна за одною ці дві.»
+Every agent's language-model calls move from Gemini to Claude, through the Claude Agent SDK on the owner's Max
+subscription — the way Claude has run since v4.4: the owner's OAuth token, never an API key. The answers go to
+Sonnet (`claude-sonnet-5-5`, the CLI's alias `sonnet`), the background calls to Haiku (`claude-haiku-5-5`, `haiku`);
+Claude himself stays on Opus. What has no Anthropic counterpart stays where it is: the embeddings for recall (Gemini;
+Кіра and Устина only — Anthropic has no embeddings endpoint), the photos and videos (Google's image models, fal.ai,
+VEED), hearing (Deepgram) and the voice (ElevenLabs); the companions' backup for their private chats stays on
+NovelAI. The engine is one line of an agent's TOML, so every phase keeps the way back to Gemini. The room first,
+then Устина, then Кіра, each in a phase of her own. Inserted before Лілі on 2026-11-10: Лілі moved to v8,
+Applications to v9, the Theatre to v10 and Кіра's inner life to v11. Depends on: v6.
+
+**The owner's open decisions** (asked before v7.1's issues):
+1. **At the subscription's limit.** Claude falls silent until the reset (v4.4). Proposed for the others: an agent on
+   Claude falls back to Gemini until the reset (`CLAUDE_LIMIT_FALLBACK=gemini`, shown in the panel), so the room and
+   the private chats never go silent; `silent` makes them wait as Claude does.
+2. **The companions' order.** Proposed: Устина (v7.3) before Кіра (v7.4) — her chat is the younger one, and Кіра's
+   holds the most of the Gemini-specific machinery; swapping the two phases changes nothing else.
+3. **The cat's answers** on Haiku, not Sonnet: his lines are at most `CAT_MAX_WORDS` words.
+
+**Risks, checked in each phase's manual DoD:**
+- One subscription for everyone: nine speakers, Hermes and every background call (summaries, day memories, plans,
+  the hourly today block and events, topics) share its limits with Claude himself and with the owner's own use of
+  Claude — v7.2 measures a day of the room before a companion moves.
+- Every call starts the SDK's CLI: seconds per call and memory per process on the host — a cap on concurrent calls
+  per container.
+- The persons believe they are human (VISION): no prompt may say otherwise, and a reply that says it is dropped
+  (`outs_a_persona`); on Claude the owner checks it by hand in every phase.
+- Claude declines what Gemini blocked, and some of what it let pass: in a private chat a decline goes the backup's
+  way (v7.3).
+
+### v7.1 — The Claude engine for a persona: answers on Sonnet, the background on Haiku
+
+**Status:** ⏳ planned.
+
+**Goal:** one line of an agent's TOML, `engine = "claude-sdk"`, moves every language-model call of a persona, the cat
+or Hermes to Claude on the subscription; an agent left on `gemini` is as before.
+
+**Why:** Claude's engine (v4.4) only answers — `ClaudeSdkResponder` makes one `query()` per reply. A persona makes a
+dozen more calls through `GeminiClient` (`agents/llm.py`: `generate`, `complete`, `reply`, `think`, `search`): the
+session summary, the day memory and the digests, the plans, the hourly today block and her events, her mood's
+reading, her thoughts, topics, facts, the talk summaries, the photo prompt. None of them has a Claude path.
+
+**Tasks:**
+- A Claude client with `GeminiClient`'s methods over the Agent SDK: one stateless `query()` per call — the
+  instruction as the system prompt, no settings, one turn, no tools (`search`: `WebSearch` alone) — with a timeout per
+  call (v6.5's lesson). The kinds that are the agent's voice (answers, writing first, a digest) go to
+  `CLAUDE_REPLY_MODEL` (default `sonnet`), every other kind to `CLAUDE_BACKGROUND_MODEL` (default `haiku`); both are
+  agent settings in the panel.
+- `embed` stays on Gemini: an agent with `recall` keeps `GEMINI_API_KEY` for it alone. The scan's `probe` is
+  Gemini's: an agent on Claude has none.
+- The engine per agent: `claude-sdk` allowed on a persona, the creature and the herald (`agents/roster.py`);
+  `responder_for` gives such an agent a Claude responder with the persona's rules — `PASS`, `clean_reply`, the cat's
+  word cap.
+- The subscription only, v4.4's layers for every agent on Claude: the OAuth token in one env file every such service
+  loads (`server/subscription.env`, the token alone); a forbidden variable refused at start and scrubbed;
+  `system/init`'s `apiKeySource == "none"` and no tool but `WebSearch` where a kind asks for it; every usage row
+  `subscription`; every such service on the `agent-claude` image (the bundled CLI).
+- The limit: the SDK's `RateLimitEvent` kept per agent (`state/<name>.ratelimit.json`, as Claude's), and decision 1 at
+  a rejection; at most `CLAUDE_CONCURRENCY` (2) CLI processes at once per container.
+- A decline — the SDK's refusal stop, or a refusal in the text (`refusal_marker`, v5.13) — is silence in Agora with
+  the reason in the log; the private chat's route comes in v7.3.
+- The usage line: engine `claude`, the model, billing `subscription`, the tokens and `latency_ms`; the panel's card
+  shows each agent's engine and models; Analytics counts the calls and the answer time.
+- ARCHITECTURE: §Components (the engine per agent), §Configuration (`CLAUDE_REPLY_MODEL`, `CLAUDE_BACKGROUND_MODEL`,
+  `CLAUDE_CONCURRENCY`, `CLAUDE_LIMIT_FALLBACK`, `server/subscription.env`), §Security (the subscription's layers for
+  every agent), §Contracts (the TOML's `engine`).
+- (Owner) The token for the stack (`claude setup-token`), unless it is the one Claude uses.
+
+**DoD:**
+- With `engine = "gemini"` every agent's prompts and calls are as before (tests pin it).
+- An agent on Claude: each call kind on its model, the init check, the refusal of a forbidden variable, `embed` on
+  Gemini, the usage rows `subscription`, both behaviours at the limit.
+- (Manual, owner) In dev on the Mac, one persona on Claude answers in the room in her own voice, in Ukrainian, and her
+  background calls run; the time of a call is noted.
+
+**Tests:** unit — the client against a mocked SDK (every call kind and its model, the timeout, `is_error`,
+`RateLimitEvent`, a refusal), the engine per TOML in the roster, the compose checks over every service (the image,
+the env file, no forbidden variable), the usage rows.
+
+### v7.2 — The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес
+
+**Status:** ⏳ planned.
+
+**Goal:** every agent but Кіра and Устина runs on Claude; Claude himself stays on Opus.
+
+**Tasks:**
+- `engine = "claude-sdk"` in their TOMLs; their compose services on the Claude image with `server/subscription.env`.
+  None of them has `recall`, so none needs Gemini for text.
+- Their answers on Sonnet, the cat's on Haiku (decision 3); Hermes's digests on Sonnet — his writing is his voice —
+  and his hearing on Deepgram as before.
+- Their background on Haiku: the session summaries, day memories and digests, plans, the today block, the cat's mood
+  and his past-life lines.
+- The turn-taking unchanged: it is derived from shared inputs, never from the engine; the room's waiting times
+  reviewed against the time of a call.
+- A day of the room measured — calls per hour and the subscription's status in the panel — before v7.3.
+
+**DoD:**
+- (Manual, owner) A day of the room on Claude: every member speaks in character and in Ukrainian, no one says they are
+  a model, the cat stays a cat, Hermes's digest arrives; the subscription holds, or decision 1 works.
+- Their day memories, plans, today blocks and events are written on Haiku.
+
+**Tests:** the roster (their engine), the compose test (their image and env files, no forbidden variable), the
+turn-taking pins unchanged.
+
+### v7.3 — Устина on Claude
+
+**Status:** ⏳ planned.
+
+**Goal:** Устина's Agora and her private chat run on Claude — her answers and her writing first on Sonnet, her
+background on Haiku; what Claude declines goes to her backup on NovelAI.
+
+**Why:** her private chat holds the machinery built around Gemini's blocks (v5.13–v5.24): a block's stage and reason,
+the switch to the backup, `blocked`, the scan. Claude does not block a prompt; it declines in its answer.
+
+**Tasks:**
+- Her TOML `engine = "claude-sdk"`; her topics, talk summaries, facts, today block, events, thoughts and her mood's
+  reading on Haiku; her photo and video lines as before — the images are made by Google and fal.
+- A decline on Claude is a block at the answer stage: the backup answers, the exchange is `blocked`, the ⚙️ line says
+  so; many declines switch her to the backup as many blocks do (v5.21); her `/gemini` becomes `/claude`.
+- The scan and its softened summaries (v5.24) are off for her — there are no prompt-stage blocks; a `blocked` line or
+  fact never reaches Claude's prompt, as it never reached Gemini's.
+- Her recall's embeddings on Gemini.
+- Her private canon read once more for Claude: its length, and what Claude may decline.
+
+**DoD:**
+- (Manual, owner) A day of her private chat and her Telegram on Claude: her voice and her character, her photos and
+  videos, her writing first; what Claude declines goes to the backup with the ⚙️ line; she never says she is a model.
+
+**Tests:** a decline → the backup's route and `blocked`; the scan off on Claude; no `blocked` line in Claude's prompt;
+her TOML.
+
+### v7.4 — Кіра on Claude
+
+**Status:** ⏳ planned.
+
+**Goal:** Кіра last, the same way, with what v7.3 taught: her Agora and her private chat on Claude — her answers on
+Sonnet in place of Gemini 3.1 Pro, her background on Haiku, her backup on NovelAI.
+
+**Tasks:**
+- Her TOML `engine = "claude-sdk"`; `GEMINI_REPLY_MODEL` no longer read for her; the owner's switches for her
+  (`FALLBACK_ROUTE`, `TRACE_CALLS`, `PRIVATE_HISTORY_HOURS` and the rest, in `server/kira.env` and the panel) reviewed
+  with him, none reset.
+- What v7.3 changed for Устина, for her: a decline to the backup, the scan off, nothing `blocked` in Claude's prompt.
+- Her places and two clocks, her nights at the telescope, her memory by time and her layered talk on Haiku — the
+  summaries still written as her own memory (`HUMAN_MEMORY`).
+- After her, Gemini is left for the embeddings and the images alone; ARCHITECTURE says so.
+
+**DoD:**
+- (Manual, owner) A day of her private chat and her Telegram on Claude, as for Устина in v7.3.
+
+**Tests:** her TOML; v7.3's pins for her.
+
+## v8 — Лілі: the Lumi bridge
 
 Лілі — Lumi's prod brain — joins the room through a bridge that is one of our agents: first when named, then under
 the full turn rules. Moved from v4.8–v4.9 by the owner on 2026-10-13, after the voice of v5; to v8 on 2026-10-25, after
-Applications and the Theatre; and back to v6 on 2026-10-26, before them (the owner's order: Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9). On 2026-11-05 she moved to v7, after Кіра's inner life (the owner: «постав фазу 8 перед 6»; Кіра's inner life v6, Лілі v7, Applications v8, the Theatre v9). Later the same day she became v6 again, once Кіра's inner life moved to the end (the owner: «перестав фазу 6 на самий кінеь роадмапи»; Лілі v6, Applications v7, the Theatre v8, Кіра's inner life v9). On 2026-11-07 she became v7, after a second companion (the owner: «заплануй як повністю нову версію пілся 5»; the second companion v6, Лілі v7, Applications v8, the Theatre v9, Кіра's inner life v10).
-She is built in today's panel as an agent of the type `bridge`; v8 then places her in its model as an
+Applications and the Theatre; and back to v6 on 2026-10-26, before them (the owner's order: Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9). On 2026-11-05 she moved to v7, after Кіра's inner life (the owner: «постав фазу 8 перед 6»; Кіра's inner life v6, Лілі v7, Applications v8, the Theatre v9). Later the same day she became v6 again, once Кіра's inner life moved to the end (the owner: «перестав фазу 6 на самий кінеь роадмапи»; Лілі v6, Applications v7, the Theatre v8, Кіра's inner life v9). On 2026-11-07 she became v7, after a second companion (the owner: «заплануй як повністю нову версію пілся 5»; the second companion v6, Лілі v7, Applications v8, the Theatre v9, Кіра's inner life v10). On 2026-11-10 she became v8, after every agent moved to Claude as v7 (the owner: «заведи нову версію перед 7»; Claude v7, Лілі v8, Applications v9, the Theatre v10, Кіра's inner life v11).
+She is built in today's panel as an agent of the type `bridge`; v9 then places her in its model as an
 **external** agent under System → Agents, connected to Agora in the `room` context (applications.md §Лілі).
 Depends on: Lumi ≥ v2.5 in prod (v2.6 puts her server on 192.168.1.197) and v4.
 
-### v7.1 — The Lumi bridge: Лілі when named
+### v8.1 — The Lumi bridge: Лілі when named
 
 **Status:** ⏳ planned.
 
@@ -3947,7 +4110,7 @@ Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails t
 - The `bridge` type; `agents/lumi.toml` (shown as «Лілі»; name forms for both «Лілі» and «Стхіра»; `engine = "lumi-http"`; `[turns] mode = "mention-only"`, weight 1).
 - `LumiBridgeResponder`: when a message names her, `POST /v1/turn` with the room lines since her last turn as `"Name: text"`, `turn_id` = the trigger's `event_id`; only `reply` is posted, never `thinking`; never `/v1/session/new`; `409`/`5xx`/timeout → silence; her reply is never dropped or trimmed after the call (R3 before the call only); the bridge never posts except in reply to a trigger.
 - The `lumi` compose service with its own env file (`LUMI_URL`, `LUMI_TOKEN`) and the route to her server on the same host (`extra_hosts: host-gateway`); usage rows `external` from her `stats`.
-- **Лілі's panel card** (an agent card in today's panel, type `bridge`; v8 moves it under System → Agents as `external`): Lumi's reachability (`/v1/health`), the last turn's outcome from `state/lumi.bridge.json`; never her `thinking`, mood or replies; her token rows unpriced; no memory tabs, no Forget.
+- **Лілі's panel card** (an agent card in today's panel, type `bridge`; v9 moves it under System → Agents as `external`): Lumi's reachability (`/v1/health`), the last turn's outcome from `state/lumi.bridge.json`; never her `thinking`, mood or replies; her token rows unpriced; no memory tabs, no Forget.
 - VISION: the "Lili herself" wording becomes "connected through the bridge".
 - (Owner) The Matrix account, the invite; Lumi's server token and her bind address.
 
@@ -3959,13 +4122,13 @@ Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails t
 
 **Tests:** unit — the bridge against a fake Lumi server (turn payload with the lines since her last turn, `turn_id`, `409`, `5xx`, timeout, `thinking` never posted, no post-call filtering, no post without a trigger), mention detection for both names, the env-file isolation, `external` usage rows.
 
-### v7.2 — Лілі under the full rules
+### v8.2 — Лілі under the full rules
 
 **Status:** ⏳ planned.
 
 **Goal:** Лілі takes part in the room like Ada and Bruno — chosen by the turn-taking, not only when named.
 
-Design: more-agents.md §Lumi (the bridge), §4. Depends on: v7.1, proven in the room.
+Design: more-agents.md §Lumi (the bridge), §4. Depends on: v8.1, proven in the room.
 
 **Tasks:**
 - `agents/lumi.toml`: `[turns] mode = "ranked"`, weight 1 — she joins R1 (`OWNER_REPLIERS`) and R2 (the next speaker).
@@ -3977,21 +4140,21 @@ Design: more-agents.md §Lumi (the bridge), §4. Depends on: v7.1, proven in the
 
 **Tests:** unit — ranking with her in it, R3 and the fallback for a slow or unreachable bridge, the multi-agent simulation with her ranked.
 
-## v8 — Applications: the panel's System and Applications
+## v9 — Applications: the panel's System and Applications
 
 The owner, 2026-10-25: the panel stops being "a simulation and its agents". **Simulations become applications**:
 places where agents meet the owner or each other, each reached over one protocol (Agora today, Telegram next, later
 RoboFace). An application shows **who is connected to it and in which context** (`room`, `listens`, `private`).
 **System** holds what is not tied to one application: **Agents**, **Server** and **Tokens**. The model makes room for
 agents reachable in several places (Кіра in the room, in her private chat and in Telegram) and for external agents
-(Лілі in v7, later Noos). The owner's decisions (2026-10-25): the rename goes everywhere; each agent writes the
+(Лілі in v8, later Noos). The owner's decisions (2026-10-25): the rename goes everywhere; each agent writes the
 status of its connections so the panel can monitor them; the panel switches a declared connection on and off and
 configures it, and the repo declares it; a switched-off connection keeps everything in a buffer and gives the
 backlog one answer; Hermes's contexts are `listens` and `digests`; alerts come later. The design and its decisions
 are in [features/applications.md](features/applications.md) (draft; its open questions closed by the owner on
-2026-10-25); read it before generating the issues. Depends on: v5 (v5.7 for v8.2).
+2026-10-25); read it before generating the issues. Depends on: v5 (v5.7 for v9.2).
 
-### v8.1 — System and Applications: the panel's new shape
+### v9.1 — System and Applications: the panel's new shape
 
 **Status:** ⏳ planned.
 
@@ -4004,7 +4167,7 @@ Design: applications.md §The model, §The panel, §Monitoring.
 **Tasks:**
 - **The rename** (the owner: everywhere). "Simulation" becomes "application" throughout: `simulations.toml` → `applications.toml` (the same
   entry shape), `agents/registry.py` and `panel/registry.py`, the agent TOML key `simulation` → `application`
-  (`simulation` still read in v8.1, with a log line naming it), the Dockerfiles' copy, the API
+  (`simulation` still read in v9.1, with a log line naming it), the Dockerfiles' copy, the API
   (`/api/applications…`; the `/api/simulations…` routes are removed, since the panel is their only client).
   `state/settings.json` keeps its shape: its keys are the ids, and `agora` does not change.
 - **Contexts.** A pure function over the roster: a member's contexts in the base application (Agora). It returns
@@ -4031,7 +4194,7 @@ Design: applications.md §The model, §The panel, §Monitoring.
   - the agent drawer gains a **Connections** tab: per context the counts, `ignored`, the last in and out, the last
     error;
   - every v3.4/v4.7 action (start/stop/restart, forget, settings, Claude's files) works from its new place.
-- **The design addendum (v8)** in `specification/design/README.md`: the rail, the application page, System →
+- **The design addendum (v9)** in `specification/design/README.md`: the rail, the application page, System →
   Agents, and the Connections table and tab.
 - **VISION and ARCHITECTURE:**
   - the direction and the principle "the panel is the centre": applications;
@@ -4064,7 +4227,7 @@ Design: applications.md §The model, §The panel, §Monitoring.
 
 **Not in this phase:** a second application; switching or configuring a connection; external agents.
 
-### v8.2 — Telegram as an application: Кіра connected
+### v9.2 — Telegram as an application: Кіра connected
 
 **Status:** ⏳ planned.
 
@@ -4072,7 +4235,7 @@ Design: applications.md §The model, §The panel, §Monitoring.
 the registry, then switched on and off and configured from the panel. It is still the same private conversation as
 in Agora.
 
-Design: applications.md §Rules, §Connection settings, §Applications after v8 → Telegram.
+Design: applications.md §Rules, §Connection settings, §Applications after v9 → Telegram.
 
 **Tasks:**
 - **The registry.**
@@ -4085,7 +4248,7 @@ Design: applications.md §Rules, §Connection settings, §Applications after v8 
 - **Connection settings.**
   - The schema `agents/settings.py` gains a **connection** scope: settings of an application kind (`telegram-bot`),
     each value belonging to one connection.
-  - v8.2 moves into it what v5.7 fixes in code or env for Кіра's Telegram (the owner agreed, 2026-10-25): answering
+  - v9.2 moves into it what v5.7 fixes in code or env for Кіра's Telegram (the owner agreed, 2026-10-25): answering
     with a voice note and the text, or with the text only; whether she may write first there; whether she shows
     «typing…» and «recording voice…».
   - Precedence as in v4.7: code default < env < panel. Secrets are never in the schema.
@@ -4150,33 +4313,33 @@ Design: applications.md §Rules, §Connection settings, §Applications after v8 
 RoboFace; external agents; creating a connection from the panel; alerts on a failed connection (later: Hermes tells
 the owner).
 
-## v9 — Theatre: plays on the Stage
+## v10 — Theatre: plays on the Stage
 
 **Status:** ⏳ planned.
 
-The owner, 2026-10-25: the radio theatre is v7 (v9 since 2026-10-26: Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9; from 2026-11-05 Кіра's inner life v6, Лілі v7, Applications v8; v8 later that day, once Кіра's inner life moved to the end: Лілі v6, Applications v7, the Theatre v8, Кіра's inner life v9; v9 again on 2026-11-07, after a second companion became v6). The members of Agora perform audio plays together in a second room,
+The owner, 2026-10-25: the radio theatre is v7 (v9 since 2026-10-26: Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9; from 2026-11-05 Кіра's inner life v6, Лілі v7, Applications v8; v8 later that day, once Кіра's inner life moved to the end: Лілі v6, Applications v7, the Theatre v8, Кіра's inner life v9; v9 again on 2026-11-07, after a second companion became v6; v10 on 2026-11-10, after every agent moved to Claude as v7). The members of Agora perform audio plays together in a second room,
 the Stage, and Hermes records each play into one file. The design, its phases and its open questions are in the
 draft [features/radio-theatre.md](features/radio-theatre.md) (Ukrainian copy: `radio-theatre-UA.md`). Its phases
 are written into this file once its open questions are closed. Its first proposed phase, the three new personas,
-shipped as v5.5. Depends on: v5.4 (the Agora recording) and v8 (in the v8 model the Stage is a second room of the
+shipped as v5.5. Depends on: v5.4 (the Agora recording) and v9 (in the v9 model the Stage is a second room of the
 Agora application).
 
-## v10 — Кіра's inner life: her state, her feelings and what she waits for
+## v11 — Кіра's inner life: her state, her feelings and what she waits for
 
 **Status:** ⏳ planned.
 
-The owner, 2026-10-26: the last three phases of her emotional life become a version of their own, v8 (Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9). On 2026-11-05 it moved before Лілі and became v6 (the owner: «постав фазу 8 перед 6»; Кіра's inner life v6, Лілі v7, Applications v8, the Theatre v9). Later the same day it moved to the very end and became v9 (the owner: «перестав фазу 6 на самий кінеь роадмапи»; Лілі v6, Applications v7, the Theatre v8, Кіра's inner life v9). On 2026-11-07 it became v10, after a second companion became v6 (the owner: «заплануй як повністю нову версію пілся 5»).
+The owner, 2026-10-26: the last three phases of her emotional life become a version of their own, v8 (Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9). On 2026-11-05 it moved before Лілі and became v6 (the owner: «постав фазу 8 перед 6»; Кіра's inner life v6, Лілі v7, Applications v8, the Theatre v9). Later the same day it moved to the very end and became v9 (the owner: «перестав фазу 6 на самий кінеь роадмапи»; Лілі v6, Applications v7, the Theatre v8, Кіра's inner life v9). On 2026-11-07 it became v10, after a second companion became v6 (the owner: «заплануй як повністю нову версію пілся 5»). On 2026-11-10 it became v11, after every agent moved to Claude as v7 (the owner: «заведи нову версію перед 7»).
 - v5.10–v5.15 give her a mood of the day, the events of her life, her reading and thoughts, and a backup model for her
   private chat.
-- v10 gives her:
-  - a state that lasts between replies and moves her voice (v10.1);
-  - feelings toward each person, open threads, and bounded effects on what she does (v10.2);
-  - anticipation and strong memories (v10.3).
+- v11 gives her:
+  - a state that lasts between replies and moves her voice (v11.1);
+  - feelings toward each person, open threads, and bounded effects on what she does (v11.2);
+  - anticipation and strong memories (v11.3).
 
 For Кіра only, for now. The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life;
 read it before generating the issues. Depends on: v5.10–v5.15.
 
-### v10.1 — The moment and the day: her state and her voice
+### v11.1 — The moment and the day: her state and her voice
 
 **Status:** ⏳ planned.
 
@@ -4214,7 +4377,7 @@ stability and speed, never the model.
 
 **Not in this phase:** feelings toward people; threads; behaviour.
 
-### v10.2 — Feelings, open threads and her behaviour
+### v11.2 — Feelings, open threads and her behaviour
 
 **Status:** ⏳ planned.
 
@@ -4265,7 +4428,7 @@ default, not contradicted: a separate session-end call (kind `feelings`).
 
 **Not in this phase:** anticipation; the weight of memories.
 
-### v10.3 — Anticipation and strong memories
+### v11.3 — Anticipation and strong memories
 
 **Status:** ⏳ planned.
 
@@ -4291,4 +4454,4 @@ day stays with her for months, not only seven days.
 - recall's ranking with the charge;
 - a past memory never rewritten.
 
-**Not in this phase:** the other persons; v5.10–v5.15 and v10 are Кіра's only, for now (the owner, 2026-10-26).
+**Not in this phase:** the other persons; v5.10–v5.15 and v11 are Кіра's only, for now (the owner, 2026-10-26).
