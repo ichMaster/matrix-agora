@@ -623,6 +623,9 @@ class ClaudeClient(_Subscription):
         self.config_dir = config_dir
         self._sink = sink
         self._gate = asyncio.Semaphore(max(1, int(concurrency)))
+        # code review v7.1 #2: the voice's calls have a gate of their own — an answer never waits behind two
+        # background calls (each may hold a slot for both its tries), so the turn-taking never drops it for that
+        self._voice_gate = asyncio.Semaphore(max(1, int(concurrency)))
         self.limit_fallback = limit_fallback if limit_fallback in LIMIT_FALLBACKS else "gemini"
         self.fallback = fallback
         self.embedder = embedder
@@ -772,7 +775,7 @@ class ClaudeClient(_Subscription):
             options = (self._options or _default_options())(**client_options(
                 path, model=model, max_output_tokens=cap, config_dir=self.config_dir, toolset=toolset,
                 effort=effort, think=think))
-            async with self._gate:
+            async with (self._voice_gate if kind in VOICE_KINDS else self._gate):
                 for attempt in range(1, REPLY_TRIES + 1):
                     started = self._mono()
                     try:

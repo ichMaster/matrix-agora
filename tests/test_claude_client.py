@@ -253,6 +253,20 @@ def test_embed_is_geminis_and_probe_is_none(tmp_path):
 
 
 # --- bounded: the timeout, the second try, the processes at once ----------------------------------------------------
+def test_an_answer_never_waits_behind_the_background(tmp_path):
+    """Code review v7.1 #2: a background call holding the one slot kept an answer waiting past its turn."""
+    sdk = FakeSDK("hang", [INIT_OK, result("Привіт!")])
+    c, _ = client(tmp_path, sdk, concurrency=1)
+
+    async def go():
+        background = asyncio.create_task(c.complete("x", "S", 300, kind="summary"))
+        await asyncio.sleep(0.05)  # it holds the background's slot, hung
+        out = await asyncio.wait_for(c.reply("Ich: привіт", "BRIEF", 200), 2)
+        background.cancel()
+        return out
+    assert run(go()) == ("Привіт!", "stop")
+
+
 def test_a_hung_call_is_tried_once_more(tmp_path, monkeypatch):
     monkeypatch.setattr("agents.claude_sdk.THINK_TIMEOUT_S", 0.05)
     sdk = FakeSDK("hang", [INIT_OK, result("нарешті.")])
