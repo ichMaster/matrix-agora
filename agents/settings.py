@@ -310,7 +310,7 @@ def validate(name: str, raw: object) -> tuple[str | None, str | None]:
         try:
             return format_weights(parse_weights(text)), None
         except ValueError:
-            return None, "not kind:weight of everyday, joyful, inspiring, heavy"
+            return None, "not kind:weight of everyday, joyful, inspiring, heavy, done"
     if setting.kind == "choice":
         return (text, None) if text in setting.choices else (None, "not one of " + ", ".join(setting.choices))
     if setting.kind == "id":  # v5.1: an ElevenLabs voice id — letters and digits; empty means none

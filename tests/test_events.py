@@ -42,8 +42,8 @@ def at(text: str) -> datetime:
 
 # --- the pure decisions ------------------------------------------------------------------------------------------
 def test_parse_weights_and_bad_specs():
-    assert parse_weights(DEFAULT_WEIGHTS) == {"everyday": 6, "joyful": 2, "inspiring": 2, "heavy": 1}
-    assert parse_weights("joyful:1") == {"everyday": 0, "joyful": 1, "inspiring": 0, "heavy": 0}
+    assert parse_weights(DEFAULT_WEIGHTS) == {"everyday": 6, "joyful": 2, "inspiring": 2, "heavy": 1, "done": 0}
+    assert parse_weights("joyful:1") == {"everyday": 0, "joyful": 1, "inspiring": 0, "heavy": 0, "done": 0}
     for bad in ("", "everyday", "everyday:x", "everyday:-1", "sad:2", "everyday:1,everyday:2", "everyday:0,heavy:0",
                 "everyday:inf"):
         with pytest.raises(ValueError):
@@ -334,3 +334,19 @@ def test_a_night_event_falls_at_its_time_and_the_roll_only_while_she_is_awake(tm
     assert agent.day_events(at("2026-11-13 09:00").date()) == [] and len(llm.calls) == calls
     tick(agent, "2026-11-13 14:00")
     assert [e.source for e in agent.day_events(at("2026-11-13 14:00").date())] == ["rolled"]
+
+
+def test_a_thing_she_did_herself_is_a_kind_of_its_own_and_never_drawn_without_its_weight():
+    """v6.5.1 (the owner, 2026-11-10, of Устина: «вона нічого не робить тільки хоче або думає»): `done` — a deed of
+    hers, asked for with its own lead; a weighting that leaves it out draws as before and is written as before."""
+    from agents.events import DONE_LEAD, KIND_ASK, event_request, format_weights, roll_event
+    assert parse_weights("done:5,everyday:5")["done"] == 5
+    assert format_weights(parse_weights(DEFAULT_WEIGHTS)) == DEFAULT_WEIGHTS                # Кіра's: as it was
+    assert format_weights(parse_weights("everyday:1,done:2")) == "everyday:1,joyful:0,inspiring:0,heavy:0,done:2"
+    draws = [roll_event(random.Random(i).random, 1.0, parse_weights(DEFAULT_WEIGHTS)) for i in range(300)]
+    assert "done" not in draws
+    assert {roll_event(random.Random(i).random, 1.0, parse_weights("done:1")) for i in range(20)} == {"done"}
+    _, contents = event_request("Устина", "Канон.", "done", at("2026-11-12 15:00"), "Магістратура.", None,
+                                "- 15:00 проявка", None, None)
+    assert DONE_LEAD.format(ask=KIND_ASK["done"]) in contents and "чого ти не планував" not in contents
+    assert "що з цього вийшло" in contents and "у минулому часі" in contents

@@ -1211,7 +1211,7 @@ function moodTabHtml(mem) {
 }
 
 // v5.11 — what happened to her: by day, newest first; the kind as a label, her story's and the news marked by source
-const EVENT_LABEL = {everyday: "everyday", joyful: "joyful", inspiring: "inspiring", heavy: "heavy", story: "story"};
+const EVENT_LABEL = {everyday: "everyday", joyful: "joyful", inspiring: "inspiring", heavy: "heavy", done: "done", story: "story"};
 const eventLabel = (e) => e.source === "news" ? `news · ${e.kind}` : e.source === "rolled" ? EVENT_LABEL[e.kind] || e.kind : `${e.source}`;
 function eventsTabHtml(a, mem) {
   const days = mem.events;

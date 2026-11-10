@@ -2,8 +2,9 @@
 
 Three sources fill one append-only file a day, `state/<name>.events/YYYY-MM-DD.md`:
 - her life story's dated events (`agents/life.py`), entered on their date — `known` ahead or a `surprise`;
-- an hourly roll in her waking hours: at `EVENT_P` an event of a weighted kind (everyday, joyful, inspiring, heavy),
-  written by one call inside her life's frame;
+- an hourly roll in her waking hours: at `EVENT_P` an event of a weighted kind (everyday, joyful, inspiring, heavy;
+  from v6.5.1 also `done` — a thing she did herself, with what came of it), written by one call inside her life's
+  frame;
 - Lviv's news, woven in rarely (`agents/citynews.py`).
 
 A block is `## HH:MM · <kind> · <source>` and its text; hidden `<!-- … -->` lines record the rolled hours, the
@@ -20,7 +21,9 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 
-KINDS = ("everyday", "joyful", "inspiring", "heavy")
+# v6.5.1 (the owner, 2026-11-10, of Устина: «додай більше подій в життя Устини бо вона нічого не робить тільки хоче
+# або думає»): `done` — a thing she did herself; last, so a weighting without it draws exactly as before (weight 0)
+KINDS = ("everyday", "joyful", "inspiring", "heavy", "done")
 DEFAULT_WEIGHTS = "everyday:6,joyful:2,inspiring:2,heavy:1"
 SOURCES = ("known", "surprise", "rolled", "news")
 # what the event call asks for, by kind
@@ -30,7 +33,11 @@ KIND_ASK = {
     "joyful": "радісна подія — щось хороше, що сталося з тобою чи з кимось із твоїх людей",
     "inspiring": "подія, що надихнула: ідея, відкриття, зустріч чи слово, від якого з'явилися сили",
     "heavy": "важка подія — хвороба, втрата, справжня невдача чи погана новина; без мелодрами, як буває в житті",
+    "done": "справа, яку ти зробила сама, — крок у чомусь із твого плану на сьогодні чи з твоїх ниточок: на роботі, "
+            "вдома, зі своїм заняттям, зі своїми людьми чи в місті; конкретна, руками, і з тим, що з цього вийшло",
 }
+# v6.5.1: a deed is hers, not something that befell her — its own lead
+DONE_LEAD = "Щойно ти сама дещо зробила — {ask}. Розкажи про це"
 EVENT_MAX_WORDS = 60
 EVENTS_IN_PROMPT = 12  # the most a plan's request carries of the last days' events
 
@@ -80,8 +87,12 @@ def parse_weights(spec: str) -> dict[str, float]:
     return {k: weights.get(k, 0.0) for k in KINDS}
 
 
+LATER_KINDS = ("done",)  # v6.5.1: kinds added later, left out of a written weighting at 0 — an older one stays as it was
+
+
 def format_weights(weights: dict[str, float]) -> str:
-    return ",".join(f"{k}:{weights[k]:g}" for k in KINDS if k in weights)
+    return ",".join(f"{k}:{weights[k]:g}" for k in KINDS
+                    if k in weights and not (k in LATER_KINDS and not weights[k]))
 
 
 def roll_event(rng: Callable[[], float], p: float, weights: dict[str, float]) -> str | None:
@@ -173,6 +184,7 @@ def event_request(name: str, canon: str, kind: str, now: datetime, chapter_body:
     if recent:
         parts.append(f"Що з тобою сталося останнім часом:\n{recent}")
     lead = (f"{news} Розкажи, як саме ця новина увійшла у твій день," if news  # v5.11: Lviv's news, woven in
+            else DONE_LEAD.format(ask=KIND_ASK[kind]) if kind == "done"  # v6.5.1: a thing she did herself
             else f"Щойно з тобою трапилося те, чого ти не планував(-ла): {KIND_ASK[kind]}. Розкажи про це")
     parts.append(
         f"Зараз {now:%H:%M}. {lead} одним-двома реченнями від першої особи, у минулому часі, не більше "
