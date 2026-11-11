@@ -1987,7 +1987,8 @@ class Agent:
         prompt, and never a reset of her writing-first timer. Logged by the command's name only."""
         name = command_of(text)
         commands = commands_for(self.cfg.can("photos_fal"), self.main_name())
-        known = {n for n, _ in commands}
+        known = {n for n, _ in commands} | {"gemini", "scan"}  # code review v7.3 #5: still answered on Claude
+        logged = name if name in known else "unknown"  # before `/claude` is mapped to the main model
         if name == "claude":  # v7.3: on Claude `/claude` returns to the main model, as `/gemini` still does
             name = "gemini"
         if name in ("gemini", "backup") and not self.backup_open():
@@ -2007,7 +2008,7 @@ class Agent:
             answer = self.photos_answer(command_args(text))
         else:
             answer = command_help(commands)
-        log.info("telegram: command %s", name if name in known else "unknown")
+        log.info("telegram: command %s", logged)
         if not await self.telegram.send_message(self.telegram_owner, answer):
             log.warning("telegram: the command's answer was not delivered")
 

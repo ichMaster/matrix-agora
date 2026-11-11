@@ -168,3 +168,16 @@ def test_gemini_and_scan_on_claude_answer_as_their_commands(tmp_path, monkeypatc
     assert load_route(agent.route_file).pin != "backup" and "Маршрут — claude" in texts_sent(agent)[-1]
     asyncio.run(agent.telegram_command("/scan"))
     assert "Команди:" not in texts_sent(agent)[-1]                # an answer of its own, never the list
+
+
+def test_on_claude_the_commands_are_logged_by_their_own_names(tmp_path, monkeypatch, caplog):
+    """Code review v7.3 #5: `/claude` was remapped before the log, and it, `/gemini` and `/scan` logged as unknown."""
+    import logging
+    caplog.set_level(logging.INFO)
+    from tests.test_photo_route import telegram_kira
+    agent = on_claude(telegram_kira(tmp_path, monkeypatch))
+    for command in ("/claude", "/gemini", "/scan", "/nonsense"):
+        asyncio.run(agent.telegram_command(command))
+    logged = [r.getMessage() for r in caplog.records if r.getMessage().startswith("telegram: command ")]
+    assert logged == ["telegram: command claude", "telegram: command gemini", "telegram: command scan",
+                      "telegram: command unknown"]
