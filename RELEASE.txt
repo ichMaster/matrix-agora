@@ -1,3 +1,9 @@
+Version 7.3.3 (2026-11-11)
+---------------------------
+- Кіра on Claude again at the owner's word, on Opus 5.5 at effort high, her
+  whole instruction as the system prompt (CLAUDE_WARM=off) - the test of
+  whether she takes the initiative as on Gemini 3.1 Pro
+
 Version 7.3.2 (2026-11-11)
 ---------------------------
 - Кіра back on Gemini 3.1 Pro at the owner's word: on Claude she flirted
