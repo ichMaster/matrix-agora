@@ -1240,7 +1240,7 @@ class Agent:
             if text is None:
                 if not nudge and door == "telegram":  # v5.22: never a bare silence to him
                     await self._say_silence(silence_line(self.cfg.name, LAST_BLOCK.get(), LAST_SILENCE.get(), by,
-                                                         self.backup_open()))
+                                                         self.backup_open(), self.main_name()))
                 return False
             sent_id = None
             # v5.15: the owner sees which network wrote it; v5.21: and until when the backup answers
@@ -1485,7 +1485,7 @@ class Agent:
             text, block = await self._gemini_answer(brief, kind)
             if block is not None:
                 self._after_block(block[0], nudge, seen)
-            return text, "gemini"
+            return text, served_by(self.cfg.engine)  # v7.3: `claude`, or `gemini` when the fallback answered
         route = load_route(self.route_file)
         if route_mode(route, self.clock()) == "backup":
             log.info("private: route=backup — the backup answers")
@@ -1499,10 +1499,10 @@ class Agent:
             return text, "backup"
         text, block = await self._gemini_answer(brief, kind)
         if text is not None:
-            self.route_step("gemini")
-            return text, "gemini"
+            self.route_step("gemini")  # the route's main model, whatever the engine
+            return text, served_by(self.cfg.engine)
         if block is None:
-            return None, "gemini"  # silence, as ever: not a block
+            return None, served_by(self.cfg.engine)  # silence, as ever: not a block
         self.route_step("block")
         self._after_block(block[0], nudge, seen)
         log.warning("private: route=gemini — a %s, the backup answers", block[0])
@@ -1984,10 +1984,12 @@ class Agent:
         One ⚙️ service line, sent as text, never voiced; never in her history, the archive, the facts, the session or a
         prompt, and never a reset of her writing-first timer. Logged by the command's name only."""
         name = command_of(text)
-        commands = commands_for(self.cfg.can("photos_fal"))
+        commands = commands_for(self.cfg.can("photos_fal"), self.main_name())
         known = {n for n, _ in commands}
+        if name == "claude":  # v7.3: on Claude `/claude` returns to the main model, as `/gemini` still does
+            name = "gemini"
         if name in ("gemini", "backup") and not self.backup_open():
-            answer = "⚙️ Backup вимкнено: її відповіді завжди через gemini"
+            answer = f"⚙️ Backup вимкнено: її відповіді завжди через {self.main_name()}"
         elif name in ("gemini", "backup"):
             self.route_step(f"pin:{name}")
             answer = self.status_answer()
@@ -2317,7 +2319,8 @@ class Agent:
         except OSError:
             records = []
         answers, _, _ = day_counts(records, day_bounds(now_ms, self.tz)[0], now_ms)
-        text = route_status(load_route(self.route_file), now_ms, self.tz, self.fallback_hour_max, blocked, answers)
+        text = route_status(load_route(self.route_file), now_ms, self.tz, self.fallback_hour_max, blocked, answers,
+                            self.main_name())
         return text if self.backup_open() else text + "\n(backup вимкнено)"
 
     def backup_open(self) -> bool:
@@ -3134,6 +3137,11 @@ class Agent:
         parts = PROMPT_PARTS.get()
         self._append_usage(lambda ts: fallback_usage_line(ts, self.cfg.localpart, kind, model, ok, latency_ms, parts))
 
+    def main_name(self) -> str:
+        """v7.3 — her main model as the owner reads it in `/status`, the commands and the ⚙️ lines: `claude` on the
+        Claude client, `gemini` otherwise (the route's stored mode stays `gemini`, the main model)."""
+        return "claude" if self.cfg.engine == "claude-sdk" else "gemini"
+
     def _media_gemini(self):
         """v7.3 (v7.1 code review #10): on the Claude client, the Gemini client beside it for her photos and clips —
         `GEMINI_API_KEY` is no longer in the environment there; None on Gemini (its makers build their own, as ever)
@@ -3733,7 +3741,14 @@ class Agent:
         None: a call or the check failed — the period stays due."""
         probe = getattr(self.llm, "probe", None)
         for strict in range(len(TALK_GENTLE)):
+            LAST_BLOCK.set(None)
             text, left_out = await self._talk_text(level, items, from_summaries, [0], strict)
+            if text is None and probe is None and (LAST_BLOCK.get() or ("",))[0] == "refusal":
+                # v7.3: Claude declined it — as a summary that blocked her prompt: written again, stricter, then empty
+                # (with no check on Claude a None was an outage, tried again every 10 minutes for good)
+                log.warning("talk: %s %s — declined (written %d of %d)", level, iso_hour(start, self.tz), strict + 1,
+                            len(TALK_GENTLE))
+                continue
             if not text or probe is None:
                 return text, left_out
             system, contents = talk_check_request(self.cfg.canon_private or self.cfg.canon, text)
@@ -4578,7 +4593,8 @@ class Agent:
         if self.telegram is not None:  # v5.7: her bot, polled beside the sync
             if ((self.cfg.can("fallback") or self.cfg.can("photos_fal"))  # v5.14: the owner's chat only
                     and not await self.telegram.set_commands(self.telegram_owner,
-                                                             commands_for(self.cfg.can("photos_fal")))):
+                                                             commands_for(self.cfg.can("photos_fal"),
+                                                                          self.main_name()))):
                 log.warning("telegram: the command list was not set")
             log.info("telegram: polling")
             tasks.append(asyncio.create_task(self.telegram_poll()))

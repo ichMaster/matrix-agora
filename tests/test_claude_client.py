@@ -471,7 +471,7 @@ def test_a_refusal_as_the_cli_ends_it_is_a_decline_with_its_category(tmp_path, c
         out = await c.reply("t", "s", kind="private")
         return out, LAST_BLOCK.get()
     out, block = run(go())
-    assert out is None and block == ("refusal", "stop", None) and usage[-1][1]["blocked"] == "refusal"
+    assert out is None and block == ("refusal", "stop", "bio") and usage[-1][1]["blocked"] == "refusal"  # v7.3: + category
     assert "claude declined: reason=stop kind=private model=claude-sonnet-5-5 category=bio" in caplog.text
     assert "call failed" not in caplog.text and "can't help" not in caplog.text
 

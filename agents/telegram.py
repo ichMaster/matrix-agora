@@ -98,9 +98,14 @@ COMMANDS = (("status", "Маршрут і блоки"), ("gemini", "Поверн
 PHOTOS_COMMAND = ("photos", "Фото: google чи fal")  # v6.5: only for a person with `photos_fal`
 
 
-def commands_for(photos_fal: bool) -> tuple[tuple[str, str], ...]:
-    """v6.5 — her chat's command list: the route's commands, and `/photos` only for a person with `photos_fal`."""
-    return (*COMMANDS, PHOTOS_COMMAND) if photos_fal else COMMANDS
+def commands_for(photos_fal: bool, main: str = "gemini") -> tuple[tuple[str, str], ...]:
+    """v6.5 — her chat's command list: the route's commands, and `/photos` only for a person with `photos_fal`. v7.3:
+    `main` names her main model — on Claude `/claude` returns to it (`/gemini` still does too), and `/scan` is off."""
+    commands = COMMANDS
+    if main != "gemini":
+        commands = tuple((main, f"Повернути {main} зараз") if name == "gemini"
+                         else (name, about.replace("/gemini", f"/{main}")) for name, about in COMMANDS if name != "scan")
+    return (*commands, PHOTOS_COMMAND) if photos_fal else commands
 
 
 def command_help(commands: tuple[tuple[str, str], ...] = COMMANDS) -> str:

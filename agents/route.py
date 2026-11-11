@@ -137,20 +137,22 @@ def backup_mark(route: Route, now_ms: int, tz: str) -> str:
     return "⚙️ backup"
 
 
-def route_status(route: Route, now_ms: int, tz: str, hour_max: int, blocked: int, answers: dict) -> str:
+def route_status(route: Route, now_ms: int, tz: str, hour_max: int, blocked: int, answers: dict,
+                 main: str = "gemini") -> str:
     """v5.21 — `/status`: the mode and its end, the blocks of the last hour out of `hour_max`, her `blocked` private
-    lines, today's answers through Gemini and through the backup. One service block, never a text of the talk."""
+    lines, today's answers through Gemini and through the backup. One service block, never a text of the talk. v7.3:
+    `main` names the main model (`claude` on Claude); the stored mode stays `gemini`, the main model."""
     if route.pin == "backup":
-        where = "backup вручну (повернути: /gemini)"
+        where = f"backup вручну (повернути: /{main})"
     elif mode(route, now_ms) == "backup":
-        where = f"backup до {_hhmm(route.window_until_ms, tz)} (повернути зараз: /gemini)"
+        where = f"backup до {_hhmm(route.window_until_ms, tz)} (повернути зараз: /{main})"
     else:
-        where = "gemini"
+        where = main
     hour = sum(1 for t in route.blocks if t > now_ms - HOUR_MS)
     return (f"⚙️ Маршрут — {where}\n"
             f"Блоків за останню годину: {hour} з {hour_max} (більше — backup на годину)\n"
             f"Приватний чат: закритих рядків {blocked}\n"
-            f"Сьогодні відповіла: через gemini {answers.get('gemini', 0)}, через backup {answers.get('backup', 0)}")
+            f"Сьогодні відповіла: через {main} {answers.get('gemini', 0)}, через backup {answers.get('backup', 0)}")
 
 
 def day_counts(records: list[dict], day: str, now_ms: int) -> tuple[dict, int, int]:

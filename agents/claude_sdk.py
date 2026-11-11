@@ -1086,7 +1086,7 @@ class ClaudeClient(_Subscription):
         elif good and answer and text:
             declined = refusal_marker(text)
         if declined:
-            LAST_BLOCK.set(("refusal", declined, None))
+            LAST_BLOCK.set(("refusal", declined, refusal_category(result)))  # v7.3: the category for the ⚙️ line
             self._report(kind, model, usage, False, cost, started, blocked="refusal", warm=warm)
             log.warning("claude declined: reason=%s kind=%s model=%s category=%s", declined, kind, model,
                         refusal_category(result))  # never a text: the classifier's label alone
