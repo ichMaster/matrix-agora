@@ -93,7 +93,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v6.5 | Her photos on fal.ai: the owner's switch, the filter off | ✅ completed | `v6.5.0` (2026-11-10) |
 | v7.1 | The Claude engine for a persona: answers on Sonnet, the background on Haiku | ✅ completed | `v7.1.0` (2026-11-11) |
 | v7.2 | The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес | ✅ completed | `v7.2.0` (2026-11-11) |
-| v7.3 | Кіра on Claude | ⏳ planned | — |
+| v7.3 | Кіра on Claude | ✅ completed | `v7.3.0` (2026-11-11) |
 | v7.4 | Устина on Claude | ⏳ planned | — |
 | v7.5 | The prompt for the cache: what changes slowly first, read from the cache | ⏳ planned | — |
 | v7.6 | The panel for Claude: the subscription's analytics and cards | ⏳ planned | — |
@@ -3936,7 +3936,7 @@ The owner, 2026-11-08: «зроби fal.ai перемикання на цю мо
 
 ## v7 — Claude for everyone: every agent on the owner's subscription
 
-**Status:** 🔄 in progress — v7.1 and v7.2 released (`v7.1.0`, `v7.2.0`, 2026-11-11).
+**Status:** 🔄 in progress — v7.1, v7.2 and v7.3 released (`v7.1.0`, `v7.2.0`, `v7.3.0`, 2026-11-11).
 
 The owner, 2026-11-10: «заведи нову версію перед 7. щоб перевести всіх агентів ан Anthropic SDK і моделі Haiku +
 Sonet на мому плані як зараз агент Клод. Почати можна зі всіх крім Кіри і Устини а поті одна за одною ці дві.»
@@ -4106,7 +4106,11 @@ compose test (their image and env files, no forbidden variable), the turn-taking
 
 ### v7.3 — Кіра on Claude
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v7.3.0` on 2026-11-11. AGORA-246–249: Gemini beside Claude for her photos and clips
+(v7.1 code review #10) and the fallback's own cap (v7.2 #6); a decline takes the backup's route with Claude's names
+(`/claude`, the ⚙️ line, `/status`), her declined summaries never loop; her switches all kept (`PRIVATE_HISTORY_HOURS`
+6 h, the owner); deployed at his word (`sha-e01b2c2`), the day waived — bugs go to 7.3.x patches; the code review's 7
+fixes, 1 left to the owner (a decline tried once more).
 
 **Goal:** Кіра's Agora and her private chat run on Claude — her answers and her writing first on Sonnet in place of
 Gemini 3.1 Pro, her background on Haiku; what Claude declines goes to her backup on NovelAI.
