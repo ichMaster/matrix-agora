@@ -216,6 +216,7 @@ from agents.plans import (
 from agents.private import (
     PRIVATE_CANT_LISTEN,
     PRIVATE_DISCRETION,
+    PRIVATE_MARK,
     PRIVATE_NOT_HEARD,
     PRIVATE_NUDGE,
     PRIVATE_NUDGE_THOUGHTS,
@@ -717,6 +718,7 @@ class Agent:
         self.last_activity_ms: int | None = None
         self.last_attempt_ms: int | None = None
         self._summary_pro_blocked: int | None = None  # code review v5.22 #2: the session's length Pro blocked
+        self._summary_declined: int | None = None  # code review v7.3 #3: the session's length Claude declined
         self._summary_lock = asyncio.Lock()
         # v5.27 (the owner, 2026-11-07: Кіра moves to Chile): her place moves with her story (`place`, below);
         # `TIMEZONE` and `LOCATION` are home, Lviv's clock beside hers when she is away
@@ -4414,6 +4416,25 @@ class Agent:
         finally:
             await self.client.room_typing(room_id, False)
 
+    async def _summary_without_private(self, snapshot: list) -> str | None:
+        """Code review v7.3 #3 — a session summary Claude declined is written once more without her private lines (what
+        it declines; her talk summaries keep them), and not tried again until a new line comes: on Claude the 3.1 Pro
+        retry is not there, and a declined summary was tried on every event while the session was full."""
+        if self._summary_declined == len(snapshot):
+            log.info("session summary declined — no new try until a new line")
+            return None
+        open_lines = [(who, strip_notes(t)) for who, t in snapshot if PRIVATE_MARK not in who]
+        text = None
+        if open_lines:
+            log.info("session summary declined — written once more without the private lines")
+            system, contents = build_summary_request(self.cfg.name, self.cfg.canon, self.summary, open_lines,
+                                                     self.summary_max_words, human=self.cfg.type == "persona")
+            LAST_BLOCK.set(None)
+            text = await self.llm.generate(contents, system, max_output_tokens=self.summary_max_words * 3,
+                                           kind="summary")
+        self._summary_declined = len(snapshot) if text is None else None
+        return text
+
     async def summarize(self) -> bool:
         """Previous summary + this session → a new summary file. On failure the
         previous summary and the session are kept for a later retry."""
@@ -4441,6 +4462,9 @@ class Agent:
                     LAST_BLOCK.set(None)  # only Pro's own block counts below
                     text = await self.llm.think(contents, system, model=reply_model, kind="summary", level="low")
                     self._summary_pro_blocked = len(snapshot) if text is None and LAST_BLOCK.get() else None
+            if text is None and not isinstance(self.llm, GeminiClient) and \
+                    (LAST_BLOCK.get() or ("",))[0] == "refusal":
+                text = await self._summary_without_private(snapshot)
             if text is None:
                 log.error("session summary failed — keeping the previous one")
                 return False

@@ -126,3 +126,45 @@ def test_a_talk_summary_that_declines_in_its_text_is_a_decline_never_her_memory(
     drain(agent)
     row = agent.archive.talk_rows("hour")[0]
     assert (row.text, row.left_out) == ("", 2) and agent.llm.thought == len(TALK_GENTLE)
+
+
+# --- code review v7.3 #3: a declined session summary ------------------------------------------------------------------
+def test_a_declined_session_summary_is_written_without_her_private_lines_and_not_tried_again(tmp_path, monkeypatch):
+    from tests.test_archive import EmbedLLM, kira
+
+    class Declines(EmbedLLM):
+        def __init__(self):
+            super().__init__()
+            self.asked = []
+
+        async def generate(self, transcript, system_instruction, max_output_tokens=400, kind="reply"):
+            self.asked.append(transcript)
+            if "наодинці" in transcript:                       # what Claude declines: her private lines
+                LAST_BLOCK.set(DECLINE)
+                return None
+            return "Нотатка: говорили про гори.\n\nСесія: Ада питала про Карпати."
+
+    llm = Declines()
+    agent = on_claude(kira(tmp_path, monkeypatch, llm))
+    agent.session = [("Ich (наодинці)", "Привіт"), ("Кіра (наодинці)", "Привіт!"), ("Ада", "Підемо в гори?")]
+    assert asyncio.run(agent.summarize()) is True
+    assert len(llm.asked) == 2 and "наодинці" not in llm.asked[1] and agent.summary.startswith("говорили про гори")
+    agent.session = [("Ich (наодинці)", "Як ти?")]               # nothing but the private: declined, no new try
+    assert asyncio.run(agent.summarize()) is False and asyncio.run(agent.summarize()) is False
+    assert len(llm.asked) == 4                                     # each summarize once on Claude, then the gate
+
+
+def test_gemini_and_scan_on_claude_answer_as_their_commands(tmp_path, monkeypatch):
+    """Code review v7.3 #7: `/gemini` still returns to the main model on Claude; `/scan` answers that it is off."""
+    from agents.route import load_route
+    from tests.test_photo_route import telegram_kira
+    from tests.test_scan_command import texts_sent
+    agent = on_claude(telegram_kira(tmp_path, monkeypatch))
+    agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "capabilities": agent.cfg.capabilities | {"fallback"}})
+    agent.fallback = object()
+    monkeypatch.setattr(agent, "backup_open", lambda: True)
+    agent.route_step("pin:backup")
+    asyncio.run(agent.telegram_command("/gemini"))
+    assert load_route(agent.route_file).pin != "backup" and "Маршрут — claude" in texts_sent(agent)[-1]
+    asyncio.run(agent.telegram_command("/scan"))
+    assert "Команди:" not in texts_sent(agent)[-1]                # an answer of its own, never the list
