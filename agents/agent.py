@@ -36,6 +36,8 @@ from nio import (
     SyncError,
 )
 
+from agents.answers import CHOICES as ANSWER_CHOICES
+from agents.answers import SwitchedResponder
 from agents.archive import (
     CANDIDATES,
     GEMINI_CLOSED,
@@ -71,6 +73,8 @@ from agents.citynews import day_items, fetch_citynews, news_ask, pick_way, roll_
 from agents.citynews import load as load_citynews
 from agents.citynews import save as save_citynews
 from agents.claude_sdk import (
+    LAST_SERVED,
+    OAUTH_VAR,
     AuthRefused,
     ClaudeSdkResponder,
     ClaudeStatus,
@@ -252,7 +256,7 @@ from agents.reading import (
 )
 from agents.reading import load_state as load_reading
 from agents.reading import save_state as save_reading
-from agents.responder import Turn, responder_for, trim_to_sentence
+from agents.responder import LlmResponder, Turn, responder_for, trim_to_sentence
 from agents.roster import Member, load_roster, speakers
 from agents.route import (
     BACKUP_MARK_RE,
@@ -463,6 +467,7 @@ class Agent:
         self.client = AsyncClient(cfg.homeserver, cfg.user_id)
         self.started = False  # flips True after the first sync; nothing earlier is handled
         self.started_ms: int | None = None  # when it did (v4.3: the silence before a nudge counts from here at least)
+        self.opus = None  # v7.4: a companion's Opus on Max behind her switch, when there is one
         if cfg.engine == "claude-sdk" and cfg.type != "assistant":
             # v7.1 — a persona or the cat on Claude: every call of hers through the Claude client on the subscription,
             # v4.4's layers first and no secret left for the CLI; Gemini beside it for recall or the limit alone
@@ -491,8 +496,16 @@ class Agent:
         else:
             self.llm = llm or GeminiClient(sink=self.record_usage)
             self.responder = responder_for(cfg.engine, self.llm)  # the reply engine seam (v4.1)
+        # v7.4 — a companion's answers on the model the owner picks in her panel settings (`ANSWER_MODEL`, live)
+        self.switch: SwitchedResponder | None = None
+        if cfg.engine == "gemini" and cfg.type == "persona" and cfg.can("private"):
+            self.switch = SwitchedResponder(
+                lambda: live_value(cfg.memory_file.parent, cfg.localpart, "ANSWER_MODEL", os.environ),
+                self._answer_responders(), self.responder)
+            self.responder = self.switch
         self.reply_max_tokens = int(os.environ.get("REPLY_MAX_TOKENS", "200"))
-        if getattr(self.llm, "reply_model", None) in THINKING_MODELS:  # v5.8: the thinking counts toward the cap
+        if getattr(self.llm, "reply_model", None) in THINKING_MODELS or self.switch is not None:
+            # v5.8: the thinking counts toward the cap; v7.4: every one of a companion's answer models thinks
             self.reply_max_tokens = int(os.environ.get("REPLY_THINK_MAX_TOKENS", "4096"))
         self.history: list[tuple[str, str]] = []
         self.history_n = int(os.environ.get("HISTORY_N", "40"))
@@ -1242,7 +1255,7 @@ class Agent:
             if text is None:
                 if not nudge and door == "telegram":  # v5.22: never a bare silence to him
                     await self._say_silence(silence_line(self.cfg.name, LAST_BLOCK.get(), LAST_SILENCE.get(), by,
-                                                         self.backup_open(), self.main_name()))
+                                                         self.backup_open(), self.main_label()))
                 return False
             sent_id = None
             # v5.15: the owner sees which network wrote it; v5.21: and until when the backup answers
@@ -1462,7 +1475,8 @@ class Agent:
         whole, with what came of it, in `state/<name>.prompt.json` (0600, replaced each time) for the panel's Prompt
         tab; never in a log, and a failed write never stops an answer."""
         data = {"at": local_now(self.clock(), self.tz).isoformat(timespec="seconds"),
-                "model": getattr(self.llm, "reply_model", ""),
+                "model": self.main_label() if self.main_label() != self.main_name()
+                else getattr(self.llm, "reply_model", ""),  # v7.4: the chosen model, her Gemini's own id
                 "outcome": "answered" if answered else "blocked" if block else "silent",
                 "block": list(block) if block else None, "system": system, "transcript": build_transcript(lines)}
         path = self.memory_file.parent / f"{self.cfg.localpart}.prompt.json"
@@ -1487,7 +1501,7 @@ class Agent:
             text, block = await self._gemini_answer(brief, kind)
             if block is not None:
                 self._after_block(block[0], nudge, seen)
-            return text, served_by(self.cfg.engine)  # v7.3: `claude`, or `gemini` when the fallback answered
+            return text, self._served()  # v7.3: `claude`, or `gemini` when the fallback answered; v7.4: the chosen
         route = load_route(self.route_file)
         if route_mode(route, self.clock()) == "backup":
             log.info("private: route=backup — the backup answers")
@@ -1502,9 +1516,9 @@ class Agent:
         text, block = await self._gemini_answer(brief, kind)
         if text is not None:
             self.route_step("gemini")  # the route's main model, whatever the engine
-            return text, served_by(self.cfg.engine)
+            return text, self._served()
         if block is None:
-            return None, served_by(self.cfg.engine)  # silence, as ever: not a block
+            return None, self._served()  # silence, as ever: not a block
         self.route_step("block")
         self._after_block(block[0], nudge, seen)
         log.warning("private: route=gemini — a %s, the backup answers", block[0])
@@ -1986,13 +2000,13 @@ class Agent:
         One ⚙️ service line, sent as text, never voiced; never in her history, the archive, the facts, the session or a
         prompt, and never a reset of her writing-first timer. Logged by the command's name only."""
         name = command_of(text)
-        commands = commands_for(self.cfg.can("photos_fal"), self.main_name())
+        commands = commands_for(self.cfg.can("photos_fal"), self.main_name(), self.main_label())
         known = {n for n, _ in commands} | {"gemini", "scan"}  # code review v7.3 #5: still answered on Claude
         logged = name if name in known else "unknown"  # before `/claude` is mapped to the main model
         if name == "claude":  # v7.3: on Claude `/claude` returns to the main model, as `/gemini` still does
             name = "gemini"
         if name in ("gemini", "backup") and not self.backup_open():
-            answer = f"⚙️ Backup вимкнено: її відповіді завжди через {self.main_name()}"
+            answer = f"⚙️ Backup вимкнено: її відповіді завжди через {self.main_label()}"
         elif name in ("gemini", "backup"):
             self.route_step(f"pin:{name}")
             answer = self.status_answer()
@@ -2323,7 +2337,7 @@ class Agent:
             records = []
         answers, _, _ = day_counts(records, day_bounds(now_ms, self.tz)[0], now_ms)
         text = route_status(load_route(self.route_file), now_ms, self.tz, self.fallback_hour_max, blocked, answers,
-                            self.main_name())
+                            self.main_name(), self.main_label())
         return text if self.backup_open() else text + "\n(backup вимкнено)"
 
     def backup_open(self) -> bool:
@@ -3141,14 +3155,53 @@ class Agent:
         self._append_usage(lambda ts: fallback_usage_line(ts, self.cfg.localpart, kind, model, ok, latency_ms, parts))
 
     def main_name(self) -> str:
-        """v7.3 — her main model as the owner reads it in `/status`, the commands and the ⚙️ lines: `claude` on the
-        Claude client, `gemini` otherwise (the route's stored mode stays `gemini`, the main model)."""
+        """v7.3 — her main model's command in her chat (`/claude` on the Claude client, `/gemini` otherwise; the
+        route's stored mode stays `gemini`, the main model)."""
         return "claude" if self.cfg.engine == "claude-sdk" else "gemini"
+
+    def main_label(self) -> str:
+        """v7.4 — her main model as the owner reads it in `/status`, the commands' help and the ⚙️ lines: with the
+        switch the chosen one (`claudemax-opus`, …) — her Gemini still `gemini` —, else `main_name()`."""
+        if self.switch is None or self.switch.chosen() == ANSWER_CHOICES[0]:
+            return self.main_name()  # her Gemini, named as ever
+        return self.switch.chosen()
+
+    def _served(self) -> str:
+        """The engine that served the answer just made in this task (her answer line's `by`): with the switch the
+        chosen model's (`gemini` when its own fallback at a limit did, v7.1), else v7.3's `served_by`."""
+        if self.switch is not None:
+            return LAST_SERVED.get() or "gemini"
+        return served_by(self.cfg.engine)
+
+    def _answer_responders(self) -> dict:
+        """v7.4 — the answer models a companion's switch can reach: her Gemini client as ever (`api-gemini-3.1pro`,
+        her `GEMINI_REPLY_MODEL`), and Opus on the owner's Max plan (`claudemax-opus`) when the subscription's token
+        is set. The Claude client takes v4.4's layers — a forbidden variable refuses it, and every secret leaves the
+        environment its CLI inherits — and her Gemini client as its fallback at the limit, never a second one."""
+        out = {"api-gemini-3.1pro": self.responder}
+        if not str(os.environ.get(OAUTH_VAR, "")).strip():
+            log.info("answers: claudemax-opus off — no subscription token")
+            return out
+        try:
+            opus = claude_client_for(
+                os.environ, status_file=self.cfg.memory_file.parent / f"{self.cfg.localpart}.ratelimit.json",
+                sink=self.record_sdk_usage, gemini_sink=self.record_usage, clock=lambda: self.clock(), recall=False,
+                gemini=self.llm, reply_model="opus", thinking="adaptive",
+                effort=os.environ.get("OPUS_EFFORT", "high").strip() or "high", warm=False)
+        except AuthRefused as exc:
+            log.warning("answers: claudemax-opus off — %s", exc)
+            return out
+        self.opus = opus
+        out["claudemax-opus"] = LlmResponder(opus)
+        return out
 
     def _media_gemini(self):
         """v7.3 (v7.1 code review #10): on the Claude client, the Gemini client beside it for her photos and clips —
         `GEMINI_API_KEY` is no longer in the environment there; None on Gemini (its makers build their own, as ever)
-        or with no Gemini beside Claude."""
+        or with no Gemini beside Claude. v7.4: on Gemini with Opus behind her switch, her own Gemini client — the
+        Claude client took the key out of the environment."""
+        if self.opus is not None:  # the switch lives on a Gemini-engine companion alone: `llm` is her Gemini
+            return self.llm
         if isinstance(self.llm, GeminiClient):
             return None
         return getattr(self.llm, "gemini", None)
@@ -4179,7 +4232,7 @@ class Agent:
             await self.send_line(room_id, text, answered_id, answering=answered_id)
             asked = self._event_at(answered_id) if answered_id else None  # v5.22: how long it waited
             self.record_answer("agora", "matrix", asked[1] if asked else "none", asked[0] if asked else None,
-                               delay_ms, served_by(self.cfg.engine),  # code review v7.1 #6: the fallback's own
+                               delay_ms, self._served(),  # code review v7.1 #6: the fallback's own
                                ["voice"] if self.voice_sent else [])
             if memory is not None:
                 self.told.add(memory)
@@ -4625,7 +4678,7 @@ class Agent:
             if ((self.cfg.can("fallback") or self.cfg.can("photos_fal"))  # v5.14: the owner's chat only
                     and not await self.telegram.set_commands(self.telegram_owner,
                                                              commands_for(self.cfg.can("photos_fal"),
-                                                                          self.main_name()))):
+                                                                          self.main_name(), self.main_label()))):
                 log.warning("telegram: the command list was not set")
             log.info("telegram: polling")
             tasks.append(asyncio.create_task(self.telegram_poll()))

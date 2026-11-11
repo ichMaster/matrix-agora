@@ -248,7 +248,7 @@ def test_a_live_switch_is_the_agents_own_never_applied_at_the_start_and_read_at_
     first in her tab, under Перемикачі; the start never puts it into the env, and `live_value` reads the panel's
     override at each use — the panel's, else the env, else the code default; an invalid one is not hers."""
     assert all(BY_NAME[n].service is None and BY_NAME[n].group == "switches" for n in LIVE)
-    assert LIVE == {"TRACE_CALLS", "FALLBACK_ROUTE"}
+    assert LIVE == {"TRACE_CALLS", "FALLBACK_ROUTE", "ANSWER_MODEL"}                  # v7.4: her answers' model
     assert AGENT_GROUPS[0] == ("switches", "Перемикачі")
     env = {}
     overrides = {"services": {}, "agents": {"kira": {"TRACE_CALLS": "on", "MEMORY_DAYS": "5"}}}

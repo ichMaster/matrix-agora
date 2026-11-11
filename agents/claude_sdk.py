@@ -1163,12 +1163,16 @@ def _int_env(raw: Any, default: int) -> int:
 
 def claude_client_for(environ: MutableMapping[str, str], *, status_file: Path, sink: Callable[..., None],
                       gemini_sink: Callable[..., None], clock: Callable[[], int], recall: bool,
-                      gemini=None, media: bool = False) -> ClaudeClient:
+                      gemini=None, media: bool = False, reply_model: str | None = None,
+                      thinking: str | None = None, effort: str | None = None,
+                      warm: bool | None = None) -> ClaudeClient:
     """v7.1 — the client of an agent on Claude that is not Claude himself (a persona, the cat, Hermes), from its
     settings in `environ`: v4.4's layers first (refuse a forbidden variable or no OAuth token, then scrub), then every
     secret out of the environment the CLI inherits. A Gemini client beside it only when needed — `recall` (the
     embeddings) or `CLAUDE_LIMIT_FALLBACK=gemini` — with the key handed over, never left in the environment;
-    `gemini` (tests) stands in for it."""
+    `gemini` (tests) stands in for it. v7.4: a companion's Opus on Max (`claudemax-opus`) is built with its own
+    `reply_model`, `thinking`, `effort` and `warm`, which win over the room's `CLAUDE_*` values, and her Gemini client
+    as `gemini` — the fallback at the limit."""
     check_startup(environ)
     scrub(environ)
     env = environ.get
@@ -1188,12 +1192,12 @@ def claude_client_for(environ: MutableMapping[str, str], *, status_file: Path, s
             log.warning("no GEMINI_API_KEY on claude: %s", ", ".join(
                 w for w, on in (("no meaning search in recall", recall),
                                 ("silent at the limit", fallback == "gemini"), ("no photos or clips", media)) if on))
-    warm = str(env("CLAUDE_WARM", "on")).strip()
-    if warm not in ("on", "off"):
+    warm_mode = "on" if warm is True else "off" if warm is False else str(env("CLAUDE_WARM", "on")).strip()
+    if warm_mode not in ("on", "off"):
         log.warning("CLAUDE_WARM is not on or off — using on")
-        warm = "on"
-    thinking = str(env("CLAUDE_THINKING", "off")).strip()
-    effort = str(env("CLAUDE_EFFORT", "low")).strip()
+        warm_mode = "on"
+    thinking = thinking or str(env("CLAUDE_THINKING", "off")).strip()
+    effort = effort or str(env("CLAUDE_EFFORT", "low")).strip()
     if thinking not in THINKING_MODES:
         log.warning("CLAUDE_THINKING is not one of %s — using off", ", ".join(THINKING_MODES))
         thinking = "off"
@@ -1206,10 +1210,10 @@ def claude_client_for(environ: MutableMapping[str, str], *, status_file: Path, s
         log.warning("CLAUDE_CONCURRENCY is not a number — using %d", CONCURRENCY)
         concurrency = CONCURRENCY
     return ClaudeClient(
-        reply_model=str(env("CLAUDE_REPLY_MODEL", "sonnet")).strip() or "sonnet",
+        reply_model=reply_model or str(env("CLAUDE_REPLY_MODEL", "sonnet")).strip() or "sonnet",
         background_model=str(env("CLAUDE_BACKGROUND_MODEL", "haiku")).strip() or "haiku",
         config_dir=str(env("CLAUDE_CONFIG_DIR", "/tmp/claude")),
         status_file=status_file, sink=sink, clock=clock, concurrency=concurrency, limit_fallback=fallback,
         fallback=gemini if fallback == "gemini" else None, embedder=gemini if recall else None,
         thinking=thinking, effort=effort, gemini=gemini if needs_gemini else None,
-        fallback_think_cap=_int_env(env("REPLY_THINK_MAX_TOKENS", "4096"), 4096), warm=warm == "on")
+        fallback_think_cap=_int_env(env("REPLY_THINK_MAX_TOKENS", "4096"), 4096), warm=warm_mode == "on")

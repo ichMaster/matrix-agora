@@ -45,7 +45,7 @@ def test_a_refused_answer_marks_his_unanswered_lines_and_they_never_reach_gemini
     assert not agent.session
 
     llm2 = BlockLLM(blocks=0)
-    agent.llm = agent.responder.llm = llm2
+    agent.llm = agent.switch.base.llm = llm2  # v7.4: her answers' Gemini is her switch's base
     agent.private_line("Привіт ще раз", ms(17, 1), "telegram", "tg:2")
     asyncio.run(agent.private_reply())
     assert "Привіт!" not in llm2.transcripts[-1] and "Привіт ще раз" in llm2.transcripts[-1]

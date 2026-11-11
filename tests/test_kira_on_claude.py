@@ -19,6 +19,8 @@ DECLINE = ("refusal", "stop", "bio")
 
 def on_claude(agent):
     agent.cfg = agent.cfg.__class__(**{**agent.cfg.__dict__, "engine": "claude-sdk"})
+    if agent.switch is not None:  # v7.4: an agent on Claude is built without the companions' answer switch
+        agent.responder, agent.switch = agent.switch.base, None
     return agent
 
 

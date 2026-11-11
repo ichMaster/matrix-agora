@@ -17,6 +17,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from agents.answer_models import CHOICES as ANSWER_CHOICES
+from agents.answer_models import MODEL_OF, THINKING_OF
 from agents.emotion import TAG_MODELS
 from agents.emotion import TAG_RE as VOICE_TAG_RE
 from agents.facts import load_facts
@@ -364,6 +366,16 @@ def models_view(state_dir: Path, name: str, voice_spec: Path | None = None, engi
                 "thinking": value.get("GEMINI_THINKING_LEVEL")
                 if answers != background or answers.startswith("gemini-3") else None,
                 "voice": None, "emotion": None}
+        if "ANSWER_MODEL" in value:  # v7.4: a companion's answers on the model the owner picked, read live
+            from agents.settings import live_value
+            choice = live_value(state_dir, name, "ANSWER_MODEL", value)
+            setting, default = THINKING_OF.get(choice, THINKING_OF[ANSWER_CHOICES[0]])
+            view["choice"] = choice
+            view["thinking"] = value.get(setting) or default
+            if choice in MODEL_OF:
+                view["answers"] = MODEL_OF[choice] + (" · codex" if choice.startswith("codex") else "")
+            if choice in ("claudemax-opus", "codex-gpt-6.1sol"):  # a subscription's limit falls back to her Gemini
+                view["fallback"] = answers
     if "ELEVENLABS_MODEL" in value or "VOICE_STABILITY" in value:
         model = value.get("ELEVENLABS_MODEL") or "eleven_turbo_v2_5"
         view["voice"] = {"model": model, "stability": value.get("VOICE_STABILITY") or "0.5",

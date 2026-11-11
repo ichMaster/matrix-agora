@@ -202,6 +202,12 @@ SCHEMA: tuple[Setting, ...] = (
     # sends her private answer to the backup; a live switch (`LIVE`): it works at once, nobody restarts
     _s("FALLBACK_ROUTE", "choice", "on", "switches", "cap:fallback", None,
        "Коли Gemini блокує, відповідає резервна модель", choices=("on", "off")),
+    # v7.4 (the owner, 2026-11-11: «щоб Кіру можна було перемикати між 4ма моделями … всі моделі мають мати
+    # включений thinking», then a fifth, «codex-gpt-6.1sol», and «те саме … для Устини») — the model of her answers
+    # (the private chat, writing first, Agora); her background stays on Gemini. A live switch: her next answer takes it
+    _s("ANSWER_MODEL", "choice", "api-gemini-3.1pro", "switches", "cap:private", None,
+       "Модель її відповідей (усі думають)", choices=("api-gemini-3.1pro", "api-gpt-6.1sol", "api-sonnet",
+                                                       "claudemax-opus", "codex-gpt-6.1sol")),
     _s("FALLBACK_MODEL", "choice", "", "fallback", "cap:fallback", None, "Резервна модель (порожньо — немає)",
        choices=("", "glm-4-6")),
     _s("FALLBACK_WINDOW_S", "int", "300", "fallback", "cap:fallback", None, "Скільки після блоку відповідає резерв",
@@ -286,6 +292,9 @@ SCHEMA: tuple[Setting, ...] = (
        "Мислення перед відповіддю на Claude", choices=("off", "adaptive")),
     _s("CLAUDE_EFFORT", "choice", "low", "model", "client:claude-sdk", None,
        "Глибина мислення (коли adaptive)", choices=("low", "medium", "high", "max")),
+    # v7.4 — how deep each of a companion's answer models thinks (none of them off), read at her start
+    _s("OPUS_EFFORT", "choice", "high", "model", "cap:private", None,
+       "Глибина мислення Opus на Max (claudemax-opus)", choices=("low", "medium", "high", "max")),
     # 7.3.1 (the owner, 2026-11-11, Кіра flirting less on Claude: «Test the prompt split»): `off` — no CLI started
     # ahead and no split prompt, the whole instruction as the system prompt, as on Gemini
     _s("CLAUDE_WARM", "choice", "on", "model", "client:claude-sdk", None,
@@ -294,7 +303,7 @@ SCHEMA: tuple[Setting, ...] = (
 BY_NAME: dict[str, Setting] = {s.name: s for s in SCHEMA}
 # v5.22 — the switches an agent reads while it runs (`live_value`): the panel's change works at once and restarts
 # nobody; only agent settings, never applied at the start
-LIVE = frozenset({"TRACE_CALLS", "FALLBACK_ROUTE"})
+LIVE = frozenset({"TRACE_CALLS", "FALLBACK_ROUTE", "ANSWER_MODEL"})  # v7.4: her answers' model
 # the groups in their order, for a service's card and for an agent's tab
 SERVICE_GROUPS = (("turns", "Room & turns"), ("moves", "Ада і Бруно: ходи"), ("cat", "Кіт у кімнаті"),
                   ("claude", "Клод у кімнаті"), ("hermes", "Гермес"), ("voice", "Голоси агентів"),
