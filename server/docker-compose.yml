@@ -155,7 +155,7 @@ services:
 
   kira:
     # v5.5 — one of the four newcomers, a person like Ada and Bruno: the same image, the TOML picks the agent
-    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
+    image: ghcr.io/ichmaster/matrix-agora-agent-claude:${AGENT_IMAGE_TAG:-latest}  # v7.3: on Claude
     command: ["agents/kira.toml"]
     restart: unless-stopped
     init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
@@ -167,10 +167,16 @@ services:
         required: false
       - path: kira.env                           # v5.7: her bot's token, the owner's Telegram id, Deepgram's key
         required: false                          # — read by no other service
+      - path: subscription.env                   # v7.3: the OAuth token alone, last
+        required: false
     environment:
+      HOME: /tmp/claude                          # v7.3: the CLI's home and config on a tmpfs
+      CLAUDE_CONFIG_DIR: /tmp/claude
       HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
       TZ: ${TIMEZONE:-Europe/Kyiv}
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
+    tmpfs:
+      - /tmp/claude:uid=1000,gid=1000,mode=0700,size=64m   # bounded: a waiting CLI and a cold call
     volumes:
       - ../state:/app/state
       - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh

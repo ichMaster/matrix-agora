@@ -68,7 +68,7 @@ def test_the_four_newcomers_are_people_like_ada_and_bruno(name, shown, forms):
     """v5.5 (the owner, 2026-10-20): four more persons, ranked with the same weight as Ada and Bruno, who speak."""
     m = load_roster("agora")[name]
     assert (m.user_id, m.name, m.type, m.engine, m.mode, m.weight) == (
-        f"@{name}:agora.lan", shown, "persona", "gemini" if name == "kira" else "claude-sdk", "ranked", 1.0)  # v7.2
+        f"@{name}:agora.lan", shown, "persona", "claude-sdk", "ranked", 1.0)  # v7.2: the room on Claude; v7.3 Кіра
     assert m.name_forms == forms and m.can("voice")
     # v5.10: her mood of the day is hers alone, with her natal chart; the others have neither
     assert m.capabilities == TYPES["persona"] | ({"private", "telegram", "recall", "facts", "emotion", "mood", "events",

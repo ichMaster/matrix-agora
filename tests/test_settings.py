@@ -275,12 +275,12 @@ def test_the_claude_clients_settings_concern_every_agent_on_it_but_claude_himsel
         s = BY_NAME[name]
         assert s.scope == "client:claude-sdk" and s.group == "model" and s.service is None, name
         assert concerns(s, ada_on_claude) and concerns(s, hermes_on_claude), name
-        assert not concerns(s, ROOM["kira"]) and not concerns(s, ROOM["claude"]), name  # v7.2: Кіра still on Gemini
+        assert not concerns(s, ROOM["ustyna"]) and not concerns(s, ROOM["claude"]), name  # Устина on Gemini until v7.4
     for name in ("CLAUDE_MODEL", "CLAUDE_TIMEOUT_S", "CLAUDE_CODE_MAX_OUTPUT_TOKENS"):  # Claude's own stay his
         assert concerns(BY_NAME[name], ROOM["claude"]) and not concerns(BY_NAME[name], ada_on_claude), name
     # v7.2 (code review v7.1 #9): Gemini's own settings reach the Claude client's fallback; never Claude himself
     for name in ("GEMINI_MODEL", "GEMINI_REPLY_MODEL", "GEMINI_THINKING_LEVEL", "REPLY_THINK_MAX_TOKENS"):
-        assert concerns(BY_NAME[name], ada_on_claude) and concerns(BY_NAME[name], ROOM["kira"]), name
+        assert concerns(BY_NAME[name], ada_on_claude) and concerns(BY_NAME[name], ROOM["ustyna"]), name
         assert not concerns(BY_NAME[name], ROOM["claude"]) and not concerns(BY_NAME[name], hermes_on_claude), name
 
 

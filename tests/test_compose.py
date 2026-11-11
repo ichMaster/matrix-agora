@@ -29,7 +29,7 @@ def test_the_homeserver_stays_closed():
     assert "@sha256:" in SERVICES["homeserver"]["image"]  # pinned, never an implicit pull
 
 
-ROOM_ON_CLAUDE = ("ada", "bruno", "leon", "mia", "irma", "kit")  # v7.2: the room on Claude
+ROOM_ON_CLAUDE = ("ada", "bruno", "leon", "mia", "irma", "kit", "kira")  # v7.2: the room on Claude; v7.3 Кіра
 
 
 def test_one_container_per_agent_from_one_image():
@@ -498,7 +498,7 @@ def test_every_agent_on_claude_runs_the_claude_image_with_the_subscription_and_n
 
 
 def test_the_rule_holds_on_a_made_up_service_on_claude():
-    ada = SERVICES["kira"]  # v7.2: a service still on Gemini (Кіра until v7.3)
+    ada = SERVICES["ustyna"]  # a service still on Gemini (Устина until v7.4)
     assert claude_service_problems(ada) == ["image", "subscription.env", "config dir", "tmpfs"]
     moved = {**ada, "image": CLAUDE_IMAGE,
              "env_file": [*ada["env_file"], {"path": "subscription.env", "required": False}],
