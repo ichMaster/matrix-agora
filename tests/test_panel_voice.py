@@ -44,9 +44,9 @@ def client(state):
 @pytest.mark.canon
 def test_kiras_card_shows_her_models_her_voice_and_her_palette(client):
     m = client.get("/api/agents/kira/memory", headers=AUTH).json()["models"]
-    # v7.3: Кіра on Claude — Sonnet and Haiku by default, her Gemini 3.1 Pro now the fallback at the limit
-    assert (m["engine"], m["answers"], m["background"], m["thinking"]) == ("claude", "sonnet", "haiku", None)
-    assert m["fallback"] == "gemini-3.1-pro-preview"
+    # 7.3.2: Кіра back on Gemini 3.1 Pro (the owner, 2026-11-11)
+    assert (m["engine"], m["answers"], m["background"], m["thinking"]) == ("gemini", "gemini-3.1-pro-preview",
+                                                                            "gemini-2.5-flash", "low")
     assert m["voice"] == {"model": "eleven_v4_turbo", "stability": "0.3", "speed": "1.0"}
     assert m["emotion"]["performed"] is True and "[laughs]" in m["emotion"]["tags"] and len(m["emotion"]["tags"]) == 10
     raw = json.dumps(m)

@@ -4114,7 +4114,9 @@ fixes, 1 left to the owner (a decline tried once more). **Rolled back the same n
 3.1 про?»): on Claude she flirted less on her own (her canon unchanged; 15 answers on Sonnet, no declines); the
 split-prompt test (`CLAUDE_WARM=off`, 7.3.1) was cut short; she runs on Gemini 3.1 Pro again, the v7.3 code kept for a
 later move. **Then on Opus** (7.3.3, the owner, 03:2x: «давай зразу опус 5.5 на хай»): Claude again, Opus 5.5 at `high`,
-her whole prompt as the system prompt (`CLAUDE_WARM=off`).
+her whole prompt as the system prompt (`CLAUDE_WARM=off`). **Back on Gemini 3.1 Pro** (7.3.4, the owner, 13:40: «наразі
+повертай Кіру на джеміні») after a morning on Opus: 37 answers and 2 written first in Telegram, no declines, his
+message to her answer 20.1 s at the median.
 
 **Goal:** Кіра's Agora and her private chat run on Claude — her answers and her writing first on Sonnet in place of
 Gemini 3.1 Pro, her background on Haiku; what Claude declines goes to her backup on NovelAI.

@@ -29,7 +29,7 @@ def test_the_homeserver_stays_closed():
     assert "@sha256:" in SERVICES["homeserver"]["image"]  # pinned, never an implicit pull
 
 
-ROOM_ON_CLAUDE = ("ada", "bruno", "leon", "mia", "irma", "kit", "kira")  # v7.2: the room on Claude; v7.3 Кіра
+ROOM_ON_CLAUDE = ("ada", "bruno", "leon", "mia", "irma", "kit")  # v7.2: the room on Claude; Кіра back on Gemini (7.3.2)
 
 
 def test_one_container_per_agent_from_one_image():
