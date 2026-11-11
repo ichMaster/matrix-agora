@@ -29,7 +29,8 @@ def test_the_homeserver_stays_closed():
     assert "@sha256:" in SERVICES["homeserver"]["image"]  # pinned, never an implicit pull
 
 
-ROOM_ON_CLAUDE = ("ada", "bruno", "leon", "mia", "irma", "kit")  # v7.2: the room on Claude; Кіра back on Gemini (7.3.2)
+# v7.2: the room on Claude; v7.4: the companions on its image too — their answer switch reaches Opus on Max
+ROOM_ON_CLAUDE = ("ada", "bruno", "leon", "mia", "irma", "kit", "kira", "ustyna")
 
 
 def test_one_container_per_agent_from_one_image():
@@ -487,11 +488,16 @@ def agent_services():
             yield name, svc, load_member(ROOT / command[0])
 
 
+def switched(member) -> bool:
+    """v7.4: a companion on Gemini with the answer switch — her Opus on Max needs the Claude image and the token."""
+    return member.engine == "gemini" and member.type == "persona" and "private" in member.capabilities
+
+
 def test_every_agent_on_claude_runs_the_claude_image_with_the_subscription_and_none_on_gemini_sees_it():
     seen = 0
     for name, svc, member in agent_services():
         seen += 1
-        if member.engine == "claude-sdk" and member.type != "assistant":
+        if (member.engine == "claude-sdk" and member.type != "assistant") or switched(member):
             assert claude_service_problems(svc) == [], name
         else:
             assert "subscription.env" not in env_files(svc), name  # the token never reaches a Gemini agent
@@ -499,7 +505,10 @@ def test_every_agent_on_claude_runs_the_claude_image_with_the_subscription_and_n
 
 
 def test_the_rule_holds_on_a_made_up_service_on_claude():
-    ada = SERVICES["ustyna"]  # a service still on Gemini (Устина until v7.4)
+    claude = SERVICES["ada"]  # v7.4: no agent service is left on Gemini — a made-up one, Ада's shape before v7.2
+    ada = {**claude, "image": IMAGE, "env_file": [f for f in claude["env_file"] if f["path"] != "subscription.env"],
+           "environment": {k: v for k, v in claude["environment"].items() if k not in ("HOME", "CLAUDE_CONFIG_DIR")},
+           "tmpfs": []}
     assert claude_service_problems(ada) == ["image", "subscription.env", "config dir", "tmpfs"]
     moved = {**ada, "image": CLAUDE_IMAGE,
              "env_file": [*ada["env_file"], {"path": "subscription.env", "required": False}],

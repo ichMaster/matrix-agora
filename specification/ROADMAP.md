@@ -4174,17 +4174,17 @@ each one's panel settings, one of five, each thinking before it answers; everyth
   | `api-gemini-3.1pro` (the default) | `gemini-3.1-pro-preview`, the Gemini API | tokens, `GEMINI_API_KEY` | `GEMINI_THINKING_LEVEL` `low` (as now) |
   | `api-gpt-6.1sol` | `gpt-6.1-sol`, the OpenAI API | tokens, `OPENAI_API_KEY` (new) | `OPENAI_REASONING_EFFORT` `medium` |
   | `api-sonnet` | `claude-sonnet-5-5`, the Anthropic API | tokens, `SONNET_API_KEY` (new) | adaptive, `SONNET_EFFORT` `medium` |
-  | `claudemax-opus` | `claude-opus-5-5`, the Agent SDK on the Max plan | the subscription | adaptive, `CLAUDE_EFFORT` `high` (as now) |
+  | `claudemax-opus` | `claude-opus-5-5`, the Agent SDK on the Max plan | the subscription | adaptive, `OPUS_EFFORT` `high` (as it ran; her own, never the room's `CLAUDE_EFFORT`) |
   | `codex-gpt-6.1sol` | `gpt-6.1-sol`, the Codex CLI (`codex exec`) on the owner's ChatGPT plan | the subscription | `CODEX_REASONING_EFFORT` `medium` |
 
   Thinking is never off for her answers: none of the five offers `off`.
 - **What follows it:** her private answers, her writing first and her Agora answers. Her background — the talk and
   session summaries, facts, topics, the today block, events, reading, thoughts — and the embeddings, photos, videos,
   hearing and voice stay as on Gemini now; her TOML stays `engine = "gemini"`.
-- **One prompt for all five:** the prompt as now, its slow part (canon and life) the system and the rest the message,
-  each client in its own shape (Gemini's system instruction, OpenAI's instructions, Anthropic's system, the Claude
-  CLI's system prompt as in 7.3.3, whole; Codex's base instructions replaced by hers where the CLI allows it, else her
-  prompt whole as the message — measured). No prompt names the model or says she is one.
+- **One prompt for all five:** the prompt as now, the whole instruction as each client's system and the transcript as
+  the message (Gemini's system instruction, OpenAI's instructions, Anthropic's system, the Claude CLI's system prompt
+  as in 7.3.3, Codex's base instructions replaced by hers through `model_instructions_file`); the order for the cache
+  is v7.5's. *(Reconciled 2026-11-11: the split «slow part as the system» first written here is v7.5's.)* No prompt names the model or says she is one.
 - **A refusal on any is a block at the answer stage:** a Gemini block, an OpenAI refusal, an Anthropic `refusal`
   stop, a Claude CLI decline and a Codex refusal all take the backup's route (v7.3) — his lines and hers `blocked`, the
   backup's window, the ⚙️ line naming the model that refused. At a subscription's limit `claudemax-opus` and
