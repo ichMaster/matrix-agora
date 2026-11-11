@@ -271,7 +271,7 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
     }
 
 
-API_ENGINES = ("openai", "anthropic")  # v7.4: a companion's answer models paid by the token
+API_ENGINES = ("openai", "anthropic", "codex")  # v7.4: a companion's answer models beside Gemini and Claude
 
 
 def api_usage_line(ts_iso: str, agent: str, kind: str, model: str, engine: str, usage: dict | None, ok: bool,
@@ -279,14 +279,15 @@ def api_usage_line(ts_iso: str, agent: str, kind: str, model: str, engine: str, 
                    prompt_parts: dict | None = None) -> dict:
     """v7.4 — one record per call of a companion's answer model on OpenAI's or Anthropic's API (`engine`): `api`,
     priced by `PRICE_MODELS` under the model's id; the prompt whole (its cached part apart too), the output with the
-    thinking in it; `blocked` is `refusal` on a refused answer. Never any text."""
+    thinking in it; `blocked` is `refusal` on a refused answer. GPT-6.1 Sol through Codex (`codex`) is the ChatGPT
+    plan's: `subscription`, never priced. Never any text."""
     usage = usage or {}
     prompt, output = _int(usage, "input_tokens"), _int(usage, "output_tokens")
     total = prompt + output if prompt is not None and output is not None else None
     return {
         "ts": ts_iso, "agent": agent, "kind": kind, "model": model,
         "prompt_tokens": prompt, "output_tokens": output, "total_tokens": total, "ok": bool(ok),
-        "engine": engine if engine in API_ENGINES else "api", "billing": "api",
+        "engine": engine if engine in API_ENGINES else "api", "billing": "subscription" if engine == "codex" else "api",
         "cache_read_tokens": _int(usage, "cached_tokens"), "cache_write_tokens": None,
         "reported_cost_usd": None, "characters": None, "audio_ms": None,
         "blocked": blocked if blocked in ("refusal",) else None,

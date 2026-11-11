@@ -299,6 +299,9 @@ SCHEMA: tuple[Setting, ...] = (
        "Глибина мислення GPT-6.1 Sol через API (api-gpt-6.1sol)", choices=("low", "medium", "high")),
     _s("SONNET_EFFORT", "choice", "medium", "model", "cap:private", None,
        "Глибина мислення Sonnet через API (api-sonnet)", choices=("low", "medium", "high", "max")),
+    _s("CODEX_REASONING_EFFORT", "choice", "medium", "model", "cap:private", None,
+       "Глибина мислення GPT-6.1 Sol через Codex (codex-gpt-6.1sol)", choices=("low", "medium", "high")),
+    _s("CODEX_TIMEOUT_S", "int", "180", "model", "cap:private", None, "Найдовша відповідь через Codex", "s", 30, 600),
     # 7.3.1 (the owner, 2026-11-11, Кіра flirting less on Claude: «Test the prompt split»): `off` — no CLI started
     # ahead and no split prompt, the whole instruction as the system prompt, as on Gemini
     _s("CLAUDE_WARM", "choice", "on", "model", "client:claude-sdk", None,

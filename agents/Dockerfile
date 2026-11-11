@@ -26,5 +26,15 @@ CMD ["agents/ada.toml"]
 FROM agent AS claude
 USER root
 RUN uv sync --frozen --no-default-groups --group claude --no-install-project
+# v7.4 — the Codex CLI for a companion's codex-gpt-6.1sol (the owner's ChatGPT plan): a pinned release, its checksum
+# checked, one binary in /usr/local/bin, nothing else kept; its login lives in state/<name>.codex/, never in the image
+ARG CODEX_VERSION=0.167.1
+ARG CODEX_SHA256=64bcc99c32e434b4bcb0508a97df9b7aeecdb97e956d976fb13661096ec4e3e2
+RUN python -c "import hashlib, io, sys, tarfile, urllib.request; \
+url = 'https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-x86_64-unknown-linux-musl.tar.gz'; \
+data = urllib.request.urlopen(url, timeout=300).read(); \
+sys.exit('codex: checksum mismatch') if hashlib.sha256(data).hexdigest() != '${CODEX_SHA256}' else None; \
+tarfile.open(fileobj=io.BytesIO(data)).extract('codex-x86_64-unknown-linux-musl', '/usr/local/bin')" \
+    && mv /usr/local/bin/codex-x86_64-unknown-linux-musl /usr/local/bin/codex && chmod 755 /usr/local/bin/codex
 USER 1000:1000
 CMD ["agents/claude.toml"]

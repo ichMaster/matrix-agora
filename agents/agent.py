@@ -14,6 +14,7 @@ import logging
 import os
 import random
 import re
+import shutil
 import signal
 import stat
 import sys
@@ -86,6 +87,8 @@ from agents.claude_sdk import (
     served_by,
     write_status,
 )
+from agents.codex_cli import BINARY_VAR as CODEX_BIN_VAR
+from agents.codex_cli import CodexAnswers
 from agents.config import AgentConfig, load_config
 from agents.emotion import Spoken, speech_for, split_tags, spoken
 from agents.events import (
@@ -3192,7 +3195,8 @@ class Agent:
 
     def _answer_responders(self, openai_key: str = "", sonnet_key: str = "") -> dict:
         """v7.4 — the answer models a companion's switch can reach: her Gemini client as ever (`api-gemini-3.1pro`,
-        her `GEMINI_REPLY_MODEL`); GPT-6.1 Sol and Sonnet on their APIs with their keys (AGORA-251); and Opus on the
+        her `GEMINI_REPLY_MODEL`); GPT-6.1 Sol and Sonnet on their APIs with their keys (AGORA-251); GPT-6.1 Sol
+        through Codex on the owner's ChatGPT plan when its CLI is in the image (AGORA-252); and Opus on the
         owner's Max plan (`claudemax-opus`) when the subscription's token is set. The Claude client takes v4.4's
         layers — a forbidden variable refuses it, and every secret leaves the environment its CLI inherits — and her
         Gemini client as its fallback at the limit, never a second one."""
@@ -3209,6 +3213,14 @@ class Agent:
                 sink=self.record_api_usage("anthropic")))
         else:
             log.info("answers: api-sonnet off — no %s", SONNET_KEY_VAR)
+        codex = shutil.which(os.environ.get(CODEX_BIN_VAR, "codex").strip() or "codex")  # the Claude image's alone
+        if codex:
+            out["codex-gpt-6.1sol"] = LlmResponder(CodexAnswers(
+                home=self.cfg.memory_file.parent / f"{self.cfg.localpart}.codex", sink=self.record_api_usage("codex"),
+                effort=os.environ.get("CODEX_REASONING_EFFORT", "medium").strip(), binary=codex,
+                timeout_s=int(os.environ.get("CODEX_TIMEOUT_S", "180")), gemini=self.llm))
+        else:
+            log.info("answers: codex-gpt-6.1sol off — no codex CLI")
         if not str(os.environ.get(OAUTH_VAR, "")).strip():
             log.info("answers: claudemax-opus off — no subscription token")
             return out

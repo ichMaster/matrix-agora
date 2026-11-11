@@ -80,3 +80,10 @@ def _no_network_fetchers(monkeypatch):
 
     yield
     assert not reached, f"a test reached the network through the default fetcher: {', '.join(reached)}"
+
+
+@pytest.fixture(autouse=True)
+def _no_codex(monkeypatch):
+    """v7.4: no test ever starts a real Codex CLI — a companion's `codex-gpt-6.1sol` is built only where its binary is
+    found, and in a test it never is (a test that wants it passes a fake process)."""
+    monkeypatch.setenv("CODEX_BIN", "codex-is-never-run-in-tests")
