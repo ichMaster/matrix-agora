@@ -1,3 +1,9 @@
+Version 7.3.2 (2026-11-11)
+---------------------------
+- Кіра back on Gemini 3.1 Pro at the owner's word: on Claude she flirted
+  less on her own (her canon unchanged); her TOML gemini, her service on the
+  agent image without the subscription; the v7.3 code kept for a later move
+
 Version 7.3.1 (2026-11-11)
 ---------------------------
 - The usage line names the model a call asked for: the CLI adds a small
