@@ -264,7 +264,7 @@ def test_a_live_switch_is_the_agents_own_never_applied_at_the_start_and_read_at_
 
 # --- v7.1: the Claude client's settings ----------------------------------------------------------------------------
 CLIENT = ("CLAUDE_REPLY_MODEL", "CLAUDE_BACKGROUND_MODEL", "CLAUDE_CONCURRENCY", "CLAUDE_LIMIT_FALLBACK",
-          "CLAUDE_THINKING", "CLAUDE_EFFORT")
+          "CLAUDE_THINKING", "CLAUDE_EFFORT", "CLAUDE_WARM")
 
 
 def test_the_claude_clients_settings_concern_every_agent_on_it_but_claude_himself():

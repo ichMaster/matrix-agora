@@ -375,3 +375,30 @@ def test_a_cli_nobody_takes_within_its_life_closes_on_its_own(tmp_path, monkeypa
 def test_the_disconnect_has_the_sdks_own_close_time():
     """#4: 10 s cut the SDK's close (stdin, SIGTERM, SIGKILL, ~5 s each) short."""
     assert sdk_mod.WARM_CLOSE_S >= 20
+
+
+
+# --- 7.3.1: the owner's switch ----------------------------------------------------------------------------------------
+def test_with_warm_off_the_whole_prompt_is_the_system_and_no_cli_is_started_ahead(tmp_path):
+    """The owner, 2026-11-11 (Кіра flirting less on Claude): «Test the prompt split»."""
+    sdk, clients = FakeSDK([INIT_OK, result("Холодно.")]), Clients()
+    c, usage = claude(tmp_path, sdk, clients, warm=False)
+
+    async def go():
+        await voice(c)
+        await settle()
+        await voice(c)
+        await settle()
+    asyncio.run(go())
+    assert clients.made == [] and len(sdk.calls) == 2 and [k.get("warm") for _, k in usage] == [None, None]
+    assert all(Path(o.system_prompt["path"]).name.endswith(".md") for _, o in sdk.calls)
+
+
+def test_claude_warm_comes_from_the_settings(tmp_path, caplog):
+    from agents.claude_sdk import claude_client_for
+    env = {"CLAUDE_CODE_OAUTH_TOKEN": "oat", "CLAUDE_WARM": "off", "CLAUDE_LIMIT_FALLBACK": "silent"}
+    assert claude_client_for(env, status_file=tmp_path / "s.json", sink=None, gemini_sink=None, clock=lambda: 0,
+                             recall=False).warm is False
+    odd = {"CLAUDE_CODE_OAUTH_TOKEN": "oat", "CLAUDE_WARM": "maybe", "CLAUDE_LIMIT_FALLBACK": "silent"}
+    assert claude_client_for(odd, status_file=tmp_path / "s.json", sink=None, gemini_sink=None, clock=lambda: 0,
+                             recall=False).warm is True and "CLAUDE_WARM is not on or off" in caplog.text

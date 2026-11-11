@@ -777,7 +777,7 @@ class ClaudeClient(_Subscription):
                  sink: Callable[..., None] | None, clock: Callable[[], int] = lambda: int(time.time() * 1000),
                  concurrency: int = CONCURRENCY, limit_fallback: str = "gemini", fallback: Any = None,
                  embedder: Any = None, query=None, options=None, thinking: str = "off", effort: str = "low",
-                 sdk_client=None, gemini: Any = None, fallback_think_cap: int = 4096) -> None:
+                 sdk_client=None, gemini: Any = None, fallback_think_cap: int = 4096, warm: bool = True) -> None:
         super().__init__(model=background_model, status_file=status_file, clock=clock)
         self.reply_model = reply_model
         self.status.model = reply_model  # the panel's card names the answers' model
@@ -799,8 +799,10 @@ class ClaudeClient(_Subscription):
         self._options = options
         self._client_cls = sdk_client  # v7.2: the SDK's `ClaudeSDKClient` (tests: a fake)
         self._warm: WarmCli | None = None
-        # a test that fakes `query` and no client never starts a real CLI ahead
-        self._warm_on = sdk_client is not None or query is None
+        # a test that fakes `query` and no client never starts a real CLI ahead; 7.3.1: `CLAUDE_WARM=off` — none at all,
+        # and the whole instruction is the system prompt (no split)
+        self.warm = warm
+        self._warm_on = warm and (sdk_client is not None or query is None)
 
     def _allowed(self, toolset: str | None) -> list[str]:
         return list(SEARCH_TOOLS) if toolset == "search" else []
@@ -960,7 +962,8 @@ class ClaudeClient(_Subscription):
                 effort=effort, think=think))
             # v7.2 (AGORA-243): a voice call whose slow part splits its prompt may go warm, through the CLI started
             # ahead for its key; a warm call that fails or hangs goes cold once (the next try), never silent for it
-            split = split_prompt(system, PROMPT_SLOW.get()) if kind in VOICE_KINDS and toolset is None else None
+            split = (split_prompt(system, PROMPT_SLOW.get()) if self.warm and kind in VOICE_KINDS and toolset is None
+                     else None)
             key = (split[0], model, effort, think, cap) if split else None
             async with (self._voice_gate if kind in VOICE_KINDS else self._gate):
                 warm = self._take_warm(key)  # code review v7.2 #5: inside the gate — a call cancelled there takes none
@@ -1185,6 +1188,10 @@ def claude_client_for(environ: MutableMapping[str, str], *, status_file: Path, s
             log.warning("no GEMINI_API_KEY on claude: %s", ", ".join(
                 w for w, on in (("no meaning search in recall", recall),
                                 ("silent at the limit", fallback == "gemini"), ("no photos or clips", media)) if on))
+    warm = str(env("CLAUDE_WARM", "on")).strip()
+    if warm not in ("on", "off"):
+        log.warning("CLAUDE_WARM is not on or off — using on")
+        warm = "on"
     thinking = str(env("CLAUDE_THINKING", "off")).strip()
     effort = str(env("CLAUDE_EFFORT", "low")).strip()
     if thinking not in THINKING_MODES:
@@ -1205,4 +1212,4 @@ def claude_client_for(environ: MutableMapping[str, str], *, status_file: Path, s
         status_file=status_file, sink=sink, clock=clock, concurrency=concurrency, limit_fallback=fallback,
         fallback=gemini if fallback == "gemini" else None, embedder=gemini if recall else None,
         thinking=thinking, effort=effort, gemini=gemini if needs_gemini else None,
-        fallback_think_cap=_int_env(env("REPLY_THINK_MAX_TOKENS", "4096"), 4096))
+        fallback_think_cap=_int_env(env("REPLY_THINK_MAX_TOKENS", "4096"), 4096), warm=warm == "on")

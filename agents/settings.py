@@ -286,6 +286,10 @@ SCHEMA: tuple[Setting, ...] = (
        "Мислення перед відповіддю на Claude", choices=("off", "adaptive")),
     _s("CLAUDE_EFFORT", "choice", "low", "model", "client:claude-sdk", None,
        "Глибина мислення (коли adaptive)", choices=("low", "medium", "high", "max")),
+    # 7.3.1 (the owner, 2026-11-11, Кіра flirting less on Claude: «Test the prompt split»): `off` — no CLI started
+    # ahead and no split prompt, the whole instruction as the system prompt, as on Gemini
+    _s("CLAUDE_WARM", "choice", "on", "model", "client:claude-sdk", None,
+       "CLI наперед: канон у системному промпті, решта в повідомленні", choices=("on", "off")),
 )
 BY_NAME: dict[str, Setting] = {s.name: s for s in SCHEMA}
 # v5.22 — the switches an agent reads while it runs (`live_value`): the panel's change works at once and restarts
