@@ -37,6 +37,7 @@ from agents.llm import (
     REPLY_TRIES,
     THINK_MAX_TOKENS,
     THINK_TIMEOUT_S,
+    THINKING_MODELS,
     refusal_marker,
 )
 from agents.logic import build_transcript
@@ -758,7 +759,7 @@ class ClaudeClient(_Subscription):
                  sink: Callable[..., None] | None, clock: Callable[[], int] = lambda: int(time.time() * 1000),
                  concurrency: int = CONCURRENCY, limit_fallback: str = "gemini", fallback: Any = None,
                  embedder: Any = None, query=None, options=None, thinking: str = "off", effort: str = "low",
-                 sdk_client=None) -> None:
+                 sdk_client=None, gemini: Any = None, fallback_think_cap: int = 4096) -> None:
         super().__init__(model=background_model, status_file=status_file, clock=clock)
         self.reply_model = reply_model
         self.status.model = reply_model  # the panel's card names the answers' model
@@ -771,6 +772,9 @@ class ClaudeClient(_Subscription):
         self.limit_fallback = limit_fallback if limit_fallback in LIMIT_FALLBACKS else "gemini"
         self.fallback = fallback
         self.embedder = embedder
+        # v7.3: the one Gemini client beside Claude — the fallback's, the embedder's, the photo and clip makers'
+        self.gemini = gemini if gemini is not None else (fallback or embedder)
+        self.fallback_think_cap = fallback_think_cap  # the fallback's answer cap on a thinking model (v7.2 review #6)
         self.thinking = thinking if thinking in THINKING_MODES else "off"
         self.effort = effort if effort in EFFORTS else "low"
         self._query_fn = query
@@ -810,7 +814,8 @@ class ClaudeClient(_Subscription):
         Claude's — the kind picks the model; it is used only on the Gemini fallback."""
         LAST_BLOCK.set(None)
         return await self._run(kind, system_instruction, transcript, max_output_tokens, answer=refusal,
-                               gemini=lambda g: g.complete(transcript, system_instruction, max_output_tokens, kind,
+                               gemini=lambda g: g.complete(transcript, system_instruction,
+                                                           self._fallback_cap(g, max_output_tokens, kind, model), kind,
                                                            model, refusal))
 
     async def reply(self, transcript: str, system_instruction: str | None, max_output_tokens: int = 400,
@@ -818,7 +823,8 @@ class ClaudeClient(_Subscription):
         """An answer: a refusal in it is a decline (v5.13's rule)."""
         LAST_BLOCK.set(None)
         return await self._run(kind, system_instruction, transcript, max_output_tokens, answer=True,
-                               gemini=lambda g: g.reply(transcript, system_instruction, max_output_tokens, kind))
+                               gemini=lambda g: g.reply(transcript, system_instruction,
+                                                        self._fallback_cap(g, max_output_tokens, kind), kind))
 
     async def think(self, contents: str, system_instruction: str, model: str | None = None,
                     max_output_tokens: int = THINK_MAX_TOKENS, kind: str = "digest_voice",
@@ -972,6 +978,14 @@ class ClaudeClient(_Subscription):
             if key and not self.blocked and not self.muted():  # code review v7.2 #3: never a CLI nobody may use
                 self._prewarm(key, make_options, model, effort, think, cap)
 
+    def _fallback_cap(self, g: Any, cap: int, kind: str, model: str | None = None) -> int:
+        """v7.3 (v7.2 code review #6): the Gemini fallback's answer cap by its own model — the Claude reply's cap (200)
+        on a thinking model (3.1 Pro) would be eaten by its thinking, as `reply_max_tokens` is set by Claude's model."""
+        used = model if isinstance(model, str) and model.startswith("gemini") else getattr(g, "reply_model", None)
+        if kind in VOICE_KINDS and used in THINKING_MODELS:
+            return max(cap, self.fallback_think_cap)
+        return cap
+
     # --- v7.2: the CLI started ahead ------------------------------------------------------------------------------
     def _take_warm(self, key: tuple | None) -> WarmCli | None:
         """The waiting CLI when it is ready for this very key — then it is taken (one call each); one for another
@@ -1120,9 +1134,16 @@ def secret_vars(env: Mapping[str, str]) -> list[str]:
     return sorted(k for k in env if k.endswith(SECRET_SUFFIXES) and k != OAUTH_VAR)
 
 
+def _int_env(raw: Any, default: int) -> int:
+    try:
+        return int(str(raw))
+    except ValueError:
+        return default
+
+
 def claude_client_for(environ: MutableMapping[str, str], *, status_file: Path, sink: Callable[..., None],
                       gemini_sink: Callable[..., None], clock: Callable[[], int], recall: bool,
-                      gemini=None) -> ClaudeClient:
+                      gemini=None, media: bool = False) -> ClaudeClient:
     """v7.1 — the client of an agent on Claude that is not Claude himself (a persona, the cat, Hermes), from its
     settings in `environ`: v4.4's layers first (refuse a forbidden variable or no OAuth token, then scrub), then every
     secret out of the environment the CLI inherits. A Gemini client beside it only when needed — `recall` (the
@@ -1138,7 +1159,7 @@ def claude_client_for(environ: MutableMapping[str, str], *, status_file: Path, s
     if fallback not in LIMIT_FALLBACKS:
         log.warning("CLAUDE_LIMIT_FALLBACK is not one of %s — using gemini", ", ".join(LIMIT_FALLBACKS))
         fallback = "gemini"
-    needs_gemini = recall or fallback == "gemini"
+    needs_gemini = recall or fallback == "gemini" or media  # v7.3: her photos and clips are Google's too
     if needs_gemini and gemini is None:
         if gemini_key:
             from agents.llm import GeminiClient
@@ -1146,7 +1167,7 @@ def claude_client_for(environ: MutableMapping[str, str], *, status_file: Path, s
         else:
             log.warning("no GEMINI_API_KEY on claude: %s", ", ".join(
                 w for w, on in (("no meaning search in recall", recall),
-                                ("silent at the limit", fallback == "gemini")) if on))
+                                ("silent at the limit", fallback == "gemini"), ("no photos or clips", media)) if on))
     thinking = str(env("CLAUDE_THINKING", "off")).strip()
     effort = str(env("CLAUDE_EFFORT", "low")).strip()
     if thinking not in THINKING_MODES:
@@ -1166,4 +1187,5 @@ def claude_client_for(environ: MutableMapping[str, str], *, status_file: Path, s
         config_dir=str(env("CLAUDE_CONFIG_DIR", "/tmp/claude")),
         status_file=status_file, sink=sink, clock=clock, concurrency=concurrency, limit_fallback=fallback,
         fallback=gemini if fallback == "gemini" else None, embedder=gemini if recall else None,
-        thinking=thinking, effort=effort)
+        thinking=thinking, effort=effort, gemini=gemini if needs_gemini else None,
+        fallback_think_cap=_int_env(env("REPLY_THINK_MAX_TOKENS", "4096"), 4096))

@@ -521,6 +521,7 @@ async def square_note(mp4: bytes, mp3: bytes, timeout_s: float = 120.0) -> bytes
     return data or None
 
 
-def clip_maker(model: str, resolution: str, sink: Callable) -> ClipMaker:
-    """Her clips on Google's video model, through a client of their own (the Gemini key from the environment)."""
-    return ClipMaker(genai.Client(), model or MODEL, resolution, sink)
+def clip_maker(model: str, resolution: str, sink: Callable, client=None) -> ClipMaker:
+    """Her clips on Google's video model, through a client of their own (the Gemini key from the environment); v7.3: on
+    Claude, the Gemini client beside it (`client`)."""
+    return ClipMaker(client or genai.Client(), model or MODEL, resolution, sink)

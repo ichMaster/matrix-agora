@@ -90,6 +90,12 @@ class GeminiClient:
         self.reply_model = os.environ.get("GEMINI_REPLY_MODEL", "").strip() or self.model
         self.thinking_level = os.environ.get("GEMINI_THINKING_LEVEL", "low").strip() or "low"
 
+
+    @property
+    def client(self):
+        """The Google SDK client this one calls through — v7.3: beside Claude the photo and clip makers share it,
+        since `GEMINI_API_KEY` is no longer in the environment there."""
+        return self._client
     def _report(self, kind: str, usage: Any, ok: bool, model: str | None = None,
                 block: tuple[str, str, str | None] | None = None) -> None:
         if self._sink is None:

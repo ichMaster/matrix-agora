@@ -370,7 +370,9 @@ class PhotoMaker:
 
 
 def photo_maker(model: str, size: str, faces: list, sink: Callable, main_face: str | None = None,
-                birth: date | None = None, look: str = "") -> PhotoMaker:
+                birth: date | None = None, look: str = "", client=None) -> PhotoMaker:
     """Her photos on Google's image model, through a client of their own (the Gemini key from the environment); v6.2:
-    her main face photo, birth date and look make her selfie her own."""
-    return PhotoMaker(genai.Client(), model or MODEL, size, faces, sink, main_face=main_face, birth=birth, look=look)
+    her main face photo, birth date and look make her selfie her own; v7.3: on Claude, the Gemini client beside it
+    (`client`), as the key is no longer in the environment there."""
+    return PhotoMaker(client or genai.Client(), model or MODEL, size, faces, sink, main_face=main_face, birth=birth,
+                      look=look)

@@ -468,7 +468,7 @@ class Agent:
             self.llm = llm or claude_client_for(
                 os.environ, status_file=cfg.memory_file.parent / f"{cfg.localpart}.ratelimit.json",
                 sink=self.record_sdk_usage, gemini_sink=self.record_usage, clock=lambda: self.clock(),
-                recall=cfg.can("recall"))
+                recall=cfg.can("recall"), media=cfg.can("photos") or cfg.can("videos"))
             self.responder = responder_for(cfg.engine, self.llm)
         elif cfg.engine == "claude-sdk":  # v4.4: the subscription only — refuse first, then scrub (agents/claude_sdk.py)
             check_startup(os.environ)
@@ -606,11 +606,14 @@ class Agent:
             # v6.2: her own selfie — her main face photo, her age from her chart, her look file
             look = load_look(Path("agents/canon") / f"{cfg.localpart}.look.md")
             self.photo_birth, self.photo_look = parse_birth_date(cfg.natal), look
-            if isinstance(self.llm, GeminiClient):
+            beside = self._media_gemini()
+            if isinstance(self.llm, GeminiClient) or beside is not None:
                 self.photos = photo_maker(os.environ.get("PHOTO_MODEL", "gemini-nano-banana-2.1").strip() or PHOTO_MODEL,
                                           os.environ.get("PHOTO_SIZE", "1K").strip() or "1K", faces,
                                           self.record_usage, f"{cfg.localpart}.png", parse_birth_date(cfg.natal),
-                                          look)
+                                          look, **({"client": beside.client} if beside is not None else {}))
+            elif cfg.engine == "claude-sdk":
+                log.warning("photos: no Gemini beside Claude (GEMINI_API_KEY) — no photos")
             if faces:
                 log.info("photos: %d faces", len(faces))
             else:  # review #3: the first deploy ran so, unnoticed — every selfie would quietly be redrawn without one
@@ -638,9 +641,13 @@ class Agent:
             self.video_window_s = int(os.environ.get("VIDEO_WINDOW_S", "7200"))
             self.video_note_max_s = int(os.environ.get("VIDEO_NOTE_MAX_S", "30"))
             self.video_note_lead_ms = int(os.environ.get("VIDEO_NOTE_LEAD_MS", "1000"))  # Telegram cuts her first sound
-            if isinstance(self.llm, GeminiClient):
+            beside = self._media_gemini()
+            if isinstance(self.llm, GeminiClient) or beside is not None:
                 self.clips = clip_maker(os.environ.get("VIDEO_MODEL", "gemini-omni-1.1-flash").strip() or VIDEO_MODEL,
-                                        os.environ.get("VIDEO_RESOLUTION", "720p").strip() or "720p", self.record_usage)
+                                        os.environ.get("VIDEO_RESOLUTION", "720p").strip() or "720p", self.record_usage,
+                                        **({"client": beside.client} if beside is not None else {}))
+            elif cfg.engine == "claude-sdk":
+                log.warning("videos: no Gemini beside Claude (GEMINI_API_KEY) — no clips")
             if fal_key:
                 self.notes = NoteMaker(fal_key, os.environ.get("VIDEO_NOTE_MODEL", "veed/fabric-1.0").strip() or NOTE_MODEL,
                                        sink=self.record_video_note_usage)
@@ -3126,6 +3133,14 @@ class Agent:
         """v5.14 — one line per call of her backup model: `novelai`, the subscription, never priced, no text."""
         parts = PROMPT_PARTS.get()
         self._append_usage(lambda ts: fallback_usage_line(ts, self.cfg.localpart, kind, model, ok, latency_ms, parts))
+
+    def _media_gemini(self):
+        """v7.3 (v7.1 code review #10): on the Claude client, the Gemini client beside it for her photos and clips —
+        `GEMINI_API_KEY` is no longer in the environment there; None on Gemini (its makers build their own, as ever)
+        or with no Gemini beside Claude."""
+        if isinstance(self.llm, GeminiClient):
+            return None
+        return getattr(self.llm, "gemini", None)
 
     def record_sdk_usage(self, kind: str, model: str, usage: dict | None, ok: bool,
                          reported_cost: float | None, latency_ms: int | None = None, blocked: str | None = None,

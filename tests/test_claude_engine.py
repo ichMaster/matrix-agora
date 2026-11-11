@@ -205,3 +205,54 @@ def test_her_talk_summaries_on_claude_are_written_and_kept_and_the_scan_is_off(t
     assert rows and rows[0].text == "Пам'ятаю, як ми гуляли." and rows[0].left_out == 0
     assert all(o.model == "haiku" for _, o in sdk.calls)  # the background model, no check call
     assert agent._scan_open() is False
+
+
+# --- v7.3 (AGORA-246): Gemini beside Claude for her media and her fallback ------------------------------------------
+def test_on_claude_her_photos_and_clips_are_made_on_the_gemini_beside_it(tmp_path, monkeypatch, caplog):
+    """v7.1 code review #10: the makers read GEMINI_API_KEY, which the Claude client takes out of the environment."""
+    import agents.agent as agent_mod
+    from tests.test_photo_route import telegram_kira
+    built = []
+    monkeypatch.setattr(agent_mod, "photo_maker", lambda *a, **k: built.append(("photo", k)) or object())
+    monkeypatch.setattr(agent_mod, "clip_maker", lambda *a, **k: built.append(("clip", k)) or object())
+    monkeypatch.setattr(agent_mod, "load_faces", lambda folder: [("kira.png", b"x", "image/png")])
+    monkeypatch.setattr(agent_mod, "load_look", lambda path: "Її очі світлі.")
+    cfg = telegram_kira(tmp_path, monkeypatch).cfg
+    cfg = replace(cfg, engine="claude-sdk", capabilities=cfg.capabilities | {"photos", "videos"})
+    beside = SimpleNamespace(client="the google sdk client")
+    agent_mod.Agent(cfg, llm=ClaudeClient(reply_model="sonnet", background_model="haiku", config_dir=str(tmp_path),
+                                          status_file=tmp_path / "k.json", sink=None, gemini=beside))
+    assert ("photo", {"client": "the google sdk client"}) in built and ("clip", {"client": "the google sdk client"}) in built
+    built.clear()
+    agent = agent_mod.Agent(cfg, llm=ClaudeClient(reply_model="sonnet", background_model="haiku",
+                                                  config_dir=str(tmp_path), status_file=tmp_path / "k.json", sink=None))
+    assert built == [] and agent.photos is None and agent.clips is None
+    assert "photos: no Gemini beside Claude (GEMINI_API_KEY) — no photos" in caplog.text
+
+
+def test_media_alone_brings_gemini_beside_claude_and_takes_its_key_out_of_the_environment(tmp_path, caplog):
+    env = {"CLAUDE_CODE_OAUTH_TOKEN": "oat", "GEMINI_API_KEY": "gem-key", "CLAUDE_LIMIT_FALLBACK": "silent"}
+    c = claude_client_for(env, status_file=tmp_path / "s.json", sink=None, gemini_sink=None, clock=lambda: 0,
+                          recall=False, media=True)
+    assert isinstance(c.gemini, GeminiClient) and c.fallback is None and c.embedder is None
+    assert "GEMINI_API_KEY" not in env
+    bare = {"CLAUDE_CODE_OAUTH_TOKEN": "oat", "CLAUDE_LIMIT_FALLBACK": "silent"}
+    none = claude_client_for(bare, status_file=tmp_path / "s.json", sink=None, gemini_sink=None, clock=lambda: 0,
+                             recall=False, media=True)
+    assert none.gemini is None and "no GEMINI_API_KEY on claude: no photos or clips" in caplog.text
+
+
+@pytest.mark.parametrize("reply_model,expected", [("gemini-3.1-pro-preview", 4096), ("gemini-2.5-flash", 200)])
+def test_the_gemini_fallback_answers_at_its_own_models_cap(tmp_path, reply_model, expected):
+    """v7.2 code review #6: the Claude reply's cap (200) on 3.1 Pro would be eaten by its thinking."""
+    from tests.test_claude_client import FakeGemini
+    gemini = FakeGemini()
+    gemini.reply_model = reply_model
+    c = ClaudeClient(reply_model="sonnet", background_model="haiku", config_dir=str(tmp_path),
+                     status_file=tmp_path / "k.json", sink=None, fallback=gemini, fallback_think_cap=4096,
+                     clock=lambda: 1_000_000 * 1000)
+    c.status.muted_until = 1_000_000 + 600                    # at the limit: the fallback answers
+    asyncio.run(c.reply("Ich: привіт", "S", 200, kind="private"))
+    asyncio.run(c.complete("x", "S", 300, kind="summary"))   # the background keeps its own cap
+    assert gemini.calls[0] == ("reply", ("Ich: привіт", "S", expected, "private"))
+    assert gemini.calls[1][1][2] == 300
