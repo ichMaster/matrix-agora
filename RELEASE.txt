@@ -1,3 +1,23 @@
+Version 7.3.0 (2026-11-11)
+---------------------------
+- Кіра on Claude: her answers and writing first on Sonnet with thinking
+  adaptive at low, her background on Haiku, the CLI started ahead; her Gemini
+  3.1 Pro now her fallback at the limit; her switches all kept
+  (PRIVATE_HISTORY_HOURS 6 h, the owner) (AGORA-248)
+- Gemini beside Claude for her photos and clips (the makers no longer read a
+  key the Claude client took out of the environment) and the fallback's own
+  answer cap on a thinking model (AGORA-246; v7.1 #10, v7.2 #6)
+- A decline takes the backup's route as a block did; /claude (and /gemini),
+  /status and the ⚙️ line name Claude («відмова claude (stop · bio)»); her
+  answer's `by` is the engine that served it; a talk summary Claude declines
+  is written stricter, then left empty (AGORA-247)
+- Code review: 7 fixes (the ⚙️ line keeps what the backup did; a summary that
+  declines in its text is a decline; a declined session summary written
+  without her private lines; the commands' log), 1 left to the owner (a
+  decline tried once more)
+- Deployed at the owner's word as sha-e01b2c2; the day of her chat waived -
+  bugs go to 7.3.x patches
+
 Version 7.2.0 (2026-11-11)
 ---------------------------
 - The room on Claude: Ада, Бруно, Леон, Мія, Ірма and Кіт answer on Haiku,
