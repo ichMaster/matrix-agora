@@ -125,7 +125,7 @@ from agents.falphoto import FalPhotoMaker, load_photo_route, save_photo_route
 from agents.guardian import KEY_VAR as GUARDIAN_KEY_VAR
 from agents.guardian import Guardian
 from agents.life import current_chapter, events_due, known_ahead, life_section, next_chapter
-from agents.llm import DIGEST_MODEL, LAST_BLOCK, THINKING_MODELS, GeminiClient
+from agents.llm import DIGEST_MODEL, LAST_BLOCK, THINKING_MODELS, GeminiClient, refusal_marker
 from agents.logic import (
     BANNED_RE,
     CLAUDE_BRIEF_DIRECT,
@@ -3775,6 +3775,12 @@ class Agent:
             calls[0] += 1
             text = await self.llm.think(contents, system, model=getattr(self.llm, "reply_model", DIGEST_MODEL),
                                         kind="talk_summary", level="low")
+            declined = refusal_marker(text) if text else None
+            if declined:  # code review v7.3 #2: a decline written as the summary is a decline, never her memory
+                log.warning("talk: a summary declined in its text — counted as a decline")
+                LAST_BLOCK.set(("refusal", declined, None))
+                text = None
+                break
             if text is None or not BANNED_RE.search(text):
                 break
             log.warning("talk: a summary named what she is — written again")

@@ -100,5 +100,29 @@ def test_a_talk_summary_claude_declines_is_written_stricter_then_left_empty(tmp_
     assert (row.text, row.left_out) == ("", 2)                       # left empty, its items counted out
     calls = agent.llm.thought
     drain(agent)
-    assert agent.llm.thought == calls                                 # never tried again
-    assert calls % len(TALK_GENTLE) == 0
+    assert agent.llm.thought == calls == len(TALK_GENTLE)             # each strictness once, never tried again
+
+
+def test_a_talk_summary_that_declines_in_its_text_is_a_decline_never_her_memory(tmp_path, monkeypatch):
+    """Code review v7.3 #2: `think` never checks a refusal formula, so a decline written as the summary was kept."""
+    from tests.test_archive import EmbedLLM
+    from tests.test_talk_writer import drain, say, talking
+    from tests.test_talk_writer import ms as tms
+
+    class Writes(EmbedLLM):
+        probe = None
+
+        def __init__(self):
+            super().__init__()
+            self.thought = 0
+
+        async def think(self, contents, system_instruction, model="", max_output_tokens=0, kind="", level=None):
+            self.thought += 1
+            return "Я не можу виконати цей запит."
+
+    agent = talking(tmp_path, monkeypatch, Writes())
+    say(agent, "tg:1", tms(2026, 11, 2, 10, 1), "Ich", "Привіт")
+    say(agent, "tg:2", tms(2026, 11, 2, 10, 2), "Кіра", "Привіт!")
+    drain(agent)
+    row = agent.archive.talk_rows("hour")[0]
+    assert (row.text, row.left_out) == ("", 2) and agent.llm.thought == len(TALK_GENTLE)
