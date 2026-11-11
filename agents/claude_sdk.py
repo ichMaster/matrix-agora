@@ -7,7 +7,9 @@ settings, one turn. An API key can never be used — several independent layers 
   3. the forbidden names are scrubbed from the environment the SDK's CLI inherits (`scrub`);
   4. no settings are read (`setting_sources=[]`) and the CLI's config dir is a fresh tmpfs;
   5. the CLI's `system/init` must report `apiKeySource == "none"` and no tools, or every later reply is blocked;
-  6. no `anthropic` client anywhere — the SDK is imported here, lazily, and nowhere else;
+  6. no `anthropic` client here — the Agent SDK is imported here, lazily; from v7.4 the `anthropic` API client lives in
+     `agents/anthropic_api.py` alone, for a companion's `api-sonnet`, with its own key (`SONNET_API_KEY`, never
+     `ANTHROPIC_*`) handed over explicitly and out of the environment before any CLI starts;
   7. at a subscription limit he is silent until it resets — no fallback of any kind;
   8. every usage line is `subscription`.
 The SDK's message classes are matched by name, so the tests need no SDK installed. Never any text in a log or a file.

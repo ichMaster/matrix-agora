@@ -213,8 +213,11 @@ def test_nothing_imports_anthropic_and_only_the_responder_imports_the_sdk():
             importers.append(path.as_posix())
         if path.name != "claude_sdk.py":
             assert "claude_agent_sdk" not in src, path
-    # v5.24 (AGORA-212): the Opus scan is gone — no `anthropic` client anywhere again
-    assert importers == []
+    # v5.24 (AGORA-212): the Opus scan is gone; v7.4: a companion's `api-sonnet` alone, imported inside its client —
+    # its own key handed over, never `ANTHROPIC_*`
+    assert importers == ["agents/anthropic_api.py"]
+    src = Path("agents/anthropic_api.py").read_text(encoding="utf-8")
+    assert not re.search(r"^(import|from)\s+anthropic\b", src, re.MULTILINE)          # never at the module's top
 
 
 # --- the agent: refuses first, scrubs, builds no Gemini client --------------------------------------------------------

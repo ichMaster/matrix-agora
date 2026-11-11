@@ -295,6 +295,10 @@ SCHEMA: tuple[Setting, ...] = (
     # v7.4 — how deep each of a companion's answer models thinks (none of them off), read at her start
     _s("OPUS_EFFORT", "choice", "high", "model", "cap:private", None,
        "Глибина мислення Opus на Max (claudemax-opus)", choices=("low", "medium", "high", "max")),
+    _s("OPENAI_REASONING_EFFORT", "choice", "medium", "model", "cap:private", None,
+       "Глибина мислення GPT-6.1 Sol через API (api-gpt-6.1sol)", choices=("low", "medium", "high")),
+    _s("SONNET_EFFORT", "choice", "medium", "model", "cap:private", None,
+       "Глибина мислення Sonnet через API (api-sonnet)", choices=("low", "medium", "high", "max")),
     # 7.3.1 (the owner, 2026-11-11, Кіра flirting less on Claude: «Test the prompt split»): `off` — no CLI started
     # ahead and no split prompt, the whole instruction as the system prompt, as on Gemini
     _s("CLAUDE_WARM", "choice", "on", "model", "client:claude-sdk", None,

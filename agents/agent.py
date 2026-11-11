@@ -38,6 +38,8 @@ from nio import (
 
 from agents.answers import CHOICES as ANSWER_CHOICES
 from agents.answers import SwitchedResponder
+from agents.anthropic_api import KEY_VAR as SONNET_KEY_VAR
+from agents.anthropic_api import AnthropicAnswers
 from agents.archive import (
     CANDIDATES,
     GEMINI_CLOSED,
@@ -188,6 +190,7 @@ from agents.nudge import (
     parse_hours,
     save_nudge_state,
 )
+from agents.openai_api import OpenAIAnswers
 from agents.pastlife import VERBATIM_WORDS, pastlife_section, pick_memory
 from agents.photo import MODEL as PHOTO_MODEL
 from agents.photo import (
@@ -344,6 +347,7 @@ from agents.usage import (
     PROMPT_PARTS,
     PROMPT_SLOW,
     answer_line,
+    api_usage_line,
     fallback_usage_line,
     image_usage_line,
     parse_lines,
@@ -453,6 +457,9 @@ class Agent:
         fal_key = os.environ.pop(FAL_KEY_VAR, "").strip()
         # v5.24 (AGORA-212): the Opus scan is gone — a key left in kira.env never stays in the environment
         os.environ.pop("OPUS_JUDGE_KEY", None)
+        # v7.4 — a companion's answer models paid by the token: out of the environment the same way, handed to them
+        openai_key = os.environ.pop("OPENAI_API_KEY", "").strip()
+        sonnet_key = os.environ.pop(SONNET_KEY_VAR, "").strip()
         # the room's members come from the registry (v4.1): nothing in the code names them
         self.roster = roster if roster is not None else load_roster(cfg.simulation, strict_for=cfg.localpart)
         self.me = self.roster.get(cfg.localpart) or Member(cfg.localpart, cfg.user_id, cfg.name, (cfg.name.lower(),))
@@ -501,7 +508,7 @@ class Agent:
         if cfg.engine == "gemini" and cfg.type == "persona" and cfg.can("private"):
             self.switch = SwitchedResponder(
                 lambda: live_value(cfg.memory_file.parent, cfg.localpart, "ANSWER_MODEL", os.environ),
-                self._answer_responders(), self.responder)
+                self._answer_responders(openai_key, sonnet_key), self.responder)
             self.responder = self.switch
         self.reply_max_tokens = int(os.environ.get("REPLY_MAX_TOKENS", "200"))
         if getattr(self.llm, "reply_model", None) in THINKING_MODELS or self.switch is not None:
@@ -3138,6 +3145,16 @@ class Agent:
         self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked, latency_ms,
                                                  parts))
 
+    def record_api_usage(self, engine: str):
+        """v7.4 — the sink of a companion's answer model on OpenAI's or Anthropic's API: one `api` line a call, priced
+        by `PRICE_MODELS`, no text."""
+        def sink(kind: str, model: str, usage: dict | None, ok: bool, blocked: str | None = None,
+                 latency_ms: int | None = None) -> None:
+            parts = PROMPT_PARTS.get()
+            self._append_usage(lambda ts: api_usage_line(ts, self.cfg.localpart, kind, model, engine, usage, ok,
+                                                          blocked, latency_ms, parts))
+        return sink
+
     def record_video_note_usage(self, model: str, video_ms: int | None, ok: bool, blocked: str | None = None,
                                 latency_ms: int | None = None) -> None:
         """v5.18 — one line per call of her кружечок's model on fal: `fal`, priced per second by `PRICE_SECONDS`, no text."""
@@ -3173,12 +3190,25 @@ class Agent:
             return LAST_SERVED.get() or "gemini"
         return served_by(self.cfg.engine)
 
-    def _answer_responders(self) -> dict:
+    def _answer_responders(self, openai_key: str = "", sonnet_key: str = "") -> dict:
         """v7.4 — the answer models a companion's switch can reach: her Gemini client as ever (`api-gemini-3.1pro`,
-        her `GEMINI_REPLY_MODEL`), and Opus on the owner's Max plan (`claudemax-opus`) when the subscription's token
-        is set. The Claude client takes v4.4's layers — a forbidden variable refuses it, and every secret leaves the
-        environment its CLI inherits — and her Gemini client as its fallback at the limit, never a second one."""
+        her `GEMINI_REPLY_MODEL`); GPT-6.1 Sol and Sonnet on their APIs with their keys (AGORA-251); and Opus on the
+        owner's Max plan (`claudemax-opus`) when the subscription's token is set. The Claude client takes v4.4's
+        layers — a forbidden variable refuses it, and every secret leaves the environment its CLI inherits — and her
+        Gemini client as its fallback at the limit, never a second one."""
         out = {"api-gemini-3.1pro": self.responder}
+        if openai_key:
+            out["api-gpt-6.1sol"] = LlmResponder(OpenAIAnswers(
+                openai_key, effort=os.environ.get("OPENAI_REASONING_EFFORT", "medium").strip(),
+                sink=self.record_api_usage("openai")))
+        else:
+            log.info("answers: api-gpt-6.1sol off — no OPENAI_API_KEY")
+        if sonnet_key:
+            out["api-sonnet"] = LlmResponder(AnthropicAnswers(
+                sonnet_key, effort=os.environ.get("SONNET_EFFORT", "medium").strip(),
+                sink=self.record_api_usage("anthropic")))
+        else:
+            log.info("answers: api-sonnet off — no %s", SONNET_KEY_VAR)
         if not str(os.environ.get(OAUTH_VAR, "")).strip():
             log.info("answers: claudemax-opus off — no subscription token")
             return out
