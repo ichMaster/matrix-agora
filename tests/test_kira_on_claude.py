@@ -47,6 +47,13 @@ def test_the_owners_words_name_claude_and_claude_returns_to_it():
     assert silence_line("Кіра", None, None, "claude", True, "claude") == "⚙️ Кіра пропустила відповідь: claude нічого не повернув"
     assert silence_line("Кіра", ("prompt", "prohibited_content", None), None, "gemini", True) == \
         "⚙️ Кіра пропустила відповідь: блок gemini (prompt prohibited_content)"            # Gemini's as before
+    # code review v7.3 #1: what the backup did stays in the line after a decline; #4: the fallback's block is Gemini's
+    assert silence_line("Кіра", DECLINE, None, "backup", True, "claude") == \
+        "⚙️ Кіра пропустила відповідь: відмова claude (stop · bio), backup не відповів"
+    assert silence_line("Кіра", DECLINE, None, "claude", False, "claude").endswith("відмова claude (stop · bio), backup вимкнено")
+    assert silence_line("Кіра", ("prompt", "prohibited_content", None), None, "gemini", True, "claude") == \
+        "⚙️ Кіра пропустила відповідь: блок gemini (prompt prohibited_content)"
+    assert silence_line("Кіра", None, None, "gemini", True, "claude").endswith("gemini нічого не повернув")
     names = dict(commands_for(False, "claude"))
     assert names["claude"] == "Повернути claude зараз" and "gemini" not in names and "scan" not in names
     assert names["backup"] == "Увімкнути backup до /claude" and commands_for(False) == COMMANDS

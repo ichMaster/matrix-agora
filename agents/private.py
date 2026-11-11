@@ -88,10 +88,13 @@ def silence_line(name: str, block: tuple | None, why: str | None, by: str | None
     """v5.22 — the owner's ⚙️ line when her answer to him came to nothing: Gemini's block (its stage, reason and
     category), a silent reason of `_compose`, the backup that gave nothing, an error, or Gemini that returned nothing.
     A service line: never in her history, the archive or a prompt; no text of theirs in it."""
-    if block is not None and main != "gemini" and block[0] == "refusal":  # v7.3: Claude declines, never blocks
-        what = f"відмова {main} (" + " · ".join(str(x) for x in block[1:] if x) + ")"
-    elif block is not None:
-        what = f"блок {main} (" + " ".join(str(x) for x in block if x) + ")"
+    engine = "gemini" if by == "gemini" else main  # code review v7.3 #4: the fallback's own block is Gemini's
+    if block is not None:
+        if engine != "gemini" and block[0] == "refusal":  # v7.3: Claude declines, never blocks
+            what = f"відмова {engine} (" + " · ".join(str(x) for x in block[1:] if x) + ")"
+        else:
+            what = f"блок {engine} (" + " ".join(str(x) for x in block if x) + ")"
+        # code review v7.3 #1: what the backup did, after a decline as after a block
         if by == "backup":  # code review v5.22 #5: the backup's own silent reason, when it wrote one that went nowhere
             what += f", backup: {SILENCE_WHY.get(why, why)}" if why else ", backup не відповів"
         elif not backup_on:
@@ -103,7 +106,7 @@ def silence_line(name: str, block: tuple | None, why: str | None, by: str | None
     elif by == "backup":
         what = "backup не відповів"
     else:
-        what = f"{main} нічого не повернув"
+        what = f"{engine} нічого не повернув"
     return f"⚙️ {name} пропустила відповідь: {what}"
 
 
