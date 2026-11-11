@@ -1,3 +1,12 @@
+Version 7.3.1 (2026-11-11)
+---------------------------
+- The usage line names the model a call asked for: the CLI adds a small
+  Haiku call to every call, and Кіра's Sonnet answers had been recorded as
+  Haiku
+- CLAUDE_WARM (on | off), per agent in the panel: off gives her Claude the
+  whole instruction as the system prompt, with no CLI started ahead - the
+  owner's test of whether the split prompt made Кіра flirt less on Claude
+
 Version 7.3.0 (2026-11-11)
 ---------------------------
 - Кіра on Claude: her answers and writing first on Sonnet with thinking
