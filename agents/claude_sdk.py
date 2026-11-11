@@ -694,6 +694,24 @@ class WarmCli:
         return answer()
 
 
+def model_of(model_usage: Any, alias: str) -> str:
+    """The model a call ran on, from the CLI's `model_usage` (7.3.1, found 2026-11-11: the CLI adds a small Haiku call to
+    every call, and the first key named Кіра's Sonnet answers Haiku): the key that holds the asked alias, else the one
+    that wrote the most; the alias when there is none."""
+    if not isinstance(model_usage, Mapping) or not model_usage:
+        return alias
+    names = [k for k in model_usage if isinstance(k, str) and k]
+    asked = [k for k in names if alias and alias in k]
+    if asked:
+        return asked[0]
+
+    def written(name: str) -> int:
+        used = model_usage[name]
+        out = used.get("outputTokens") if isinstance(used, Mapping) else getattr(used, "outputTokens", 0)
+        return out if isinstance(out, int) else 0
+    return max(names, key=written) if names else alias
+
+
 def split_prompt(system: str | None, slow: str | None) -> tuple[str, str] | None:
     """v7.2 (AGORA-242) — a call's system prompt as its slow part and the rest: `(slow, rest)` when `system` starts
     with `slow` (the rest without the blank line that joined them), else None."""
@@ -1074,8 +1092,7 @@ class ClaudeClient(_Subscription):
         usage = getattr(result, "usage", None)
         cost = getattr(result, "total_cost_usd", None)
         model_usage = getattr(result, "model_usage", None)
-        named = next(iter(model_usage), None) if isinstance(model_usage, Mapping) and model_usage else None
-        model = named if isinstance(named, str) and named else model  # the id the CLI ran, else the alias
+        model = model_of(model_usage, model)  # the id the CLI ran for this call, else the alias
         checked = (result is not None and self.blocked is None and seen["init"] and not seen["over_limit"]
                    and seen["refused"] is None)
         good = checked and not getattr(result, "is_error", True)

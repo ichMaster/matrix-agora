@@ -526,3 +526,18 @@ def test_one_usage_line_a_call_with_the_model_the_cli_ran_and_its_time(tmp_path)
         ("claude-sdk", "subscription", 800, None)
     assert sdk_usage_line("t", "a", "private", "m", None, False, blocked="refusal")["blocked"] == "refusal"
     assert sdk_usage_line("t", "a", "private", "m", None, False, blocked="prompt")["blocked"] is None
+
+
+
+# --- 7.3.1: the model a call ran on ---------------------------------------------------------------------------------
+def test_the_usage_line_names_the_model_asked_not_the_clis_auxiliary_haiku(tmp_path):
+    """Found 2026-11-11: the CLI adds a small Haiku call to every call; the first key named Sonnet's answers Haiku."""
+    from agents.claude_sdk import model_of
+    both = {"claude-haiku-5-5": {"inputTokens": 1173, "outputTokens": 19},
+            "claude-sonnet-5-5": {"inputTokens": 451, "outputTokens": 36}}
+    assert model_of(both, "sonnet") == "claude-sonnet-5-5" and model_of(both, "haiku") == "claude-haiku-5-5"
+    assert model_of(both, "opus") == "claude-sonnet-5-5"          # no such key: the one that wrote the most
+    assert model_of({}, "sonnet") == "sonnet" and model_of(None, "haiku") == "haiku"
+    c, usage = client(tmp_path, FakeSDK([INIT_OK, result("Так.", model_usage=both)]))
+    run(c.reply("t", "s"))
+    assert usage[-1][0][1] == "claude-sonnet-5-5"
