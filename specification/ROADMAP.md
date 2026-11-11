@@ -94,7 +94,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v7.1 | The Claude engine for a persona: answers on Sonnet, the background on Haiku | ✅ completed | `v7.1.0` (2026-11-11) |
 | v7.2 | The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес | ✅ completed | `v7.2.0` (2026-11-11) |
 | v7.3 | Кіра on Claude | ✅ completed | `v7.3.0` (2026-11-11) |
-| v7.4 | The companions' four models: Кіра and Устина switched in the panel | ⏳ planned | — |
+| v7.4 | The companions' five models: Кіра and Устина switched in the panel | ⏳ planned | — |
 | v7.5 | The prompt for the cache: what changes slowly first, read from the cache | ⏳ planned | — |
 | v7.6 | The panel for Claude: the subscription's analytics and cards | ⏳ planned | — |
 | v8.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
@@ -3947,9 +3947,9 @@ Sonnet (`claude-sonnet-5-5`, the CLI's alias `sonnet`) for Кіра, Устин�
 Кіра and Устина only — Anthropic has no embeddings endpoint), the photos and videos (Google's image models, fal.ai,
 VEED), hearing (Deepgram) and the voice (ElevenLabs); the companions' backup for their private chats stays on
 NovelAI. The engine is one line of an agent's TOML, so every phase keeps the way back to Gemini. The room first,
-then Кіра (the owner, 2026-11-10: «навпаки» — decision 2); then the companions' four models, Кіра and
-Устина switched in the panel between Gemini 3.1 Pro, GPT-6.1 Sol and Sonnet on their APIs and Opus on the Max plan
-(v7.4, the owner, 2026-11-11 — it replaced «Устина on Claude»); last, the prompt
+then Кіра (the owner, 2026-11-10: «навпаки» — decision 2); then the companions' five models, Кіра and
+Устина switched in the panel between Gemini 3.1 Pro, GPT-6.1 Sol and Sonnet on their APIs, Opus on the Max plan and
+GPT-6.1 Sol through Codex on the ChatGPT plan (v7.4, the owner, 2026-11-11 — it replaced «Устина on Claude»); last, the prompt
 laid out for the cache (v7.5; the owner, 2026-11-10: «переробити промпт адаптований під кеш» — «це має бути в 7
 версії» — «постав кеш в кінець версії 7»), and the panel read for Claude (v7.6; the owner, 2026-11-11: «переробити
 адмін панель … на аналіз під Claude» — «зроби це в кінці 7 версії»). Inserted before Лілі on 2026-11-10: Лілі moved to v8,
@@ -3962,7 +3962,7 @@ the defaults, and he then answered the second):
    the private chats never go silent; `silent` makes them wait as Claude does.
 2. **The companions' order.** Proposed: Устина before Кіра. **Decided (the owner, 2026-11-10: «Устина переходить
    раніше за Кіру — навпаки»):** Кіра first (v7.3), then Устина (v7.4; from 2026-11-11 her move is a choice in
-   the companions' four-model switch) — Кіра's chat carries the Gemini-specific
+   the companions' five-model switch) — Кіра's chat carries the Gemini-specific
    machinery (v5.13–v5.27), so it is rebuilt for Claude on her, and Устина takes what that phase taught.
 3. **The cat's answers** on Haiku, not Sonnet: his lines are at most `CAT_MAX_WORDS` words. **Widened (the owner,
    2026-11-10: «можна поставити всім агентам Ада, Бруно, Леон, Мія, Ірма, Кіт haiku instead sonnet», «Гермес хай
@@ -4152,18 +4152,18 @@ first companion to move (the owner, 2026-11-10), so the machinery is rebuilt for
 **Tests:** a decline → the backup's route and `blocked`; the scan off on Claude; no `blocked` line in Claude's prompt;
 her photos on Claude; her TOML.
 
-### v7.4 — The companions' four models: Кіра and Устина switched in the panel
+### v7.4 — The companions' five models: Кіра and Устина switched in the panel
 
 **Status:** ⏳ planned.
 
 The owner, 2026-11-11: «в версії 7.4 я хочу щоб Кіру можна було перемикати між 4ма моделями api-gemini-3.1pro,
 api-gtp-6.1sol, api-sonet, claudemax-opus всі моделі мають мати включений thinking», then «те саме треба буде потім
-для Устини тож можна одночасно зробити в одній версії». It replaces «Устина on Claude»: Opus on the Max plan is one of
-her four choices. His answers (2026-11-11): the switch in the panel only; only her answers follow it; thinking as it
-runs now, the two new models at `medium`.
+для Устини тож можна одночасно зробити в одній версії», and a fifth, «роби зразу ще одну codex-gpt-6.1sol». It replaces
+«Устина on Claude»: Opus on the Max plan is one of her five choices. His answers (2026-11-11): the switch in the panel
+only; only her answers follow it; thinking as it runs now, the new ones at `medium`.
 
 **Goal:** Кіра's and Устина's answers — the private chat, writing first, Agora — come from the model the owner picks in
-each one's panel settings, one of four, each thinking before it answers; everything else stays where it is.
+each one's panel settings, one of five, each thinking before it answers; everything else stays where it is.
 
 **Tasks:**
 - **The switch.** One setting per companion, `ANSWER_MODEL`, in her panel settings (the companions' scope), a live
@@ -4175,42 +4175,55 @@ each one's panel settings, one of four, each thinking before it answers; everyth
   | `api-gpt-6.1sol` | `gpt-6.1-sol`, the OpenAI API | tokens, `OPENAI_API_KEY` (new) | `OPENAI_REASONING_EFFORT` `medium` |
   | `api-sonnet` | `claude-sonnet-5-5`, the Anthropic API | tokens, `SONNET_API_KEY` (new) | adaptive, `SONNET_EFFORT` `medium` |
   | `claudemax-opus` | `claude-opus-5-5`, the Agent SDK on the Max plan | the subscription | adaptive, `CLAUDE_EFFORT` `high` (as now) |
+  | `codex-gpt-6.1sol` | `gpt-6.1-sol`, the Codex CLI (`codex exec`) on the owner's ChatGPT plan | the subscription | `CODEX_REASONING_EFFORT` `medium` |
 
-  Thinking is never off for her answers: none of the four offers `off`.
+  Thinking is never off for her answers: none of the five offers `off`.
 - **What follows it:** her private answers, her writing first and her Agora answers. Her background — the talk and
   session summaries, facts, topics, the today block, events, reading, thoughts — and the embeddings, photos, videos,
   hearing and voice stay as on Gemini now; her TOML stays `engine = "gemini"`.
-- **One prompt for all four:** the prompt as now, its slow part (canon and life) the system and the rest the message,
-  each client in its own shape (Gemini's system instruction, OpenAI's instructions, Anthropic's system, the CLI's
-  system prompt as in 7.3.3, whole). No prompt names the model or says she is one.
-- **A refusal on any is a block at the answer stage:** a Gemini block, an OpenAI refusal, an Anthropic `refusal` stop
-  and a Claude CLI decline all take the backup's route (v7.3) — his lines and hers `blocked`, the backup's window, the
-  ⚙️ line naming the model that refused. At the Max limit `claudemax-opus` falls back to Gemini 3.1 Pro (v7.1); an API
-  error is a failed answer as now — logged, silent, never handed to another paid model.
+- **One prompt for all five:** the prompt as now, its slow part (canon and life) the system and the rest the message,
+  each client in its own shape (Gemini's system instruction, OpenAI's instructions, Anthropic's system, the Claude
+  CLI's system prompt as in 7.3.3, whole; Codex's base instructions replaced by hers where the CLI allows it, else her
+  prompt whole as the message — measured). No prompt names the model or says she is one.
+- **A refusal on any is a block at the answer stage:** a Gemini block, an OpenAI refusal, an Anthropic `refusal`
+  stop, a Claude CLI decline and a Codex refusal all take the backup's route (v7.3) — his lines and hers `blocked`, the
+  backup's window, the ⚙️ line naming the model that refused. At a subscription's limit `claudemax-opus` and
+  `codex-gpt-6.1sol` fall back to Gemini 3.1 Pro (v7.1); an API error is a failed answer as now — logged, silent,
+  never handed to another paid model.
 - **The subscription stays safe:** the Anthropic API key is named `SONNET_API_KEY`, never `ANTHROPIC_*` (a Claude
   client refuses to start with one, v4.4 layers 2–3); only the Anthropic API client reads it, given explicitly, and it
   is scrubbed from the environment the CLI inherits, so `claudemax-opus` stays on the subscription
   (`apiKeySource == "none"`). The Anthropic SDK is imported in that client's module alone (v4.4 layer 6 widened).
+- **Codex on the ChatGPT plan, as Claude on Max:** `codex exec` with `--json`, one process a call, its model
+  `gpt-6.1-sol`, signed in with the owner's ChatGPT account and never an API key — the login forced to ChatGPT,
+  `OPENAI_API_KEY` scrubbed from the environment the CLI inherits, a call that reports any other auth blocked. No tools:
+  no shell, no file edits, a read-only sandbox, no approvals — the answer only. Its credentials are signed in once by the
+  owner (`codex login --device-auth`), kept on the host 0600 and never printed, baked into an image or logged; the CLI
+  is added to the Claude image. ChatGPT's limits (a 5-hour window on Plus, weekly ones) are read from its error as
+  Claude's are.
 - **The owner's words:** `/status` and the ⚙️ lines name the model that answered; `/gemini` and `/claude` keep returning
   from the backup to the chosen model; her answer's `by` names it.
 - **Accounting:** usage lines for the two new APIs (billing `api`, their prices in `PRICE_MODELS`), the Max calls as now
-  (`claude-sdk`, subscription); Analytics shows each model's speed and cost apart.
+  (`claude-sdk`, subscription), the Codex calls as a subscription's (`codex`); Analytics shows each model's speed and
+  cost apart.
 - **The services:** Кіра's and Устина's compose services on the Claude image with `subscription.env` last, whatever is
   chosen; `server/kira.env` and `server/ustyna.env` gain `OPENAI_API_KEY` and `SONNET_API_KEY` (the owner's), read by
   no other service; the `openai` and `anthropic` Python SDKs join the dependencies; the panel's card shows the chosen
   model.
 
 **DoD:**
-- (Manual, owner) In the panel each of the four answers Кіра's private chat in Telegram, then Устина's: her voice and
+- (Manual, owner) Codex signed in on the host with his ChatGPT account.
+- (Manual, owner) In the panel each of the five answers Кіра's private chat in Telegram, then Устина's: her voice and
   character, her writing first; a refusal goes to the backup with the ⚙️ line naming the model; she never says she is
   a model.
 - Each model's answer time and cost per answer over a day of hers, in the execution report, against her week on
   Gemini 3.1 Pro.
 
-**Tests:** the setting's four choices and its live switch; each client's call — the system, the message, thinking on —
+**Tests:** the setting's five choices and its live switch; each client's call — the system, the message, thinking on —
 with its SDK mocked; a refusal on each → the backup's route; the background untouched by the switch; the usage lines
-of the two APIs; `SONNET_API_KEY` never in the CLI's environment and a Claude client still refusing `ANTHROPIC_*`; the
-compose pins for both services; nothing reaches the network.
+of the two APIs; `SONNET_API_KEY` never in the Claude CLI's environment and a Claude client still refusing
+`ANTHROPIC_*`; `OPENAI_API_KEY` never in Codex's, its tools off, its credentials never in a log; the compose pins for
+both services; nothing reaches the network.
 
 ### v7.5 — The prompt for the cache: what changes slowly first, read from the cache
 
