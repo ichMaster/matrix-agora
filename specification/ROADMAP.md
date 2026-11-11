@@ -4110,7 +4110,10 @@ compose test (their image and env files, no forbidden variable), the turn-taking
 (v7.1 code review #10) and the fallback's own cap (v7.2 #6); a decline takes the backup's route with Claude's names
 (`/claude`, the ⚙️ line, `/status`), her declined summaries never loop; her switches all kept (`PRIVATE_HISTORY_HOURS`
 6 h, the owner); deployed at his word (`sha-e01b2c2`), the day waived — bugs go to 7.3.x patches; the code review's 7
-fixes, 1 left to the owner (a decline tried once more).
+fixes, 1 left to the owner (a decline tried once more). **Rolled back the same night** (7.3.2, the owner, 03:10: «а можеш зараз її перемкнути назад на джемені
+3.1 про?»): on Claude she flirted less on her own (her canon unchanged; 15 answers on Sonnet, no declines); the
+split-prompt test (`CLAUDE_WARM=off`, 7.3.1) was cut short; she runs on Gemini 3.1 Pro again, the v7.3 code kept for a
+later move.
 
 **Goal:** Кіра's Agora and her private chat run on Claude — her answers and her writing first on Sonnet in place of
 Gemini 3.1 Pro, her background on Haiku; what Claude declines goes to her backup on NovelAI.
