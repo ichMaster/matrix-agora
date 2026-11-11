@@ -4113,7 +4113,8 @@ compose test (their image and env files, no forbidden variable), the turn-taking
 fixes, 1 left to the owner (a decline tried once more). **Rolled back the same night** (7.3.2, the owner, 03:10: «а можеш зараз її перемкнути назад на джемені
 3.1 про?»): on Claude she flirted less on her own (her canon unchanged; 15 answers on Sonnet, no declines); the
 split-prompt test (`CLAUDE_WARM=off`, 7.3.1) was cut short; she runs on Gemini 3.1 Pro again, the v7.3 code kept for a
-later move.
+later move. **Then on Opus** (7.3.3, the owner, 03:2x: «давай зразу опус 5.5 на хай»): Claude again, Opus 5.5 at `high`,
+her whole prompt as the system prompt (`CLAUDE_WARM=off`).
 
 **Goal:** Кіра's Agora and her private chat run on Claude — her answers and her writing first on Sonnet in place of
 Gemini 3.1 Pro, her background on Haiku; what Claude declines goes to her backup on NovelAI.
