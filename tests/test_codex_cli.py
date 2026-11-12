@@ -243,3 +243,26 @@ def test_its_home_is_absolute_wherever_the_cli_runs(tmp_path, monkeypatch):
     for r in spawn.runs:
         assert r["env"]["CODEX_HOME"] == str(tmp_path / "state" / "kira.codex") and r["cwd"] == str(tmp_path / "work")
     assert (tmp_path / "state" / "kira.codex").is_dir()
+
+
+def test_an_unreadable_status_is_looked_at_again_and_a_hung_one_is_killed(tmp_path, monkeypatch):
+    """Code review v7.4 #3: an error or a panic from `login status` blocked Codex for good, and a hung one stayed."""
+    from agents import codex_cli
+    clock = [0.0]
+    spawn = Spawn(status=b"Error: permission denied reading auth.json\n", status_code=1)
+    client = codex(tmp_path, spawn, clock=clock)
+    assert run(client.reply("x", SYSTEM, 100, "private"))[0] is None and client.blocked is None
+    spawn.status, spawn.status_code, clock[0] = b"Logged in using ChatGPT\n", 0, 301.0
+    assert run(client.reply("x", SYSTEM, 100, "private"))[0] == ("Привіт, сонце.", "stop")
+
+    monkeypatch.setattr(codex_cli, "STATUS_TIMEOUT_S", 0.01)
+    hung = []
+
+    async def slow_status(*args, **kwargs):
+        proc = Proc(b"Logged in using ChatGPT\n", 0, delay=1.0)
+        hung.append(proc)
+        return proc
+
+    stuck = codex(tmp_path, slow_status)
+    assert run(stuck.reply("x", SYSTEM, 100, "private"))[0] is None and stuck.blocked is None
+    assert hung and hung[0].killed

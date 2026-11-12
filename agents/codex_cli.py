@@ -39,6 +39,7 @@ MODEL = "gpt-6.1-sol"
 EFFORTS = ("low", "medium", "high")
 BINARY_VAR = "CODEX_BIN"
 STATUS_TTL_S = 300      # not signed in: looked at again so often
+STATUS_TIMEOUT_S = 30   # its `login status`, at most so long
 LIMIT_MUTE_S = 3600     # a usage limit with no time named: an hour, as Claude's (v4.4)
 # every tool and side door Codex has, off (`codex features list`, 0.167.1); the sandbox is read-only besides
 FEATURES_OFF = ("shell_tool", "unified_exec", "view_image", "image_generation", "apps", "plugins", "multi_agent",
@@ -133,15 +134,24 @@ class CodexAnswers:
 
     # --- the login ----------------------------------------------------------------------------------------------
     async def _status(self) -> str:
-        """`codex login status`, read for its kind alone — `chatgpt`, `none` or `other` — and never logged."""
+        """`codex login status`, read for its kind alone — `chatgpt`, `other` (an API key: never) or `none` — and
+        never logged. Code review v7.4 #3: only a login that names an API key is `other`; anything else (not signed
+        in, an error, a panic) is `none`, looked at again later; a status that hangs is killed."""
         proc = await self._spawn(self.binary, "login", "status", stdin=asyncio.subprocess.DEVNULL,
                                  stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                                  env=clean_env(self.home, self.work), cwd=str(self.work))
-        out, err = await asyncio.wait_for(proc.communicate(), 30)
-        said = (out or b"").decode("utf-8", "replace") + (err or b"").decode("utf-8", "replace")
-        if "chatgpt" in said.lower() and proc.returncode == 0:
+        try:
+            out, err = await asyncio.wait_for(proc.communicate(), STATUS_TIMEOUT_S)
+        finally:
+            if proc.returncode is None:
+                with contextlib.suppress(ProcessLookupError):
+                    proc.kill()
+                with contextlib.suppress(Exception):
+                    await proc.wait()
+        said = ((out or b"") + b"\n" + (err or b"")).decode("utf-8", "replace").lower()
+        if "chatgpt" in said and proc.returncode == 0:
             return "chatgpt"
-        return "none" if "not logged in" in said.lower() else "other"
+        return "other" if "api key" in said else "none"
 
     async def signed_in(self) -> bool:
         if self.blocked:
@@ -159,7 +169,7 @@ class CodexAnswers:
             log.error("codex: blocked — %s; never an API key", self.blocked)
             return False
         if kind == "none":
-            log.warning("codex: not signed in — codex-gpt-6.1sol answers nothing")
+            log.warning("codex: not signed in (or its status unreadable) — codex-gpt-6.1sol answers nothing")
         self._signed = (kind == "chatgpt", now)
         return kind == "chatgpt"
 
