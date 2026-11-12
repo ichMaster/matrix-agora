@@ -511,7 +511,7 @@ class Agent:
         if cfg.engine == "gemini" and cfg.type == "persona" and cfg.can("private"):
             self.switch = SwitchedResponder(
                 lambda: live_value(cfg.memory_file.parent, cfg.localpart, "ANSWER_MODEL", os.environ),
-                self._answer_responders(openai_key, sonnet_key), self.responder)
+                self._answer_responders(openai_key, sonnet_key), self.responder, silent=_silent)
             self.responder = self.switch
         self.reply_max_tokens = int(os.environ.get("REPLY_MAX_TOKENS", "200"))
         if getattr(self.llm, "reply_model", None) in THINKING_MODELS or self.switch is not None:

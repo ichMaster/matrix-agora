@@ -33,8 +33,9 @@ class SwitchedResponder:
     (Gemini, as ever); the Gemini choice is `base` itself, so on it nothing differs from before v7.4."""
 
     def __init__(self, choice: Callable[[], str], responders: Mapping[str, Responder], base: Responder,
-                 mono: Callable[[], float] = time.monotonic) -> None:
+                 mono: Callable[[], float] = time.monotonic, silent: Callable[[str], None] | None = None) -> None:
         self._choice = choice
+        self._silent = silent  # code review v7.4 #5: the agent's silence reason, for the owner's ⚙️ line
         self.responders = dict(responders)
         self.base = base
         self._mono = mono
@@ -63,5 +64,7 @@ class SwitchedResponder:
         responder = self.responders.get(name)
         if responder is None:
             self._missing(name)
+            if self._silent is not None:
+                self._silent(f"{name} недоступна (немає ключа чи входу)")
             return None
         return await responder.respond(turn)

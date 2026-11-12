@@ -197,3 +197,20 @@ def test_a_restart_during_opuss_max_limit_keeps_it_muted(tmp_path, monkeypatch):
     assert agent.opus is not None and not agent.opus.muted()
     agent.resume_cards()
     assert agent.opus.muted()
+
+
+def test_a_chosen_model_that_is_not_there_is_named_to_the_owner(tmp_path, monkeypatch):
+    """Code review v7.4 #5: a missing choice reached him as «… нічого не повернув», never why — the switch now sets
+    the agent's silence reason, which his ⚙️ line reads."""
+    agent = her(tmp_path, monkeypatch)
+    choose(agent, "api-sonnet")                                            # no SONNET_API_KEY in the test
+
+    async def answer():
+        agent_module.LAST_SILENCE.set(None)
+        out = await agent.responder.respond(Turn([("Ich", "Привіт")], "sys", 100, "private"))
+        return out, agent_module.LAST_SILENCE.get()
+
+    out, why = asyncio.run(answer())
+    assert out is None and why == "api-sonnet недоступна (немає ключа чи входу)"
+    assert silence_line("Кіра", None, why, "anthropic", True, agent.main_label()) == \
+        "⚙️ Кіра пропустила відповідь: api-sonnet недоступна (немає ключа чи входу)"
