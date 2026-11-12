@@ -45,7 +45,8 @@ LIMIT_MUTE_S = 3600     # a usage limit with no time named: an hour, as Claude's
 FEATURES_OFF = ("shell_tool", "unified_exec", "view_image", "image_generation", "apps", "plugins", "multi_agent",
                 "browser_use", "computer_use", "goals", "hooks", "skill_search", "sleep_tool", "tool_suggest",
                 "workspace_dependencies", "code_mode_host")
-QUIET_ITEMS = frozenset({"agent_message", "reasoning", "error"})  # anything else an item is, is a tool
+# anything else an item is, is a tool; code review v7.4 #9: a plan (`todo_list`) acts on nothing — not a tool
+QUIET_ITEMS = frozenset({"agent_message", "reasoning", "error", "todo_list"})
 LIMIT_RE = re.compile(r"usage limit|rate limit|too many requests|\b429\b", re.IGNORECASE)
 
 

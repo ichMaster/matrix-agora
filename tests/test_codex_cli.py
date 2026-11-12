@@ -289,3 +289,10 @@ def test_a_failed_instruction_file_is_silence_and_her_work_folder_is_on_the_clis
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "tmpfs"))
     agent = her(tmp_path, monkeypatch)
     assert agent.switch.responders["codex-gpt-6.1sol"].llm.work == tmp_path / "tmpfs" / "codex-kira"
+
+
+def test_a_plan_step_is_no_tool_and_her_answer_stands(tmp_path):
+    """Code review v7.4 #9: a plan (`todo_list`) counted as a tool and dropped her answer."""
+    plan = Spawn(events=[{"type": "item.started", "item": {"type": "todo_list", "items": []}},
+                         {"type": "item.completed", "item": {"type": "todo_list", "items": []}}, *OK_EVENTS])
+    assert run(codex(tmp_path, plan).reply("x", SYSTEM, 100, "private"))[0] == ("Привіт, сонце.", "stop")
