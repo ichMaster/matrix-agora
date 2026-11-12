@@ -96,7 +96,8 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v7.3 | Кіра on Claude | ✅ completed | `v7.3.0` (2026-11-11) |
 | v7.4 | The companions' five models: Кіра and Устина switched in the panel | ✅ completed | `v7.4.0` (2026-11-12) |
 | v7.5 | The prompt for the cache: what changes slowly first, read from the cache | ⏳ planned | — |
-| v7.6 | The panel for Claude: the subscription's analytics and cards | ⏳ planned | — |
+| v7.6 | Her memory as Lumi's: a short live window, short summaries, recall by her own tool | ⏳ planned | — |
+| v7.7 | The panel for Claude: the subscription's analytics and cards | ⏳ planned | — |
 | v8.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v8.2 | Лілі under the full rules | ⏳ planned | — |
 | v9.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -3951,7 +3952,8 @@ then Кіра (the owner, 2026-11-10: «навпаки» — decision 2); then t
 Устина switched in the panel between Gemini 3.1 Pro, GPT-6.1 Sol and Sonnet on their APIs, Opus on the Max plan and
 GPT-6.1 Sol through Codex on the ChatGPT plan (v7.4, the owner, 2026-11-11 — it replaced «Устина on Claude»); last, the prompt
 laid out for the cache (v7.5; the owner, 2026-11-10: «переробити промпт адаптований під кеш» — «це має бути в 7
-версії» — «постав кеш в кінець версії 7»), and the panel read for Claude (v7.6; the owner, 2026-11-11: «переробити
+версії» — «постав кеш в кінець версії 7»), then (v7.6; the owner, 2026-11-12) the companions' memory as Lumi's — a short live window, short summaries,
+recall by her own tool —, and the panel read for Claude (v7.7; the owner, 2026-11-11: «переробити
 адмін панель … на аналіз під Claude» — «зроби це в кінці 7 версії»). Inserted before Лілі on 2026-11-10: Лілі moved to v8,
 Applications to v9, the Theatre to v10 and Кіра's inner life to v11. Depends on: v6.
 
@@ -4243,7 +4245,12 @@ both services; nothing reaches the network.
 
 ### v7.5 — The prompt for the cache: what changes slowly first, read from the cache
 
-**Status:** ⏳ planned.
+**Status:** ⏳ planned. **Widened 2026-11-12** (the owner, after the cost analysis
+[docs/companions-gemini-cost.md](../docs/companions-gemini-cost.md) and a look at Lumi's prompt: «Дві фази поспіль»).
+Кіра and Устина stay on Gemini 3.1 Pro (the owner: «наразі найліпша їх поведінка на 3.1 про»), whose cache served 0.1%
+of their 52M prompt tokens in a week — so this phase lays the prompt out for the cache on Gemini first, as Lumi does
+(an explicit context cache of the stable start, the per-message tail after it, the history moving in steps), and on
+Claude as planned. The memory itself (a shorter live window, fewer summaries, recall by her own tool) is v7.6's.
 
 The owner, 2026-11-10: «зроби окрему версію щоб переробити промпт адаптований під кеш» — «ні це має бути в 7
 версії». Measured in v7.1 (its execution report, §The prompt cache): the CLI caches a call's prompt by itself, for an
@@ -4255,8 +4262,10 @@ the same, a 12-request conversation read 89% of each prompt from the cache on So
 2026-11-10: «постав кеш в кінець версії 7»).
 
 **Goal:** every agent's prompt in two parts — what changes slowly, the same from call to call, then what changes
-every call, then the history — so that on Claude the second call within the hour reads the first part from the
-cache; on Gemini, the fallback at the limit, the same order (its implicit cache reads a repeated beginning too).
+every call, then the history — so that the second call within the hour reads the first part from the cache: on
+Gemini (Кіра's and Устина's answers) through an explicit context cache, on Claude through the CLI's own cache.
+Measured 2026-11-12 (23 calls of an identical 43,800-token start on 3.1 Pro): Gemini's implicit cache read **0**
+tokens, so on Gemini the cache is made on purpose.
 
 **Tasks:**
 - The layers by how often they change, from the code and from the prompt parts the usage lines carry
@@ -4272,20 +4281,82 @@ cache; on Gemini, the fallback at the limit, the same order (its implicit cache 
   history (a few hundred tokens); whether the new order changes how well it is followed is the owner's live check.
 - The invariants unchanged: nothing of her future, the persons believe they are human, nothing `blocked` in a prompt;
   the backup's prompt (NovelAI) in the same order.
+- **Gemini's explicit cache, as Lumi has it** (`core/llm.py` there, `cachedContents`): the stable start (the canon,
+  the life, the voice, the rules, the memories, the plans, the mood, the facts, the talk summaries) in a context
+  cache keyed by a fingerprint (sha256 of its text and the model), made when the fingerprint is new and reused until
+  it changes; a short life renewed while they talk (its TTL a setting), so a quiet hour stores nothing; the per-message
+  tail (the style line, the place and time, the today block, the recall, Agora now, the thoughts, the move) moved out
+  of the system instruction into the message, after the history, next to his line. A cache that cannot be made or has
+  expired is a call without it, never silence.
+- **The history window moves in steps** (Lumi: a window of N to N+batch messages): the word-for-word window starts at
+  a line that moves on in blocks, so between two moves a new line only adds to its end — the start of the history
+  repeats, and the window's length stays what it is now (v7.6 shortens it).
+- **Why a call missed the cache** (Lumi's `cache_log`): each cache made is logged as `first`, `expired` or `moved`
+  with the parts whose fingerprint changed — names only, never a text.
 - The cache in the numbers: Claude's usage lines carry `cache_read_tokens` / `cache_write_tokens` since v4.4; Gemini's
-  gain its `cached_content_token_count`; Analytics · Prompts shows the share read from the cache by agent and kind.
+  carry `cached_content_token_count` (and the explicit cache's creation as its own kind); `PRICE_MODELS` gains the
+  cache-read price (a third number: 3.1 Pro $0.20 per 1M) and the storage, so Analytics prices a cached token right;
+  Analytics · Prompts shows the share read from the cache by agent and kind.
+- Not here: Google's Flex tier for her answers — tested 2026-11-12, 9 of 20 calls answered (9 × `503`, 2 timeouts at
+  300 s, up to 204 s), against 3 of 3 on Standard at 7.5 s (docs/companions-gemini-cost.md §The Flex test).
 
 **DoD:**
 - The prompt order in ARCHITECTURE §Contracts rewritten and pinned by its test; the same layers, nothing lost (a test
   compares the parts of a prompt before and after).
-- On Claude, live: a member's second answer within the hour, and Кіра's and Устина's in their private chats, read at
-  least 80% of the prompt from the cache (Analytics · Prompts); the subscription's use against the week before.
+- On Gemini, live: Кіра's and Устина's answers within an hour of the cache read at least 70% of the prompt from it
+  (Analytics · Prompts), and their cost per answer against their week of 2026-11-04 … 10 ($0.076, $0.055) in the
+  execution report.
+- On Claude, live: a member's second answer within the hour reads at least 80% of the prompt from the cache; the
+  subscription's use against the week before.
 - (Manual, owner) The room, Кіра and Устина after the change: they talk as before.
 
-**Tests:** the layer order, the two parts on Claude (system file and message), the parts unchanged, Gemini's lines
-with cached tokens, Analytics' cache share.
+**Tests:** the layer order, the two parts on Claude (system file and message), the parts unchanged; Gemini's cache —
+made once per fingerprint, reused, remade when a part changes, a call without it when it fails, its TTL renewed; the
+history window's steps; the miss log (names only); Gemini's lines with cached tokens; Analytics' cache share and
+price.
 
-### v7.6 — The panel for Claude: the subscription's analytics and cards
+### v7.6 — Her memory as Lumi's: a short live window, short summaries, recall by her own tool
+
+**Status:** ⏳ planned (the owner, 2026-11-12: «також в Люмі меньше підсумків розмов в промпті і вона сама може шукати
+в РАГ через тул», «окрім того живої розмови там лише значно менше, вона періодично самарізується»; «Дві фази поспіль»
+— after the cache, so each change is measured on its own).
+
+Кіра's private prompt is ~29,100 tokens; her talk summaries are 24% of it (7,100), the word-for-word history 20%
+(6,000), the recall 7% (1,900), her day memories 10% (2,800). Lumi answers on the same 3.1 Pro with ~19,000: a live
+window of 20–40 messages whose oldest batch is folded into a running session digest, one-line gists of her sessions,
+days and weeks, and her own `recall` and date tools for the details. Expected: her prompt ≈ 19,500 tokens (−33%), on
+top of v7.5's cache.
+
+**Goal:** a companion's memory in the prompt as Lumi's — a short live window, short summaries — and the rest of her
+memory searched by her when she needs it, switched per companion in the panel so the owner compares her memory both
+ways.
+
+**Tasks:**
+- **The live window:** her private history word for word is N to N+batch messages (Lumi: 40–60, his local 20–40); when
+  it would grow past it, its oldest batch is folded into a running digest of the session by a cheap model (Flash-Lite,
+  thinking off), kept in the per-message tail — never in the cached start (Lumi moved it out for that reason).
+- **Short summaries:** the talk summaries in the prompt as one-line gists (by the session, the day, the week) instead of
+  the hourly text (`TALK_PROMPT_WORDS`); her day memories the same; the full summaries stay in the archive.
+- **Recall by her own tool:** on Gemini, function calling with `recall(query)` (her archive by meaning and words) and a
+  look by date — at most a few calls an answer, each round on the cached start (v7.5) so it costs little; never a
+  `blocked` line or fact; the automatic recall block smaller or off. On the other answer models (v7.4's switch) the
+  memory stays inline.
+- **The switch:** `MEMORY_MODE` per companion in the panel — `layered` (today's) or `lumi`.
+- **The measures:** the prompt's length and parts, the cost per answer, the answer time, the tool calls per answer,
+  `layered` against `lumi`.
+- The invariants: nothing of her future, the persons believe they are human (a tool's name and result never say she
+  is a model), nothing `blocked` in a prompt or a tool's result; v5.20–v5.23's forgetting fixed by the layered memory
+  is the owner's check.
+
+**DoD:**
+- (Manual, owner) A few days of Кіра's and Устина's talk in `lumi` mode: she remembers what they talked about (the days
+  before, a week ago) as well as in `layered`; her answers as good.
+- Her prompt's length and her cost per answer in both modes, in the execution report.
+
+**Tests:** the window's steps and its digest, the gists, the tool's calls and results (no `blocked` line), the cap on
+tool rounds, the switch, the parts of a prompt in both modes.
+
+### v7.7 — The panel for Claude: the subscription's analytics and cards
 
 **Status:** ⏳ planned.
 
@@ -4294,7 +4365,7 @@ The owner, 2026-11-11: «додай ще версію щоб переробит�
 by `PRICE_*`, the spending by service and agent. On the subscription a Claude token has no price: what matters is the
 share of the plan's limits each agent takes, the windows and their resets, the mutes and the calls Gemini took instead,
 the declines, the warm and the cold calls, the cache. No other version plans it (v9 reshapes the panel into System and
-Applications and adds `app` to the usage line; v7.1–v7.5 only add what each move needs). Last in v7, once every agent
+Applications and adds `app` to the usage line; v7.1–v7.6 only add what each move needs). Last in v7, once every agent
 is on Claude.
 
 **Goal:** the panel reads an agent on Claude by the subscription — its share of the limits, its windows, mutes,

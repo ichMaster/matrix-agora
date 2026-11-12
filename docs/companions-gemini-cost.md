@@ -32,9 +32,11 @@ savings on that model, not a move to another one.
   | A. a shorter prompt (settings) | −8–10% |
   | B. the background and the blocks | −10–20% |
   | C. the prompt laid out for the cache | about −30% net |
-  | D. Google's Flex tier | −50%, its speed to be tested first |
+  | D. Google's Flex tier | **tested: not for her answers** (§5); −6–11% on the background at most |
+  | E. her memory as Lumi's (§6) | a third shorter prompt; with C, a little more money |
 
-  C and D together come to about −65–70%.
+  **Updated 2026-11-12.** The Flex test failed for answers, and Lumi's prompt points the same way as C. The plan is
+  now C in v7.5 (Gemini's explicit cache, as Lumi has it) and E in v7.6.
 
 ## 1. The prices
 
@@ -291,23 +293,72 @@ In the code it is one field on the call.
 | A. Shorter prompt | your settings and texts | detail of her memory and past | ≈ $375 | ≈ $700 |
 | B. Background and blocks | settings + Flex on the background | fewer hours softened by the scan | ≈ $370 | ≈ $620 |
 | C. Prompt for the cache | v7.5 for Gemini (a contract) | the prompt's order | ≈ $300 | ≈ $520 |
-| D. Flex | one setting + a test | none expected; her answer time to check | ≈ $210 | ≈ $380 |
-| **C + D** | both | as both | **≈ $140** | **≈ $250** |
+| D. Flex | one setting | tested: 11 of 20 answers failed, up to 204 s | — (her answers stay on Standard) | — |
+| E. Memory as Lumi's, on top of C | v7.6 (a tool for her recall) | what she remembers unprompted | ≈ $270 | ≈ $500 |
 
-## 4. Recommendation
+## 4. Recommendation (updated after §5 and §6)
 
-1. **D first:** test Flex on about 20 answer-sized calls (≈ $0.8).
-   - The background goes onto Flex in any case: no risk to how she answers.
-   - Her answers go onto it too if their time holds.
-2. **B's scan limits for Устина:** her scan and probes are 11% of her 3.1 Pro.
-3. **C in v7.5:** the prompt for the cache, Gemini included. It is the largest saving that keeps Standard.
-4. **A only if needed:** it trades her memory for money, and the others do not.
+1. **C in v7.5:** the prompt for the cache, with Gemini's explicit cache as Lumi has it. It is the largest saving
+   that keeps her model and Standard: about −30%.
+2. **E in v7.6:** her memory as Lumi's — a short live window, short summaries, recall by her own tool — with a switch
+   in the panel to compare her memory both ways.
+3. **B's scan limits for Устина** (panel settings, any time): her scan and probes are 11% of her 3.1 Pro.
+4. **D only for the background,** if at all: Flex refused more than half of the calls in the test, so it needs a
+   fallback to Standard, for a saving of ≈ $6–8 a week.
+5. **A only if needed:** it trades her memory for money, and the others do not.
+
+## 5. The Flex test (2026-11-12)
+
+Run from Кіра's container on the host: 23 sequential calls of `gemini-3.1-pro-preview`.
+- **The prompt:** an answer-sized 43,800 input tokens of made-up everyday lines — not hers, so no block confuses the
+  time — with thinking at `low` and a timeout of 300 s.
+- **The order:** Standard first, last and in the middle, Flex between.
+- **The cost:** about $0.8, outside her usage lines.
+
+| | Calls | Answered | Median of the answered | p90 | Longest | Failures |
+|---|---|---|---|---|---|---|
+| Standard | 3 | **3** | **7.5 s** | 7.5 s | 8.3 s | — |
+| Flex | 20 | **9 (45%)** | 10.9 s | 96.5 s | **204.3 s** | 9 × `503` (no capacity), 2 × timeout at 300 s |
+
+Two findings:
+- **Flex is not usable for her answers.** More than half of its calls failed, and an answer can take minutes. It could
+  serve her background calls only behind a fallback to Standard.
+- **Gemini's implicit cache read 0 tokens** in all 23 calls, although each started with the same 43,800 tokens. On
+  3.1 Pro preview the cache has to be made explicitly (C), as Lumi does.
+
+## 6. How Lumi builds its prompt (2026-11-12)
+
+Lumi is the owner's other companion project. It answers on the same `gemini-3.1-pro-preview` (its `gemini` profile)
+with about **19,000 input tokens**, of which **8,000–12,000 are read from the cache** — against Кіра's 29,100 with
+0.1%. From its code and its own docs (`docs/PROMPT_OPTIMIZATION*.md`, `docs/LLM_OPERATIONS_COST.md`):
+
+| | Lumi | Кіра now |
+|---|---|---|
+| The order | a stable start (canon, instructions, memory from coarse to fine, the day's mood), **one cut**, then the per-message tail (the session's digest, the recall, the time and place, closeness, thoughts, the style palette) | one system instruction with the per-message parts inside it |
+| The cache on Gemini | explicit `cachedContents` of the start, keyed by its sha256, made again only when it changes (TTL 5 h); the tail moved into a leading message | none (0.1%) |
+| The cache on Anthropic | one `cache_control` breakpoint after the stable start, TTL 1 h | — |
+| The live talk | **20–40 messages** (default 40–60), as chat turns; when it overflows, the oldest 20 are folded into a running session digest by the cheapest model | the last 6 hours word for word (≈ 6,000 tokens), as a transcript |
+| Summaries in the prompt | one-line gists: sessions 1–2 days, days 3–7, weeks 14 | the hourly and daily talk summaries in full (7,100 tokens, 24%) |
+| Recall | 4–5 lines found by meaning in the prompt, and **her own `recall` tool** (5 results, at most 3 calls an answer) plus date tools | 10 lines found by meaning (1,900 tokens), no tool |
+| Background models | 2.5 Flash for thoughts and mood; 2.5 Flash-Lite with thinking off for summaries, facts and the digest | 2.5 Flash; her talk summaries on 3.1 Pro |
+| Cache misses | every cache made is logged as first, expired, moved or evicted, with the parts that changed | not measured |
+
+**Still uncached in Lumi:** the history and the tail, which are billed at full price every turn.
+
+**What this changes in the plan:**
+- **v7.5:** Lumi's cache mechanics — the explicit cache keyed by a fingerprint, the tail after it, the history in
+  steps, and the miss log.
+- **v7.6:** Lumi's memory — a short live window with a running digest, gists instead of full summaries, and recall by
+  her own tool.
+- **The money from E is small once C is in.** A cached token already costs a tenth, so E's gain is mostly a prompt a
+  third shorter to read and to store: ≈ −10% more for Кіра, little for Устина, whose summaries are short already.
 
 ## Open questions
 
 - **Blocked prompts.** Does Google bill the input of a prompt-stage block? If not, the blocks cost about half of
   what §What the blocks cost shows.
-- **Flex.** What is its time and refusal rate for 3.1 Pro from our host, at her hours?
-- **The implicit cache.** What hit rate does it reach once the prompt is reordered? Her usage lines will show it the
-  first day.
+- **Flex.** Answered in §5 for one evening: 45% of the calls answered. Another hour might differ, but not enough to
+  put her answers on it.
+- **The implicit cache.** It read nothing in §5's test, even with an identical start, so v7.5 makes the cache
+  explicitly.
 - **Устина's pace.** Her three days were her first, so a quieter week will lower her monthly figure.
