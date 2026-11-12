@@ -271,6 +271,23 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
     }
 
 
+def cache_usage_line(ts_iso: str, agent: str, model: str, tokens: int | None, ttl_s: int, made: bool,
+                     ok: bool = True) -> dict:
+    """v7.5 (AGORA-258) — one record per explicit context cache made or renewed for a companion's answers on Gemini:
+    kind `cache`, `api`. Made, its tokens are read once at the input price (`prompt_tokens`); made or renewed, they
+    are stored for `cache_ttl_s` seconds (`cache_write_tokens` × the seconds, priced by `PRICE_MODELS`' fourth
+    number). Never any text."""
+    return {
+        "ts": ts_iso, "agent": agent, "kind": "cache", "model": model,
+        "prompt_tokens": _ms(tokens) if made else 0, "output_tokens": 0,
+        "total_tokens": _ms(tokens) if made else 0, "ok": bool(ok),
+        "engine": "gemini", "billing": "api",
+        "cache_read_tokens": None, "cache_write_tokens": _ms(tokens), "cache_ttl_s": _ms(ttl_s),
+        "reported_cost_usd": None, "characters": None, "audio_ms": None, "blocked": None, "video_ms": None,
+        "latency_ms": None, "images": None, "warm": None, "prompt_parts": None,
+    }
+
+
 API_ENGINES = ("openai", "anthropic", "codex")  # v7.4: a companion's answer models beside Gemini and Claude
 
 
@@ -321,6 +338,7 @@ def answer_line(ts_iso: str, agent: str, place: str, door: str, answered: str, w
 
 
 COUNT_FIELDS = ("prompt_tokens", "output_tokens", "total_tokens", "cache_read_tokens", "cache_write_tokens",
+                "cache_ttl_s",  # v7.5: a Gemini cache's stored seconds, on its `cache` line only
                 "characters", "audio_ms", "video_ms", "latency_ms",  # v5.22: the call's time
                 "images")  # v6.5: a fal photo's count
 
@@ -378,7 +396,9 @@ class Row:
     audio_ms: int = 0       # v5.19: the audio heard (Deepgram), for the analytics
     images: int = 0         # v6.5: the images fal made (her photos on Seedream)
     latencies: list[int] = field(default_factory=list)  # v5.22: the timed calls' `latency_ms`
-    by_model: dict[str, list[int]] = field(default_factory=dict)  # v5.1: the `api` tokens per model, for its price
+    # v5.1: the `api` tokens per model, for its price — v7.5: [prompt, output, of the prompt read from a cache, a
+    # cache's stored token-seconds]
+    by_model: dict[str, list[int]] = field(default_factory=dict)
     ms_by_model: dict[str, int] = field(default_factory=dict)     # v5.18: the `api` video ms per model, for its price
     images_by_model: dict[str, int] = field(default_factory=dict)  # v6.5: the `api` images per model, for its price
 
@@ -402,10 +422,10 @@ class Row:
             self.ms_by_model[model] = self.ms_by_model.get(model, 0) + ms
         for model, n in other.images_by_model.items():
             self.images_by_model[model] = self.images_by_model.get(model, 0) + n
-        for model, (p, o) in other.by_model.items():
-            mine = self.by_model.setdefault(model, [0, 0])
-            mine[0] += p
-            mine[1] += o
+        for model, counts in other.by_model.items():
+            mine = self.by_model.setdefault(model, [0, 0, 0, 0])
+            for i, n in enumerate(counts):
+                mine[i] += n
 
 
 def _merge(a: str, b: str) -> str:
@@ -457,17 +477,21 @@ def _add_line(row: Row, r: dict) -> None:
         p, o = r.get("prompt_tokens") or 0, r.get("output_tokens") or 0
         row.priced_prompt += p
         row.priced_output += o
-        mine = row.by_model.setdefault(str(r.get("model", "")), [0, 0])
+        mine = row.by_model.setdefault(str(r.get("model", "")), [0, 0, 0, 0])
         mine[0] += p
         mine[1] += o
+        mine[2] += min(p, r.get("cache_read_tokens") or 0)  # v7.5: the part of the prompt a cache served
+        mine[3] += (r.get("cache_write_tokens") or 0) * (r.get("cache_ttl_s") or 0)  # v7.5: a cache's storage
 
 
-Prices = dict[str, tuple[float, float]]
+Prices = dict[str, tuple[float, ...]]  # in, out[, a cache read[, a cache's storage per 1M tokens an hour]]
 
 
 def parse_model_prices(spec: str | None) -> tuple[Prices, list[str]]:
     """v5.1 — `PRICE_MODELS`: comma-separated `model=in/out` (USD per 1M tokens), e.g.
-    `gemini-3.1-pro-preview=2/12`. Returns the prices and the malformed entries (to warn about, never fatal)."""
+    `gemini-3.1-pro-preview=2/12`. v7.5 (AGORA-258): optionally `/cache_read[/storage]` — a cached prompt token's
+    price and a cache's storage per 1M tokens an hour, e.g. `gemini-3.1-pro-preview=2/12/0.2/4.5`. Returns the prices
+    and the malformed entries (to warn about, never fatal)."""
     prices: Prices = {}
     bad: list[str] = []
     for entry in (spec or "").split(","):
@@ -475,9 +499,11 @@ def parse_model_prices(spec: str | None) -> tuple[Prices, list[str]]:
         if not entry:
             continue
         model, _, pair = entry.partition("=")
-        p_in, _, p_out = pair.partition("/")
+        numbers = pair.split("/")
         try:
-            values = float(p_in), float(p_out)
+            if not 2 <= len(numbers) <= 4:
+                raise ValueError
+            values = tuple(float(x) for x in numbers)
         except ValueError:
             bad.append(entry)
             continue
@@ -550,10 +576,14 @@ def cost(row: Row, price_in: float | None, price_out: float | None, models: Pric
             return total
     models = models or {}
     listed_in, listed_out = 0, 0
-    for model, (p, o) in row.by_model.items():
+    for model, counts in row.by_model.items():
+        p, o, cached, stored = (list(counts) + [0, 0])[:4]
         pair = models.get(model)
         if pair:
-            total += p / 1e6 * pair[0] + o / 1e6 * pair[1]
+            read = pair[2] if len(pair) > 2 else pair[0]  # v7.5: a cached token at its own price, else the input's
+            total += (p - cached) / 1e6 * pair[0] + cached / 1e6 * read + o / 1e6 * pair[1]
+            if len(pair) > 3:
+                total += stored / 3600 / 1e6 * pair[3]  # v7.5: a cache's storage, token-hours
             listed_in, listed_out = listed_in + p, listed_out + o
     rest_in, rest_out = row.priced_prompt - listed_in, row.priced_output - listed_out
     if rest_in or rest_out or not (listed_in or listed_out):
@@ -1253,6 +1283,21 @@ def analyze_detail(records: list[dict], answers: list[dict], since: date, until:
         parts_out.sort(key=lambda x: (-(x["tokens"] or 0), x["part"]))
         structure.append({"kind": kind, "calls": len(rows), "tokens": round(total), "parts": parts_out})
     prompts_block["structure"] = structure
+
+    # v7.5 (AGORA-258): the share of the prompt a cache served, by agent, model and kind, and the caches made
+    def cache_row(rows: list[dict]) -> dict:
+        prompt = sum(_int_of(r, "prompt_tokens") or 0 for r in rows)
+        cached = sum(min(_int_of(r, "prompt_tokens") or 0, _int_of(r, "cache_read_tokens") or 0) for r in rows)
+        return {"calls": len(rows), "prompt": prompt, "cached": cached,
+                "share": round(cached / prompt, 4) if prompt else None}
+
+    answered = [r for r in prompted if r.get("kind") != "cache"]
+    prompts_block["cache"] = [
+        {"agent": a, "model": m, "kind": k, **cache_row(rows)}
+        for (a, m, k), rows in sorted(grouped(answered, lambda r: (str(r.get("agent")), str(r.get("model") or "?"),
+                                                                    str(r.get("kind")))).items())
+        if any(_int_of(r, "cache_read_tokens") for r in rows) or k in ("private", "private_nudge", "reply")]
+    prompts_block["caches_made"] = sum(1 for r in now_l if r.get("kind") == "cache" and (r.get("prompt_tokens") or 0))
 
     # the photos and videos
     photo = [r for r in now_l if r.get("kind") == "photo"]

@@ -354,6 +354,7 @@ from agents.usage import (
     PROMPT_SLOW,
     answer_line,
     api_usage_line,
+    cache_usage_line,
     fallback_usage_line,
     image_usage_line,
     parse_lines,
@@ -520,6 +521,7 @@ class Agent:
             if isinstance(self.llm, GeminiClient) and os.environ.get("GEMINI_CACHE", "on").strip() == "on":
                 self.llm.cache = CachePlanner(int(os.environ.get("GEMINI_CACHE_TTL_S", "600")),
                                               int(os.environ.get("GEMINI_CACHE_REBUILD_LINES", "40")))
+                self.llm.cache_sink = self.record_cache_usage  # v7.5 (AGORA-258): its cost in the usage lines
         self.reply_max_tokens = int(os.environ.get("REPLY_MAX_TOKENS", "200"))
         if getattr(self.llm, "reply_model", None) in THINKING_MODELS or self.switch is not None:
             # v5.8: the thinking counts toward the cap; v7.4: every one of a companion's answer models thinks
@@ -3158,6 +3160,10 @@ class Agent:
         parts = PROMPT_PARTS.get()  # v5.22: an answer's prompt in parts
         self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked, latency_ms,
                                                  parts))
+
+    def record_cache_usage(self, model: str, tokens: int | None, ttl_s: int, made: bool) -> None:
+        """v7.5 (AGORA-258) — her answers' Gemini cache made or renewed: one `cache` line, no text."""
+        self._append_usage(lambda ts: cache_usage_line(ts, self.cfg.localpart, model, tokens, ttl_s, made))
 
     def record_api_usage(self, engine: str):
         """v7.4 — the sink of a companion's answer model on OpenAI's or Anthropic's API: one `api` line a call, priced

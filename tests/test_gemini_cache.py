@@ -80,7 +80,8 @@ class Caches:
         if self.fail:
             raise RuntimeError("too small")
         self.made.append((model, config))
-        return SimpleNamespace(name=f"cachedContents/{len(self.made)}")
+        return SimpleNamespace(name=f"cachedContents/{len(self.made)}",
+                               usage_metadata=SimpleNamespace(total_token_count=15_000))
 
     async def update(self, name, config):
         self.updated.append(name)
@@ -111,6 +112,8 @@ def gemini(caches=None, models=None, clock=None):
     g._sink = None
     g.model, g.reply_model, g.thinking_level = "gemini-2.5-flash", "gemini-3.1-pro-preview", "low"
     g.cache = CachePlanner(ttl_s=600, rebuild_lines=40)
+    g.cache_lines = []
+    g.cache_sink = lambda model, tokens, ttl_s, made: g.cache_lines.append((model, tokens, ttl_s, made))
     t = clock or [0.0]
     g._mono = lambda: t[0]
     return g
@@ -172,3 +175,52 @@ def test_a_background_call_and_an_unknown_start_go_as_before():
     for c in models.calls:
         assert (c["system"], c["contents"], c["cached"]) == ("СИСТЕМА ЦІЛА", "Ich: привіт", None)
     assert g.cache.held("private") is None
+
+
+# --- v7.5 (AGORA-258): the cache in the numbers -----------------------------------------------------------------------
+def test_a_cache_made_and_renewed_writes_its_lines_and_the_cost_prices_reads_and_storage():
+    import json
+
+    from agents.usage import aggregate, cache_usage_line, cost, parse_lines, parse_model_prices
+    clock = [0.0]
+    g = gemini(clock=clock)
+    answer(g, history(10))
+    clock[0] = 30
+    answer(g, history(12))
+    clock[0] = 400                                                                   # past half its life: renewed
+    answer(g, history(14))
+    assert g.cache_lines == [("gemini-3.1-pro-preview", 15_000, 600, True), ("gemini-3.1-pro-preview", 15_000, 600, False)]
+    made = cache_usage_line("2026-11-12T20:00:00+02:00", "kira", "gemini-3.1-pro-preview", 15_000, 600, True)
+    renew = cache_usage_line("2026-11-12T20:05:00+02:00", "kira", "gemini-3.1-pro-preview", 15_000, 600, False)
+    answer_line = {"ts": "2026-11-12T20:01:00+02:00", "agent": "kira", "kind": "private",
+                   "model": "gemini-3.1-pro-preview", "prompt_tokens": 20_000, "output_tokens": 1_000,
+                   "total_tokens": 21_000, "ok": True, "engine": "gemini", "billing": "api",
+                   "cache_read_tokens": 15_000}
+    records, bad = parse_lines([json.dumps(x) for x in (made, renew, answer_line)])
+    assert bad == 0 and made["kind"] == "cache" and made["prompt_tokens"] == 15_000 and renew["prompt_tokens"] == 0
+    prices, wrong = parse_model_prices("gemini-3.1-pro-preview=2/12/0.2/4.5,old=2/12,bad=1/2/3/4/5")
+    assert prices == {"gemini-3.1-pro-preview": (2.0, 12.0, 0.2, 4.5), "old": (2.0, 12.0)} and wrong == ["bad=1/2/3/4/5"]
+    total = sum(cost(row, 0.3, 2.5, prices) for row in aggregate(records).values())
+    # made: 15k read at $2; the answer: 5k at $2, 15k at $0.20, 1k out at $12; storage: 15k × 1,200 s at $4.5/h
+    expected = 15_000 * 2 / 1e6 + 5_000 * 2 / 1e6 + 15_000 * 0.2 / 1e6 + 1_000 * 12 / 1e6 + 15_000 * (1200 / 3600) * 4.5 / 1e6
+    assert abs(total - expected) < 1e-9
+    assert abs(cost(aggregate(records[2:])[next(iter(aggregate(records[2:])))], 0.3, 2.5,
+                    {"gemini-3.1-pro-preview": (2.0, 12.0)}) - (20_000 * 2 / 1e6 + 1_000 * 12 / 1e6)) < 1e-9  # old form
+
+
+def test_analytics_shows_the_share_of_her_prompt_read_from_the_cache(tmp_path):
+    import json
+
+    from panel.memory import analytics_view
+    lines = [{"ts": f"2026-11-12T20:0{i}:00+02:00", "agent": "kira", "kind": "private",
+              "model": "gemini-3.1-pro-preview", "prompt_tokens": 20_000, "output_tokens": 900, "total_tokens": 20_900,
+              "ok": True, "engine": "gemini", "billing": "api", "cache_read_tokens": c, "latency_ms": 9000}
+             for i, c in enumerate([0, 15_000, 15_000, 15_000])]
+    (tmp_path / "kira.usage.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+    from datetime import date, datetime
+    from zoneinfo import ZoneInfo
+    view = analytics_view(tmp_path, date(2026, 11, 12), date(2026, 11, 12), "kira", date(2026, 11, 12),
+                          datetime(2026, 11, 12, 21, 0, tzinfo=ZoneInfo("Europe/Kyiv")))
+    [row] = view["prompts"]["cache"]
+    assert (row["agent"], row["kind"], row["calls"], row["prompt"], row["cached"], row["share"]) == \
+        ("kira", "private", 4, 80_000, 45_000, 0.5625)

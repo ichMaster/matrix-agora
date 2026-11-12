@@ -284,7 +284,7 @@ def test_both_env_examples_price_the_pro_model_by_its_own_pair():
         values = dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines()
                       if line and not line.startswith("#") and "=" in line)
         assert parse_model_prices(values["PRICE_MODELS"]) == (
-            {"gemini-3.1-pro-preview": (2.0, 12.0), "claude-opus-5-5": (4.0, 20.0)}, []), path
+            {"gemini-3.1-pro-preview": (2.0, 12.0, 0.2, 4.5), "claude-opus-5-5": (4.0, 20.0)}, []), path  # v7.5: its cache
 
 
 

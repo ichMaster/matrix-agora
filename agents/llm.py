@@ -102,6 +102,7 @@ class GeminiClient:
         self.reply_model = os.environ.get("GEMINI_REPLY_MODEL", "").strip() or self.model
         self.thinking_level = os.environ.get("GEMINI_THINKING_LEVEL", "low").strip() or "low"
         self.cache: CachePlanner | None = None  # v7.5 (AGORA-256): a companion's answers, set by her agent
+        self.cache_sink: Callable[..., None] | None = None  # v7.5 (AGORA-258): (model, tokens, ttl_s, made)
 
     @property
     def client(self):
@@ -286,6 +287,8 @@ class GeminiClient:
                     await asyncio.wait_for(self._client.aio.caches.update(
                         name=plan.name, config=types.UpdateCachedContentConfig(ttl=f"{int(self.cache.ttl)}s")), 30)
                     self.cache.renewed(ch, self._mono())
+                    held = self.cache.held(ch)
+                    self._cache_report(model, held.tokens if held else None, False)
                 except Exception as exc:  # noqa: BLE001 — it may expire; the next answer makes another
                     log.warning("gemini cache: not renewed (%s)", type(exc).__name__)
             return plan.name, plan.lines
@@ -304,9 +307,20 @@ class GeminiClient:
             self.cache.forget(ch)
             self.cache.failed(ch, self._mono())
             return None
-        self.cache.made(ch, made.name, model, start, lines[:k], self._mono())
+        tokens = getattr(getattr(made, "usage_metadata", None), "total_token_count", None)
+        self.cache.made(ch, made.name, model, start, lines[:k], self._mono(), tokens or 0)
         log.info("gemini cache: made (%s) for %s — %d history lines", plan.why, ch, k)  # names and counts only
+        self._cache_report(model, tokens, True)
         return made.name, k
+
+    def _cache_report(self, model: str, tokens: int | None, made: bool) -> None:
+        """v7.5 (AGORA-258): a cache made (read once at the input price) or renewed — its storage for its life."""
+        if self.cache_sink is None or self.cache is None:
+            return
+        try:
+            self.cache_sink(model, tokens, int(self.cache.ttl), made)
+        except Exception:
+            log.exception("usage accounting failed")
 
     async def _drop_cache(self, name: str | None) -> None:
         """A cache no longer used, deleted so its storage stops; a failure is left to its TTL."""

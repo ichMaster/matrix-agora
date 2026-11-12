@@ -49,6 +49,7 @@ class Held:
     lines: int       # history lines in the cache
     expires: float   # on the planner's clock
     ttl: float
+    tokens: int = 0  # v7.5 (AGORA-258): its size, for its storage line
 
 
 @dataclass
@@ -108,9 +109,10 @@ class CachePlanner:
             why = "grew"
         return Plan("make", lines=max(0, len(lines) - self.keep_last), why=why, old=h.name if h else None)
 
-    def made(self, channel: str, name: str, model: str, start: str, lines: list[str], now: float) -> None:
+    def made(self, channel: str, name: str, model: str, start: str, lines: list[str], now: float,
+             tokens: int = 0) -> None:
         self._ch(channel).held = Held(name, model, fingerprint(model, start, []), fingerprint(model, start, lines),
-                                      len(lines), now + self.ttl, self.ttl)
+                                      len(lines), now + self.ttl, self.ttl, tokens)
 
     def renewed(self, channel: str, now: float) -> None:
         h = self._ch(channel).held

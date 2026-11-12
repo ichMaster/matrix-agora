@@ -910,7 +910,14 @@ function anPromptsHtml(d) {
   const agents = pr.agents.length > 1 ? anTable("Agents", [["agent"], ...head], pr.agents.map((x) => `<tr><td>${esc(agentName(x.agent))}</td>${cells(x)}</tr>`).join("")) : "";
   const structure = (pr.structure || []).slice(0, 3).map((st) => structureHtml(st, d)).join("")
     || anEmpty("scroll", "The prompt's parts are kept from v5.22 on — none yet in this period");
-  return tiles + structure + lines + services + kinds + agents;
+  // v7.5 (AGORA-258): the share of the prompt a cache served, by agent, model and kind
+  const pct = (v) => (v == null ? "—" : `${Math.round(v * 1000) / 10}%`);
+  const cache = (pr.cache || []).length ? anTable("Read from the cache",
+    [["agent"], ["model"], ["kind"], ["calls", 1], ["prompt", 1], ["cached", 1], ["share", 1]],
+    pr.cache.map((c) => `<tr><td>${esc(agentName(c.agent))}</td><td>${esc(c.model)}</td><td class="kind">${esc(c.kind)}</td>` +
+      nCell(c.calls) + tokCell(c.prompt) + tokCell(c.cached) + `<td class="num">${pct(c.share)}</td></tr>`).join("")) +
+    (pr.caches_made ? `<p class="muted">Caches made in this period: ${fmtInt(pr.caches_made)}</p>` : "") : "";
+  return tiles + structure + cache + lines + services + kinds + agents;
 }
 
 const MEDIA_COLOR = {photos: "var(--viz-1)", videos: "var(--viz-2)"};
