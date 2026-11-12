@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from agents import guardian
+from agents.gemini_cache import SEPARATOR
 from agents.llm import (
     DIGEST_MODEL,
     LAST_BLOCK,
@@ -714,6 +715,13 @@ def model_of(model_usage: Any, alias: str) -> str:
     return max(names, key=written) if names else alias
 
 
+def _with_tail(prompt: str, tail: str) -> str:
+    """v7.5 (AGORA-257): a voice call's message — the transcript, then the tail next to its last line."""
+    if not tail:
+        return prompt
+    return f"{prompt}{SEPARATOR}{tail}" if prompt else tail
+
+
 def answer_of(result: Any, parts: list[str], toolset: str | None) -> str:
     """A call's answer: with no tools, every text block in order — an answer cut at the cap is continued by the CLI
     in a second request, and its result holds that part alone; with tools (a search) the result, the last turn's."""
@@ -944,8 +952,13 @@ class ClaudeClient(_Subscription):
             log.error("claude call failed: %s — the SDK is not installed", type(exc).__name__)
             self._failed(type(exc).__name__)
             return None
+        # v7.5 (AGORA-257): a voice call whose prompt's start is known sends the start as the system prompt and the
+        # history then the tail as the message, on the warm path and the cold one alike, so the CLI's cache reads
+        # the start from the second call on
+        split = split_prompt(system, PROMPT_SLOW.get()) if kind in VOICE_KINDS and toolset is None else None
+        message = _with_tail(prompt, split[1]) if split else prompt
         try:
-            path = self._prompt_file(system)
+            path = self._prompt_file(split[0] if split else system)
         except OSError as exc:
             log.error("claude prompt file not written (%s)", type(exc).__name__)
             return None
@@ -954,18 +967,15 @@ class ClaudeClient(_Subscription):
             options = make_options(**client_options(
                 path, model=model, max_output_tokens=cap, config_dir=self.config_dir, toolset=toolset,
                 effort=effort, think=think))
-            # v7.2 (AGORA-243): a voice call whose slow part splits its prompt may go warm, through the CLI started
-            # ahead for its key; a warm call that fails or hangs goes cold once (the next try), never silent for it
-            split = (split_prompt(system, PROMPT_SLOW.get()) if self.warm and kind in VOICE_KINDS and toolset is None
-                     else None)
-            key = (split[0], model, effort, think, cap) if split else None
+            # v7.2 (AGORA-243): a voice call may go warm, through the CLI started ahead for its key (the start); a warm
+            # call that fails or hangs goes cold once (the next try), never silent for it
+            key = (split[0], model, effort, think, cap) if split and self.warm else None
             async with (self._voice_gate if kind in VOICE_KINDS else self._gate):
                 warm = self._take_warm(key)  # code review v7.2 #5: inside the gate — a call cancelled there takes none
                 for attempt in range(1, REPLY_TRIES + 1):
                     hot = warm is not None and attempt == 1
                     started = self._mono()
-                    call = (warm.query, f"{split[1]}\n\n{prompt}" if split[1] else prompt, None) if hot else \
-                        (query, prompt, options)
+                    call = (warm.query, message, None) if hot else (query, message, options)
                     try:
                         seen = await asyncio.wait_for(self._consume(call[0], call[1], call[2], toolset), timeout_s)
                     except TimeoutError:

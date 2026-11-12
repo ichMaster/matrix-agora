@@ -31,7 +31,11 @@ from pathlib import Path
 from typing import Any
 
 from agents.claude_sdk import LAST_SERVED
+from agents.gemini_cache import SEPARATOR
 from agents.llm import LAST_BLOCK, refusal_marker
+from agents.logic import split_prompt
+from agents.responder import ANSWER_KINDS
+from agents.usage import PROMPT_SLOW
 
 log = logging.getLogger("agent.codex")
 
@@ -202,6 +206,11 @@ class CodexAnswers:
     async def reply(self, transcript: str, system_instruction: str | None, max_output_tokens: int = 400,
                     kind: str = "reply") -> tuple[str, str] | None:
         LAST_BLOCK.set(None)
+        # v7.5 (AGORA-257): the start as her instructions' file, the history then the tail by stdin
+        split = split_prompt(system_instruction, PROMPT_SLOW.get()) if kind in ANSWER_KINDS else None
+        if split is not None:
+            system_instruction = split[0]
+            transcript = f"{transcript}{SEPARATOR}{split[1]}" if transcript.strip() else split[1]
         if self._mono() < self.muted_until:
             return await self._on_gemini("at its limit", transcript, system_instruction, max_output_tokens, kind)
         if not await self.signed_in():

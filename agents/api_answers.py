@@ -14,7 +14,11 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from agents.gemini_cache import SEPARATOR
 from agents.llm import LAST_BLOCK, REPLY_TIMEOUT_S, refusal_marker
+from agents.logic import split_prompt
+from agents.responder import ANSWER_KINDS
+from agents.usage import PROMPT_SLOW
 
 log = logging.getLogger("agent.api")
 
@@ -57,6 +61,11 @@ class ApiAnswers:
                     kind: str = "reply") -> tuple[str, str] | None:
         LAST_BLOCK.set(None)
         cap = max_output_tokens + THINK_HEADROOM if max_output_tokens > 0 else max_output_tokens
+        # v7.5 (AGORA-257): the start as the system prompt, the history then the tail as the message
+        split = split_prompt(system_instruction, PROMPT_SLOW.get()) if kind in ANSWER_KINDS else None
+        if split is not None:
+            system_instruction = split[0]
+            transcript = f"{transcript}{SEPARATOR}{split[1]}" if transcript.strip() else split[1]
         started = self._mono()
         try:
             text, finish, usage, refused = await asyncio.wait_for(

@@ -296,3 +296,21 @@ def test_a_plan_step_is_no_tool_and_her_answer_stands(tmp_path):
     plan = Spawn(events=[{"type": "item.started", "item": {"type": "todo_list", "items": []}},
                          {"type": "item.completed", "item": {"type": "todo_list", "items": []}}, *OK_EVENTS])
     assert run(codex(tmp_path, plan).reply("x", SYSTEM, 100, "private"))[0] == ("Привіт, сонце.", "stop")
+
+
+def test_with_a_known_start_codex_gets_it_as_its_instructions_and_the_tail_after_the_history(tmp_path):
+    """v7.5 (AGORA-257): the start as `model_instructions_file`, the history then the tail by stdin."""
+    from agents.gemini_cache import SEPARATOR
+    from agents.usage import PROMPT_SLOW
+    spawn = Spawn()
+    client = codex(tmp_path, spawn)
+
+    async def call():
+        token = PROMPT_SLOW.set("КАНОН")
+        try:
+            return await client.reply("Ich: привіт", "КАНОН\n\nЗараз вечір.", 4096, "private")
+        finally:
+            PROMPT_SLOW.reset(token)
+
+    assert asyncio.run(call()) == ("Привіт, сонце.", "stop")
+    assert spawn.instructions[0][1] == "КАНОН" and spawn.last.stdin == ("Ich: привіт" + SEPARATOR + "Зараз вечір.").encode()

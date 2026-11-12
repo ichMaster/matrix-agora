@@ -96,7 +96,8 @@ def test_openai_sends_her_whole_instruction_thinking_on_and_nothing_stored():
     assert asyncio.run(client.reply("Ich: Привіт", SYSTEM, 4096, "private")) == ("Привіт!", "stop")
     asked = fake.asked[0]
     assert asked == {"model": "gpt-6.1-sol", "instructions": SYSTEM, "input": "Ich: Привіт",
-                     "reasoning": {"effort": "medium"}, "max_output_tokens": 4096 + THINK_HEADROOM, "store": False}
+                     "reasoning": {"effort": "medium"}, "max_output_tokens": 4096 + THINK_HEADROOM, "store": False,
+                     "prompt_cache_key": "answers"}                     # v7.5: her prefix cache on OpenAI's side
     assert sink.calls[0]["ok"] and sink.calls[0]["usage"] == {"input_tokens": 1200, "cached_tokens": 100,
                                                               "output_tokens": 340}
     assert "sk-test" not in repr(client)
@@ -135,7 +136,8 @@ def test_anthropic_sends_her_whole_instruction_with_adaptive_thinking_and_reads_
     fake, sink = AnthropicFake(ant()), Sink()
     client = AnthropicAnswers("sk-ant-test", effort="medium", client=fake, sink=sink)
     assert asyncio.run(client.reply("Ich: Привіт", SYSTEM, 4096, "reply")) == ("Привіт!", "stop")
-    assert fake.asked[0] == {"model": "claude-sonnet-5-5", "max_tokens": 4096 + THINK_HEADROOM, "system": SYSTEM,
+    assert fake.asked[0] == {"model": "claude-sonnet-5-5", "max_tokens": 4096 + THINK_HEADROOM,
+                             "system": [{"type": "text", "text": SYSTEM, "cache_control": {"type": "ephemeral"}}],
                              "messages": [{"role": "user", "content": "Ich: Привіт"}],
                              "thinking": {"type": "adaptive"}, "output_config": {"effort": "medium"}}
     assert sink.calls[0]["usage"] == {"input_tokens": 1200, "cached_tokens": 900, "output_tokens": 410}
@@ -197,3 +199,25 @@ def test_sonnet_answers_her_private_chat_its_usage_is_anthropics_and_its_refusal
     agent.private_line(ASKED, ms(17, 1), "telegram", "tg:2")
     assert asyncio.run(agent.private_reply()) is True
     assert answers(agent)[-1]["by"] == "backup" and marks(agent)["tg:2"] == "blocked"
+
+
+# --- v7.5 (AGORA-257): the start as the system, the history then the tail ----------------------------------------------
+def test_with_a_known_start_each_api_sends_it_as_the_system_and_the_tail_after_the_history():
+    from agents.gemini_cache import SEPARATOR
+    from agents.usage import PROMPT_SLOW
+    start, tail = "КАНОН\n\nЖИТТЯ", "Зараз вечір.\n\nТи — Кіра."
+
+    async def call(client):
+        token = PROMPT_SLOW.set(start)
+        try:
+            return await client.reply("Ich: привіт", f"{start}\n\n{tail}", 4096, "private")
+        finally:
+            PROMPT_SLOW.reset(token)
+
+    oai_fake, ant_fake = OpenAIFake(oai()), AnthropicFake(ant())
+    asyncio.run(call(OpenAIAnswers("k", client=oai_fake, sink=None, cache_key="kira-answers")))
+    asyncio.run(call(AnthropicAnswers("k", client=ant_fake, sink=None)))
+    assert oai_fake.asked[0]["instructions"] == start and oai_fake.asked[0]["prompt_cache_key"] == "kira-answers"
+    assert oai_fake.asked[0]["input"] == "Ich: привіт" + SEPARATOR + tail
+    assert ant_fake.asked[0]["system"][0]["text"] == start
+    assert ant_fake.asked[0]["messages"][0]["content"] == "Ich: привіт" + SEPARATOR + tail

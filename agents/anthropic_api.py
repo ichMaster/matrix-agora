@@ -49,8 +49,11 @@ class AnthropicAnswers(ApiAnswers):
         return f"AnthropicAnswers(model={self.reply_model!r}, effort={self.effort!r})"
 
     async def _call(self, system: str, message: str, cap: int) -> tuple[str, str, dict, tuple | None]:
+        # v7.5 (AGORA-257): one cache breakpoint at the end of the system — her start, read at a tenth from the second
+        # call within five minutes (Lumi's single breakpoint)
         resp = await self._client.messages.create(
-            model=self.reply_model, max_tokens=cap, system=system,
+            model=self.reply_model, max_tokens=cap,
+            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": message}],
             thinking={"type": "adaptive"}, output_config={"effort": self.effort})
         stop = getattr(resp, "stop_reason", None)

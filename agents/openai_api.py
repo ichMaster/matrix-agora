@@ -43,8 +43,10 @@ def refusal_of(resp: Any) -> tuple | None:
 class OpenAIAnswers(ApiAnswers):
     engine = "openai"
 
-    def __init__(self, key: str, *, effort: str = "medium", client: Any = None, **kwargs: Any) -> None:
+    def __init__(self, key: str, *, effort: str = "medium", client: Any = None, cache_key: str = "answers",
+                 **kwargs: Any) -> None:
         super().__init__(model=MODEL, effort=effort if effort in EFFORTS else "medium", **kwargs)
+        self.cache_key = cache_key  # v7.5 (AGORA-257): her answers' prefix cache on OpenAI's side
         if client is None:
             from openai import AsyncOpenAI  # here alone; the key handed over, never read from the environment
             client = AsyncOpenAI(api_key=key, max_retries=2, timeout=self.timeout_s)
@@ -56,7 +58,7 @@ class OpenAIAnswers(ApiAnswers):
     async def _call(self, system: str, message: str, cap: int) -> tuple[str, str, dict, tuple | None]:
         resp = await self._client.responses.create(
             model=self.reply_model, instructions=system, input=message, reasoning={"effort": self.effort},
-            max_output_tokens=cap, store=False)
+            max_output_tokens=cap, store=False, prompt_cache_key=self.cache_key)
         refused = refusal_of(resp)
         details = getattr(resp, "incomplete_details", None)
         cut = getattr(resp, "status", None) == "incomplete" and getattr(details, "reason", None) == "max_output_tokens"

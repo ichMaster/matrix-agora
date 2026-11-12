@@ -12,6 +12,7 @@ import pytest
 
 import agents.claude_sdk as sdk_mod
 from agents.claude_sdk import THINK_HEADROOM, ClaudeClient, WarmCli
+from agents.gemini_cache import SEPARATOR
 from agents.usage import PROMPT_SLOW, analyze_detail, sdk_usage_line
 from tests.test_claude_client import (
     INIT_OK,
@@ -116,7 +117,8 @@ def test_the_first_answer_is_cold_and_the_next_goes_warm_with_its_slow_part_as_t
     assert first == ("Холодно.", "stop") and second == ("Тепло.", "stop")
     warm = clients.made[0]
     assert warm.system == SLOW                                              # the canon and the life, its system
-    assert warm.prompts == ["Зараз 17:02, вівторок.\n\nПРАВИЛА\n\nIch: як ти?"]  # the rest, then the transcript
+    # v7.5 (AGORA-257): the transcript, then the tail next to its last line
+    assert warm.prompts == ["Ich: як ти?" + SEPARATOR + "Зараз 17:02, вівторок.\n\nПРАВИЛА"]
     assert warm.closed and len(clients.made) == 2                           # one call, then the next started
     assert warm.options.model == "haiku" and warm.options.env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == str(200 + THINK_HEADROOM)
     assert [k.get("warm") for _, k in usage] == [False, True]
@@ -402,3 +404,23 @@ def test_claude_warm_comes_from_the_settings(tmp_path, caplog):
     odd = {"CLAUDE_CODE_OAUTH_TOKEN": "oat", "CLAUDE_WARM": "maybe", "CLAUDE_LIMIT_FALLBACK": "silent"}
     assert claude_client_for(odd, status_file=tmp_path / "s.json", sink=None, gemini_sink=None, clock=lambda: 0,
                              recall=False).warm is True and "CLAUDE_WARM is not on or off" in caplog.text
+
+
+# --- v7.5 (AGORA-257): the start as the system on every path ----------------------------------------------------------
+def test_with_no_cli_ahead_the_cold_call_has_the_start_as_its_system_and_the_tail_after_the_transcript(tmp_path):
+    """`CLAUDE_WARM=off` (a companion's Opus) once sent the whole instruction as the system; the start goes there now,
+    the same every call, so the CLI's own cache reads it."""
+    sdk = FakeSDK([INIT_OK, result("Холодно.")])
+    c, _ = claude(tmp_path, sdk, Clients(), warm=False)
+    asyncio.run(voice(c, transcript="Ich: привіт"))
+    asyncio.run(voice(c, transcript="Ich: привіт\nIch: ще раз"))
+    assert [f[0] for f in sdk.prompt_files] == [SLOW, SLOW]                    # the start, the same for both
+    assert sdk.calls[0][0] == "Ich: привіт" + SEPARATOR + "Зараз 17:02, вівторок.\n\nПРАВИЛА"
+    assert prompts_left(tmp_path) == []
+
+
+def test_a_background_call_keeps_its_whole_system(tmp_path):
+    sdk = FakeSDK([INIT_OK, result("Підсумок.")])
+    c, _ = claude(tmp_path, sdk, Clients(), warm=False)
+    asyncio.run(voice(c, kind="summary"))
+    assert sdk.prompt_files[0][0] == SYSTEM and sdk.calls[0][0] == "Ich: привіт"

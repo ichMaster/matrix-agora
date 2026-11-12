@@ -3226,6 +3226,7 @@ class Agent:
         if openai_key:
             out["api-gpt-6.1sol"] = LlmResponder(OpenAIAnswers(
                 openai_key, effort=os.environ.get("OPENAI_REASONING_EFFORT", "medium").strip(),
+                cache_key=f"{self.cfg.localpart}-answers",
                 sink=self.record_api_usage("openai")))
         else:
             log.info("answers: api-gpt-6.1sol off — no OPENAI_API_KEY")
