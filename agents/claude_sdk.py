@@ -42,7 +42,7 @@ from agents.llm import (
     THINKING_MODELS,
     refusal_marker,
 )
-from agents.logic import build_transcript
+from agents.logic import build_transcript, split_prompt  # v7.5: split_prompt lives in logic
 from agents.responder import ANSWER_KINDS, Reply, Turn
 from agents.usage import PROMPT_SLOW
 
@@ -712,14 +712,6 @@ def model_of(model_usage: Any, alias: str) -> str:
         out = used.get("outputTokens") if isinstance(used, Mapping) else getattr(used, "outputTokens", 0)
         return out if isinstance(out, int) else 0
     return max(names, key=written) if names else alias
-
-
-def split_prompt(system: str | None, slow: str | None) -> tuple[str, str] | None:
-    """v7.2 (AGORA-242) — a call's system prompt as its slow part and the rest: `(slow, rest)` when `system` starts
-    with `slow` (the rest without the blank line that joined them), else None."""
-    if not system or not slow or not system.startswith(slow):
-        return None
-    return slow, system[len(slow):].removeprefix("\n\n")
 
 
 def answer_of(result: Any, parts: list[str], toolset: str | None) -> str:

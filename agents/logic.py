@@ -295,6 +295,14 @@ def asked_section(questions: list[str]) -> str | None:
     return "Твої питання в цій розмові — не повторюй їх: " + "; ".join(f"«{q}»" for q in questions)
 
 
+def split_prompt(system: str | None, slow: str | None) -> tuple[str, str] | None:
+    """v7.2 (AGORA-242) — a call's system prompt as its slow part and the rest: `(slow, rest)` when `system` starts
+    with `slow` (the rest without the blank line that joined them), else None. v7.5: here, for every client."""
+    if not system or not slow or not system.startswith(slow):
+        return None
+    return slow, system[len(slow):].removeprefix("\n\n")
+
+
 def slow_part(prompt: str, start: str | None) -> str | None:
     """The slow part of an instruction `build_instruction` made — v7.2 (AGORA-242): the canon and the life; v7.5
     (AGORA-255): the whole start (`instruction_and_start`), exactly the prompt's prefix; None when it is empty or the

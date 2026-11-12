@@ -19,6 +19,11 @@ from typing import Any
 from google import genai
 from google.genai import types
 
+from agents.gemini_cache import BACKOFF_S, SEPARATOR, CachePlanner, channel_of
+from agents.logic import split_prompt
+from agents.responder import ANSWER_KINDS
+from agents.usage import PROMPT_SLOW
+
 log = logging.getLogger("agent.llm")
 
 MODEL = "gemini-2.5-flash"  # the default; `GEMINI_MODEL` overrides it (v4.7: tunable in the panel)
@@ -76,6 +81,13 @@ _REFUSAL_RE = re.compile(r"(?<!\w)(?:" + "|".join(re.escape(m) for m in REFUSAL_
 _CALL_T0: ContextVar[float | None] = ContextVar("gemini_call_t0", default=None)
 
 
+def _joined(lines: list[str], tail: str) -> str:
+    """v7.5 (AGORA-256): an answer's message — her history, then the tail (the time, the recall, her brief, the move,
+    the rules) next to his last line."""
+    history = "\n".join(lines)
+    return f"{history}{SEPARATOR}{tail}" if history else tail
+
+
 class GeminiClient:
     _mono = staticmethod(time.monotonic)  # v5.22: the calls' clock — a test sets its own
 
@@ -89,6 +101,7 @@ class GeminiClient:
         # thinking reply model thinks
         self.reply_model = os.environ.get("GEMINI_REPLY_MODEL", "").strip() or self.model
         self.thinking_level = os.environ.get("GEMINI_THINKING_LEVEL", "low").strip() or "low"
+        self.cache: CachePlanner | None = None  # v7.5 (AGORA-256): a companion's answers, set by her agent
 
     @property
     def client(self):
@@ -199,30 +212,46 @@ class GeminiClient:
         """v5.8 — an answer (in the room, in the private chat, a line written first) on `GEMINI_REPLY_MODEL`: a
         thinking model through the thinking config at `GEMINI_THINKING_LEVEL`, any other through `complete`.
         (text, finish) either way, so a cut answer is still trimmed to a sentence; None on failure. A block or a
-        refusal (v5.13) also leaves `LAST_BLOCK` set for the caller."""
+        refusal (v5.13) also leaves `LAST_BLOCK` set for the caller.
+
+        v7.5 (AGORA-256): an answer whose prompt's start is known (`PROMPT_SLOW`) sends the start as the system
+        instruction and the history then the tail as the message; with her cache (`self.cache`) the start and the
+        first lines of her history are read from Gemini's explicit context cache."""
         LAST_BLOCK.set(None)
+        split = split_prompt(system_instruction, PROMPT_SLOW.get()) if kind in ANSWER_KINDS else None
+        lines = transcript.split("\n") if transcript else []
         if self.reply_model not in THINKING_MODELS:
+            if split is not None:
+                system_instruction, transcript = split[0], _joined(lines, split[1])
             return await self.complete(transcript, system_instruction, max_output_tokens, kind, self.reply_model,
                                        refusal=True)  # v5.13: an answer — a refusal in it is a block
         model = self.reply_model
+        cached = await self._cache_for(kind, model, split[0], lines) if split is not None else None
+        if split is not None:
+            system_instruction, transcript = split[0], _joined(lines[cached[1]:] if cached else lines, split[1])
         self._start()
         try:
             resp = await self._within(lambda: self._client.aio.models.generate_content(
-                model=model,
-                contents=transcript,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    max_output_tokens=max_output_tokens,
-                    thinking_config=types.ThinkingConfig(
-                        include_thoughts=False,
-                        thinking_level=getattr(types.ThinkingLevel, self.thinking_level.upper(), None)),
-                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-                ),
-            ), kind)
+                model=model, contents=transcript,
+                config=self._reply_config(None if cached else system_instruction, max_output_tokens,
+                                          cached[0] if cached else None)), kind)
         except Exception as exc:  # noqa: BLE001 — any provider failure means silence
-            log.error("gemini reply failed: %s", type(exc).__name__)
-            self._report(kind, None, False, model)
-            return None
+            if cached is None:
+                log.error("gemini reply failed: %s", type(exc).__name__)
+                self._report(kind, None, False, model)
+                return None
+            # the cache was gone or refused: forget it, and the same answer once more without it
+            log.warning("gemini reply on the cache failed (%s) — once more without it", type(exc).__name__)
+            await self._drop_cache(self.cache.forget(channel_of(kind)))
+            transcript = _joined(lines, split[1])
+            try:
+                resp = await self._within(lambda: self._client.aio.models.generate_content(
+                    model=model, contents=transcript,
+                    config=self._reply_config(system_instruction, max_output_tokens, None)), kind)
+            except Exception as again:  # noqa: BLE001
+                log.error("gemini reply failed: %s", type(again).__name__)
+                self._report(kind, None, False, model)
+                return None
         text = answer_text(resp)
         if not text:
             self._empty(resp, kind, model, getattr(resp, "usage_metadata", None), "gemini reply was empty (finish %s)")
@@ -231,6 +260,62 @@ class GeminiClient:
             return None
         self._report(kind, getattr(resp, "usage_metadata", None), True, model)
         return text, finish_of(resp)
+
+    def _reply_config(self, system_instruction: str | None, max_output_tokens: int,
+                      cached_content: str | None) -> Any:
+        return types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            cached_content=cached_content,
+            max_output_tokens=max_output_tokens,
+            thinking_config=types.ThinkingConfig(
+                include_thoughts=False,
+                thinking_level=getattr(types.ThinkingLevel, self.thinking_level.upper(), None)),
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+        )
+
+    # --- v7.5 (AGORA-256): her answers' explicit context cache ---------------------------------------------------
+    async def _cache_for(self, kind: str, model: str, start: str, lines: list[str]) -> tuple[str, int] | None:
+        """(the cache's name, the history lines in it) for this answer, or None — a plain call. Never raises."""
+        if self.cache is None:
+            return None
+        ch = channel_of(kind)
+        plan = self.cache.plan(ch, model, start, lines, self._mono())
+        if plan.action == "use":
+            if plan.renew:
+                try:
+                    await asyncio.wait_for(self._client.aio.caches.update(
+                        name=plan.name, config=types.UpdateCachedContentConfig(ttl=f"{int(self.cache.ttl)}s")), 30)
+                    self.cache.renewed(ch, self._mono())
+                except Exception as exc:  # noqa: BLE001 — it may expire; the next answer makes another
+                    log.warning("gemini cache: not renewed (%s)", type(exc).__name__)
+            return plan.name, plan.lines
+        if plan.action != "make":
+            return None
+        if plan.old:
+            await self._drop_cache(plan.old)
+        k = plan.lines
+        try:
+            made = await asyncio.wait_for(self._client.aio.caches.create(model=model, config=types.CreateCachedContentConfig(
+                system_instruction=start,
+                contents=[types.Content(role="user", parts=[types.Part(text="\n".join(lines[:k]))])] if k else None,
+                ttl=f"{int(self.cache.ttl)}s", display_name=f"answers-{ch}")), 60)
+        except Exception as exc:  # noqa: BLE001 — too small, refused, a bad network: plain calls for a while
+            log.warning("gemini cache: not made (%s) — plain answers for %d s", type(exc).__name__, BACKOFF_S)
+            self.cache.forget(ch)
+            self.cache.failed(ch, self._mono())
+            return None
+        self.cache.made(ch, made.name, model, start, lines[:k], self._mono())
+        log.info("gemini cache: made (%s) for %s — %d history lines", plan.why, ch, k)  # names and counts only
+        return made.name, k
+
+    async def _drop_cache(self, name: str | None) -> None:
+        """A cache no longer used, deleted so its storage stops; a failure is left to its TTL."""
+        if not name:
+            return
+        try:
+            await asyncio.wait_for(self._client.aio.caches.delete(name=name), 30)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("gemini cache: an old one not deleted (%s) — it expires by itself", type(exc).__name__)
 
     async def probe(self, transcript: str, system_instruction: str | None, kind: str = "probe") -> bool | None:
         """v5.16 — does Gemini block this prompt at the prompt stage? One call on `GEMINI_REPLY_MODEL` for the

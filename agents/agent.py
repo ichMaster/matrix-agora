@@ -132,6 +132,7 @@ from agents.facts import (
 from agents.fallback import TOKEN_VAR as FALLBACK_TOKEN_VAR
 from agents.fallback import FallbackClient, FallbackResponder
 from agents.falphoto import FalPhotoMaker, load_photo_route, save_photo_route
+from agents.gemini_cache import CachePlanner
 from agents.guardian import KEY_VAR as GUARDIAN_KEY_VAR
 from agents.guardian import Guardian
 from agents.life import current_chapter, events_due, known_ahead, life_section, next_chapter
@@ -515,6 +516,10 @@ class Agent:
                 lambda: live_value(cfg.memory_file.parent, cfg.localpart, "ANSWER_MODEL", os.environ),
                 self._answer_responders(openai_key, sonnet_key), self.responder, silent=_silent)
             self.responder = self.switch
+            # v7.5 (AGORA-256): her answers' start and the first lines of her history in Gemini's explicit cache
+            if isinstance(self.llm, GeminiClient) and os.environ.get("GEMINI_CACHE", "on").strip() == "on":
+                self.llm.cache = CachePlanner(int(os.environ.get("GEMINI_CACHE_TTL_S", "600")),
+                                              int(os.environ.get("GEMINI_CACHE_REBUILD_LINES", "40")))
         self.reply_max_tokens = int(os.environ.get("REPLY_MAX_TOKENS", "200"))
         if getattr(self.llm, "reply_model", None) in THINKING_MODELS or self.switch is not None:
             # v5.8: the thinking counts toward the cap; v7.4: every one of a companion's answer models thinks
@@ -688,6 +693,8 @@ class Agent:
         # v5.23 (the owner): Gemini's private window by time — the last day word for word, never fewer than 20 lines
         self.private_history_hours = int(os.environ.get("PRIVATE_HISTORY_HOURS", "24")) if cfg.can("private") else 0
         self.private_history_min = int(os.environ.get("PRIVATE_HISTORY_MIN", "20")) if cfg.can("private") else 0
+        # v7.5 (AGORA-256): her Gemini window's start moves in steps of so many hours (0: with the clock, as before)
+        self.private_history_step_h = int(os.environ.get("PRIVATE_HISTORY_STEP_H", "2")) if cfg.can("private") else 0
         # v5.25 (the owner): her topics — from how many of the private chat's last lines Flash lists them (0: none)
         self.topics_lines = int(os.environ.get("TOPICS_LINES", "20")) if cfg.can("private") else 0
         self._topics: tuple[list, int] | None = None  # (topic, her, his) and the lines read — in memory only
@@ -1578,7 +1585,8 @@ class Agent:
         if self.private_history_hours > 0 and lines:  # v5.23: the last day, at least the floor, his new lines always
             his = next((n for n, x in enumerate(reversed(lines)) if x.speaker == self.cfg.name), len(lines))
             lines = lines[window_start([x.ts_ms for x in lines], self.clock(), self.private_history_hours,
-                                       self.private_history_min, len(lines) - his):]
+                                       self.private_history_min, len(lines) - his,
+                                       self.private_history_step_h * 3_600_000):]  # v7.5: in steps, for the cache
         if self.private_history_n > 0:  # the owner's cap — never below his lines since her last one
             unanswered = next((n for n, x in enumerate(reversed(lines)) if x.speaker == self.cfg.name), len(lines))
             lines = lines[-max(self.private_history_n, unanswered):] if lines else lines

@@ -160,6 +160,16 @@ SCHEMA: tuple[Setting, ...] = (
        "Скільки годин особистого чату Gemini бачить дослівно (0 — за рядками)", "hours", 0, 168),
     _s("PRIVATE_HISTORY_MIN", "int", "20", "private", "cap:private", None,
        "Найменше останніх рядків, які він бачить, хоч би якими давніми", "lines", 0, 300),
+    # v7.5 (AGORA-256): the window's start moves in steps, so a cache reads its start; her answers' start and the
+    # first lines of her history in Gemini's explicit context cache (as Lumi), made on the second answer within its life
+    _s("PRIVATE_HISTORY_STEP_H", "int", "2", "private", "cap:private", None,
+       "Крок, яким зсувається початок вікна розмови (0 — щохвилини, як раніше)", "h", 0, 12),
+    _s("GEMINI_CACHE", "choice", "on", "model", "cap:private", None,
+       "Кеш Gemini для її відповідей (початок промпту й історії)", choices=("on", "off")),
+    _s("GEMINI_CACHE_TTL_S", "int", "600", "model", "cap:private", None,
+       "Скільки живе кеш без її відповідей", "s", 60, 3600),
+    _s("GEMINI_CACHE_REBUILD_LINES", "int", "40", "model", "cap:private", None,
+       "Нових рядків історії, після яких кеш робиться заново", "lines", 5, 300),
     _s("PRIVATE_AGORA_N", "int", "20", "private", "cap:recall", None,
        "Скільки сьогоднішніх рядків Агори бачить в особистому чаті", "lines", 0, 60),
     # v5.25 (the owner, 2026-11-04: «додай параметрт на панел щоб визначати зі скільком останіх меседжів брати теми, я
