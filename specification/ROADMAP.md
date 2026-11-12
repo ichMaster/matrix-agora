@@ -4333,10 +4333,14 @@ ways.
 
 **Tasks:**
 - **The live window:** her private history word for word is N to N+batch messages (Lumi: 40–60, his local 20–40); when
-  it would grow past it, its oldest batch is folded into a running digest of the session by a cheap model (Flash-Lite,
-  thinking off), kept in the per-message tail — never in the cached start (Lumi moved it out for that reason).
-- **Short summaries:** the talk summaries in the prompt as one-line gists (by the session, the day, the week) instead of
-  the hourly text (`TALK_PROMPT_WORDS`); her day memories the same; the full summaries stay in the archive.
+  it would grow past it, its oldest batch is folded into a running digest of **her day's talk** by a cheap model
+  (Flash-Lite, thinking off), kept in the per-message tail — never in the cached start (Lumi moved it out for that
+  reason). At the end of her day (her own clock) the running digest becomes that day's gist and starts empty.
+- **Short summaries, by the day and the week — no session:** the talk summaries in the prompt as one-line gists of each
+  day (the last 7 days) and each week (the last few weeks) instead of the hourly text (`TALK_PROMPT_WORDS`); her day
+  memories the same; the full summaries stay in the archive. Lumi's session gists have no counterpart here: her
+  process restarts rarely, so a session is no unit of her talk (the owner, 2026-11-12: «сесія немає сенсу так як
+  рестарт дуже рідко»).
 - **Recall by her own tool:** on Gemini, function calling with `recall(query)` (her archive by meaning and words) and a
   look by date — at most a few calls an answer, each round on the cached start (v7.5) so it costs little; never a
   `blocked` line or fact; the automatic recall block smaller or off. On the other answer models (v7.4's switch) the
@@ -4353,8 +4357,9 @@ ways.
   before, a week ago) as well as in `layered`; her answers as good.
 - Her prompt's length and her cost per answer in both modes, in the execution report.
 
-**Tests:** the window's steps and its digest, the gists, the tool's calls and results (no `blocked` line), the cap on
-tool rounds, the switch, the parts of a prompt in both modes.
+**Tests:** the window's steps and the day's running digest (folded in batches, reset at her midnight into the day's
+gist), the day and week gists, the tool's calls and results (no `blocked` line), the cap on tool rounds, the switch,
+the parts of a prompt in both modes.
 
 ### v7.7 — The panel for Claude: the subscription's analytics and cards
 

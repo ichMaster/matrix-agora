@@ -348,8 +348,9 @@ with about **19,000 input tokens**, of which **8,000–12,000 are read from the 
 **What this changes in the plan:**
 - **v7.5:** Lumi's cache mechanics — the explicit cache keyed by a fingerprint, the tail after it, the history in
   steps, and the miss log.
-- **v7.6:** Lumi's memory — a short live window with a running digest, gists instead of full summaries, and recall by
-  her own tool.
+- **v7.6:** Lumi's memory — a short live window with a running digest of her day's talk, one-line gists by the day
+  and the week instead of full summaries, and recall by her own tool. There are no session gists, because her process
+  restarts rarely.
 - **The money from E is small once C is in.** A cached token already costs a tenth, so E's gain is mostly a prompt a
   third shorter to read and to store: ≈ −10% more for Кіра, little for Устина, whose summaries are short already.
 
