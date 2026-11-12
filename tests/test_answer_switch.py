@@ -183,3 +183,17 @@ def test_the_panels_card_shows_her_chosen_model_and_its_thinking(tmp_path, choic
     m = models_view(tmp_path, "kira")
     assert (m["choice"], m["answers"], m["thinking"], m.get("fallback")) == (choice, answers_on, thinking, fallback)
     assert m["background"] == "gemini-2.5-flash"
+
+
+def test_a_restart_during_opuss_max_limit_keeps_it_muted(tmp_path, monkeypatch):
+    """Code review v7.4 #4: `run()` read the mute back from the switch or her Gemini, never her Opus — the first Opus
+    answer after a restart called the CLI into the limit again (v4.4 review #6)."""
+    from agents.claude_sdk import ClaudeStatus, write_status
+    monkeypatch.setenv(OAUTH_VAR, "oauth-token-for-the-test")
+    status = tmp_path / "kira.ratelimit.json"
+    write_status(status, ClaudeStatus(status="rejected", muted_until=4_102_444_800, model="opus"))
+    agent = her(tmp_path, monkeypatch)
+    agent.opus.clock = lambda: 1_000_000_000_000
+    assert agent.opus is not None and not agent.opus.muted()
+    agent.resume_cards()
+    assert agent.opus.muted()

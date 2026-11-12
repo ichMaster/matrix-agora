@@ -3179,6 +3179,17 @@ class Agent:
         route's stored mode stays `gemini`, the main model)."""
         return "claude" if self.cfg.engine == "claude-sdk" else "gemini"
 
+    def resume_cards(self) -> None:
+        """v4.4 review #6: a fresh Claude card at start, a running mute kept — Claude's responder, an agent's Claude
+        client (v7.1), and (code review v7.4 #4) a companion's Opus behind her switch, so a restart during a Max limit
+        makes no call into it."""
+        if hasattr(self.responder, "resume_status"):
+            self.responder.resume_status()
+        elif hasattr(self.llm, "resume_status"):
+            self.llm.resume_status()
+        if self.opus is not None and self.opus is not self.llm:
+            self.opus.resume_status()
+
     def main_label(self) -> str:
         """v7.4 — her main model as the owner reads it in `/status`, the commands' help and the ⚙️ lines: with the
         switch the chosen one (`claudemax-opus`, …) — her Gemini still `gemini` —, else `main_name()`."""
@@ -4671,10 +4682,7 @@ class Agent:
             self.summary_ms = int(self.memory_file.stat().st_mtime * 1000)
             log.info("%s: last-session memory loaded", self.cfg.localpart)
         await self.login()
-        if hasattr(self.responder, "resume_status"):  # v4.4 review #6: a fresh card, a running mute kept
-            self.responder.resume_status()
-        elif hasattr(self.llm, "resume_status"):  # v7.1: an agent on the Claude client, the same card
-            self.llm.resume_status()
+        self.resume_cards()
         # First sync: only to obtain next_batch; its events are never handled.
         first = await self.client.sync(timeout=10000, full_state=True)
         if isinstance(first, SyncError):
