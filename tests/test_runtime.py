@@ -58,3 +58,11 @@ def test_main_exits_on_a_held_lock_without_logging_in(tmp_path, monkeypatch, cle
         assert exc.value.code == 1
     finally:
         held.release()
+
+
+def test_the_api_sdks_request_lines_stay_out_of_her_log(tmp_path):
+    """Code review v7.4 #10: every OpenAI or Anthropic call put httpx's «HTTP Request: POST …» line in her log."""
+    import logging
+    setup_logging("kira", tmp_path)
+    assert all(logging.getLogger(n).getEffectiveLevel() >= logging.WARNING
+               for n in ("httpx", "httpx2", "openai", "anthropic", "nio"))

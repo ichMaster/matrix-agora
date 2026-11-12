@@ -50,6 +50,9 @@ def lock_holder(path: Path) -> int | None:
         return None
 
 
+QUIET_LOGGERS = ("httpx", "httpx2", "openai", "anthropic")  # v7.4: their request lines stay out of her log
+
+
 def setup_logging(localpart: str, log_dir: Path = Path("state/logs")) -> Path:
     """Console + a rotating file; replaces only the handlers this function installed before."""
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -67,4 +70,7 @@ def setup_logging(localpart: str, log_dir: Path = Path("state/logs")) -> Path:
         root.addHandler(h)
     # the panel tails this file: keep it to the agent's own events, not a line per room event (v3.4 review #3)
     logging.getLogger("nio").setLevel(logging.WARNING)
+    # code review v7.4 #10: nor a line per API call of a companion's answer models (OpenAI's and Anthropic's SDKs)
+    for name in QUIET_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
     return file
