@@ -25,6 +25,10 @@ from dataclasses import dataclass, field
 
 SEPARATOR = "\n\n———\n\n"  # between her history and the tail (the time, the recall, her brief, the move, the rules)
 BACKOFF_S = 300
+# a history that changed under its cache (her window slid by a count cap, a span softened, a line closed): for so long
+# the cache holds the start alone, so it is not made again at every answer (Устина's 12-hour window outgrows
+# `HISTORY_N` 300 on a busy day, 2026-11-12)
+START_ONLY_S = 7200
 KEEP_LAST = 2  # the newest history lines stay in the request: his line is never in the cache
 
 
@@ -67,6 +71,7 @@ class _Channel:
     held: Held | None = None
     seen: dict[str, float] = field(default_factory=dict)  # start fingerprint → when an answer last had it
     failed_until: float = float("-inf")
+    start_only_until: float = float("-inf")
 
 
 class CachePlanner:
@@ -86,9 +91,10 @@ class CachePlanner:
         ch = self._ch(channel)
         start_fp = fingerprint(model, start, [])
         h = ch.held
-        if h is not None and now < h.expires and h.model == model and h.start_fp == start_fp \
-                and h.lines <= len(lines) and fingerprint(model, start, lines[:h.lines]) == h.fp \
-                and len(lines) - h.lines <= self.rebuild:
+        if h is not None and now < h.expires and h.model == model and h.start_fp == start_fp and (
+                h.lines == 0  # the start alone: good for any history
+                or (h.lines <= len(lines) and fingerprint(model, start, lines[:h.lines]) == h.fp
+                    and len(lines) - h.lines <= self.rebuild)):
             ch.seen[start_fp] = now
             return Plan("use", lines=h.lines, renew=h.expires - now < h.ttl / 2, name=h.name)
         if now < ch.failed_until:
@@ -107,7 +113,10 @@ class CachePlanner:
             why = "history"
         else:
             why = "grew"
-        return Plan("make", lines=max(0, len(lines) - self.keep_last), why=why, old=h.name if h else None)
+        if why == "history":
+            ch.start_only_until = now + START_ONLY_S
+        lines_in = 0 if now < ch.start_only_until else max(0, len(lines) - self.keep_last)
+        return Plan("make", lines=lines_in, why=why, old=h.name if h else None)
 
     def made(self, channel: str, name: str, model: str, start: str, lines: list[str], now: float,
              tokens: int = 0) -> None:

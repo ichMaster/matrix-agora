@@ -605,7 +605,7 @@ over the cap by its `Content-Length` or by what arrives (never more than the cap
   - **Its key** is the fingerprint of the model, the start and the cached lines.
   - **It is made** on the second answer with that start within its life (`GEMINI_CACHE_TTL_S`, 600 s), so a quiet hour stores nothing. It holds all of her history but the newest two lines.
   - **It is used** while it lives and her history still begins with its lines, and renewed past half its life.
-  - **It is made again** on a new start, a stepped or changed history, more than `GEMINI_CACHE_REBUILD_LINES` (40) new lines, or expiry, and the old one is deleted.
+  - **It is made again** on a new start, a stepped or changed history, more than `GEMINI_CACHE_REBUILD_LINES` (40) new lines, or expiry, and the old one is deleted. When her history changed under the cache while the start did not — a window that slides by a count cap (Устина's 12-hour window outgrows `HISTORY_N` 300 on a busy day), a softened span, a closed line — the cache holds the start alone for `START_ONLY_S` (2 h), so it is not made again at every answer.
   - **On failure** — a cache that cannot be made, or a call on it that fails — the answer goes once more without it and backs off 5 minutes, never silence.
   - **Its log** says why it was made (`gemini cache: made (first|expired|start|history|grew)`), names only.
 

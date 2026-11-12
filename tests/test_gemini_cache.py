@@ -224,3 +224,22 @@ def test_analytics_shows_the_share_of_her_prompt_read_from_the_cache(tmp_path):
     [row] = view["prompts"]["cache"]
     assert (row["agent"], row["kind"], row["calls"], row["prompt"], row["cached"], row["share"]) == \
         ("kira", "private", 4, 80_000, 45_000, 0.5625)
+
+
+def test_a_history_that_slides_under_its_cache_makes_the_cache_hold_the_start_alone_for_a_while():
+    """Устина's 12-hour window outgrows `HISTORY_N` 300 on a busy day: its start slides by a line at every message."""
+    from agents.gemini_cache import START_ONLY_S
+    p = CachePlanner(ttl_s=600, rebuild_lines=40)
+    window = [f"Ich: рядок {i}" for i in range(300)]
+    p.plan("private", "m", START, window, 0)
+    plan = p.plan("private", "m", START, window, 10)
+    p.made("private", "c1", "m", START, window[:plan.lines], 11)
+    slid = window[1:] + ["Ich: новий"]                                                # the oldest out, a new one in
+    again = p.plan("private", "m", START, slid, 20)
+    assert (again.action, again.why, again.lines) == ("make", "history", 0)          # the start alone now
+    p.made("private", "c2", "m", START, [], 21)
+    for n in range(2, 30):                                                           # it slides on: used every time
+        assert p.plan("private", "m", START, window[n:] + ["Ich: x"] * n, 20 + n).action == "use"
+    p.made("private", "c3", "m", "НОВИЙ ПОЧАТОК", [], 100)                           # a new hour's start, later on
+    p.plan("private", "m", "НОВИЙ ПОЧАТОК", window, 20 + START_ONLY_S)
+    assert p.plan("private", "m", "НОВИЙ ПОЧАТОК", window, 30 + START_ONLY_S).lines > 0   # history tried again
