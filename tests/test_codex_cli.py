@@ -231,3 +231,15 @@ def test_codex_answers_her_private_chat_through_her_switch(tmp_path, monkeypatch
     agent.private_line("Привіт", ms(17), "telegram", "tg:1")
     assert asyncio.run(agent.private_reply()) is True
     assert answers(agent)[-1]["by"] == "codex" and len(spawn.execs()) == 1 and agent.llm.transcripts == []
+
+
+def test_its_home_is_absolute_wherever_the_cli_runs(tmp_path, monkeypatch):
+    """Code review v7.4 #2: her home came as `state/<name>.codex`, relative, while the CLI runs in its work folder —
+    Codex looked for its login under the work folder and never found it."""
+    monkeypatch.chdir(tmp_path)
+    spawn = Spawn()
+    client = CodexAnswers(home="state/kira.codex", work=tmp_path / "work", sink=None, spawn=spawn, mono=lambda: 0.0)
+    assert run(client.reply("x", SYSTEM, 100, "private"))[0] == ("Привіт, сонце.", "stop")
+    for r in spawn.runs:
+        assert r["env"]["CODEX_HOME"] == str(tmp_path / "state" / "kira.codex") and r["cwd"] == str(tmp_path / "work")
+    assert (tmp_path / "state" / "kira.codex").is_dir()

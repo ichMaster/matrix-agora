@@ -117,9 +117,10 @@ class CodexAnswers:
                  mono: Callable[[], float] = time.monotonic) -> None:
         self.reply_model = MODEL
         self.effort = effort if effort in EFFORTS else "medium"
-        self.home, self.binary, self.timeout_s, self.gemini = Path(home), binary, timeout_s, gemini
+        # code review v7.4 #2: absolute — the CLI runs in its work folder, and `state/<name>.codex` from there is nowhere
+        self.home, self.binary, self.timeout_s, self.gemini = Path(home).resolve(), binary, timeout_s, gemini
         # its working folder: empty, never a repository, never the state — her instruction's file lives there a call
-        self.work = Path(work) if work is not None else Path(tempfile.gettempdir()) / f"codex-{self.home.name}"
+        self.work = (Path(work) if work is not None else Path(tempfile.gettempdir()) / f"codex-{self.home.name}").resolve()
         self._sink, self._spawn, self._mono = sink, spawn, mono
         self.blocked: str | None = None       # another login than ChatGPT's: until a restart
         self._signed: tuple[bool, float] | None = None
