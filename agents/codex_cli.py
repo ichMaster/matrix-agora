@@ -241,3 +241,9 @@ class CodexAnswers:
             return None
         self._report(kind, got.usage, True, started)
         return got.text, "stop"
+
+    # code review v7.4 #1: her switch wraps every client in `LlmResponder`, which asks `complete` (else `generate`);
+    # the background never comes here — a stray call is an answer all the same
+    async def complete(self, transcript: str, system_instruction: str | None, max_output_tokens: int = 400,
+                       kind: str = "reply", *_: Any, **__: Any) -> tuple[str, str] | None:
+        return await self.reply(transcript, system_instruction, max_output_tokens, kind)

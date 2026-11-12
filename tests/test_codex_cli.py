@@ -212,3 +212,22 @@ def test_the_agent_builds_codex_where_its_cli_is_with_her_home_in_her_state(tmp_
     assert "codex-gpt-6.1sol" in agent.switch.available()
     client = agent.switch.responders["codex-gpt-6.1sol"].llm
     assert client.home == tmp_path / "kira.codex" and client.gemini is agent.llm and client.binary == str(cli)
+
+
+def test_codex_answers_her_private_chat_through_her_switch(tmp_path, monkeypatch):
+    """Code review v7.4 #1: the switch wraps each client in `LlmResponder` (`complete`, else `generate`) — the tests
+    called `reply()` alone, and every live Codex answer raised `AttributeError`."""
+    from tests.test_answer_switch import answers, choose
+    from tests.test_private_runtime import ms
+    cli = tmp_path / "bin" / "codex"
+    cli.parent.mkdir()
+    cli.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    cli.chmod(0o755)
+    monkeypatch.setenv("CODEX_BIN", str(cli))
+    agent = her(tmp_path, monkeypatch)
+    spawn = Spawn()
+    agent.switch.responders["codex-gpt-6.1sol"].llm._spawn = spawn
+    choose(agent, "codex-gpt-6.1sol")
+    agent.private_line("Привіт", ms(17), "telegram", "tg:1")
+    assert asyncio.run(agent.private_reply()) is True
+    assert answers(agent)[-1]["by"] == "codex" and len(spawn.execs()) == 1 and agent.llm.transcripts == []
