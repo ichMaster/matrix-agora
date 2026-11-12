@@ -1,3 +1,21 @@
+Version 7.4.0 (2026-11-12)
+---------------------------
+- v7.4 the companions' five models: Кіра and Устина answer on the model the
+  owner picks in each one's panel settings (ANSWER_MODEL, a live switch) -
+  Gemini 3.1 Pro, GPT-6.1 Sol and Sonnet 5.5 on their APIs, Opus 5.5 on the
+  Max plan, GPT-6.1 Sol through Codex on the ChatGPT plan; every one thinks;
+  only their answers follow it, the background stays on Gemini (AGORA-250..253)
+- the API keys (OPENAI_API_KEY, SONNET_API_KEY - never ANTHROPIC_*) leave the
+  environment at start; Codex runs with no tools, no secret in its environment
+  and a ChatGPT login only; its pinned 0.167.1 binary in the Claude image
+- both companions' services on the Claude image with the subscription; Codex
+  signed in by device code in each one's container (AGORA-254)
+- the code review's eight fixes, two of them HIGH (Codex off the switch's
+  path, its home relative)
+- the owner's verdict: best on api-gemini-3.1pro (both stay on it); the rest of
+  the DoD waived by the owner (Codex live, Устина on other models) - bugs go to
+  7.4.x patches
+
 Version 7.3.4 (2026-11-11)
 ---------------------------
 - Кіра back on Gemini 3.1 Pro at the owner's word after a morning on Opus
