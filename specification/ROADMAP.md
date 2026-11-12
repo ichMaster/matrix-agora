@@ -94,7 +94,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v7.1 | The Claude engine for a persona: answers on Sonnet, the background on Haiku | ✅ completed | `v7.1.0` (2026-11-11) |
 | v7.2 | The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес | ✅ completed | `v7.2.0` (2026-11-11) |
 | v7.3 | Кіра on Claude | ✅ completed | `v7.3.0` (2026-11-11) |
-| v7.4 | The companions' five models: Кіра and Устина switched in the panel | ⏳ planned | — |
+| v7.4 | The companions' five models: Кіра and Устина switched in the panel | ✅ completed | `v7.4.0` (2026-11-12) |
 | v7.5 | The prompt for the cache: what changes slowly first, read from the cache | ⏳ planned | — |
 | v7.6 | The panel for Claude: the subscription's analytics and cards | ⏳ planned | — |
 | v8.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
@@ -3936,7 +3936,7 @@ The owner, 2026-11-08: «зроби fal.ai перемикання на цю мо
 
 ## v7 — Claude for everyone: every agent on the owner's subscription
 
-**Status:** 🔄 in progress — v7.1, v7.2 and v7.3 released (`v7.1.0`, `v7.2.0`, `v7.3.0`, 2026-11-11).
+**Status:** 🔄 in progress — v7.1, v7.2 and v7.3 released (`v7.1.0`, `v7.2.0`, `v7.3.0`, 2026-11-11), v7.4 (`v7.4.0`, 2026-11-12).
 
 The owner, 2026-11-10: «заведи нову версію перед 7. щоб перевести всіх агентів ан Anthropic SDK і моделі Haiku +
 Sonet на мому плані як зараз агент Клод. Почати можна зі всіх крім Кіри і Устини а поті одна за одною ці дві.»
@@ -4154,7 +4154,23 @@ her photos on Claude; her TOML.
 
 ### v7.4 — The companions' five models: Кіра and Устина switched in the panel
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — `v7.4.0` (2026-11-12). Deployed 2026-11-12 02:22 (`sha-e11cf7b`), with Codex signed in by device
+code in both companions' containers. The owner tried Кіра on GPT-6.1 Sol and Sonnet through their APIs, and on Opus
+the day before. His verdict: «найліпше на api-gemini-3.1pro», and both stay on it.
+
+He waived the rest of the DoD («Релізь без перевірки»): Codex answering live, and Устина on any model but Gemini.
+
+Кіра's measures (execution report):
+
+| Model | Answer call (median) | Per answer |
+|---|---|---|
+| GPT-6.1 Sol | 4.2 s | $0.055 |
+| Sonnet | 6.0 s | $0.075 |
+| Opus | 10.8 s | the subscription |
+| Gemini 3.1 Pro | 14.1 s | $0.076 |
+
+The code review found two HIGH bugs that kept Codex from answering (its client off the switch's path, its home
+relative). Those and six more were fixed before the release.
 
 The owner, 2026-11-11: «в версії 7.4 я хочу щоб Кіру можна було перемикати між 4ма моделями api-gemini-3.1pro,
 api-gtp-6.1sol, api-sonet, claudemax-opus всі моделі мають мати включений thinking», then «те саме треба буде потім
