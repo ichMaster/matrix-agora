@@ -18,6 +18,7 @@ import shutil
 import signal
 import stat
 import sys
+import tempfile
 import time
 from contextvars import ContextVar
 from datetime import date, timedelta
@@ -3229,6 +3230,9 @@ class Agent:
             out["codex-gpt-6.1sol"] = LlmResponder(CodexAnswers(
                 home=self.cfg.memory_file.parent / f"{self.cfg.localpart}.codex", sink=self.record_api_usage("codex"),
                 effort=os.environ.get("CODEX_REASONING_EFFORT", "medium").strip(), binary=codex,
+                # code review v7.4 #8: her instruction's file on the CLIs' bounded tmpfs (compose), not the image's /tmp
+                work=Path(os.environ.get("CLAUDE_CONFIG_DIR", "").strip() or tempfile.gettempdir())
+                / f"codex-{self.cfg.localpart}",
                 timeout_s=int(os.environ.get("CODEX_TIMEOUT_S", "180")), gemini=self.llm))
         else:
             log.info("answers: codex-gpt-6.1sol off — no codex CLI")

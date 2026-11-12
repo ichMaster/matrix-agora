@@ -206,9 +206,9 @@ class CodexAnswers:
         if not await self.signed_in():
             return None
         started = self._mono()
-        path = self._instructions(system_instruction or "")
-        proc = None
-        try:
+        path = proc = None
+        try:  # code review v7.4 #8: the file inside the `try` — a failed write is silence, never her prompt left behind
+            path = self._instructions(system_instruction or "")
             proc = await self._spawn(*run_args(self.binary, self.work, self.effort, path),
                                      stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
                                      stderr=asyncio.subprocess.DEVNULL, env=clean_env(self.home, self.work),
@@ -223,8 +223,9 @@ class CodexAnswers:
             self._report(kind, None, False, started)
             return None
         finally:
-            with contextlib.suppress(OSError):
-                path.unlink()
+            if path is not None:
+                with contextlib.suppress(OSError):
+                    path.unlink()
             if proc is not None and proc.returncode is None:
                 with contextlib.suppress(ProcessLookupError):
                     proc.kill()

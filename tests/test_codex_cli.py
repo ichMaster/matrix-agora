@@ -266,3 +266,26 @@ def test_an_unreadable_status_is_looked_at_again_and_a_hung_one_is_killed(tmp_pa
     stuck = codex(tmp_path, slow_status)
     assert run(stuck.reply("x", SYSTEM, 100, "private"))[0] is None and stuck.blocked is None
     assert hung and hung[0].killed
+
+
+def test_a_failed_instruction_file_is_silence_and_her_work_folder_is_on_the_clis_tmpfs(tmp_path, monkeypatch):
+    """Code review v7.4 #8: the file was written before the `try` (a failed write escaped `reply()`), in the image's
+    own /tmp rather than the CLIs' bounded tmpfs."""
+    spawn = Spawn()
+    client = codex(tmp_path, spawn)
+
+    def full(_system):
+        raise OSError("no space left")
+
+    client._instructions = full
+    assert run(client.reply("x", SYSTEM, 100, "private"))[0] is None and spawn.execs() == []
+    assert list((tmp_path / "work").iterdir()) == []
+
+    cli = tmp_path / "bin" / "codex"
+    cli.parent.mkdir()
+    cli.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    cli.chmod(0o755)
+    monkeypatch.setenv("CODEX_BIN", str(cli))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "tmpfs"))
+    agent = her(tmp_path, monkeypatch)
+    assert agent.switch.responders["codex-gpt-6.1sol"].llm.work == tmp_path / "tmpfs" / "codex-kira"
