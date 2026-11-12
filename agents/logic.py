@@ -295,15 +295,14 @@ def asked_section(questions: list[str]) -> str | None:
     return "Твої питання в цій розмові — не повторюй їх: " + "; ".join(f"«{q}»" for q in questions)
 
 
-def slow_part(prompt: str, canon: str | None, life: str | None) -> str | None:
-    """v7.2 (AGORA-242) — the slow part of an instruction `build_instruction` made: the canon, then the life section
-    when there is one — exactly its prefix (its parts are joined by a blank line); None when it has neither, or when
-    the prompt does not start with them."""
-    slow = "\n\n".join(s for s in (canon or "", life or "") if s)
-    return slow if slow and prompt.startswith(slow) else None
+def slow_part(prompt: str, start: str | None) -> str | None:
+    """The slow part of an instruction `build_instruction` made — v7.2 (AGORA-242): the canon and the life; v7.5
+    (AGORA-255): the whole start (`instruction_and_start`), exactly the prompt's prefix; None when it is empty or the
+    prompt does not start with it."""
+    return start if start and prompt.startswith(start) else None
 
 
-def build_instruction(
+def instruction_and_start(
     name: str,
     canon: str,
     summary: str | None = None,
@@ -328,36 +327,47 @@ def build_instruction(
     talk: str | None = None,
     voice: str | None = None,
     can_pass: bool = True,
-) -> str:
-    """The system instruction, in contract order (ARCHITECTURE §Prompt assembly):
-    canon → life so far → place and time → memories → plans → today →
-    (v4.2) the mood of the day → (v5.12) what she thought today → (v4.3) a past-life memory → (v4.3) a nudge's material and rule →
-    (v5.8) the facts about the owner (private only) → (v5.8) Agora today (private only) → (v5.8) what she recalls →
-    (v5.20) what happened between them before the window (private, to Gemini) → last-session memory → (v5.6) the private chat's situation → (v4.6) the persona's move → (v5.3) its own
-    questions of this session → (v5.9) her palette of voice tags → rules (v5.6: with the discretion line in Agora). Empty sections are skipped. Nothing
-    here may say a persona is a model or a bot. `can_pass` False (v5.22: her private chat with him) leaves PASS out
-    of the rules."""
-    parts = [canon]
-    parts += [s for s in (life, world, memories, plans, today, mood, thoughts, pastlife, nudge) if s]  # «Настрій дня», …
-    parts += [s for s in (facts, agora_now, recalled) if s]  # v5.8: what she knows, Agora today, what she recalls
-    if talk:
-        parts.append(talk)  # v5.20: her private chat before the window, by week, block and hour
+) -> tuple[str, str]:
+    """(the system instruction, its start) in contract order (ARCHITECTURE §Prompt assembly). v7.5 (AGORA-255): what
+    changes slowly first, so a cache reads it from one call to the next, then what changes every call:
+
+    - **the start** — canon → life so far → memories → plans → (v4.2) the mood of the day → last-session memory →
+      (v5.8) the facts about the owner (private only) → (v5.20) what happened between them before the window
+      (private, to Gemini);
+    - **the tail** — place and time → today → (v5.12) what she thought today → (v4.3) a past-life memory → (v4.3) a
+      nudge's material and rule → (v5.8) Agora today (private only) → (v5.8) what she recalls → (v5.6) the private
+      chat's situation → (v4.6) the persona's move → (v5.3) its own questions of this session → (v5.9) her palette of
+      voice tags → rules (v5.6: with the discretion line in Agora).
+
+    The start is exactly the instruction's prefix (the rules always close the tail). Empty sections are skipped.
+    Nothing here may say a persona is a model or a bot. `can_pass` False (v5.22: her private chat with him) leaves
+    PASS out of the rules."""
+    start = [canon]
+    start += [s for s in (life, memories, plans, mood) if s]  # by the day
     if summary:
-        parts.append(f"Що ти пам'ятаєш з минулої розмови: {summary}")
+        start.append(f"Що ти пам'ятаєш з минулої розмови: {summary}")  # by the session
+    start += [s for s in (facts, talk) if s]  # v5.8: when she keeps a fact; v5.20: by the hour
+    tail = [s for s in (world, today, thoughts, pastlife, nudge) if s]  # «Зараз …» to the minute, …
+    tail += [s for s in (agora_now, recalled) if s]  # v5.8: Agora today, what she recalls — by the call
     if private:
-        parts.append(private)  # v5.6: a private reply, or writing first in the private chat
+        tail.append(private)  # v5.6: a private reply, or writing first in the private chat (her style line)
     if move:
-        parts.append(move)  # the freshest instruction: how to reply this time (v4.6)
+        tail.append(move)  # the freshest instruction: how to reply this time (v4.6)
     if asked:
-        parts.append(asked)  # v5.3: what it already asked in this conversation — never again
+        tail.append(asked)  # v5.3: what it already asked in this conversation — never again
     if voice:
-        parts.append(voice)  # v5.9: her palette of tags for her voice, just before the rules
+        tail.append(voice)  # v5.9: her palette of tags for her voice, just before the rules
     rules = f"Ти — {name}. Відповідай лише від себе, коротко, без префікса з іменем."
     if can_pass:
         rules += " Якщо тобі нема чого додати — відповідай рівно PASS."
     rules = " ".join(r for r in (rules, rules_extra, discretion) if r)  # v5.6: the discretion line, in Agora
-    parts.append(rules)
-    return "\n\n".join(parts)
+    tail.append(rules)
+    return "\n\n".join(start + tail), "\n\n".join(start)
+
+
+def build_instruction(name: str, canon: str, summary: str | None = None, **layers) -> str:
+    """The system instruction, in contract order (`instruction_and_start`)."""
+    return instruction_and_start(name, canon, summary, **layers)[0]
 
 
 ECHO_MAX_CHARS = 4000

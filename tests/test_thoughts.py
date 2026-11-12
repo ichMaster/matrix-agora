@@ -233,7 +233,8 @@ def test_the_block_shows_parts_of_the_day_and_alone_with_him_the_links_and_the_p
 def test_the_block_sits_after_the_mood_and_before_a_past_life_memory():
     out = build_instruction("Кіра", "КАНОН", today="СЬОГОДНІ", mood="НАСТРІЙ", thoughts="ДУМКИ", pastlife="МИНУЛЕ",
                             facts="ФАКТИ")
-    order = [out.index(x) for x in ("КАНОН", "СЬОГОДНІ", "НАСТРІЙ", "ДУМКИ", "МИНУЛЕ", "ФАКТИ", "Ти — Кіра")]
+    # v7.5 (AGORA-255): the mood and the facts in the start; today, her thoughts, a past life in the tail
+    order = [out.index(x) for x in ("КАНОН", "НАСТРІЙ", "ФАКТИ", "СЬОГОДНІ", "ДУМКИ", "МИНУЛЕ", "Ти — Кіра")]
     assert order == sorted(order)
     assert build_instruction("Ада", "КАНОН", thoughts=None) == build_instruction("Ада", "КАНОН")
 

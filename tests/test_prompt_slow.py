@@ -5,7 +5,7 @@ import asyncio
 from types import SimpleNamespace
 
 from agents.claude_sdk import split_prompt
-from agents.logic import build_instruction, slow_part
+from agents.logic import instruction_and_start, slow_part
 from agents.responder import Reply
 from agents.usage import PROMPT_SLOW
 from tests.test_answers import agora
@@ -20,14 +20,16 @@ def test_split_prompt_gives_the_slow_part_and_the_rest_or_nothing():
     assert split_prompt("КАНОН", "КАНОН") == ("КАНОН", "")                 # all of it slow (Hermes's brief)
 
 
-def test_the_slow_part_is_the_canon_then_the_life_the_prompts_own_prefix():
-    with_life = build_instruction(name="Ада", canon="КАНОН", life="ЖИТТЯ", world="Зараз 17:02")
-    assert slow_part(with_life, "КАНОН", "ЖИТТЯ") == "КАНОН\n\nЖИТТЯ"
-    slow, rest = split_prompt(with_life, slow_part(with_life, "КАНОН", "ЖИТТЯ"))
+def test_the_slow_part_is_the_whole_start_the_prompts_own_prefix():
+    """v7.5 (AGORA-255): the start grew from the canon and the life (v7.2) to everything that changes at most hourly."""
+    with_life, start = instruction_and_start(name="Ада", canon="КАНОН", life="ЖИТТЯ", world="Зараз 17:02",
+                                             memories="СПОГАДИ", mood="НАСТРІЙ", recalled="ЗГАДКА")
+    assert start == "КАНОН\n\nЖИТТЯ\n\nСПОГАДИ\n\nНАСТРІЙ" and slow_part(with_life, start) == start
+    slow, rest = split_prompt(with_life, slow_part(with_life, start))
     assert f"{slow}\n\n{rest}" == with_life and rest.startswith("Зараз 17:02")   # nothing lost
-    no_life = build_instruction(name="Ада", canon="КАНОН", world="Зараз 17:02")
-    assert slow_part(no_life, "КАНОН", None) == "КАНОН"
-    assert slow_part(no_life, "", None) is None and slow_part("ІНШЕ", "КАНОН", None) is None
+    no_life, start = instruction_and_start(name="Ада", canon="КАНОН", world="Зараз 17:02")
+    assert slow_part(no_life, start) == "КАНОН"
+    assert slow_part(no_life, "") is None and slow_part("ІНШЕ", "КАНОН") is None
 
 
 # --- an answer's call carries it ------------------------------------------------------------------------------------
@@ -91,3 +93,36 @@ def test_hermess_slow_part_is_his_canon_the_same_for_every_digest(tmp_path):
     asyncio.run(h._think("розмова", "ІНШИЙ БРИФ", "ask", 400))
     assert seen[-1][0] is None                                     # a system that is not his canon's: none
     assert chat_request  # his answers' system starts with his canon too (agents/digest.py)
+
+
+# --- v7.5 (AGORA-255): the start and the tail -------------------------------------------------------------------------
+ALL = {"life": "ЖИТТЯ", "world": "СВІТ", "memories": "СПОГАДИ", "plans": "ПЛАНИ", "today": "СЬОГОДНІ",
+       "mood": "НАСТРІЙ", "thoughts": "ДУМКИ", "pastlife": "МИНУЛЕ", "nudge": "ПОШТОВХ", "move": "ХІД",
+       "asked": "ПИТАННЯ", "private": "НАОДИНЦІ", "facts": "ФАКТИ", "agora_now": "АГОРА", "recalled": "ЗГАДКА",
+       "talk": "РОЗМОВА", "voice": "ГОЛОС"}
+
+
+def test_every_layer_appears_once_the_slow_ones_in_the_start_the_per_call_ones_in_the_tail():
+    prompt, start = instruction_and_start("Кіра", "КАНОН", "ПІДСУМОК", **ALL)
+    sections = prompt.split("\n\n")
+    assert sorted(sections[:-1]) == sorted(["КАНОН", "Що ти пам'ятаєш з минулої розмови: ПІДСУМОК", *ALL.values()])
+    assert sections[-1].startswith("Ти — Кіра.")                                # the rules close it, as ever
+    assert start.split("\n\n") == ["КАНОН", "ЖИТТЯ", "СПОГАДИ", "ПЛАНИ", "НАСТРІЙ",
+                                   "Що ти пам'ятаєш з минулої розмови: ПІДСУМОК", "ФАКТИ", "РОЗМОВА"]
+    assert prompt.startswith(start + "\n\nСВІТ")                                # the tail opens with the time
+
+
+def test_the_start_is_the_same_whatever_the_time_the_recall_the_move_or_the_style_line(tmp_path):
+    agent = agora(tmp_path)
+    first = agent.build_prompt(move="Цього разу: запитай", recalled="Тобі згадується: А.")
+    from agents.agent import _LAST_PARTS
+    start_a = _LAST_PARTS.get()[2]
+    agent.clock = lambda: agent_clock_later
+    second = agent.build_prompt(move="Цього разу: заперечи", recalled="Тобі згадується: Б.",
+                                private="Як сказати цього разу: інакше")
+    start_b = _LAST_PARTS.get()[2]
+    assert start_a and start_a == start_b and first != second
+    assert first.startswith(start_a) and second.startswith(start_b)
+
+
+agent_clock_later = 1_794_600_000_000 + 37 * 60_000                             # 37 minutes on: a new «Зараз …»

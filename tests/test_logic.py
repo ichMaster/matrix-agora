@@ -217,7 +217,8 @@ def test_full_prompt_order_contract():
     from agents.logic import build_instruction
     out = build_instruction("Ада", "КАНОН", "ПІДСУМОК", life="ЖИТТЯ", world="СВІТ",
                             memories="СПОГАДИ", plans="ПЛАНИ", today="СЬОГОДНІ")
-    order = ["КАНОН", "ЖИТТЯ", "СВІТ", "СПОГАДИ", "ПЛАНИ", "СЬОГОДНІ", "ПІДСУМОК", "Ти — Ада."]
+    # v7.5 (AGORA-255): the slow start (by the day, the session) first, then the per-call tail (the time, today)
+    order = ["КАНОН", "ЖИТТЯ", "СПОГАДИ", "ПЛАНИ", "ПІДСУМОК", "СВІТ", "СЬОГОДНІ", "Ти — Ада."]
     idx = [out.index(x) for x in order]
     assert idx == sorted(idx)
 
@@ -227,7 +228,7 @@ def test_the_creatures_prompt_order_mood_then_a_past_life_memory_then_rules():
     from agents.logic import build_instruction
     out = build_instruction("Кіт", "КАНОН", life="ЖИТТЯ", world="СВІТ", mood="Настрій дня: сонний",
                             pastlife="Спогад з минулого життя (перекажи своїми словами, уривком, не цитуй): x")
-    order = ["КАНОН", "ЖИТТЯ", "СВІТ", "Настрій дня", "Спогад з минулого життя", "Ти — Кіт."]
+    order = ["КАНОН", "ЖИТТЯ", "Настрій дня", "СВІТ", "Спогад з минулого життя", "Ти — Кіт."]  # v7.5: mood in the start
     idx = [out.index(x) for x in order]
     assert idx == sorted(idx)
     nudge = build_instruction("Кіт", "КАНОН", mood="Настрій дня: x", pastlife="Спогад з минулого життя: y",
@@ -288,7 +289,7 @@ def test_a_personas_move_comes_after_the_summary_and_before_the_rules():
     from agents.logic import build_instruction
     out = build_instruction("Ада", "КАНОН", "підсумок", plans="Твої плани: x", today="Сьогодні: y",
                             move="Цього разу: заперечи")
-    order = ["КАНОН", "Твої плани", "Сьогодні", "Що ти пам'ятаєш з минулої розмови", "Цього разу", "Ти — Ада."]
+    order = ["КАНОН", "Твої плани", "Що ти пам'ятаєш з минулої розмови", "Сьогодні", "Цього разу", "Ти — Ада."]
     idx = [out.index(x) for x in order]
     assert idx == sorted(idx)
     assert "Цього разу" not in build_instruction("Ада", "КАНОН", "підсумок")
@@ -332,9 +333,10 @@ def test_the_asked_section_comes_after_the_move_and_before_the_rules():
     assert "ПИТАННЯ" not in build_instruction("Ада", "КАНОН")
 
 
-def test_the_talk_section_sits_after_what_she_recalls_and_before_the_last_session():
+def test_the_talk_section_closes_the_start_after_the_last_session_and_before_what_she_recalls():
+    """v7.5 (AGORA-255): her talk summaries change by the hour — the last of the start; what she recalls is per call."""
     from agents.logic import build_instruction
     out = build_instruction("Кіра", "Канон.", "ми говорили про каву", recalled="Пригадує.", talk="Що було між вами.",
                             private="Наодинці.")
-    assert out.index("Пригадує.") < out.index("Що було між вами.") < out.index("Що ти пам'ятаєш з минулої розмови")
-    assert out.index("Що ти пам'ятаєш з минулої розмови") < out.index("Наодинці.")
+    assert out.index("Що ти пам'ятаєш з минулої розмови") < out.index("Що було між вами.") < out.index("Пригадує.")
+    assert out.index("Пригадує.") < out.index("Наодинці.")

@@ -152,6 +152,7 @@ from agents.logic import (
     cut_openings,
     fit_budget,
     history_entry,
+    instruction_and_start,
     is_edit,
     members_phrase,
     outs_a_persona,
@@ -2934,11 +2935,12 @@ class Agent:
             return prompt
         layers = self.prompt_layers(pastlife, nudge, move, private, recalled, agora_now, facts, skip_layers, talk,
                                     backup)
-        prompt = build_instruction(**layers)
+        prompt, start = instruction_and_start(**layers)
         # v5.22: its parts' sizes (the rules and the joins are what is left), for the answer call's usage line
         parts = {PART_NAMES.get(k, k): len(v) for k, v in layers.items() if k != "name" and isinstance(v, str) and v}
         parts["rules"] = max(0, len(prompt) - sum(parts.values()))
-        _LAST_PARTS.set((prompt, parts, slow_part(prompt, layers.get("canon"), layers.get("life"))))
+        # v7.5 (AGORA-255): its slow part is the whole start — what a cache reads from one call to the next
+        _LAST_PARTS.set((prompt, parts, slow_part(prompt, start)))
         return prompt
 
     def prompt_layers(self, pastlife: str | None = None, nudge: str | None = None, move: str | None = None,

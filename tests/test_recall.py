@@ -129,7 +129,8 @@ def test_the_rendering_has_when_and_places_never_a_date_and_cuts_long_lines():
 def test_the_prompt_order():
     out = build_instruction("Кіра", "КАНОН", "ПІДСУМОК", today="СЬОГОДНІ", facts="ФАКТИ", agora_now="АГОРА",
                             recalled="ЗГАДКА", private="НАОДИНЦІ", move="ХІД")
-    order = [out.index(x) for x in ("КАНОН", "СЬОГОДНІ", "ФАКТИ", "АГОРА", "ЗГАДКА", "ПІДСУМОК", "НАОДИНЦІ", "ХІД")]
+    # v7.5 (AGORA-255): the session's memory and the facts in the start; today, Agora and the recall in the tail
+    order = [out.index(x) for x in ("КАНОН", "ПІДСУМОК", "ФАКТИ", "СЬОГОДНІ", "АГОРА", "ЗГАДКА", "НАОДИНЦІ", "ХІД")]
     assert order == sorted(order)
     assert build_instruction("Кіра", "КАНОН") == build_instruction("Кіра", "КАНОН", facts=None, recalled="")
 
