@@ -162,6 +162,12 @@ SCHEMA: tuple[Setting, ...] = (
        "Найменше останніх рядків, які він бачить, хоч би якими давніми", "lines", 0, 300),
     # v7.5 (AGORA-256): the window's start moves in steps, so a cache reads its start; her answers' start and the
     # first lines of her history in Gemini's explicit context cache (as Lumi), made on the second answer within its life
+    # v7.5 (the owner, 2026-11-14: «скороти всім агентам окрім Кіри і Устини вікно до 3х годин»): the room's lines a
+    # reply sees, by the hour — each agent's own (set for the room, left 0 for the companions)
+    _s("AGORA_HISTORY_HOURS", "int", "0", "memory", "speaker", None,
+       "Скільки годин Агори бачить відповідь (0 — усе вікно HISTORY_N)", "h", 0, 72),
+    _s("AGORA_HISTORY_MIN", "int", "10", "memory", "speaker", None,
+       "Найменше останніх рядків Агори, хоч би якими давніми", "lines", 0, 300),
     _s("PRIVATE_HISTORY_STEP_H", "int", "2", "private", "cap:private", None,
        "Крок, яким зсувається початок вікна розмови (0 — щохвилини, як раніше)", "h", 0, 12),
     _s("GEMINI_CACHE", "choice", "on", "model", "cap:private", None,
@@ -374,6 +380,8 @@ def concerns(setting: Setting, member: Member) -> bool:
         return False
     if setting.scope == "shared":
         return True
+    if setting.scope == "speaker":  # v7.5: each agent that speaks in the room, its own value (never the herald)
+        return member.type != "herald"
     if kind == "type":
         return member.type == value
     if kind == "cap":

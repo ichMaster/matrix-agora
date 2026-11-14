@@ -531,6 +531,11 @@ class Agent:
         # v4.5 — Claude the philosopher reads a wider window (RAM only, seeded from the room like the regular one)
         self.wide_n = int(os.environ.get("CLAUDE_HISTORY_N", "150")) if cfg.type == "assistant" else 0
         self.wide_history: list[tuple[str, str]] = []
+        self.history_ts: list[int] = []  # v7.5: each room line's time, beside `history` and `wide_history`
+        self.wide_ts: list[int] = []
+        # v7.5 (the owner, 2026-11-14): the room's window by the hour (0: by `HISTORY_N` alone, as before)
+        self.agora_history_hours = int(os.environ.get("AGORA_HISTORY_HOURS", "0"))
+        self.agora_history_min = int(os.environ.get("AGORA_HISTORY_MIN", "10"))
         self._texts: dict[str, str] = {}  # event id → text of recent room messages: what a reply answers
         # v4.1: MAX_BOT_TURNS counts the message being answered (v1.2's count excluded it: new = old + 1)
         self.max_bot_turns = int(os.environ.get("MAX_BOT_TURNS", "3"))
@@ -938,7 +943,7 @@ class Agent:
             speaker = self.names.get(e.sender, e.sender)
             if e.sender == self.cfg.owner:
                 self.last_owner = (str(getattr(e, "event_id", "")), e.body)
-            self._add_context(speaker, e.body)
+            self._add_context(speaker, e.body, int(e.server_timestamp))
             self._remember_text(str(getattr(e, "event_id", "")), e.body)
             self._archive(str(getattr(e, "event_id", "")), int(e.server_timestamp), "agora", "matrix", speaker, e.body)
             self.timeline = [*self.timeline, (speaker, int(e.server_timestamp), str(getattr(e, "event_id", "")),
@@ -1011,7 +1016,7 @@ class Agent:
             if room.room_id == self.cfg.room_id:
                 # the context window sees every room message, own and the other agent's included
                 speaker = self.names.get(event.sender, event.sender)
-                self._add_context(speaker, event.body)
+                self._add_context(speaker, event.body, now_ms)
                 self._archive(event_id, now_ms, "agora", "matrix", speaker, event.body)  # v5.8: every room line
                 self._remember_text(event_id, event.body)
                 self.timeline = [*self.timeline, (speaker, now_ms, event_id,
@@ -2825,17 +2830,32 @@ class Agent:
         """A purr right after the same speaker's purr — it collapses into the earlier one (v4.2)."""
         return bool(lines) and lines[-1][0] == speaker and is_purr(text) and is_purr(lines[-1][1])
 
-    def _add_context(self, speaker: str, text: str) -> None:
-        """The context window, with consecutive purrs collapsed so they never crowd out the talk."""
+    def _add_context(self, speaker: str, text: str, ts_ms: int | None = None) -> None:
+        """The context window, with consecutive purrs collapsed so they never crowd out the talk. v7.5: each line's
+        time kept beside it (`history_ts`, `wide_ts`), for the window by the hour (`AGORA_HISTORY_HOURS`)."""
+        ts = int(ts_ms) if ts_ms is not None else self.clock()
         if self._repeat_purr(self.history, speaker, text):
             self.history = [*self.history[:-1], (speaker, text)]
+            self.history_ts = [*self.history_ts[:-1], ts]
         else:
             self.history = append_history(self.history, speaker, text, self.history_n)
+            self.history_ts = [*self.history_ts, ts][-len(self.history):]
         if self.wide_n:  # v4.5: the philosopher's wider window
             if self._repeat_purr(self.wide_history, speaker, text):
                 self.wide_history = [*self.wide_history[:-1], (speaker, text)]
+                self.wide_ts = [*self.wide_ts[:-1], ts]
             else:
                 self.wide_history = append_history(self.wide_history, speaker, text, self.wide_n)
+                self.wide_ts = [*self.wide_ts, ts][-len(self.wide_history):]
+
+    def agora_lines(self, wide: bool = False) -> list[tuple[str, str]]:
+        """v7.5 (the owner, 2026-11-14: «скороти всім агентам окрім Кіри і Устини вікно до 3х годин») — the room's
+        lines a reply sees: the last `AGORA_HISTORY_HOURS` hours of its window (`HISTORY_N` lines at most), never
+        fewer than `AGORA_HISTORY_MIN` lines; 0 hours — the whole window, as before."""
+        lines, times = (self.wide_history, self.wide_ts) if wide else (self.history, self.history_ts)
+        if self.agora_history_hours <= 0 or len(times) != len(lines):
+            return list(lines)
+        return list(lines[window_start(times, self.clock(), self.agora_history_hours, self.agora_history_min):])
 
     def _remember_text(self, event_id: str, text: str) -> None:
         """What a reply answers (v4.5: Claude's mode depends on it) — bounded like the windows."""
@@ -4278,7 +4298,7 @@ class Agent:
                 answered = (self._texts.get(trigger, "") if trigger
                             else self.last_owner[1] if self.last_owner else "")
                 if claude_mode(answered, self.me.name_forms, self.cfg.user_id) == "philosopher":
-                    prompt, lines, effort = self.brief(CLAUDE_BRIEF_PHILOSOPHER), self.wide_history, "high"
+                    prompt, lines, effort = self.brief(CLAUDE_BRIEF_PHILOSOPHER), self.agora_lines(wide=True), "high"
                     log.info("claude mode: philosopher")
             self._owner_seen = self._owner_coalesced  # the owner's messages so far are in this reply's context
             text = await self._compose(prompt, lines=lines, effort=effort)
@@ -4319,7 +4339,7 @@ class Agent:
                        responder=None, shots: list | None = None) -> str | None:
         """One model call → the line as it would be sent, or None (logged): never half a sentence, never another's
         words, PASS honoured, the creature's word cap applied (`max_words` overrides it: a telegram's joke)."""
-        history = list(self.history if lines is None else lines)
+        history = list(self.agora_lines() if lines is None else lines)  # v7.5: the room's window by the hour
         built = _LAST_PARTS.get()  # v5.22: the prompt's parts, when this prompt is the one last built in this task
         parts = {**built[1], "history": len(build_transcript(history))} if built and built[0] is prompt else None
         token = PROMPT_PARTS.set(parts)
