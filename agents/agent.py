@@ -21,9 +21,10 @@ import sys
 import tempfile
 import time
 from contextvars import ContextVar
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -38,6 +39,7 @@ from nio import (
     SyncError,
 )
 
+from agents.answer_models import ENGINE_OF
 from agents.answers import CHOICES as ANSWER_CHOICES
 from agents.answers import SwitchedResponder
 from agents.anthropic_api import KEY_VAR as SONNET_KEY_VAR
@@ -183,6 +185,8 @@ from agents.lumi import MODES as MEMORY_MODES
 from agents.matrix import join_room as matrix_join
 from agents.matrix import login as matrix_login
 from agents.memory import build_summary_request, cap_words, load_memory, save_memory, session_ended
+from agents.memory_tools import DAY_TALK, NOTHING, RECALL, ToolSet, day_result, declarations
+from agents.memory_tools import parse_day as parse_tool_day
 from agents.mood import (
     MOOD_MAX_TOKENS,
     NO_SKY_SECTION,
@@ -319,11 +323,13 @@ from agents.talk import (
     TALK_GENTLE,
     TALK_SPLIT_MIN,
     covered,
+    day_when,
     gist_items,
     gist_request,
     gist_section,
     gists_due,
     iso_hour,
+    period_of,
     periods_due,
     talk_check_request,
     talk_request,
@@ -371,6 +377,7 @@ from agents.turns import (
 from agents.usage import (
     PROMPT_PARTS,
     PROMPT_SLOW,
+    TOOL_CALLS,
     answer_line,
     api_usage_line,
     cache_usage_line,
@@ -536,6 +543,8 @@ class Agent:
                 lambda: live_value(cfg.memory_file.parent, cfg.localpart, "ANSWER_MODEL", os.environ),
                 self._answer_responders(openai_key, sonnet_key), self.responder, silent=_silent)
             self.responder = self.switch
+            if isinstance(self.llm, GeminiClient):  # v7.6 (AGORA-262): her own recall, in `lumi` mode
+                self.llm.tools_for = self._memory_tools
             # v7.5 (AGORA-256): her answers' start and the first lines of her history in Gemini's explicit cache
             if isinstance(self.llm, GeminiClient) and os.environ.get("GEMINI_CACHE", "on").strip() == "on":
                 self.llm.cache = CachePlanner(int(os.environ.get("GEMINI_CACHE_TTL_S", "600")),
@@ -850,6 +859,8 @@ class Agent:
         # chats at its first start, embedded by the idle watcher
         self.archive: Archive | None = None
         self.recall_n, self.private_agora_n = 0, 0
+        self.recall_tool_n, self.recall_tool_rounds, self.lumi_recall_n = 0, 0, 0  # v7.6 (AGORA-262)
+        self._recall_tools: list | None = None
         if cfg.can("recall"):
             try:  # v5.8 review #4: a bad archive never stops her start — she answers without recall
                 self.archive = Archive(self.memory_file.parent / f"{cfg.localpart}.archive.db")
@@ -859,6 +870,11 @@ class Agent:
                 log.error("archive: unreadable (%s) — running without it", type(exc).__name__)
             self.recall_n = int(os.environ.get("RECALL_N", "6"))
             self.private_agora_n = int(os.environ.get("PRIVATE_AGORA_N", "20"))
+            # v7.6 (AGORA-262): in `lumi` mode her own recall — lines a call gives, calls an answer, and the recall
+            # before an answer on Gemini smaller
+            self.recall_tool_n = int(os.environ.get("RECALL_TOOL_N", "5"))
+            self.recall_tool_rounds = int(os.environ.get("RECALL_TOOL_ROUNDS", "3"))
+            self.lumi_recall_n = int(os.environ.get("LUMI_RECALL_N", "4"))
         self._own_seq = 0
         # v5.8 — facts about the owner (`facts`): her private prompt only; kept as files, read at each private prompt
         self.facts_dir: Path | None = None
@@ -1418,9 +1434,64 @@ class Agent:
             exclude = (set(self.private_history) if window is None
                        else {(x.speaker, x.text) for x in window} | set(history) | self._closed)
             exclude |= self._soft_hidden()  # v5.24 (AGORA-212): a softened span's lines never come back by recall
-            recalled = await self.recall_section(query, self.private_places, exclude)
+            # v7.6 (AGORA-262): in `lumi` mode on Gemini fewer lines — she recalls the rest herself
+            n = self.lumi_recall_n if self.memory_mode() == "lumi" and self._answers_on_gemini() else None
+            recalled = await self.recall_section(query, self.private_places, exclude, n=n)
             agora_now = self.agora_now_section()
         return self.build_prompt(private=brief, recalled=recalled, agora_now=agora_now, facts=facts, talk=True)
+
+    def _answers_on_gemini(self) -> bool:
+        """v7.6 — whether her answers go to Gemini now (v7.4's switch, live), where she has her own recall."""
+        if self.switch is None:
+            return self.cfg.engine == "gemini"
+        try:
+            choice = live_value(self.memory_file.parent, self.cfg.localpart, "ANSWER_MODEL", os.environ)
+        except Exception:  # noqa: BLE001
+            return True
+        return ENGINE_OF.get(choice) == "gemini"
+
+    def _memory_tools(self, kind: str) -> ToolSet | None:
+        """v7.6 (AGORA-262) — what her answer offers to recall by herself: in `lumi` mode, alone with him (an answer or
+        a line written first), with her archive; None otherwise."""
+        if kind not in ("private", "private_nudge") or self.archive is None or self.recall_tool_rounds <= 0:
+            return None
+        if not self.cfg.can("recall") or self.memory_mode() != "lumi":
+            return None
+        if self._recall_tools is None:
+            self._recall_tools = declarations()
+        return ToolSet(self._recall_tools, self._run_memory_tool, self.recall_tool_rounds)
+
+    async def _run_memory_tool(self, name: str, args: dict) -> str:
+        """One of her recall calls: `recall` — her archive by meaning and words, what her prompt already holds left out;
+        `day_talk` — a day's gist and summaries, today her digest, a day not yet come nothing. Never a closed line, a
+        softened span's line or her future; the log names the call and whether it found anything, never a text."""
+        if name == RECALL:
+            query = " ".join(str(args.get("query", "")).split())[:300]
+            if not query:
+                return NOTHING
+            window = self._gemini_lines() or []
+            exclude = ({(x.speaker, x.text) for x in window} | set(self.gemini_history()) | self._closed
+                       | self._soft_hidden())
+            text = await self.recall_section(query, self.private_places, exclude, n=self.recall_tool_n)
+            log.info("recall tool: recall — %s", "found" if text else "nothing")
+            return text or NOTHING
+        if name == DAY_TALK:
+            now = local_now(self.clock(), self.tz)
+            day = parse_tool_day(args.get("date"))
+            if day is None or day > now.date():
+                log.info("recall tool: day_talk — nothing (%s)", "no date" if day is None else "not yet come")
+                return NOTHING
+            start, end = period_of("day", int(datetime(day.year, day.month, day.day, 12,
+                                                        tzinfo=ZoneInfo(self.tz)).timestamp() * 1000), self.tz)
+            rows = self.archive.talk_rows() if self.archive is not None else []
+            gist = next((r.text for r in rows if r.level == "gist_day" and r.start_ms == start and r.text), None)
+            digest = load_digest(self.digest_file)
+            text = day_result(day, now.date(), day_when(start, now, self.tz), gist,
+                              gist_items("gist_day", start, end, rows, self.tz),
+                              digest.text if digest.day == now.date().isoformat() else None)
+            log.info("recall tool: day_talk — %s", "nothing" if text == NOTHING else "found")
+            return text
+        return NOTHING
 
     async def _backup_private_prompt(self, brief: str) -> tuple[str, list[tuple[str, str]]]:
         """Her private instruction and history for the backup (v5.21, the owner, 2026-11-02: a `blocked` line is the
@@ -1880,13 +1951,14 @@ class Agent:
         log.info("private chat: %d lines of history from the archive", len(lines))
 
     async def recall_section(self, query: str, places: tuple[str, ...], exclude: set,
-                             gemini: bool = True, meaning: bool = True) -> str | None:
+                             gemini: bool = True, meaning: bool = True, n: int | None = None) -> str | None:
         """What she recalls before an answer: the message she answers is the query — the word search and (when its
         embedding comes back) the meaning search within `places`, fused; the best `RECALL_N` lines not already in the
         prompt's window, each with its neighbours. `gemini=False` reads closed lines too; `meaning=False` is words
         only (v5.21: the backup's recall — open lines only, and its query never goes to Gemini's embeddings). A failure
         is no section, never a blocked answer."""
-        if self.archive is None or self.recall_n <= 0 or not (query or "").strip():
+        n = self.recall_n if n is None else n  # v7.6: her own recall's, or `lumi`'s smaller recall
+        if self.archive is None or n <= 0 or not (query or "").strip():
             return None
         try:
             word_ids = self.archive.search_words(query, places, gemini=gemini)
@@ -1902,7 +1974,7 @@ class Agent:
                 log.error("recall: the meaning search failed (%s) — words only", type(exc).__name__)
             ranked = fuse(word_ids, meaning_ids)
             picked = pick_recall(ranked, self.archive.lines(ranked[:2 * CANDIDATES], gemini=gemini), exclude,
-                                 self.recall_n)
+                                 n)
             groups, seen = [], set()
             for line in sorted(picked, key=lambda x: (x.ts_ms, x.id)):
                 group = [n for n in (self.archive.around(line, 1, gemini=gemini)
@@ -3245,8 +3317,9 @@ class Agent:
         """One JSON line per Gemini call (v3.1) — no texts; a write error never blocks. `blocked` (v5.13): the stage
         of a safety block; `latency_ms` (v5.22): how long the call took."""
         parts = PROMPT_PARTS.get()  # v5.22: an answer's prompt in parts
+        calls = TOOL_CALLS.get()  # v7.6 (AGORA-262): her own recall's calls, on her answer's line
         self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked, latency_ms,
-                                                 parts))
+                                                 parts, calls))
 
     def record_cache_usage(self, model: str, tokens: int | None, ttl_s: int, made: bool) -> None:
         """v7.5 (AGORA-258) — her answers' Gemini cache made or renewed: one `cache` line, no text."""

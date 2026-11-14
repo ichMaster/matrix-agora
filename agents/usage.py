@@ -41,6 +41,8 @@ PROMPT_PARTS: ContextVar[dict | None] = ContextVar("prompt_parts", default=None)
 # and life section; Hermes's brief), set by the agent around the call like `PROMPT_PARTS`; `ClaudeClient` gives it to a
 # CLI started ahead as its system prompt (AGORA-243). None on any other call
 PROMPT_SLOW: ContextVar[str | None] = ContextVar("prompt_slow", default=None)
+# v7.6 (AGORA-262): how many times her answer recalled by her own tool, for its own usage line (None: not offered)
+TOOL_CALLS: ContextVar[int | None] = ContextVar("tool_calls", default=None)
 
 
 def _parts(value: Any) -> dict | None:
@@ -71,7 +73,8 @@ def _output(usage: Any) -> int | None:
 
 
 def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: bool,
-               blocked: str | None = None, latency_ms: int | None = None, prompt_parts: dict | None = None) -> dict:
+               blocked: str | None = None, latency_ms: int | None = None, prompt_parts: dict | None = None,
+               tool_calls: int | None = None) -> dict:
     """One record per Gemini call (v2 since v4.4: engine, billing, cache tokens; v3 since v5.1: `characters`, null
     here, and the thinking counted in the output; v5 since v5.13: `blocked`, the stage of a safety block — `prompt`
     or `answer` — or null; v7 since v5.22: `latency_ms`, the call's wall time on a monotonic clock, on every kind of
@@ -98,6 +101,7 @@ def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: b
         "images": None,  # v8 (v6.5): a fal photo's count, on its `photo` line only
         "warm": None,
         "prompt_parts": _parts(prompt_parts),  # v7 (v5.22): an answer's prompt, its parts' sizes in characters
+        "tool_calls": _ms(tool_calls),  # v7.6 (AGORA-262): her answer's own recall calls; null where not offered
     }
 
 
@@ -144,6 +148,7 @@ def tts_usage_line(ts_iso: str, agent: str, model: str, characters: int, ok: boo
         "images": None,
         "warm": None,
         "prompt_parts": None,
+        "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
     }
 
 
@@ -160,6 +165,7 @@ def fallback_usage_line(ts_iso: str, agent: str, kind: str, model: str, ok: bool
         "images": None,
         "warm": None,
         "prompt_parts": _parts(prompt_parts),
+        "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
     }
 
 
@@ -178,6 +184,7 @@ def judge_usage_line(ts_iso: str, agent: str, model: str, prompt_tokens: int | N
         "images": None,
         "warm": None,
         "prompt_parts": None,
+        "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
     }
 
 
@@ -195,6 +202,7 @@ def stt_usage_line(ts_iso: str, agent: str, model: str, audio_ms: int | None, ok
         "images": None,
         "warm": None,
         "prompt_parts": None,
+        "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
     }
 
 
@@ -214,6 +222,7 @@ def video_note_usage_line(ts_iso: str, agent: str, model: str, video_ms: int | N
         "images": None,
         "warm": None,
         "prompt_parts": None,
+        "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
     }
 
 
@@ -231,6 +240,7 @@ def image_usage_line(ts_iso: str, agent: str, model: str, images: int | None, ok
         "images": int(images) if isinstance(images, int) and not isinstance(images, bool) else None,
         "warm": None,
         "prompt_parts": None,
+        "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
     }
 
 
@@ -268,6 +278,7 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
         "images": None,
         "warm": warm if isinstance(warm, bool) else None,
         "prompt_parts": _parts(prompt_parts),
+        "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
     }
 
 
@@ -284,7 +295,7 @@ def cache_usage_line(ts_iso: str, agent: str, model: str, tokens: int | None, tt
         "engine": "gemini", "billing": "api",
         "cache_read_tokens": None, "cache_write_tokens": _ms(tokens), "cache_ttl_s": _ms(ttl_s),
         "reported_cost_usd": None, "characters": None, "audio_ms": None, "blocked": None, "video_ms": None,
-        "latency_ms": None, "images": None, "warm": None, "prompt_parts": None,
+        "latency_ms": None, "images": None, "warm": None, "prompt_parts": None, "tool_calls": None,
     }
 
 
@@ -310,6 +321,7 @@ def api_usage_line(ts_iso: str, agent: str, kind: str, model: str, engine: str, 
         "blocked": blocked if blocked in ("refusal",) else None,
         "video_ms": None, "latency_ms": _ms(latency_ms), "images": None, "warm": None,
         "prompt_parts": _parts(prompt_parts),
+        "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
     }
 
 
@@ -340,7 +352,8 @@ def answer_line(ts_iso: str, agent: str, place: str, door: str, answered: str, w
 COUNT_FIELDS = ("prompt_tokens", "output_tokens", "total_tokens", "cache_read_tokens", "cache_write_tokens",
                 "cache_ttl_s",  # v7.5: a Gemini cache's stored seconds, on its `cache` line only
                 "characters", "audio_ms", "video_ms", "latency_ms",  # v5.22: the call's time
-                "images")  # v6.5: a fal photo's count
+                "images",  # v6.5: a fal photo's count
+                "tool_calls")  # v7.6: her answer's own recall calls
 
 
 def _valid(rec: Any) -> bool:

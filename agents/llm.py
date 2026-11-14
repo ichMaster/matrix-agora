@@ -21,8 +21,9 @@ from google.genai import types
 
 from agents.gemini_cache import BACKOFF_S, CACHED_CHANNELS, SEPARATOR, CachePlanner, channel_of
 from agents.logic import split_prompt
+from agents.memory_tools import NO_MORE, NOTHING
 from agents.responder import ANSWER_KINDS
-from agents.usage import PROMPT_SLOW
+from agents.usage import PROMPT_SLOW, TOOL_CALLS
 
 log = logging.getLogger("agent.llm")
 
@@ -105,6 +106,8 @@ class GeminiClient:
         self.cache_sink: Callable[..., None] | None = None  # v7.5 (AGORA-258): (model, tokens, ttl_s, made)
         # v7.6 (AGORA-260): whether her cache holds the start alone — her `lumi` memory, read at each answer
         self.cache_start_only: Callable[[], bool] | None = None
+        # v7.6 (AGORA-262): her own recall — the tools an answer of this kind offers (None: none), read at each answer
+        self.tools_for: Callable[[str], Any] | None = None
 
     @property
     def client(self):
@@ -229,15 +232,17 @@ class GeminiClient:
             return await self.complete(transcript, system_instruction, max_output_tokens, kind, self.reply_model,
                                        refusal=True)  # v5.13: an answer — a refusal in it is a block
         model = self.reply_model
-        cached = await self._cache_for(kind, model, split[0], lines) if split is not None else None
+        tools = self._tools(kind)  # v7.6 (AGORA-262): her own recall, in `lumi` mode
+        cached = await self._cache_for(kind, model, split[0], lines, tools) if split is not None else None
         if split is not None:
             system_instruction, transcript = split[0], _joined(lines[cached[1]:] if cached else lines, split[1])
+        # with the cache the tools are its own (a request with `cached_content` may carry none)
+        config = self._reply_config(None if cached else system_instruction, max_output_tokens,
+                                    cached[0] if cached else None, None if cached else tools)
         self._start()
         try:
             resp = await self._within(lambda: self._client.aio.models.generate_content(
-                model=model, contents=transcript,
-                config=self._reply_config(None if cached else system_instruction, max_output_tokens,
-                                          cached[0] if cached else None)), kind)
+                model=model, contents=transcript, config=config), kind)
         except Exception as exc:  # noqa: BLE001 — any provider failure means silence
             # a hang is the network, not the cache: both tries are spent, the cache is kept (code review v7.5 #2)
             if cached is None or isinstance(exc, TimeoutError):
@@ -250,28 +255,82 @@ class GeminiClient:
             await self._drop_cache(self.cache.forget(channel_of(kind)))
             self.cache.failed(channel_of(kind), self._mono())
             transcript = _joined(lines, split[1])
+            config = self._reply_config(system_instruction, max_output_tokens, None, tools)
             try:
                 resp = await self._within(lambda: self._client.aio.models.generate_content(
-                    model=model, contents=transcript,
-                    config=self._reply_config(system_instruction, max_output_tokens, None)), kind)
+                    model=model, contents=transcript, config=config), kind)
             except Exception as again:  # noqa: BLE001
                 log.error("gemini reply failed: %s", type(again).__name__)
                 self._report(kind, None, False, model)
                 return None
-        text = answer_text(resp)
-        if not text:
-            self._empty(resp, kind, model, getattr(resp, "usage_metadata", None), "gemini reply was empty (finish %s)")
+        calls = 0
+        if tools is not None:
+            resp, calls = await self._recall_rounds(resp, transcript, config, model, kind, tools)
+            if resp is None:
+                return None
+        token = TOOL_CALLS.set(calls if tools is not None else None)  # v7.6: on the answer's own line
+        try:
+            text = answer_text(resp)
+            if not text:
+                self._empty(resp, kind, model, getattr(resp, "usage_metadata", None),
+                            "gemini reply was empty (finish %s)")
+                return None
+            if self._refused(text, kind, model, getattr(resp, "usage_metadata", None)):  # v5.13: an answer
+                return None
+            self._report(kind, getattr(resp, "usage_metadata", None), True, model)
+            return text, finish_of(resp)
+        finally:
+            TOOL_CALLS.reset(token)
+
+    def _tools(self, kind: str) -> Any:
+        """v7.6 (AGORA-262): the tools this answer offers, or None; a failure to tell is none."""
+        if self.tools_for is None or kind not in ANSWER_KINDS:
             return None
-        if self._refused(text, kind, model, getattr(resp, "usage_metadata", None)):  # v5.13: an answer
+        try:
+            return self.tools_for(kind)
+        except Exception:
+            log.exception("recall tools: not offered")
             return None
-        self._report(kind, getattr(resp, "usage_metadata", None), True, model)
-        return text, finish_of(resp)
+
+    async def _recall_rounds(self, resp: Any, first: str, config: Any, model: str, kind: str,
+                             tools: Any) -> tuple[Any, int]:
+        """v7.6 (AGORA-262): while her answer asks to recall, each call is run and its result sent back with the
+        model's own turn as it came (thinking's signatures kept): at most `tools.rounds` rounds; a call past them is
+        answered `NO_MORE` and the round after it is the last. Each round's call is its own usage line
+        (`<kind>_recall`). (the final response, the calls run); (None, n) when a round's call failed."""
+        contents: list | None = None
+        n = 0
+        for round_ in range(tools.rounds + 1):
+            asked = [part.function_call for part in _parts(resp) if getattr(part, "function_call", None)]
+            if not asked:
+                break
+            self._report(f"{kind}_recall", getattr(resp, "usage_metadata", None), True, model)
+            if contents is None:
+                contents = [types.Content(role="user", parts=[types.Part(text=first)])]
+            contents.append(resp.candidates[0].content)
+            answers = []
+            for call in asked:
+                n += 1
+                result = NO_MORE if round_ >= tools.rounds else await _run(tools, call)
+                answers.append(types.Part.from_function_response(name=call.name or "", response={"result": result}))
+            contents.append(types.Content(role="user", parts=answers))
+            log.info("recall tools: round %d, %d calls", round_ + 1, len(asked))  # names and counts only
+            self._start()
+            try:
+                resp = await self._within(lambda turns=contents: self._client.aio.models.generate_content(
+                    model=model, contents=turns, config=config), kind)
+            except Exception as exc:  # noqa: BLE001 — any provider failure means silence
+                log.error("gemini reply failed after a recall round: %s", type(exc).__name__)
+                self._report(kind, None, False, model)
+                return None, n
+        return resp, n
 
     def _reply_config(self, system_instruction: str | None, max_output_tokens: int,
-                      cached_content: str | None) -> Any:
+                      cached_content: str | None, tools: Any = None) -> Any:
         return types.GenerateContentConfig(
             system_instruction=system_instruction,
             cached_content=cached_content,
+            tools=tools.tools if tools is not None else None,  # v7.6: her own recall, without a cache
             max_output_tokens=max_output_tokens,
             thinking_config=types.ThinkingConfig(
                 include_thoughts=False,
@@ -280,8 +339,11 @@ class GeminiClient:
         )
 
     # --- v7.5 (AGORA-256): her answers' explicit context cache ---------------------------------------------------
-    async def _cache_for(self, kind: str, model: str, start: str, lines: list[str]) -> tuple[str, int] | None:
-        """(the cache's name, the history lines in it) for this answer, or None — a plain call. Never raises."""
+    async def _cache_for(self, kind: str, model: str, start: str, lines: list[str],
+                         tools: Any = None) -> tuple[str, int] | None:
+        """(the cache's name, the history lines in it) for this answer, or None — a plain call. Never raises. v7.6
+        (AGORA-262): her tools live in the cache with the start, and its fingerprint takes them."""
+        ident = f"{start}\0{tools.key}" if tools is not None else start
         if self.cache is None or channel_of(kind) not in CACHED_CHANNELS:  # 7.5.1: Agora's answers plain
             return None
         ch = channel_of(kind)
@@ -291,7 +353,7 @@ class GeminiClient:
                 start_only = bool(self.cache_start_only())
             except Exception:  # noqa: BLE001 — a settings file that cannot be read: as before
                 start_only = False
-        plan = self.cache.plan(ch, model, start, lines, self._mono(), start_only)
+        plan = self.cache.plan(ch, model, ident, lines, self._mono(), start_only)
         if plan.action == "use":
             if plan.renew:
                 try:
@@ -315,6 +377,7 @@ class GeminiClient:
             made = await asyncio.wait_for(self._client.aio.caches.create(model=model, config=types.CreateCachedContentConfig(
                 system_instruction=start,
                 contents=[types.Content(role="user", parts=[types.Part(text="\n".join(lines[:k]))])] if k else None,
+                tools=tools.tools if tools is not None else None,
                 ttl=f"{int(self.cache.ttl)}s", display_name=f"answers-{ch}")), 60)
         except Exception as exc:  # noqa: BLE001 — too small, refused, a bad network: plain calls for a while
             log.warning("gemini cache: not made (%s) — plain answers for %d s", type(exc).__name__, BACKOFF_S)
@@ -322,7 +385,7 @@ class GeminiClient:
             self.cache.failed(ch, self._mono())
             return None
         tokens = getattr(getattr(made, "usage_metadata", None), "total_token_count", None)
-        self.cache.made(ch, made.name, model, start, lines[:k], self._mono(), tokens or 0)
+        self.cache.made(ch, made.name, model, ident, lines[:k], self._mono(), tokens or 0)
         log.info("gemini cache: made (%s) for %s — %d history lines", plan.why, ch, k)  # names and counts only
         self._cache_report(model, tokens, True)
         return made.name, k
@@ -466,6 +529,22 @@ def answer_text(resp: Any) -> str:
         return (getattr(resp, "text", None) or "").strip() if resp is not None else ""
     return "".join(p.text for p in parts if isinstance(getattr(p, "text", None), str)
                    and not getattr(p, "thought", False)).strip()
+
+
+def _parts(resp: Any) -> list:
+    """The first candidate's parts, or none."""
+    candidates = getattr(resp, "candidates", None) or []
+    return list(getattr(getattr(candidates[0], "content", None), "parts", None) or []) if candidates else []
+
+
+async def _run(tools: Any, call: Any) -> str:
+    """v7.6 (AGORA-262): one recall call run by her agent — never raises: a failure is nothing recalled."""
+    try:
+        out = await tools.run(str(call.name or ""), dict(call.args or {}))
+    except Exception as exc:  # noqa: BLE001
+        log.error("recall tools: a call failed (%s)", type(exc).__name__)
+        return NOTHING
+    return out if isinstance(out, str) and out.strip() else NOTHING
 
 
 def _name(value: Any) -> str:

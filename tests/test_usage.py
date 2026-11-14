@@ -28,8 +28,11 @@ def test_usage_line_shape_and_no_text():
                          "latency_ms",  # v7 (v5.22): the call's time
                          "images",  # v8 (v6.5): a fal photo's count
                          "warm",  # v9 (v7.2): a Claude call taken by a CLI started ahead
-                         "prompt_parts"}  # v7 (v5.22): an answer's prompt, its parts' sizes
+                         "prompt_parts",  # v7 (v5.22): an answer's prompt, its parts' sizes
+                         "tool_calls"}  # v10 (v7.6): her answer's own recall calls
     assert line["characters"] is None and line["audio_ms"] is None and line["blocked"] is None
+    assert line["tool_calls"] is None                                     # not offered
+    assert usage_line("2026-11-14T18:00:00+02:00", "kira", "private", "m", META, True, tool_calls=2)["tool_calls"] == 2
     assert line["video_ms"] is None and line["latency_ms"] is None and line["images"] is None
     assert line["warm"] is None
     assert (line["engine"], line["billing"]) == ("gemini", "api")

@@ -147,6 +147,14 @@ SCHEMA: tuple[Setting, ...] = (
     # v5.8 — the archive (`recall`): how many recalled lines enter a prompt, and Agora's lines of today in the private
     # chat
     _s("RECALL_N", "int", "6", "memory", "cap:recall", None, "Скільки рядків пригадує перед відповіддю", "lines", 0, 20),
+    # v7.6 (AGORA-262): in `lumi` mode on Gemini her own recall — lines a call gives, calls an answer (0: none), and
+    # the recall before an answer smaller
+    _s("RECALL_TOOL_N", "int", "5", "memory", "cap:recall", None, "Скільки рядків дає її власне пригадування (lumi)",
+       "lines", 1, 20),
+    _s("RECALL_TOOL_ROUNDS", "int", "3", "memory", "cap:recall", None,
+       "Скільки разів за відповідь може пригадати сама (lumi; 0 — ні)", "calls", 0, 5),
+    _s("LUMI_RECALL_N", "int", "4", "memory", "cap:recall", None, "Скільки рядків пригадує перед відповіддю (lumi)",
+       "lines", 0, 20),
     # v5.8 — facts about the owner (`facts`): the store's size, how many reach her private prompt, a fact's length
     _s("FACTS_MAX", "int", "100", "memory", "cap:facts", None, "Скільки фактів про Ich зберігає", "facts", 10, 500),
     _s("FACTS_IN_PROMPT", "int", "25", "memory", "cap:facts", None, "Скільки фактів бачить в особистому чаті", "facts",

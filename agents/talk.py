@@ -156,6 +156,18 @@ def _label(row, now: datetime, tz: str) -> str:
     return f"{when} {part}" if when in ("вчора", "позавчора") or 2 < diff < 7 else f"{when}, {part}"
 
 
+class _Day:
+    level = "day"
+
+    def __init__(self, start_ms: int) -> None:
+        self.start_ms = start_ms
+
+
+def day_when(start_ms: int, now: datetime, tz: str) -> str:
+    """v7.6 — a day as she remembers it («вчора», «у вівторок», «минулого тижня»), never a date."""
+    return _label(_Day(start_ms), now, tz)
+
+
 def talk_section(rows: list, before_ms: int, now: datetime, tz: str, words_budget: int = TALK_PROMPT_WORDS,
                  day_days: int = 7) -> str | None:
     """Her private prompt's summaries (pure): v5.23 — only the `hour` and `day` rows, those ended within the last
