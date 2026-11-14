@@ -241,9 +241,11 @@ class GeminiClient:
                 log.error("gemini reply failed: %s", type(exc).__name__)
                 self._report(kind, None, False, model)
                 return None
-            # the cache was gone or refused: forget it, and the same answer once more without it
+            # the cache was gone or refused: forget it, and the same answer once more without it; plain answers for
+            # `BACKOFF_S`, so a cache the model keeps refusing is not made again at every answer (code review v7.5 #1)
             log.warning("gemini reply on the cache failed (%s) — once more without it", type(exc).__name__)
             await self._drop_cache(self.cache.forget(channel_of(kind)))
+            self.cache.failed(channel_of(kind), self._mono())
             transcript = _joined(lines, split[1])
             try:
                 resp = await self._within(lambda: self._client.aio.models.generate_content(

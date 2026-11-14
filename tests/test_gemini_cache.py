@@ -159,6 +159,21 @@ def test_a_cache_that_fails_is_a_plain_answer_never_silence():
     assert gone.calls[-2]["cached"] and gone.calls[-1]["cached"] is None and gone.calls[-1]["system"] == START
 
 
+def test_a_call_that_fails_on_the_cache_backs_off_instead_of_making_one_at_every_answer():
+    """Code review v7.5 #1: the model keeps refusing the cache — one cache made, then plain answers for a while."""
+    caches, models, clock = Caches(), Models(fail_on_cache=True), [0.0]
+    g = gemini(caches, models, clock)
+    answer(g, history(10))
+    for i, t in enumerate([30, 60, 90, 120, 150]):
+        clock[0] = t
+        assert answer(g, history(12 + 2 * i))[0] == "Привіт!"
+    assert len(caches.made) == 1 and caches.deleted == ["cachedContents/1"]
+    assert len(models.calls) == 7                                                    # 1 plain, 1 failed + 1 plain, 4 plain
+    clock[0] = 30 + 301                                                              # after the backoff: tried again
+    answer(g, history(30))
+    assert len(caches.made) == 2
+
+
 def test_a_background_call_and_an_unknown_start_go_as_before():
     models = Models()
     g = gemini(models=models)
