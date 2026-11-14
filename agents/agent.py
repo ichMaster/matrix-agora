@@ -284,7 +284,7 @@ from agents.reading import (
 )
 from agents.reading import load_state as load_reading
 from agents.reading import save_state as save_reading
-from agents.responder import LlmResponder, Turn, responder_for, trim_to_sentence
+from agents.responder import ANSWER_KINDS, LlmResponder, Turn, responder_for, trim_to_sentence
 from agents.roster import Member, load_roster, speakers
 from agents.route import (
     BACKUP_MARK_RE,
@@ -3324,7 +3324,9 @@ class Agent:
                      latency_ms: int | None = None) -> None:
         """One JSON line per Gemini call (v3.1) — no texts; a write error never blocks. `blocked` (v5.13): the stage
         of a safety block; `latency_ms` (v5.22): how long the call took."""
-        parts = PROMPT_PARTS.get()  # v5.22: an answer's prompt in parts
+        # v5.22: an answer's prompt in parts — on an answer's line and its recall rounds alone (code review v7.6 #6: her
+        # recall's `embed` lines inside the answer took them too)
+        parts = PROMPT_PARTS.get() if kind in ANSWER_KINDS or kind.endswith("_recall") else None
         calls = TOOL_CALLS.get()  # v7.6 (AGORA-262): her own recall's calls, on her answer's line
         self._append_usage(lambda ts: usage_line(ts, self.cfg.localpart, kind, model, usage, ok, blocked, latency_ms,
                                                  parts, calls))
@@ -4078,7 +4080,8 @@ class Agent:
             if probe is None:
                 return text
             check_system, check_contents = talk_check_request(canon, text)
-            blocked = await probe(check_contents, check_system, kind="talk_check")
+            # code review v7.6 #6: `lumi`'s own checks, apart from the summaries', so «By memory» counts them
+            blocked = await probe(check_contents, check_system, kind="lumi_check")
             if blocked is None:
                 return None
             if not blocked:
@@ -4197,7 +4200,8 @@ class Agent:
             if probe is None:
                 return text
             check_system, check_contents = talk_check_request(canon, text)
-            blocked = await probe(check_contents, check_system, kind="talk_check")
+            # code review v7.6 #6: `lumi`'s own checks, apart from the summaries', so «By memory» counts them
+            blocked = await probe(check_contents, check_system, kind="lumi_check")
             if blocked is None:
                 return None
             if not blocked:

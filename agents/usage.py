@@ -46,7 +46,8 @@ TOOL_CALLS: ContextVar[int | None] = ContextVar("tool_calls", default=None)
 # v7.6 (AGORA-263): the lines her memory's mode shapes — her private answers and their recall rounds, the `lumi` mode's
 # own calls (the day's digest, the gists) and her cache — each tagged `memory_mode` by her agent, to compare the modes
 MEMORY_KINDS = frozenset({"private", "private_nudge", "private_recall", "private_nudge_recall", "talk_digest",
-                          "talk_gist", "memory_gist", "cache"})
+                          "talk_gist", "memory_gist", "lumi_check", "cache"})
+LUMI_OWN = ("talk_digest", "talk_gist", "memory_gist", "lumi_check")  # `lumi`'s own background calls
 MEMORY_ANSWERS = ("private", "private_nudge")
 
 
@@ -1357,7 +1358,11 @@ def analyze_detail(records: list[dict], answers: list[dict], since: date, until:
                 "tool_calls_per_answer": (round(sum(_int_of(r, "tool_calls") or 0 for r in answered) / len(answered), 3)
                                           if answered else None),
                 "rounds": sum(1 for r in rows if str(r.get("kind")).endswith("_recall")),
-                "background": sum(1 for r in rows if r.get("kind") in ("talk_digest", "talk_gist", "memory_gist"))}
+                # code review v7.6 #6: the recall rounds' time an answer, beside the last call's median
+                "recall_ms": (round(sum(_int_of(r, "latency_ms") or 0 for r in rows
+                                        if str(r.get("kind")).endswith("_recall")) / len(answered))
+                              if answered else None),
+                "background": sum(1 for r in rows if r.get("kind") in LUMI_OWN)}
 
     shaped = grouped([r for r in now_l if r.get("kind") in MEMORY_KINDS],
                      lambda r: (str(r.get("agent")), str(r.get("memory_mode") or "layered")))

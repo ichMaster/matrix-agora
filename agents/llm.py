@@ -310,7 +310,7 @@ class GeminiClient:
             contents.append(resp.candidates[0].content)
             answers = []
             for call in asked:
-                n += 1
+                n += round_ < tools.rounds  # code review v7.6 #6: the calls run, never one told «більше нічого»
                 result = NO_MORE if round_ >= tools.rounds else await _run(tools, call)
                 answers.append(types.Part.from_function_response(name=call.name or "", response={"result": result}))
             contents.append(types.Content(role="user", parts=answers))

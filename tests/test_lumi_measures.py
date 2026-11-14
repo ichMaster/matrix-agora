@@ -55,6 +55,7 @@ def test_by_memory_compares_the_modes_by_agent_with_the_modes_own_calls_in_its_c
                line("private_recall", "lumi", 19_000, 15_000, latency=3_000, minute=2),
                line("private_nudge", "lumi", 20_000, 15_000, latency=10_000, calls=0, minute=3),
                line("talk_digest", "lumi", 4_000, 0, 200, minute=4),
+               line("lumi_check", "lumi", 5_000, 0, 1, minute=4),                    # code review v7.6 #6
                line("reply", None, 25_000, minute=5)]                                   # Agora: not hers here
     prices, _ = parse_model_prices("gemini-3.1-pro-preview=2/12/0.2/4.5,gemini-2.5-flash-lite=0.1/0.4")
     detail = analyze_detail(records, [], date(2026, 11, 14), date(2026, 11, 14), "kira",
@@ -64,10 +65,12 @@ def test_by_memory_compares_the_modes_by_agent_with_the_modes_own_calls_in_its_c
     assert (layered["answers"], layered["prompt_mean"]) == (2, 30_000)
     assert layered["time_median"] in (12_000, 13_000, 14_000)                         # the analytics' own median
     assert layered["cached_share"] == round(20_000 / 60_000, 4) and layered["tool_calls_per_answer"] == 0
-    assert (lumi_["answers"], lumi_["prompt_mean"], lumi_["rounds"], lumi_["background"]) == (2, 20_000, 1, 1)
+    assert (lumi_["answers"], lumi_["prompt_mean"], lumi_["rounds"], lumi_["background"]) == (2, 20_000, 1, 2)
+    assert lumi_["recall_ms"] == 1_500 and layered["recall_ms"] == 0               # its round's 3 s over two answers
     assert lumi_["cached_share"] == round(45_000 / 59_000, 4) and lumi_["tool_calls_per_answer"] == 0.5
     # two answers and a round on Gemini (fresh at $2, cached at $0.20, the output at $12), the digest on Flash-Lite
-    lumi_cost = ((5_000 + 4_000 + 5_000) * 2 + 45_000 * 0.2 + 3 * 500 * 12) / 1e6 + (4_000 * 0.1 + 200 * 0.4) / 1e6
+    lumi_cost = (((5_000 + 4_000 + 5_000) * 2 + 45_000 * 0.2 + 3 * 500 * 12) / 1e6 + (4_000 * 0.1 + 200 * 0.4) / 1e6
+                 + (5_000 * 2 + 1 * 12) / 1e6)                                         # its check, on Pro
     assert abs(lumi_["cost_per_answer"] - round(lumi_cost / 2, 6)) < 1e-6
     assert set(by) == {"layered", "lumi"}
 
@@ -80,3 +83,18 @@ def test_the_panel_shows_her_days_digest_and_her_settings_the_switch(tmp_path):
     mode = BY_NAME["MEMORY_MODE"]
     assert mode.group == "switches" and mode.choices == ("layered", "lumi") and mode.default == "layered"
     assert {n for n, m in ROOM.items() if concerns(mode, m)} == {n for n, m in ROOM.items() if m.can("private")}
+
+
+def test_an_answers_prompt_parts_never_ride_on_another_kind_of_line_inside_it(tmp_path, monkeypatch):
+    """Code review v7.6 #6: her recall's `embed` lines inside the answer carried its parts — a false structure group."""
+    from agents.usage import PROMPT_PARTS
+    agent = lumi(tmp_path, monkeypatch)
+    token = PROMPT_PARTS.set({"canon": 100})
+    try:
+        for kind in ("private", "private_recall", "embed"):
+            agent.record_usage(kind, "m", None, True)
+    finally:
+        PROMPT_PARTS.reset(token)
+    records, _ = parse_lines(agent.usage_file.read_text(encoding="utf-8").splitlines())
+    assert [r["prompt_parts"] for r in records] == [{"canon": 100}, {"canon": 100}, None]
+

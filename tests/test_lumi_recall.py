@@ -126,6 +126,7 @@ def test_the_rounds_are_capped_a_call_past_them_is_told_no_more_and_a_failing_ca
     assert ask(g) is None                                                           # it never stopped asking
     assert len(ran) == 3 and len(models.calls) == 5
     assert [k for k, _, _ in lines].count("private_recall") == 4                     # each round its own line
+    assert lines[-1][2] == 3                                         # code review v7.6 #6: the calls run, no more
     assert models.calls[-1]["contents"][-1].parts[0].function_response.response == {"result": NO_MORE}
     models2, ran2 = Calling(asks=1), []
     g2, _ = recalling(models2, ran2, fail=True)

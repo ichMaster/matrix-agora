@@ -173,7 +173,7 @@ def test_a_fold_that_blocks_is_written_gentler_and_when_it_always_blocks_the_dig
     seeded(agent)
     tick(agent)
     assert TALK_GENTLE[1] in agent.llm.folds[1]["system"]                   # the second write, one step stricter
-    assert SECRET not in load_digest(agent.digest_file).text and "talk_check" in agent.llm.checks
+    assert SECRET not in load_digest(agent.digest_file).text and "lumi_check" in agent.llm.checks
 
 
 def test_a_fold_that_always_blocks_leaves_the_batch_out_of_the_digest_and_moves_on(tmp_path, monkeypatch):

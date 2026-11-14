@@ -129,7 +129,7 @@ def test_in_lumi_the_gists_are_written_once_and_her_prompt_shows_them_while_laye
     assert ("gist_day", day(2026, 11, 13)[0]) in gists and ("gist_day", day(2026, 11, 3)[0]) in gists
     assert ("gist_week", ms(2026, 11, 2)) in gists                          # its only day's gist written first
     kinds = {f["kind"] for f in agent.llm.folds}
-    assert kinds == {"talk_gist"} and "talk_check" in agent.llm.checks
+    assert kinds == {"talk_gist"} and "lumi_check" in agent.llm.checks
     calls = len(agent.llm.folds)
     drain(agent)
     assert len(agent.llm.folds) == calls                                    # never written again
