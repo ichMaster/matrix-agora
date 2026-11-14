@@ -4346,6 +4346,10 @@ ways.
   `blocked` line or fact; the automatic recall block smaller or off. On the other answer models (v7.4's switch) the
   memory stays inline.
 - **The switch:** `MEMORY_MODE` per companion in the panel — `layered` (today's) or `lumi`.
+- **The cache over the new window** (v7.5 code review #9): a start-only cache (`lines == 0`, after a history slid
+  under it) is used for any history and never checks `START_ONLY_S` or the growth, so while the start stays the same
+  it never goes back to holding her history; the live window replaces the slide, and the planner's use branch checks
+  both.
 - **The measures:** the prompt's length and parts, the cost per answer, the answer time, the tool calls per answer,
   `layered` against `lumi`.
 - The invariants: nothing of her future, the persons believe they are human (a tool's name and result never say she
