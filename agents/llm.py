@@ -298,10 +298,10 @@ class GeminiClient:
                 except Exception as exc:  # noqa: BLE001 — it may expire; the next answer makes another
                     log.warning("gemini cache: not renewed (%s)", type(exc).__name__)
             return plan.name, plan.lines
-        if plan.action != "make":
-            return None
         if plan.old:
             await self._drop_cache(plan.old)
+        if plan.action != "make":
+            return None
         k = plan.lines
         try:
             made = await asyncio.wait_for(self._client.aio.caches.create(model=model, config=types.CreateCachedContentConfig(

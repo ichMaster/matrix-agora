@@ -62,7 +62,7 @@ class Plan:
     lines: int = 0              # history lines in the cache (use, make)
     renew: bool = False         # use: the TTL to be renewed
     why: str = ""               # make: first | expired | start | history | grew; plain: quiet | backoff
-    old: str | None = None      # make: the cache to delete
+    old: str | None = None      # make, or a quiet plain after the start changed: the cache to delete
     name: str | None = None     # use: the cache's name
 
 
@@ -72,6 +72,7 @@ class _Channel:
     seen: dict[str, float] = field(default_factory=dict)  # start fingerprint → when an answer last had it
     failed_until: float = float("-inf")
     start_only_until: float = float("-inf")
+    dropped: str = ""  # why the last cache was let go before its make (code review v7.5 #7): its `why` for the log
 
 
 class CachePlanner:
@@ -102,9 +103,14 @@ class CachePlanner:
         last = ch.seen.get(start_fp)
         ch.seen = {start_fp: now}  # only the latest start matters
         if last is None or now - last > self.ttl:
-            return Plan("plain", why="quiet")  # the first answer with this start: a cache only for a second one
+            # the first answer with this start: a cache only for a second one. A live cache of another start is of no
+            # more use: deleted now, not stored to the end of its life (code review v7.5 #7)
+            if h is not None and now < h.expires and (h.start_fp != start_fp or h.model != model):
+                ch.held, ch.dropped = None, "start"
+                return Plan("plain", why="quiet", old=h.name)
+            return Plan("plain", why="quiet")
         if h is None:
-            why = "first"
+            why, ch.dropped = ch.dropped or "first", ""
         elif now >= h.expires:
             why = "expired"
         elif h.start_fp != start_fp or h.model != model:

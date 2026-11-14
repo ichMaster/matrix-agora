@@ -38,9 +38,10 @@ def test_a_quiet_hour_makes_none_and_a_changed_start_or_history_makes_another():
     assert p.plan("private", "m", START, history(6), 700).action == "plain"         # the second came after its life
     p.plan("private", "m", START, history(6), 710)
     p.made("private", "c1", "m", START, history(6)[:4], 711)
-    assert p.plan("private", "m", "ІНШИЙ ПОЧАТОК", history(8), 720).action == "plain"   # a new start: first seen
+    quiet = p.plan("private", "m", "ІНШИЙ ПОЧАТОК", history(8), 720)                # a new start: first seen
+    assert (quiet.action, quiet.old) == ("plain", "c1") and p.held("private") is None   # the old one deleted now
     made = p.plan("private", "m", "ІНШИЙ ПОЧАТОК", history(8), 730)
-    assert (made.action, made.why, made.old) == ("make", "start", "c1")
+    assert (made.action, made.why, made.old) == ("make", "start", None)
     p.made("private", "c2", "m", "ІНШИЙ ПОЧАТОК", history(8)[:6], 731)
     stepped = ["Ich: інший початок вікна", *history(8)[1:]]                          # the window stepped
     assert p.plan("private", "m", "ІНШИЙ ПОЧАТОК", stepped, 740).why == "history"
@@ -49,6 +50,19 @@ def test_a_quiet_hour_makes_none_and_a_changed_start_or_history_makes_another():
     p.made("private", "c4", "m", "ІНШИЙ ПОЧАТОК", history(8)[:6], 751)
     assert p.plan("private", "m", "ІНШИЙ ПОЧАТОК", history(8), 1400).why == "quiet"   # its life over, a quiet start
     assert p.plan("private", "m", "ІНШИЙ ПОЧАТОК", history(8), 1410).why == "expired"
+
+
+def test_a_cache_of_another_start_is_deleted_at_once_not_stored_to_the_end_of_its_life():
+    """Code review v7.5 #7: her start changed and no second answer came — the old cache is deleted on the first."""
+    caches, clock = Caches(), [0.0]
+    g = gemini(caches, clock=clock)
+    answer(g, history(10))
+    clock[0] = 30
+    answer(g, history(12))
+    assert caches.made and caches.deleted == []
+    clock[0] = 60
+    answer(g, history(14), start="НОВИЙ ПОЧАТОК")                                     # a new hour's summary
+    assert caches.deleted == ["cachedContents/1"] and g.cache.held("private") is None
 
 
 def test_a_failed_make_backs_off_with_plain_calls_and_agora_has_its_own_cache():
