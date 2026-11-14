@@ -319,9 +319,10 @@ SCHEMA: tuple[Setting, ...] = (
        "Глибина мислення GPT-6.1 Sol через Codex (codex-gpt-6.1sol)", choices=("low", "medium", "high")),
     _s("CODEX_TIMEOUT_S", "int", "180", "model", "cap:private", None, "Найдовша відповідь через Codex", "s", 30, 600),
     # 7.3.1 (the owner, 2026-11-11, Кіра flirting less on Claude: «Test the prompt split»): `off` — no CLI started
-    # ahead and no split prompt, the whole instruction as the system prompt, as on Gemini
+    # ahead. From v7.5 (AGORA-257) every voice answer is split either way: the start as the system prompt, the history
+    # then the tail as the message (code review v7.5 #8)
     _s("CLAUDE_WARM", "choice", "on", "model", "client:claude-sdk", None,
-       "CLI наперед: канон у системному промпті, решта в повідомленні", choices=("on", "off")),
+       "CLI, запущений наперед (початок промпту завжди системний, решта в повідомленні)", choices=("on", "off")),
 )
 BY_NAME: dict[str, Setting] = {s.name: s for s in SCHEMA}
 # v5.22 — the switches an agent reads while it runs (`live_value`): the panel's change works at once and restarts
