@@ -120,3 +120,30 @@ def talk_digest_request(name: str, canon: str, so_far: str, items: list[tuple[st
               f"{HUMAN_MEMORY}")
     before = f"Що ти вже пам'ятаєш про раніше сьогодні:\n{so_far.strip()}\n\n" if so_far.strip() else ""
     return system, before + "Розмова далі:\n" + "\n".join(f"{who}: {text}" for who, text in items)
+
+
+# --- v7.6 (AGORA-261): her day memories in one line ----------------------------------------------------------------
+def gist_path(path: Path) -> Path:
+    """A memory's one-line gist, beside it: `2026-11-13.md` → `2026-11-13.gist.md` (never read as a memory)."""
+    return path.with_name(f"{path.stem}.gist.md")
+
+
+def first_sentence(text: str, max_words: int = 40) -> str:
+    """A memory's first sentence (pure), at most `max_words` words — her day memory in `lumi` mode until its gist is
+    written."""
+    flat = " ".join(text.split())
+    for i, ch in enumerate(flat):
+        if ch in ".!?…" and (i + 1 == len(flat) or flat[i + 1] == " "):
+            flat = flat[:i + 1]
+            break
+    words = flat.split()
+    return " ".join(words[:max_words]) + ("…" if len(words) > max_words else "")
+
+
+def memory_gist_request(name: str, canon: str, memory: str, max_words: int) -> tuple[str, str]:
+    """(system instruction, contents) for a day memory's gist: one sentence of it, her own, at most `max_words`."""
+    system = (f"{canon}\n\nТи — {name}. Стисни цей свій спогад до одного речення, не більше {max_words} слів, від першої "
+              "особи: головне, що сталося і що ти відчувала. Тільки з того, що в ньому, нічого не вигадуй. Без дат."
+              f"\n\n{HUMAN_MEMORY}")
+    return system, f"Спогад:\n{memory.strip()}"
+

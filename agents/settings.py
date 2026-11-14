@@ -218,6 +218,11 @@ SCHEMA: tuple[Setting, ...] = (
        "days", 3, 30),
     _s("TALK_WORDS_HOUR", "int", "60", "memory", "cap:talk", None, "Слів на підсумок години", "words", 20, 400),
     _s("TALK_WORDS_DAY", "int", "150", "memory", "cap:talk", None, "Слів на підсумок дня", "words", 20, 400),
+    # v7.6 (AGORA-261): her talk in short in `lumi` mode — a line a day for so many days, a line a week for so many
+    # weeks before them, a line's words (her day memories in one line the same)
+    _s("GIST_DAYS", "int", "7", "memory", "cap:talk", None, "Скільки днів по рядку (lumi)", "days", 1, 14),
+    _s("GIST_WEEKS", "int", "4", "memory", "cap:talk", None, "Скільки тижнів по рядку перед ними (lumi)", "weeks", 0, 12),
+    _s("GIST_WORDS", "int", "30", "memory", "cap:talk", None, "Слів у рядку дня чи тижня (lumi)", "words", 10, 80),
     _s("TALK_PROMPT_WORDS", "int", "4000", "memory", "cap:talk", None, "Слів підсумків розмови в її запиті (0 — без них)",
        "words", 0, 8000),
     # v5.14 — the backup for her private chat (`fallback`): GLM-4.6 on NovelAI when Gemini blocks or refuses; empty

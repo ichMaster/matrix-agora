@@ -150,7 +150,7 @@ def _label(row, now: datetime, tz: str) -> str:
     then = datetime.fromtimestamp(row.start_ms / 1000, ZoneInfo(tz))
     diff = (now.date() - then.date()).days
     when = WEEKDAY_ON[then.weekday()] if 2 < diff < 7 else ago(then, now)
-    if row.level == "day" or when.startswith("сьогодні"):
+    if row.level in ("day", "gist_day") or when.startswith("сьогодні"):  # v7.6: a day's gist is a day
         return when
     part = PART_ADVERB[part_of_day(then.hour)]
     return f"{when} {part}" if when in ("вчора", "позавчора") or 2 < diff < 7 else f"{when}, {part}"
@@ -172,3 +172,138 @@ def talk_section(rows: list, before_ms: int, now: datetime, tz: str, words_budge
     while lines and sum(len(x.split()) for x in lines) > words_budget:
         lines.pop(0)
     return TALK_TITLE + "\n" + "\n".join(lines) if lines else None
+
+
+# --- v7.6 (AGORA-261): her talk in short — one line a day, one line a week (`MEMORY_MODE = lumi`) -----------------
+# The owner, 2026-11-12: «також в Люмі меньше підсумків розмов в промпті»; «підсумки в промпті стають рядками на
+# сесію, день і тиждень; -- сесія немає сенсу так як рестарт дуже рідко». A day's gist is written once from that day's
+# summaries (its `day` row, else its hours, else v5.20's blocks — they cover every open line of the day, which her
+# running digest may not: lines still in her window at midnight), a week's once from its days' gists; both are
+# `talk` rows of their own levels, never rewritten and never shown in `layered` mode.
+GIST_LEVELS = ("gist_day", "gist_week")
+GIST_DAYS = 7
+GIST_WEEKS = 4
+GIST_WORDS = 30
+GIST_TITLE = "Що було між вами раніше — коротко (твоя пам'ять, а не те, що кажуть зараз):"
+GIST_SOURCES = ("day", "hour", "4h")  # a day's summaries, the coarsest first
+GIST_SPAN = {"gist_day": "того дня", "gist_week": "того тижня"}
+WEEKS_AGO = {1: "минулого тижня", 2: "два тижні тому", 3: "три тижні тому", 4: "чотири тижні тому"}
+
+
+def week_of(ts_ms: int, tz: str) -> tuple[int, int]:
+    """The local week (Monday 00:00 to the next Monday 00:00) that holds `ts_ms`."""
+    zone = ZoneInfo(tz)
+    day = datetime.fromtimestamp(ts_ms / 1000, zone).date()
+    monday = day - timedelta(days=day.weekday())
+    after = monday + timedelta(days=7)
+    return (_ms(datetime(monday.year, monday.month, monday.day, tzinfo=zone)),
+            _ms(datetime(after.year, after.month, after.day, tzinfo=zone)))
+
+
+def _bands(now_ms: int, tz: str, gist_days: int, gist_weeks: int) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    """The days shown (the last `gist_days` before today) and the weeks shown (the last `gist_weeks` that are over and
+    began before the days shown, so no day falls between them), each oldest first."""
+    today = period_of("day", now_ms, tz)[0]
+    days, start = [], today
+    for _ in range(max(gist_days, 0)):
+        start = period_of("day", start - HOUR_MS, tz)[0]
+        days.append((start, period_of("day", start, tz)[1]))
+    band = days[-1][0] if days else today
+    weeks, monday = [], week_of(now_ms, tz)[0]
+    while len(weeks) < max(gist_weeks, 0):
+        w_start, w_end = week_of(monday - HOUR_MS, tz)
+        monday = w_start
+        if w_start < band:
+            weeks.append((w_start, w_end))
+    return days[::-1], weeks[::-1]
+
+
+def _overlaps(row, start: int, end: int) -> bool:
+    return row.start_ms < end and row.end_ms > start
+
+
+def gist_items(level: str, start: int, end: int, rows: list, tz: str) -> list[str]:
+    """What a gist is written from (pure): a day's — its summaries of the coarsest level that has text; a week's —
+    its days' gists, each with its weekday."""
+    if level == "gist_day":
+        for source in GIST_SOURCES:
+            texts = [r.text for r in sorted(rows, key=lambda r: r.start_ms)
+                     if r.level == source and r.text and start <= r.start_ms < end]
+            if texts:
+                return texts
+        return []
+    return [f"{WEEKDAY_ON[datetime.fromtimestamp(r.start_ms / 1000, ZoneInfo(tz)).weekday()]}: {r.text}"
+            for r in sorted(rows, key=lambda r: r.start_ms) if r.level == "gist_day" and r.text
+            and start <= r.start_ms < end]
+
+
+def gists_due(now_ms: int, tz: str, rows: list, pending: list[tuple[str, int, int]], gist_days: int = GIST_DAYS,
+              gist_weeks: int = GIST_WEEKS) -> list[tuple[str, int, int]]:
+    """The gists to write, oldest first, as (level, start_ms, end_ms) (pure):
+    - a day of the days shown, or of the weeks shown (a week is written from its days' gists), that has a summary
+      with text, none of whose periods is still `pending`, and no gist yet;
+    - a week shown that is over, has no gist yet, and whose every day with a summary has its gist."""
+    held = {(r.level, r.start_ms) for r in rows if r.level in GIST_LEVELS}
+    days, weeks = _bands(now_ms, tz, gist_days, gist_weeks)
+    every_day = sorted({d for w_start, w_end in weeks for d in _days_of(w_start, w_end, tz)} | set(days))
+    due = []
+    for start, end in every_day:
+        if ("gist_day", start) in held or not gist_items("gist_day", start, end, rows, tz):
+            continue
+        if any(s < end and e > start for _, s, e in pending):
+            continue
+        due.append(("gist_day", start, end))
+    waiting = {s for _, s, _ in due}
+    for start, end in weeks:
+        if ("gist_week", start) in held or end > now_ms:
+            continue
+        days_with_talk = [s for s, e in _days_of(start, end, tz) if gist_items("gist_day", s, e, rows, tz)]
+        if not days_with_talk or any(s in waiting or ("gist_day", s) not in held for s in days_with_talk):
+            continue
+        due.append(("gist_week", start, end))
+    return sorted(due, key=lambda g: (g[1], GIST_LEVELS.index(g[0])))
+
+
+def _days_of(start: int, end: int, tz: str) -> list[tuple[int, int]]:
+    out, s = [], start
+    while s < end:
+        e = period_of("day", s, tz)[1]
+        out.append((s, e))
+        s = e
+    return out
+
+
+def week_label(start_ms: int, now: datetime, tz: str) -> str:
+    """A week as a person remembers it: «минулого тижня», «два тижні тому», … — never a date."""
+    then = datetime.fromtimestamp(start_ms / 1000, ZoneInfo(tz)).date()
+    monday = now.date() - timedelta(days=now.weekday())
+    n = max(1, (monday - then).days // 7)
+    return WEEKS_AGO.get(n, f"{n} тижнів тому")
+
+
+def gist_section(rows: list, now: datetime, tz: str, gist_days: int = GIST_DAYS,
+                 gist_weeks: int = GIST_WEEKS) -> str | None:
+    """Her private prompt's talk in `lumi` mode (pure): a line for each week shown, then for each day shown, oldest
+    first, each labelled as she remembers it, an empty one skipped; no hour's text. None when nothing is left."""
+    now_ms = int(now.timestamp() * 1000)
+    days, weeks = _bands(now_ms, tz, gist_days, gist_weeks)
+    by = {(r.level, r.start_ms): r for r in rows if r.level in GIST_LEVELS and r.text}
+    lines = [f"- {week_label(s, now, tz)}: {by[('gist_week', s)].text}" for s, _ in weeks if ("gist_week", s) in by]
+    lines += [f"- {_label(by[('gist_day', s)], now, tz)}: {by[('gist_day', s)].text}" for s, _ in days
+              if ("gist_day", s) in by]
+    return GIST_TITLE + "\n" + "\n".join(lines) if lines else None
+
+
+def gist_request(level: str, name: str, canon: str, items: list[str], max_words: int,
+                 strict: int = 0) -> tuple[str, str]:
+    """(system instruction, contents) for a gist: one sentence of her own memory of their talk alone with Ich that day
+    or that week, at most `max_words` words, from her summaries of it — never a date or an hour; their closeness told
+    as `TALK_GENTLE[strict]` says."""
+    system = (f"{canon}\n\nТи — {name}. Запиши для себе одним реченням, не більше {max_words} слів, пам'ять про вашу "
+              f"розмову наодинці з Ich {GIST_SPAN[level]} — від першої особи, мовою розмови: головне, про що говорили "
+              "і що ти відчувала. Тільки з того, що нижче, нічого не вигадуй. Без дат, без днів тижня і без годин.\n\n"
+              f"{TALK_GENTLE[min(max(strict, 0), len(TALK_GENTLE) - 1)]}\n\n"
+              f"{HUMAN_MEMORY}")
+    head = "Що ти пам'ятаєш про той день, по черзі:" if level == "gist_day" else "Що ти пам'ятаєш про дні того тижня:"
+    return system, head + "\n" + "\n".join(f"- {x}" for x in items)
+

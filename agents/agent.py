@@ -169,8 +169,11 @@ from agents.lumi import (
     DIGEST_BATCHES_PER_TICK,
     DIGEST_CHECK_MS,
     batches_due,
+    first_sentence,
+    gist_path,
     load_digest,
     lumi_window_start,
+    memory_gist_request,
     rolled,
     save_digest,
     talk_digest_request,
@@ -316,6 +319,10 @@ from agents.talk import (
     TALK_GENTLE,
     TALK_SPLIT_MIN,
     covered,
+    gist_items,
+    gist_request,
+    gist_section,
+    gists_due,
     iso_hour,
     periods_due,
     talk_check_request,
@@ -620,6 +627,10 @@ class Agent:
             self.talk_words = {"hour": int(os.environ.get("TALK_WORDS_HOUR", "60")),
                                "day": int(os.environ.get("TALK_WORDS_DAY", "150"))}
             self.talk_prompt_words = int(os.environ.get("TALK_PROMPT_WORDS", "4000"))
+            # v7.6 (AGORA-261): in `lumi` mode her talk in short — a line a day for so many days, a line a week before
+            self.gist_days = int(os.environ.get("GIST_DAYS", "7"))
+            self.gist_weeks = int(os.environ.get("GIST_WEEKS", "4"))
+            self.gist_words = int(os.environ.get("GIST_WORDS", "30"))
         # v5.14 — the backup for her private chat: on with `fallback`, a model and the token; its settings
         self.fallback: FallbackClient | None = None
         self.fallback_responder: FallbackResponder | None = None
@@ -1705,6 +1716,8 @@ class Agent:
         if self.archive is None:
             return None
         try:
+            if self.memory_mode() == "lumi":  # v7.6 (AGORA-261): a line a day, a line a week — never an hour's
+                return gist_section(self.archive.talk_rows(), now, self.tz, self.gist_days, self.gist_weeks)
             lines = self._gemini_lines() or []
             if self.talk_prompt_words <= 0:  # the owner's switch: no summaries in her prompt
                 return None
@@ -3449,7 +3462,7 @@ class Agent:
         out = set()
         if d.exists():
             for p in d.glob("*.md"):
-                if p.name.endswith(".talk.md"):
+                if p.name.endswith((".talk.md", ".gist.md")):  # v7.6: a memory's gist is never a memory
                     continue
                 stem = p.stem
                 try:
@@ -3579,6 +3592,7 @@ class Agent:
     def memories_section(self, now, skip: frozenset = frozenset()) -> str | None:
         """Her memories; `skip` (v5.14, the backup's budget) leaves out the layers of those kinds."""
         today = now.date()
+        lumi = self.cfg.can("talk") and self.memory_mode() == "lumi"
         layers = select_layers(
             today, self.memory_days, self.memory_weeks, self.memory_months,
             self._dates_in("days"), self._dates_in("weeks"), self._dates_in("months"), self._dates_in("years"),
@@ -3588,6 +3602,8 @@ class Agent:
             if kind in skip:
                 continue
             text = self._read(self._memory_path(kind, key))
+            if text and lumi:  # v7.6 (AGORA-261): in `lumi` mode a memory in one line — its gist, else its first sentence
+                text = self._read(gist_path(self._memory_path(kind, key))) or first_sentence(text, self.gist_words)
             if text:
                 parts.append(f"{layer_label(kind, key, today)}: {text}")
         return "Твої спогади:\n\n" + "\n\n".join(parts) if parts else None
@@ -3998,6 +4014,8 @@ class Agent:
         due = periods_due(self.clock(), self.tz, self.archive.private_open_times(), held, self.talk_hour_days,
                           self.talk_day_days)
         if not due:
+            if self.memory_mode() == "lumi":  # v7.6 (AGORA-261): once her summaries are written, her gists
+                await self._gist_tick(rows)
             return
         level, start, end = due[0]
         open_n, closed_n = self.archive.private_counts(start, end)
@@ -4027,6 +4045,85 @@ class Agent:
         self.archive.talk_put(level, start, end, text, open_n, closed_n, left_out, self.clock())
         log.info("talk: %s %s — %d open, %d closed, %d left out, %d words%s", level, iso_hour(start, self.tz), open_n,
                  closed_n, left_out, len(text.split()), " (from the finer summaries)" if from_summaries else "")
+
+    # --- v7.6 (AGORA-261): her talk in short, her day memories in one line ---------------------------------------
+    async def _gist_tick(self, rows: list) -> None:
+        """One gist a check, oldest first: a day's or a week's (`gists_due`), else a day memory's of those her prompt
+        shows. Never rewritten: a gist written stays."""
+        due = gists_due(self.clock(), self.tz, rows, [], self.gist_days, self.gist_weeks)
+        if not due:
+            await self._memory_gist_tick()
+            return
+        level, start, end = due[0]
+        items = gist_items(level, start, end, rows, self.tz)
+        text = await self._gist_written(level, items)
+        if text is None:
+            self._talk_retry_ms = self.clock() + 600_000
+            log.warning("gist: %s %s not written — the call failed (tried again later)", level, iso_hour(start, self.tz))
+            return
+        open_n, closed_n = self.archive.private_counts(start, end)
+        self.archive.talk_put(level, start, end, text, open_n, closed_n, 0 if text else len(items), self.clock())
+        log.info("gist: %s %s — %d items, %d words", level, iso_hour(start, self.tz), len(items), len(text.split()))
+
+    async def _gist_written(self, level: str, items: list[str]) -> str | None:
+        """A gist on the digest's model, checked as a talk summary is (`talk_check`, each rewrite stricter; when the
+        last still blocks, empty). One naming her a model or a bot is written again once, then empty. None: a call or
+        the check failed."""
+        model = self.talk_digest_model or getattr(self.llm, "model", None)
+        probe = getattr(self.llm, "probe", None)
+        canon = self.cfg.canon_private or self.cfg.canon
+        for strict in range(len(TALK_GENTLE)):
+            system, contents = gist_request(level, self.cfg.name, self.cfg.canon, items, self.gist_words, strict)
+            text = None
+            for _ in range(2):
+                out = await self.llm.complete(contents, system, self.gist_words * 4, kind="talk_gist", model=model)
+                if out is None:
+                    return None
+                text = cap_words(out[0].strip(), self.gist_words)
+                if refusal_marker(text):
+                    log.warning("gist: declined in its text — left empty")
+                    return ""
+                if not BANNED_RE.search(text):
+                    break
+                text = None
+            if not text:
+                return ""
+            if probe is None:
+                return text
+            check_system, check_contents = talk_check_request(canon, text)
+            blocked = await probe(check_contents, check_system, kind="talk_check")
+            if blocked is None:
+                return None
+            if not blocked:
+                return text
+            log.warning("gist: it blocks her prompt (written %d of %d)", strict + 1, len(TALK_GENTLE))
+        return ""
+
+    async def _memory_gist_tick(self) -> None:
+        """The first day memory her prompt shows that has no gist yet, gisted in one sentence beside it (never
+        rewritten, the memory untouched)."""
+        if not self.cfg.can("chronicle"):
+            return
+        today = local_now(self.clock(), self.tz).date()
+        layers = select_layers(today, self.memory_days, self.memory_weeks, self.memory_months, self._dates_in("days"),
+                               self._dates_in("weeks"), self._dates_in("months"), self._dates_in("years"))
+        for kind, key in layers:
+            path = self._memory_path(kind, key)
+            memory = self._read(path)
+            if not memory or gist_path(path).exists():
+                continue
+            system, contents = memory_gist_request(self.cfg.name, self.cfg.canon, memory, self.gist_words)
+            model = self.talk_digest_model or getattr(self.llm, "model", None)
+            out = await self.llm.complete(contents, system, self.gist_words * 4, kind="memory_gist", model=model)
+            text = cap_words(out[0].strip(), self.gist_words) if out else ""
+            if not text or BANNED_RE.search(text) or refusal_marker(text):
+                log.warning("gist: a %s memory's gist not written (%s)", kind, "failed" if out is None else "unfit")
+                if out is None:
+                    self._talk_retry_ms = self.clock() + 600_000
+                return
+            save_memory(gist_path(path), text)
+            log.info("gist: a %s memory in one line, %d words", kind, len(text.split()))
+            return
 
     async def _talk_written(self, level: str, start: int, items: list,
                             from_summaries: bool) -> tuple[str | None, int]:
