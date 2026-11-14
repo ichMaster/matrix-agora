@@ -265,3 +265,16 @@ def test_a_batch_that_keeps_failing_is_passed_over_after_three_tries(tmp_path, m
     tick(agent)
     assert load_digest(agent.digest_file).text.startswith("Пам'ятаю")             # the next batch folds
 
+
+def test_the_fold_and_the_window_never_leave_a_line_between_them_whatever_history_n_or_her_cap(tmp_path, monkeypatch):
+    """Code review v7.6 #3: with `HISTORY_N` below the window nothing folded, and `PRIVATE_HISTORY_N` cut the window."""
+    agent = lumi(tmp_path, monkeypatch, n=4, batch=2)
+    agent.history_n, agent.private_history_n = 3, 2                               # both below the window
+    seeded(agent)
+    tick(agent)
+    folded = load_digest(agent.digest_file).upto_ms
+    assert folded == ms(2026, 11, 14, 9, 2) and len(agent.llm.folds) == 2
+    window = agent._gemini_lines()
+    assert [x.text for x in window] == ["сьогодні 4", "сьогодні 5", "сьогодні 6", "сьогодні 7"]
+    assert window[0].ts_ms > folded                                                # nothing between them
+

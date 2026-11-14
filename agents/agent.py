@@ -1687,13 +1687,13 @@ class Agent:
                     if (who, text) not in self._closed and strip_notes(text)]
         return [(f"line:{line.key}", (line.speaker, history_entry(strip_notes(line.text)))) for line in lines]
 
-    def _open_private_lines(self) -> list | None:
-        """The archive's last `HISTORY_N` private lines open to Gemini, before any window — None without the archive or
-        when it fails."""
+    def _open_private_lines(self, count: int | None = None) -> list | None:
+        """The archive's last `HISTORY_N` (or `count`) private lines open to Gemini, before any window — None without
+        the archive or when it fails."""
         if self.archive is None:
             return None
         try:
-            lines = self.archive.latest("private", max(self.history_n, 1))
+            lines = self.archive.latest("private", max(count or self.history_n, 1))
         except Exception as exc:  # noqa: BLE001
             log.error("archive: Gemini's history was not read (%s) — her own", type(exc).__name__)
             return None
@@ -1702,10 +1702,13 @@ class Agent:
     def _gemini_lines(self) -> list | None:
         """The archive's last `HISTORY_N` private lines open to Gemini, in her window — None without the archive or when
         it fails."""
-        lines = self._open_private_lines()
+        # code review v7.6 #3: in `lumi` at least the window's own lines, whatever `HISTORY_N`
+        lumi = self.memory_mode() == "lumi"
+        lines = self._open_private_lines(max(self.history_n, self.live_window_n + self.live_window_batch)
+                                         if lumi else None)
         if lines is None:
             return None
-        if lines and self.memory_mode() == "lumi":  # v7.6 (AGORA-260): the live window after her digest's last line
+        if lines and lumi:  # v7.6 (AGORA-260): the live window after her digest's last line
             his = next((n for n, x in enumerate(reversed(lines)) if x.speaker == self.cfg.name), len(lines))
             lines = lines[lumi_window_start([x.ts_ms for x in lines], load_digest(self.digest_file).upto_ms,
                                             self.live_window_n, self.live_window_batch, len(lines) - his):]
@@ -1714,7 +1717,8 @@ class Agent:
             lines = lines[window_start([x.ts_ms for x in lines], self.clock(), self.private_history_hours,
                                        self.private_history_min, len(lines) - his,
                                        self.private_history_step_h * 3_600_000):]  # v7.5: in steps, for the cache
-        if self.private_history_n > 0:  # the owner's cap — never below his lines since her last one
+        if self.private_history_n > 0 and not lumi:  # the owner's cap — never below his lines since her last one;
+            # code review v7.6 #3: never in `lumi`, where it left lines in neither her window nor her digest
             unanswered = next((n for n, x in enumerate(reversed(lines)) if x.speaker == self.cfg.name), len(lines))
             lines = lines[-max(self.private_history_n, unanswered):] if lines else lines
         return lines
@@ -4003,13 +4007,16 @@ class Agent:
         """Each whole batch of the oldest lines after the last one folded, while `n + batch` wait: her day's lines into
         the digest (one call a batch, at most `DIGEST_BATCHES_PER_TICK` a tick), an earlier day's passed over with no
         call — her day's gists keep those. Never a closed line (the archive's open lines) nor a softened span's."""
-        lines = self._open_private_lines()
-        if not lines:
+        if self.archive is None:
             return
         now = local_now(self.clock(), self.tz)
         today = now.date().isoformat()
         digest = rolled(load_digest(self.digest_file), today)
-        waiting = [x for x in lines if x.ts_ms > digest.upto_ms]
+        # code review v7.6 #3: every open line after the fold point, whatever `HISTORY_N` (it read only the last ones)
+        waiting = [x for x in self.archive.private_between(digest.upto_ms + 1, self.clock() + 1)
+                   if (x.speaker, x.text) not in self._closed and strip_notes(x.text)]
+        if not waiting:
+            return
         n, batch = self.live_window_n, self.live_window_batch
         hidden, calls, changed = self._soft_hidden(), 0, digest.day != load_digest(self.digest_file).day
         for k in range(batches_due(len(waiting), n, batch)):
