@@ -1,3 +1,12 @@
+Version 7.5.1 (2026-11-14)
+---------------------------
+- the companions' Agora answers go without the Gemini cache: it held the
+  start alone and was read again almost never (Устина's week simulated on her
+  real timeline: -$0.09 to -$0.49 a busy day, more the longer it lives); her
+  private chat keeps its cache, and the split stays on both
+- the 7.5.0 code review's eight fixes reach the host with this release's
+  deploy
+
 Version 7.5.0 (2026-11-14)
 ---------------------------
 - v7.5 the prompt for the cache: the slow start (canon, life, memories,
