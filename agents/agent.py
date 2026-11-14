@@ -165,6 +165,18 @@ from agents.logic import (
     slow_part,
     transcript_of,
 )
+from agents.lumi import (
+    DIGEST_BATCHES_PER_TICK,
+    DIGEST_CHECK_MS,
+    batches_due,
+    load_digest,
+    lumi_window_start,
+    rolled,
+    save_digest,
+    talk_digest_request,
+    talk_digest_section,
+)
+from agents.lumi import MODES as MEMORY_MODES
 from agents.matrix import join_room as matrix_join
 from agents.matrix import login as matrix_login
 from agents.memory import build_summary_request, cap_words, load_memory, save_memory, session_ended
@@ -522,6 +534,8 @@ class Agent:
                 self.llm.cache = CachePlanner(int(os.environ.get("GEMINI_CACHE_TTL_S", "600")),
                                               int(os.environ.get("GEMINI_CACHE_REBUILD_LINES", "40")))
                 self.llm.cache_sink = self.record_cache_usage  # v7.5 (AGORA-258): its cost in the usage lines
+                # v7.6 (AGORA-260): in her `lumi` memory the cache holds the start alone
+                self.llm.cache_start_only = lambda: self.memory_mode() == "lumi"
         self.reply_max_tokens = int(os.environ.get("REPLY_MAX_TOKENS", "200"))
         if getattr(self.llm, "reply_model", None) in THINKING_MODELS or self.switch is not None:
             # v5.8: the thinking counts toward the cap; v7.4: every one of a companion's answer models thinks
@@ -702,6 +716,14 @@ class Agent:
         self.private_history_min = int(os.environ.get("PRIVATE_HISTORY_MIN", "20")) if cfg.can("private") else 0
         # v7.5 (AGORA-256): her Gemini window's start moves in steps of so many hours (0: with the clock, as before)
         self.private_history_step_h = int(os.environ.get("PRIVATE_HISTORY_STEP_H", "2")) if cfg.can("private") else 0
+        # v7.6 (AGORA-260): her memory as Lumi's (`MEMORY_MODE`, live) — a live window of so many lines, its oldest batch
+        # folded into her day's running digest by the digest model (empty: `GEMINI_MODEL`)
+        self.live_window_n = int(os.environ.get("LIVE_WINDOW_N", "40")) if cfg.can("private") else 0
+        self.live_window_batch = int(os.environ.get("LIVE_WINDOW_BATCH", "20")) if cfg.can("private") else 0
+        self.talk_digest_model = os.environ.get("TALK_DIGEST_MODEL", "").strip()
+        self.digest_words = int(os.environ.get("DIGEST_WORDS", "120"))
+        self.digest_file = cfg.memory_file.parent / f"{cfg.localpart}.digest.json"
+        self._digest_lock, self._digest_check_ms, self._digest_retry_ms = asyncio.Lock(), 0, 0
         # v5.25 (the owner): her topics — from how many of the private chat's last lines Flash lists them (0: none)
         self.topics_lines = int(os.environ.get("TOPICS_LINES", "20")) if cfg.can("private") else 0
         self._topics: tuple[list, int] | None = None  # (topic, her, his) and the lines read — in memory only
@@ -1579,8 +1601,9 @@ class Agent:
                     if (who, text) not in self._closed and strip_notes(text)]
         return [(f"line:{line.key}", (line.speaker, history_entry(strip_notes(line.text)))) for line in lines]
 
-    def _gemini_lines(self) -> list | None:
-        """The archive's last `HISTORY_N` private lines open to Gemini — None without the archive or when it fails."""
+    def _open_private_lines(self) -> list | None:
+        """The archive's last `HISTORY_N` private lines open to Gemini, before any window — None without the archive or
+        when it fails."""
         if self.archive is None:
             return None
         try:
@@ -1588,8 +1611,19 @@ class Agent:
         except Exception as exc:  # noqa: BLE001
             log.error("archive: Gemini's history was not read (%s) — her own", type(exc).__name__)
             return None
-        lines = [line for line in lines if (line.speaker, line.text) not in self._closed and strip_notes(line.text)]
-        if self.private_history_hours > 0 and lines:  # v5.23: the last day, at least the floor, his new lines always
+        return [line for line in lines if (line.speaker, line.text) not in self._closed and strip_notes(line.text)]
+
+    def _gemini_lines(self) -> list | None:
+        """The archive's last `HISTORY_N` private lines open to Gemini, in her window — None without the archive or when
+        it fails."""
+        lines = self._open_private_lines()
+        if lines is None:
+            return None
+        if lines and self.memory_mode() == "lumi":  # v7.6 (AGORA-260): the live window after her digest's last line
+            his = next((n for n, x in enumerate(reversed(lines)) if x.speaker == self.cfg.name), len(lines))
+            lines = lines[lumi_window_start([x.ts_ms for x in lines], load_digest(self.digest_file).upto_ms,
+                                            self.live_window_n, self.live_window_batch, len(lines) - his):]
+        elif self.private_history_hours > 0 and lines:  # v5.23: the last day, at least the floor, his new lines always
             his = next((n for n, x in enumerate(reversed(lines)) if x.speaker == self.cfg.name), len(lines))
             lines = lines[window_start([x.ts_ms for x in lines], self.clock(), self.private_history_hours,
                                        self.private_history_min, len(lines) - his,
@@ -1646,6 +1680,24 @@ class Agent:
         except Exception as exc:  # noqa: BLE001
             log.error("scan: the softened spans were not read (%s)", type(exc).__name__)
             return set()
+
+    def memory_mode(self) -> str:
+        """v7.6 (AGORA-260) — her memory's shape now (`MEMORY_MODE`, a live switch read at each use): `layered`, or
+        `lumi` — a live window, her day's running digest, short gists, her own recall. A person without the private
+        chat is always `layered`."""
+        if not self.cfg.can("private"):
+            return "layered"
+        try:
+            mode = live_value(self.memory_file.parent, self.cfg.localpart, "MEMORY_MODE", os.environ)
+        except Exception:  # noqa: BLE001 — a settings file that cannot be read: as before
+            return "layered"
+        return mode if mode in MEMORY_MODES else "layered"
+
+    def talk_digest_now(self, now) -> str | None:
+        """v7.6 (AGORA-260) — her day's running digest for the prompt's tail, in `lumi` mode only."""
+        if self.memory_mode() != "lumi":
+            return None
+        return talk_digest_section(load_digest(self.digest_file), now.date().isoformat())
 
     def talk_now(self, now) -> str | None:
         """v5.20 — the summaries of her private chat older than the first line of Gemini's history window (`talk_section`);
@@ -3024,6 +3076,8 @@ class Agent:
             "agora_now": agora_now if private is not None and can("recall") else None,
             "recalled": recalled if can("recall") else None,
             "talk": self.talk_now(now) if talk and private is not None and can("talk") else None,  # v5.20
+            # v7.6 (AGORA-260): her day's running digest, in the tail — her private prompt in `lumi` mode alone
+            "digest": self.talk_digest_now(now) if talk and private is not None else None,
             # v5.22 (the owner, 2026-11-02: «прибрати рядок про PASS з її промпту, щоб вона завжди відповідала»; «коли
             # вона пише першою — теж забери»): alone with him she is never offered PASS — Gemini took it for a quiet
             # refusal
@@ -3828,6 +3882,97 @@ class Agent:
                                                                       self.reflect_every_ms)
 
     # --- v5.20: her private chat in layers — each period due summarized once, by Gemini 3.1 Pro ------------------------
+    # --- v7.6 (AGORA-260): her day's running digest ---------------------------------------------------------------
+    def talk_digest_is_due(self) -> bool:
+        """In `lumi` mode, checked every `DIGEST_CHECK_MS`, never under a running fold or within a failure's back-off."""
+        if self.archive is None or self._digest_lock.locked() or self.live_window_batch <= 0:
+            return False
+        now = self.clock()
+        if now < self._digest_retry_ms or now - self._digest_check_ms < DIGEST_CHECK_MS:
+            return False
+        return self.memory_mode() == "lumi"
+
+    async def ensure_talk_digest(self) -> None:
+        """The oldest batches waiting past her live window, folded (a failure backs off for 10 minutes). Spawned by the
+        idle watcher: no answer waits for it."""
+        async with self._digest_lock:
+            self._digest_check_ms = self.clock()
+            try:
+                await self._talk_digest_tick()
+            except Exception:
+                self._digest_retry_ms = self.clock() + 600_000
+                log.exception("digest: the fold failed (bot keeps running)")
+
+    async def _talk_digest_tick(self) -> None:
+        """Each whole batch of the oldest lines after the last one folded, while `n + batch` wait: her day's lines into
+        the digest (one call a batch, at most `DIGEST_BATCHES_PER_TICK` a tick), an earlier day's passed over with no
+        call — her day's gists keep those. Never a closed line (the archive's open lines) nor a softened span's."""
+        lines = self._open_private_lines()
+        if not lines:
+            return
+        now = local_now(self.clock(), self.tz)
+        today = now.date().isoformat()
+        digest = rolled(load_digest(self.digest_file), today)
+        waiting = [x for x in lines if x.ts_ms > digest.upto_ms]
+        n, batch = self.live_window_n, self.live_window_batch
+        hidden, calls, changed = self._soft_hidden(), 0, digest.day != load_digest(self.digest_file).day
+        for k in range(batches_due(len(waiting), n, batch)):
+            chunk = waiting[k * batch:(k + 1) * batch]
+            items = [(x.speaker, history_entry(strip_notes(x.text))) for x in chunk
+                     if local_now(x.ts_ms, self.tz).date().isoformat() == today and (x.speaker, x.text) not in hidden]
+            if items:
+                if calls >= DIGEST_BATCHES_PER_TICK:
+                    break
+                calls += 1
+                text = await self._talk_digest_written(digest.text, items)
+                if text is None:  # a failure: this batch stays waiting — for a while
+                    self._digest_retry_ms = self.clock() + 600_000
+                    log.warning("digest: a batch not folded — the call failed (tried again later)")
+                    break
+                digest.text = text
+            digest.upto_ms, changed = chunk[-1].ts_ms, True
+            log.info("digest: folded %d lines (%d of her day), %d words", len(chunk), len(items),
+                     len(digest.text.split()))
+        if changed:
+            save_digest(self.digest_file, digest)
+
+    async def _talk_digest_written(self, so_far: str, items: list) -> str | None:
+        """Her digest with the batch folded in, checked as a talk summary is (the `talk_check` probe): one that blocks
+        her prompt is written again, each time stricter (`TALK_GENTLE`); when the last still blocks, the digest as it
+        was (the batch left out of it). One that names her a model or a bot is written again once, then left as it
+        was. None: a call or the check failed — the batch stays waiting."""
+        model = self.talk_digest_model or getattr(self.llm, "model", None)
+        probe = getattr(self.llm, "probe", None)
+        canon = self.cfg.canon_private or self.cfg.canon
+        for strict in range(len(TALK_GENTLE)):
+            system, contents = talk_digest_request(self.cfg.name, self.cfg.canon, so_far, items, self.digest_words,
+                                                   strict)
+            text = None
+            for _ in range(2):
+                out = await self.llm.complete(contents, system, self.digest_words * 4, kind="talk_digest", model=model)
+                if out is None:
+                    return None
+                text = out[0].strip()
+                if refusal_marker(text):  # a decline written as the digest is never her memory
+                    log.warning("digest: a fold declined in its text — the digest as it was")
+                    return so_far
+                if not BANNED_RE.search(text):
+                    break
+                text = None
+            if not text:
+                log.warning("digest: a fold named what she is twice — the digest as it was")
+                return so_far
+            if probe is None:
+                return text
+            check_system, check_contents = talk_check_request(canon, text)
+            blocked = await probe(check_contents, check_system, kind="talk_check")
+            if blocked is None:
+                return None
+            if not blocked:
+                return text
+            log.warning("digest: the fold blocks her prompt (written %d of %d)", strict + 1, len(TALK_GENTLE))
+        return so_far
+
     def talk_is_due(self) -> bool:
         """Checked every `TALK_CHECK_MS` (the idle watcher's ticks are seconds apart), never under a running writer or
         within a failure's back-off."""
@@ -4660,6 +4805,8 @@ class Agent:
                     self._spawn(self.ensure_reflection(now_local))
             if self.talk_is_due():  # v5.20: her private chat summarized by hour, block and week, off the reply path
                 self._spawn(self.ensure_talk())
+            if self.cfg.can("private") and self.talk_digest_is_due():  # v7.6: her day's running digest
+                self._spawn(self.ensure_talk_digest())
             if self.cfg.can("nudge"):  # v4.3: the cat speaks first
                 try:
                     await self.maybe_nudge()

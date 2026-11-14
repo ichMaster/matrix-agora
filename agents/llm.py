@@ -103,6 +103,8 @@ class GeminiClient:
         self.thinking_level = os.environ.get("GEMINI_THINKING_LEVEL", "low").strip() or "low"
         self.cache: CachePlanner | None = None  # v7.5 (AGORA-256): a companion's answers, set by her agent
         self.cache_sink: Callable[..., None] | None = None  # v7.5 (AGORA-258): (model, tokens, ttl_s, made)
+        # v7.6 (AGORA-260): whether her cache holds the start alone — her `lumi` memory, read at each answer
+        self.cache_start_only: Callable[[], bool] | None = None
 
     @property
     def client(self):
@@ -283,7 +285,13 @@ class GeminiClient:
         if self.cache is None or channel_of(kind) not in CACHED_CHANNELS:  # 7.5.1: Agora's answers plain
             return None
         ch = channel_of(kind)
-        plan = self.cache.plan(ch, model, start, lines, self._mono())
+        start_only = False
+        if self.cache_start_only is not None:
+            try:
+                start_only = bool(self.cache_start_only())
+            except Exception:  # noqa: BLE001 — a settings file that cannot be read: as before
+                start_only = False
+        plan = self.cache.plan(ch, model, start, lines, self._mono(), start_only)
         if plan.action == "use":
             if plan.renew:
                 try:

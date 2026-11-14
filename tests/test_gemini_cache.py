@@ -127,6 +127,7 @@ def gemini(caches=None, models=None, clock=None):
     g.model, g.reply_model, g.thinking_level = "gemini-2.5-flash", "gemini-3.1-pro-preview", "low"
     g.cache = CachePlanner(ttl_s=600, rebuild_lines=40)
     g.cache_lines = []
+    g.cache_start_only = None
     g.cache_sink = lambda model, tokens, ttl_s, made: g.cache_lines.append((model, tokens, ttl_s, made))
     t = clock or [0.0]
     g._mono = lambda: t[0]

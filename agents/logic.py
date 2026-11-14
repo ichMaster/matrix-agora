@@ -333,6 +333,7 @@ def instruction_and_start(
     agora_now: str | None = None,
     recalled: str | None = None,
     talk: str | None = None,
+    digest: str | None = None,
     voice: str | None = None,
     can_pass: bool = True,
 ) -> tuple[str, str]:
@@ -342,7 +343,8 @@ def instruction_and_start(
     - **the start** — canon → life so far → memories → plans → (v4.2) the mood of the day → last-session memory →
       (v5.8) the facts about the owner (private only) → (v5.20) what happened between them before the window
       (private, to Gemini);
-    - **the tail** — place and time → today → (v5.12) what she thought today → (v4.3) a past-life memory → (v4.3) a
+    - **the tail** — place and time → today → (v7.6) her day's running digest (`lumi`, private) → (v5.12) what she
+      thought today → (v4.3) a past-life memory → (v4.3) a
       nudge's material and rule → (v5.8) Agora today (private only) → (v5.8) what she recalls → (v5.6) the private
       chat's situation → (v4.6) the persona's move → (v5.3) its own questions of this session → (v5.9) her palette of
       voice tags → rules (v5.6: with the discretion line in Agora).
@@ -355,7 +357,8 @@ def instruction_and_start(
     if summary:
         start.append(f"Що ти пам'ятаєш з минулої розмови: {summary}")  # by the session
     start += [s for s in (facts, talk) if s]  # v5.8: when she keeps a fact; v5.20: by the hour
-    tail = [s for s in (world, today, thoughts, pastlife, nudge) if s]  # «Зараз …» to the minute, …
+    # «Зараз …» to the minute, …; v7.6 (AGORA-260): her day's digest grows with every batch — never in the start
+    tail = [s for s in (world, today, digest, thoughts, pastlife, nudge) if s]
     tail += [s for s in (agora_now, recalled) if s]  # v5.8: Agora today, what she recalls — by the call
     if private:
         tail.append(private)  # v5.6: a private reply, or writing first in the private chat (her style line)

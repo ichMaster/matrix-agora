@@ -65,7 +65,7 @@ class Plan:
     action: str                 # plain | use | make
     lines: int = 0              # history lines in the cache (use, make)
     renew: bool = False         # use: the TTL to be renewed
-    why: str = ""               # make: first | expired | start | history | grew; plain: quiet | backoff
+    why: str = ""               # make: first | expired | start | mode | history | grew; plain: quiet | backoff
     old: str | None = None      # make, or a quiet plain after the start changed: the cache to delete
     name: str | None = None     # use: the cache's name
 
@@ -92,14 +92,20 @@ class CachePlanner:
     def held(self, channel: str) -> Held | None:
         return self._ch(channel).held
 
-    def plan(self, channel: str, model: str, start: str, lines: list[str], now: float) -> Plan:
+    def plan(self, channel: str, model: str, start: str, lines: list[str], now: float,
+             start_only: bool = False) -> Plan:
+        """`start_only` (v7.6, AGORA-260): the cache holds the start alone, good for any history — her `lumi` memory,
+        whose short window moves by whole batches, has little history worth a cache and would make it again at
+        every batch."""
         ch = self._ch(channel)
         start_fp = fingerprint(model, start, [])
         h = ch.held
         if h is not None and now < h.expires and h.model == model and h.start_fp == start_fp and (
-                h.lines == 0  # the start alone: good for any history
-                or (h.lines <= len(lines) and fingerprint(model, start, lines[:h.lines]) == h.fp
-                    and len(lines) - h.lines <= self.rebuild)):
+                # the start alone: good for any history — in `lumi` mode, or for `START_ONLY_S` after a history slid
+                # under it, then a full cache again (v7.5 code review #9: it held the history out for good)
+                (h.lines == 0 and (start_only or now < ch.start_only_until))
+                or (h.lines > 0 and not start_only and h.lines <= len(lines)
+                    and fingerprint(model, start, lines[:h.lines]) == h.fp and len(lines) - h.lines <= self.rebuild)):
             ch.seen[start_fp] = now
             return Plan("use", lines=h.lines, renew=h.expires - now < h.ttl / 2, name=h.name)
         if now < ch.failed_until:
@@ -119,13 +125,17 @@ class CachePlanner:
             why = "expired"
         elif h.start_fp != start_fp or h.model != model:
             why = "start"
+        elif start_only and h.lines > 0:
+            why = "mode"  # v7.6: her memory switched to `lumi`: the start alone from now on
+        elif h.lines == 0:
+            why = "grew"  # the history back in the cache: its start-only time is over, or `layered` again
         elif h.lines > len(lines) or fingerprint(model, start, lines[:h.lines]) != h.fp:
             why = "history"
         else:
             why = "grew"
         if why == "history":
             ch.start_only_until = now + START_ONLY_S
-        lines_in = 0 if now < ch.start_only_until else max(0, len(lines) - self.keep_last)
+        lines_in = 0 if start_only or now < ch.start_only_until else max(0, len(lines) - self.keep_last)
         return Plan("make", lines=lines_in, why=why, old=h.name if h else None)
 
     def made(self, channel: str, name: str, model: str, start: str, lines: list[str], now: float,

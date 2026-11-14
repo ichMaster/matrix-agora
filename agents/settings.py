@@ -170,6 +170,15 @@ SCHEMA: tuple[Setting, ...] = (
        "Найменше останніх рядків Агори, хоч би якими давніми", "lines", 0, 300),
     _s("PRIVATE_HISTORY_STEP_H", "int", "2", "private", "cap:private", None,
        "Крок, яким зсувається початок вікна розмови (0 — щохвилини, як раніше)", "h", 0, 12),
+    # v7.6 (AGORA-260): her `lumi` memory — the live window's lines, the batch folded at once into her day's digest,
+    # the digest's model (empty: GEMINI_MODEL) and length
+    _s("LIVE_WINDOW_N", "int", "40", "private", "cap:private", None,
+       "Скільки рядків розмови бачить дослівно в режимі lumi (до N + пачка)", "lines", 10, 200),
+    _s("LIVE_WINDOW_BATCH", "int", "20", "private", "cap:private", None,
+       "Скільки найстаріших рядків за раз іде в підсумок дня (lumi)", "lines", 5, 100),
+    _s("TALK_DIGEST_MODEL", "choice", "", "private", "cap:private", None,
+       "Модель підсумку дня (порожньо — GEMINI_MODEL)", choices=("", "gemini-2.5-flash", "gemini-2.5-flash-lite")),
+    _s("DIGEST_WORDS", "int", "120", "private", "cap:private", None, "Слів у підсумку дня (lumi)", "words", 40, 400),
     _s("GEMINI_CACHE", "choice", "on", "model", "cap:private", None,
        "Кеш Gemini для її відповідей (початок промпту й історії)", choices=("on", "off")),
     _s("GEMINI_CACHE_TTL_S", "int", "600", "model", "cap:private", None,
@@ -224,6 +233,10 @@ SCHEMA: tuple[Setting, ...] = (
     _s("ANSWER_MODEL", "choice", "api-gemini-3.1pro", "switches", "cap:private", None,
        "Модель її відповідей (усі думають)", choices=("api-gemini-3.1pro", "api-gpt-6.1sol", "api-sonnet",
                                                        "claudemax-opus", "codex-gpt-6.1sol")),
+    # v7.6 (AGORA-260, the owner, 2026-11-12: «також в Люмі меньше підсумків розмов в промпті…»): her memory in the
+    # prompt as today (`layered`) or as Lumi's (`lumi`: a short live window, her day's running digest) — a live switch
+    _s("MEMORY_MODE", "choice", "layered", "switches", "cap:private", None,
+       "Її пам'ять у промпті (lumi — коротке вікно і підсумок дня)", choices=("layered", "lumi")),
     _s("FALLBACK_MODEL", "choice", "", "fallback", "cap:fallback", None, "Резервна модель (порожньо — немає)",
        choices=("", "glm-4-6")),
     _s("FALLBACK_WINDOW_S", "int", "300", "fallback", "cap:fallback", None, "Скільки після блоку відповідає резерв",
@@ -327,7 +340,8 @@ SCHEMA: tuple[Setting, ...] = (
 BY_NAME: dict[str, Setting] = {s.name: s for s in SCHEMA}
 # v5.22 — the switches an agent reads while it runs (`live_value`): the panel's change works at once and restarts
 # nobody; only agent settings, never applied at the start
-LIVE = frozenset({"TRACE_CALLS", "FALLBACK_ROUTE", "ANSWER_MODEL"})  # v7.4: her answers' model
+LIVE = frozenset({"TRACE_CALLS", "FALLBACK_ROUTE", "ANSWER_MODEL",  # v7.4: her answers' model
+                  "MEMORY_MODE"})  # v7.6: her memory's shape
 # the groups in their order, for a service's card and for an agent's tab
 SERVICE_GROUPS = (("turns", "Room & turns"), ("moves", "Ада і Бруно: ходи"), ("cat", "Кіт у кімнаті"),
                   ("claude", "Клод у кімнаті"), ("hermes", "Гермес"), ("voice", "Голоси агентів"),
