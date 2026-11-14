@@ -629,6 +629,9 @@ class Agent:
         self.talk_hour_days, self.talk_day_days, self.talk_words, self.talk_prompt_words = 0, 0, {}, 0
         self._talk_lock, self._talk_check_ms, self._talk_retry_ms = asyncio.Lock(), 0, 0
         self._talk_fails: dict[tuple[str, int], int] = {}  # code review v5.20 #2: a period's unblocked failures
+        # code review v7.6 #2: the `lumi` calls' failures — a gist's (or a memory's), a digest batch's by its first line
+        self._gist_fails: dict[object, int] = {}
+        self._digest_fails: dict[int, int] = {}
         self._talk_probed: bool | None = None  # the last probe's verdict in a tick (None: it failed or none ran)
         if cfg.can("talk"):
             # v5.23 (the owner): 3 days by the hour, then a day each up to 7 days, nothing older in her prompt
@@ -4018,10 +4021,16 @@ class Agent:
                     break
                 calls += 1
                 text = await self._talk_digest_written(digest.text, items)
-                if text is None:  # a failure: this batch stays waiting — for a while
-                    self._digest_retry_ms = self.clock() + 600_000
-                    log.warning("digest: a batch not folded — the call failed (tried again later)")
-                    break
+                if text is None:  # a failure: this batch stays waiting — for a while, then it is passed over
+                    fails = self._digest_fails.get(chunk[0].ts_ms, 0) + 1
+                    if fails < TALK_FAILS_MAX:
+                        self._digest_fails[chunk[0].ts_ms] = fails
+                        self._digest_retry_ms = self.clock() + 600_000
+                        log.warning("digest: a batch not folded — the call failed (tried again later)")
+                        break
+                    self._digest_fails.pop(chunk[0].ts_ms, None)  # code review v7.6 #2: never every later one held
+                    log.warning("digest: a batch passed over after %d failures — the digest as it was", fails)
+                    text = digest.text
                 digest.text = text
             digest.upto_ms, changed = chunk[-1].ts_ms, True
             log.info("digest: folded %d lines (%d of her day), %d words", len(chunk), len(items),
@@ -4134,10 +4143,17 @@ class Agent:
         level, start, end = due[0]
         items = gist_items(level, start, end, rows, self.tz)
         text = await self._gist_written(level, items)
-        if text is None:
-            self._talk_retry_ms = self.clock() + 600_000
-            log.warning("gist: %s %s not written — the call failed (tried again later)", level, iso_hour(start, self.tz))
-            return
+        if text is None:  # a failure: tried again later — and after `TALK_FAILS_MAX`, written empty (code review
+            fails = self._gist_fails.get((level, start), 0) + 1  # v7.6 #2: it was tried every 10 minutes for good,
+            if fails < TALK_FAILS_MAX:                           # every later gist held behind it)
+                self._gist_fails[(level, start)] = fails
+                self._talk_retry_ms = self.clock() + 600_000
+                log.warning("gist: %s %s not written — the call failed (tried again later)", level,
+                            iso_hour(start, self.tz))
+                return
+            self._gist_fails.pop((level, start), None)
+            log.warning("gist: %s %s left empty after %d failures", level, iso_hour(start, self.tz), fails)
+            text = ""
         open_n, closed_n = self.archive.private_counts(start, end)
         self.archive.talk_put(level, start, end, text, open_n, closed_n, 0 if text else len(items), self.clock())
         log.info("gist: %s %s — %d items, %d words", level, iso_hour(start, self.tz), len(items), len(text.split()))
@@ -4194,8 +4210,15 @@ class Agent:
             out = await self.llm.complete(contents, system, self.gist_words * 4, kind="memory_gist", model=model)
             text = cap_words(out[0].strip(), self.gist_words) if out else ""
             if out is None:
-                log.warning("gist: a %s memory's gist not written (failed)", kind)
-                self._talk_retry_ms = self.clock() + 600_000
+                fails = self._gist_fails.get(str(path), 0) + 1  # code review v7.6 #2: then kept empty
+                if fails < TALK_FAILS_MAX:
+                    self._gist_fails[str(path)] = fails
+                    log.warning("gist: a %s memory's gist not written (failed)", kind)
+                    self._talk_retry_ms = self.clock() + 600_000
+                    return
+                self._gist_fails.pop(str(path), None)
+                save_memory(gist_path(path), "")
+                log.warning("gist: a %s memory's gist left empty after %d failures", kind, fails)
                 return
             if not text or BANNED_RE.search(text) or refusal_marker(text):
                 # code review v7.6 #1: kept empty — its first sentence stays, and it is never asked for again (an unfit

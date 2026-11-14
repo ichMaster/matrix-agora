@@ -249,3 +249,19 @@ def test_in_lumi_the_cache_holds_the_start_alone_and_a_slid_historys_start_only_
     assert q.plan("private", "m", "S", slid + ["a"], 100).action == "use"
     late = q.plan("private", "m", "S", slid + ["a", "b"], 3 + START_ONLY_S)
     assert (late.action, late.why, late.lines) == ("make", "grew", len(slid))
+
+
+def test_a_batch_that_keeps_failing_is_passed_over_after_three_tries(tmp_path, monkeypatch):
+    """Code review v7.6 #2: a batch the model kept refusing was tried until her midnight, no later batch folded."""
+    agent = lumi(tmp_path, monkeypatch, Folder(down=True))
+    seeded(agent)
+    for _ in range(3):
+        agent._digest_retry_ms = 0
+        tick(agent)
+    digest = load_digest(agent.digest_file)
+    assert digest.upto_ms == ms(2026, 11, 14, 9, 0) and digest.text == ""         # [y2 t0] passed over, as it was
+    agent.llm.down = False
+    agent._digest_retry_ms = 0
+    tick(agent)
+    assert load_digest(agent.digest_file).text.startswith("Пам'ятаю")             # the next batch folds
+

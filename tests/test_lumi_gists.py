@@ -183,3 +183,17 @@ def test_an_unfit_memory_gist_is_kept_empty_and_never_asked_for_again(tmp_path, 
     now = datetime.fromtimestamp(NOW / 1000, KYIV)
     assert agent.memories_section(now).endswith("Ми ходили до обсерваторії.")
 
+
+def test_a_gist_that_keeps_failing_is_left_empty_after_three_tries_and_the_next_one_goes_on(tmp_path, monkeypatch):
+    """Code review v7.6 #2: one blocked day was tried every 10 minutes for good, every later gist held behind it."""
+    agent = talker(tmp_path, monkeypatch, Folder(down=True))
+    agent.archive.talk_put("hour", *hour(2026, 11, 12, 20), "Про зорі.", 4, 0, 0, NOW)
+    agent.archive.talk_put("hour", *hour(2026, 11, 13, 20), "Про небо.", 4, 0, 0, NOW)
+    drain(agent, 3)
+    gists = {r.start_ms: r.text for r in agent.archive.talk_rows() if r.level == "gist_day"}
+    assert gists == {day(2026, 11, 12)[0]: ""} and len(agent.llm.folds) == 3     # three tries, then empty
+    agent.llm.down = False
+    drain(agent, 1)
+    assert {r.start_ms for r in agent.archive.talk_rows() if r.level == "gist_day"} == \
+        {day(2026, 11, 12)[0], day(2026, 11, 13)[0]}                             # the next one goes on
+
