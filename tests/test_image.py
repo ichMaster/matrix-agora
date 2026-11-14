@@ -33,7 +33,18 @@ def test_the_panel_gets_docker_and_compose_from_official_images():
 
 
 def test_the_agent_image_has_ffmpeg_for_the_voice_messages():
-    """v5.1: Hermes encodes his digests to OGG/Opus; the `claude` target inherits the layer."""
+    """v5.1: Hermes encodes his digests to OGG/Opus; both targets inherit the layer from the base (v7.5)."""
     text = (ROOT / "agents" / "Dockerfile").read_text()
-    agent = text.split("FROM agent AS claude")[0]
-    assert "apt-get install -y --no-install-recommends ffmpeg" in agent and "rm -rf /var/lib/apt/lists/*" in agent
+    base = text.split("FROM python:3.12-slim AS codex")[0]
+    assert "AS base" in base and "apt-get install -y --no-install-recommends ffmpeg" in base
+    assert "rm -rf /var/lib/apt/lists/*" in base
+
+
+def test_the_heavy_layers_come_before_the_code_so_a_deploy_ships_only_the_code():
+    """v7.5: a deploy of 2026-11-12 spent 40 minutes pulling the Claude SDK's and Codex's layers again, rebuilt after
+    every code change; now the code is the last layer of each target."""
+    text = (ROOT / "agents" / "Dockerfile").read_text()
+    claude = text.split("FROM base AS claude")[1]
+    assert claude.index("--group claude") < claude.index("COPY --from=codex") < claude.index("COPY agents/")
+    agent = text.split("FROM base AS agent")[1].split("FROM base AS claude")[0]
+    assert agent.strip().startswith("COPY agents/")

@@ -257,8 +257,9 @@ def test_deploy_syncs_claudes_env_file_privately_and_it_never_enters_an_image():
         lines = (ROOT / ignore).read_text().splitlines()
         assert "server/*.env*" in lines and "!server/*.env.example" in lines, ignore
     dockerfile = (ROOT / "agents" / "Dockerfile").read_text()
-    assert "FROM python:3.12-slim AS agent" in dockerfile and "FROM agent AS claude" in dockerfile
-    assert "--group claude" in dockerfile
+    # v7.5: both targets on a shared base, the heavy layers before the code
+    assert "FROM python:3.12-slim AS base" in dockerfile and "FROM base AS agent" in dockerfile
+    assert "FROM base AS claude" in dockerfile and "--group claude" in dockerfile
 
 
 
