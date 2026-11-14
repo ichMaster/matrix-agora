@@ -262,6 +262,30 @@ def test_analytics_shows_the_share_of_her_prompt_read_from_the_cache(tmp_path):
         ("kira", "private", 4, 80_000, 45_000, 0.5625)
 
 
+def test_a_caches_own_lines_are_no_calls_in_the_prompts_tables(tmp_path):
+    """Code review v7.5 #4: one cache made and three renewed beside four answers — four calls of 20,000 tokens."""
+    import json
+    from datetime import date, datetime
+    from zoneinfo import ZoneInfo
+
+    from agents.usage import cache_usage_line
+    from panel.memory import analytics_view
+    lines = [{"ts": f"2026-11-12T20:0{i}:00+02:00", "agent": "kira", "kind": "private",
+              "model": "gemini-3.1-pro-preview", "prompt_tokens": 20_000, "output_tokens": 900, "total_tokens": 20_900,
+              "ok": True, "engine": "gemini", "billing": "api", "cache_read_tokens": 15_000, "latency_ms": 9000}
+             for i in range(4)]
+    lines += [cache_usage_line(f"2026-11-12T20:1{i}:00+02:00", "kira", "gemini-3.1-pro-preview", 15_000, 600, i == 0)
+              for i in range(4)]
+    (tmp_path / "kira.usage.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+    view = analytics_view(tmp_path, date(2026, 11, 12), date(2026, 11, 12), "kira", date(2026, 11, 12),
+                          datetime(2026, 11, 12, 21, 0, tzinfo=ZoneInfo("Europe/Kyiv")))
+    prompts = view["prompts"]
+    [svc] = prompts["services"]
+    assert (svc["calls"], svc["mean"]) == (4, 20_000) and [m["calls"] for m in svc["models"]] == [4]
+    assert [k["kind"] for k in prompts["kinds"]] == ["private"] and prompts["agents"][0]["calls"] == 4
+    assert prompts["caches_made"] == 1 and [r["kind"] for r in prompts["cache"]] == ["private"]
+
+
 def test_a_history_that_slides_under_its_cache_makes_the_cache_hold_the_start_alone_for_a_while():
     """Устина's 12-hour window outgrows `HISTORY_N` 300 on a busy day: its start slides by a line at every message."""
     from agents.gemini_cache import START_ONLY_S

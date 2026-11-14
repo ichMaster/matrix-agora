@@ -1230,9 +1230,10 @@ def analyze_detail(records: list[dict], answers: list[dict], since: date, until:
                      "groups": groups, "series": series(owner, lambda a: a["wait_ms"], median_of),
                      "first": sum(1 for a in now_a if a["answered"] == "none")}
 
-    # the prompts
-    prompted = [r for r in now_l if _int_of(r, "prompt_tokens") is not None]
-    p_prompted = [r for r in prev_l if _int_of(r, "prompt_tokens") is not None]
+    # the prompts — of the calls alone: a Gemini cache's own line is no call (code review v7.5 #4)
+    asked = lambda r: _int_of(r, "prompt_tokens") is not None and r.get("kind") != "cache"
+    prompted = [r for r in now_l if asked(r)]
+    p_prompted = [r for r in prev_l if asked(r)]
     tok = lambda r: r["prompt_tokens"]
 
     def prompt_row(rows: list[dict], prev: list[dict]) -> dict:
@@ -1291,10 +1292,9 @@ def analyze_detail(records: list[dict], answers: list[dict], since: date, until:
         return {"calls": len(rows), "prompt": prompt, "cached": cached,
                 "share": round(cached / prompt, 4) if prompt else None}
 
-    answered = [r for r in prompted if r.get("kind") != "cache"]
     prompts_block["cache"] = [
         {"agent": a, "model": m, "kind": k, **cache_row(rows)}
-        for (a, m, k), rows in sorted(grouped(answered, lambda r: (str(r.get("agent")), str(r.get("model") or "?"),
+        for (a, m, k), rows in sorted(grouped(prompted, lambda r: (str(r.get("agent")), str(r.get("model") or "?"),
                                                                     str(r.get("kind")))).items())
         if any(_int_of(r, "cache_read_tokens") for r in rows) or k in ("private", "private_nudge", "reply")]
     prompts_block["caches_made"] = sum(1 for r in now_l if r.get("kind") == "cache" and (r.get("prompt_tokens") or 0))
