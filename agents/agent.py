@@ -4193,10 +4193,15 @@ class Agent:
             model = self.talk_digest_model or getattr(self.llm, "model", None)
             out = await self.llm.complete(contents, system, self.gist_words * 4, kind="memory_gist", model=model)
             text = cap_words(out[0].strip(), self.gist_words) if out else ""
+            if out is None:
+                log.warning("gist: a %s memory's gist not written (failed)", kind)
+                self._talk_retry_ms = self.clock() + 600_000
+                return
             if not text or BANNED_RE.search(text) or refusal_marker(text):
-                log.warning("gist: a %s memory's gist not written (%s)", kind, "failed" if out is None else "unfit")
-                if out is None:
-                    self._talk_retry_ms = self.clock() + 600_000
+                # code review v7.6 #1: kept empty — its first sentence stays, and it is never asked for again (an unfit
+                # one was asked for every 30 s, for good)
+                save_memory(gist_path(path), "")
+                log.warning("gist: a %s memory's gist unfit — its first sentence stays", kind)
                 return
             save_memory(gist_path(path), text)
             log.info("gist: a %s memory in one line, %d words", kind, len(text.split()))

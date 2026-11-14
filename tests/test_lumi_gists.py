@@ -161,3 +161,25 @@ def test_her_day_memories_are_one_line_in_lumi_and_whole_in_layered(tmp_path, mo
     assert [f["kind"] for f in agent.llm.folds] == ["memory_gist"]
     monkeypatch.delenv("MEMORY_MODE")
     assert agent.memories_section(now).endswith("про зорі і про нього.")                # whole in `layered`
+
+
+class Unfit(Folder):
+    """Flash that names what she is in every gist."""
+
+    async def complete(self, transcript, system_instruction, max_output_tokens=400, kind="reply", model=None,
+                       refusal=False):
+        self.folds.append({"contents": transcript, "system": system_instruction, "kind": kind, "model": model})
+        return "Я лише модель, що пам'ятає.", "stop"
+
+
+def test_an_unfit_memory_gist_is_kept_empty_and_never_asked_for_again(tmp_path, monkeypatch):
+    """Code review v7.6 #1: it was asked for every 30 s, for good — now once, and her first sentence stays."""
+    agent = talker(tmp_path, monkeypatch, Unfit())
+    path = agent._memory_path("day", date(2026, 11, 13))
+    save_memory(path, "Ми ходили до обсерваторії. Потім довго говорили.")
+    drain(agent, 10)
+    assert [f["kind"] for f in agent.llm.folds] == ["memory_gist"]
+    assert gist_path(path).exists() and gist_path(path).read_text(encoding="utf-8").strip() == ""
+    now = datetime.fromtimestamp(NOW / 1000, KYIV)
+    assert agent.memories_section(now).endswith("Ми ходили до обсерваторії.")
+
