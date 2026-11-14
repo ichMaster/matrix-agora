@@ -4153,7 +4153,9 @@ class Agent:
             return
         level, start, end = due[0]
         items = gist_items(level, start, end, rows, self.tz)
-        text = await self._gist_written(level, items)
+        # code review v7.6 #5: nothing to gist (a week whose days' gists are all empty) is empty, with no call — never a
+        # line written from nothing
+        text = await self._gist_written(level, items) if items else ""
         if text is None:  # a failure: tried again later — and after `TALK_FAILS_MAX`, written empty (code review
             fails = self._gist_fails.get((level, start), 0) + 1  # v7.6 #2: it was tried every 10 minutes for good,
             if fails < TALK_FAILS_MAX:                           # every later gist held behind it)

@@ -197,3 +197,13 @@ def test_a_gist_that_keeps_failing_is_left_empty_after_three_tries_and_the_next_
     assert {r.start_ms for r in agent.archive.talk_rows() if r.level == "gist_day"} == \
         {day(2026, 11, 12)[0], day(2026, 11, 13)[0]}                             # the next one goes on
 
+
+def test_a_week_whose_day_gists_are_all_empty_is_empty_with_no_call(tmp_path, monkeypatch):
+    """Code review v7.6 #5: Flash was asked to write a week's line from an empty list."""
+    agent = talker(tmp_path, monkeypatch)
+    agent.archive.talk_put("day", *day(2026, 11, 3), "День про переїзд.", 9, 0, 0, NOW)
+    agent.archive.talk_put("gist_day", *day(2026, 11, 3), "", 9, 0, 1, NOW)       # its gist blocked thrice: empty
+    drain(agent, 2)
+    [week] = [r for r in agent.archive.talk_rows() if r.level == "gist_week"]
+    assert week.text == "" and not [f for f in agent.llm.folds if f["kind"] == "talk_gist"]
+
