@@ -15,7 +15,10 @@ This module is the plan alone, over plain data and an injected clock: what an an
   expiry. The reason is named for the owner's log (`why`) — names only, never a text.
 - **On failure:** a failed make backs off for `BACKOFF_S`, with plain calls meanwhile.
 
-One cache per channel: her private chat (private answers and writing first) and Agora.
+One cache per channel. From 7.5.1 her private chat alone (private answers and writing first) has one: her Agora
+answers go plain (`CACHED_CHANNELS`) — rare, and the room's 300-line window slides at every line, so an Agora cache held
+the start alone, was read again almost never and cost its storage (Устина's week simulated, 2026-11-14: −$0.49 a busy
+day at an hour's life; the owner: «роби тільки 2»).
 """
 
 from __future__ import annotations
@@ -30,6 +33,7 @@ BACKOFF_S = 300
 # `HISTORY_N` 300 on a busy day, 2026-11-12)
 START_ONLY_S = 7200
 KEEP_LAST = 2  # the newest history lines stay in the request: his line is never in the cache
+CACHED_CHANNELS = frozenset({"private"})  # 7.5.1: her Agora answers without a cache
 
 
 def channel_of(kind: str) -> str:

@@ -19,7 +19,7 @@ from typing import Any
 from google import genai
 from google.genai import types
 
-from agents.gemini_cache import BACKOFF_S, SEPARATOR, CachePlanner, channel_of
+from agents.gemini_cache import BACKOFF_S, CACHED_CHANNELS, SEPARATOR, CachePlanner, channel_of
 from agents.logic import split_prompt
 from agents.responder import ANSWER_KINDS
 from agents.usage import PROMPT_SLOW
@@ -280,7 +280,7 @@ class GeminiClient:
     # --- v7.5 (AGORA-256): her answers' explicit context cache ---------------------------------------------------
     async def _cache_for(self, kind: str, model: str, start: str, lines: list[str]) -> tuple[str, int] | None:
         """(the cache's name, the history lines in it) for this answer, or None — a plain call. Never raises."""
-        if self.cache is None:
+        if self.cache is None or channel_of(kind) not in CACHED_CHANNELS:  # 7.5.1: Agora's answers plain
             return None
         ch = channel_of(kind)
         plan = self.cache.plan(ch, model, start, lines, self._mono())

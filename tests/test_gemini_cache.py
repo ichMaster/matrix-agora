@@ -209,6 +209,23 @@ def test_a_hang_on_the_cache_is_two_tries_as_ever_and_the_cache_is_kept(monkeypa
     assert caches.deleted == [] and g.cache.held("private").name == "cachedContents/1"
 
 
+def test_her_agora_answers_go_plain_with_the_start_split_and_never_make_a_cache():
+    """7.5.1 (the owner, 2026-11-14: «роби тільки 2»): an Agora cache held the start alone and was read again almost
+    never — her Agora answers go without one; the split stays."""
+    caches, models, clock = Caches(), Models(), [0.0]
+    g = gemini(caches, models, clock)
+    for i, t in enumerate([0, 30, 60, 90]):
+        clock[0] = t
+        assert answer(g, history(10 + 2 * i), kind="reply")[0] == "Привіт!"
+    assert caches.made == [] and g.cache.held("agora") is None and g.cache_lines == []
+    assert all(c["cached"] is None and c["system"] == START for c in models.calls)
+    assert models.calls[-1]["contents"].endswith(SEPARATOR + TAIL)
+    answer(g, history(10))                                                           # her private chat keeps its own
+    clock[0] = 120
+    answer(g, history(12))
+    assert len(caches.made) == 1
+
+
 def test_a_background_call_and_an_unknown_start_go_as_before():
     models = Models()
     g = gemini(models=models)
