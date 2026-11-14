@@ -225,7 +225,8 @@ def test_a_cache_made_and_renewed_writes_its_lines_and_the_cost_prices_reads_and
     answer(g, history(12))
     clock[0] = 400                                                                   # past half its life: renewed
     answer(g, history(14))
-    assert g.cache_lines == [("gemini-3.1-pro-preview", 15_000, 600, True), ("gemini-3.1-pro-preview", 15_000, 600, False)]
+    # made at 30 for 600 s; renewed at 400 to 1,000 — 370 s more stored, not a whole TTL (code review v7.5 #5)
+    assert g.cache_lines == [("gemini-3.1-pro-preview", 15_000, 600, True), ("gemini-3.1-pro-preview", 15_000, 370, False)]
     made = cache_usage_line("2026-11-12T20:00:00+02:00", "kira", "gemini-3.1-pro-preview", 15_000, 600, True)
     renew = cache_usage_line("2026-11-12T20:05:00+02:00", "kira", "gemini-3.1-pro-preview", 15_000, 600, False)
     answer_line = {"ts": "2026-11-12T20:01:00+02:00", "agent": "kira", "kind": "private",

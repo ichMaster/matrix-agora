@@ -274,9 +274,9 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
 def cache_usage_line(ts_iso: str, agent: str, model: str, tokens: int | None, ttl_s: int, made: bool,
                      ok: bool = True) -> dict:
     """v7.5 (AGORA-258) — one record per explicit context cache made or renewed for a companion's answers on Gemini:
-    kind `cache`, `api`. Made, its tokens are read once at the input price (`prompt_tokens`); made or renewed, they
-    are stored for `cache_ttl_s` seconds (`cache_write_tokens` × the seconds, priced by `PRICE_MODELS`' fourth
-    number). Never any text."""
+    kind `cache`, `api`. Made, its tokens are read once at the input price (`prompt_tokens`) and stored for its TTL;
+    renewed, for the seconds the renewal added (code review v7.5 #5) — `cache_write_tokens` × `cache_ttl_s`, priced by
+    `PRICE_MODELS`' fourth number. Never any text."""
     return {
         "ts": ts_iso, "agent": agent, "kind": "cache", "model": model,
         "prompt_tokens": _ms(tokens) if made else 0, "output_tokens": 0,

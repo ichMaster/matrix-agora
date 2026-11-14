@@ -289,9 +289,12 @@ class GeminiClient:
                 try:
                     await asyncio.wait_for(self._client.aio.caches.update(
                         name=plan.name, config=types.UpdateCachedContentConfig(ttl=f"{int(self.cache.ttl)}s")), 30)
-                    self.cache.renewed(ch, self._mono())
                     held = self.cache.held(ch)
-                    self._cache_report(model, held.tokens if held else None, False)
+                    before = held.expires if held else None
+                    self.cache.renewed(ch, self._mono())
+                    # the storage the renewal added, never a whole TTL again (code review v7.5 #5)
+                    added = held.expires - before if held and before is not None else None
+                    self._cache_report(model, held.tokens if held else None, False, added)
                 except Exception as exc:  # noqa: BLE001 — it may expire; the next answer makes another
                     log.warning("gemini cache: not renewed (%s)", type(exc).__name__)
             return plan.name, plan.lines
@@ -316,12 +319,13 @@ class GeminiClient:
         self._cache_report(model, tokens, True)
         return made.name, k
 
-    def _cache_report(self, model: str, tokens: int | None, made: bool) -> None:
-        """v7.5 (AGORA-258): a cache made (read once at the input price) or renewed — its storage for its life."""
+    def _cache_report(self, model: str, tokens: int | None, made: bool, seconds: float | None = None) -> None:
+        """v7.5 (AGORA-258): a cache made (read once at the input price, stored for its TTL) or renewed (stored for
+        the `seconds` the renewal added)."""
         if self.cache_sink is None or self.cache is None:
             return
         try:
-            self.cache_sink(model, tokens, int(self.cache.ttl), made)
+            self.cache_sink(model, tokens, round(self.cache.ttl if seconds is None else max(0.0, seconds)), made)
         except Exception:
             log.exception("usage accounting failed")
 
