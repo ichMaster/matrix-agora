@@ -1,3 +1,30 @@
+Version 7.5.0 (2026-11-14)
+---------------------------
+- v7.5 the prompt for the cache: the slow start (canon, life, memories,
+  plans, mood, last-session memory, facts, talk) first, the per-call tail
+  (time, today, thoughts, recall, brief, move, voice, rules) after it; every
+  answer model sends the start as its system prompt and the history, a
+  separator and the tail as the message (AGORA-255, 257)
+- Gemini's explicit context cache for Кіра's and Устина's answers: made on
+  the second answer with the same start, used while her history begins with
+  its lines, renewed, made again on a change, plain on any failure; her
+  private window moves in 2-hour steps; after a history slide the cache holds
+  the start alone for 2 h (AGORA-256)
+- the cache in the numbers: its own usage lines, PRICE_MODELS with a cached
+  read and storage per hour (3.1 Pro 2/12/0.2/4.5), Analytics - Prompts shows
+  the share read from the cache (AGORA-258)
+- the room's window by the hour (AGORA_HISTORY_HOURS, each speaker's own):
+  3 h for the room at the owner's word; Устина's private window 6 h; the
+  cache's life an hour for both companions
+- the image's heavy layers before the code: a deploy in about a minute
+- the code review's eight fixes: a failed call on the cache backs off, a hang
+  keeps it, a new start deletes the old cache at once, Codex's fallback no
+  longer splits twice, the cache's lines and storage counted right
+- measured with a 10-minute cache: 52% (Кіра) and 68% (Устина) of the private
+  prompt read from the cache, $0.061 and $0.055 an answer; the Claude room
+  10% (DoD 80% not met). The owner accepted the phase with these numbers
+  («релізь»); the hour-long cache and the room's 3 hours are read after it
+
 Version 7.4.0 (2026-11-12)
 ---------------------------
 - v7.4 the companions' five models: Кіра and Устина answer on the model the
