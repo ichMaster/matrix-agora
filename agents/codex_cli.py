@@ -206,13 +206,14 @@ class CodexAnswers:
     async def reply(self, transcript: str, system_instruction: str | None, max_output_tokens: int = 400,
                     kind: str = "reply") -> tuple[str, str] | None:
         LAST_BLOCK.set(None)
+        asked = transcript, system_instruction  # her Gemini at the limit gets them as they came (code review v7.5 #3)
         # v7.5 (AGORA-257): the start as her instructions' file, the history then the tail by stdin
         split = split_prompt(system_instruction, PROMPT_SLOW.get()) if kind in ANSWER_KINDS else None
         if split is not None:
             system_instruction = split[0]
             transcript = f"{transcript}{SEPARATOR}{split[1]}" if transcript.strip() else split[1]
         if self._mono() < self.muted_until:
-            return await self._on_gemini("at its limit", transcript, system_instruction, max_output_tokens, kind)
+            return await self._on_gemini("at its limit", *asked, max_output_tokens, kind)
         if not await self.signed_in():
             return None
         started = self._mono()
@@ -245,7 +246,7 @@ class CodexAnswers:
         if got.limit:
             self.muted_until = self._mono() + LIMIT_MUTE_S
             self._report(kind, got.usage, False, started)
-            return await self._on_gemini("at its limit", transcript, system_instruction, max_output_tokens, kind)
+            return await self._on_gemini("at its limit", *asked, max_output_tokens, kind)
         if got.tools:
             log.error("codex %s used a tool (%s) — no answer", kind, ", ".join(sorted(set(got.tools))))
             self._report(kind, got.usage, False, started)

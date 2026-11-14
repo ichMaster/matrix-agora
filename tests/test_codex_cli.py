@@ -74,10 +74,11 @@ class Spawn:
 
 class Gemini:
     def __init__(self):
-        self.calls = []
+        self.calls, self.got = [], []
 
     async def reply(self, transcript, system, cap, kind):
         self.calls.append(kind)
+        self.got.append((transcript, system))
         return "Від Gemini.", "stop"
 
 
@@ -314,3 +315,21 @@ def test_with_a_known_start_codex_gets_it_as_its_instructions_and_the_tail_after
 
     assert asyncio.run(call()) == ("Привіт, сонце.", "stop")
     assert spawn.instructions[0][1] == "КАНОН" and spawn.last.stdin == ("Ich: привіт" + SEPARATOR + "Зараз вечір.").encode()
+
+
+def test_at_its_limit_her_gemini_gets_the_prompt_as_it_came_never_split_twice(tmp_path):
+    """Code review v7.5 #3: Gemini splits it itself — handed the split one, its tail went into her cache."""
+    from agents.usage import PROMPT_SLOW
+    clock, gemini = [0.0], Gemini()
+    client = codex(tmp_path, Spawn(events=LIMIT_EVENTS), clock=clock, gemini=gemini)
+
+    async def call():
+        token = PROMPT_SLOW.set("КАНОН")
+        try:
+            return await client.reply("Ich: привіт", "КАНОН\n\nЗараз вечір.", 4096, "private")
+        finally:
+            PROMPT_SLOW.reset(token)
+
+    asyncio.run(call())                                                    # Codex at its limit
+    asyncio.run(call())                                                    # muted: Gemini at once
+    assert gemini.got == [("Ich: привіт", "КАНОН\n\nЗараз вечір.")] * 2
