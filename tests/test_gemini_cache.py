@@ -174,6 +174,27 @@ def test_a_call_that_fails_on_the_cache_backs_off_instead_of_making_one_at_every
     assert len(caches.made) == 2
 
 
+def test_a_hang_on_the_cache_is_two_tries_as_ever_and_the_cache_is_kept(monkeypatch):
+    """Code review v7.5 #2: both tries hang on the cache — silence after them, no two tries more without it."""
+    from agents import llm
+
+    class Hanging(Models):
+        async def generate_content(self, model, contents, config):
+            if config.cached_content:
+                self.calls.append({"cached": config.cached_content})
+                await asyncio.sleep(1)
+            return await super().generate_content(model, contents, config)
+
+    monkeypatch.setattr(llm, "REPLY_TIMEOUT_S", 0.01)
+    caches, models, clock = Caches(), Hanging(), [0.0]
+    g = gemini(caches, models, clock)
+    answer(g, history(10))
+    clock[0] = 30
+    assert answer(g, history(12)) is None
+    assert [c["cached"] for c in models.calls[1:]] == ["cachedContents/1", "cachedContents/1"]
+    assert caches.deleted == [] and g.cache.held("private").name == "cachedContents/1"
+
+
 def test_a_background_call_and_an_unknown_start_go_as_before():
     models = Models()
     g = gemini(models=models)

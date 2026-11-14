@@ -237,7 +237,8 @@ class GeminiClient:
                 config=self._reply_config(None if cached else system_instruction, max_output_tokens,
                                           cached[0] if cached else None)), kind)
         except Exception as exc:  # noqa: BLE001 — any provider failure means silence
-            if cached is None:
+            # a hang is the network, not the cache: both tries are spent, the cache is kept (code review v7.5 #2)
+            if cached is None or isinstance(exc, TimeoutError):
                 log.error("gemini reply failed: %s", type(exc).__name__)
                 self._report(kind, None, False, model)
                 return None
