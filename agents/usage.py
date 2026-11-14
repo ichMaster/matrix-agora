@@ -43,6 +43,18 @@ PROMPT_PARTS: ContextVar[dict | None] = ContextVar("prompt_parts", default=None)
 PROMPT_SLOW: ContextVar[str | None] = ContextVar("prompt_slow", default=None)
 # v7.6 (AGORA-262): how many times her answer recalled by her own tool, for its own usage line (None: not offered)
 TOOL_CALLS: ContextVar[int | None] = ContextVar("tool_calls", default=None)
+# v7.6 (AGORA-263): the lines her memory's mode shapes — her private answers and their recall rounds, the `lumi` mode's
+# own calls (the day's digest, the gists) and her cache — each tagged `memory_mode` by her agent, to compare the modes
+MEMORY_KINDS = frozenset({"private", "private_nudge", "private_recall", "private_nudge_recall", "talk_digest",
+                          "talk_gist", "memory_gist", "cache"})
+MEMORY_ANSWERS = ("private", "private_nudge")
+
+
+def memory_tagged(record: dict, mode: str | None) -> dict:
+    """A usage line with her memory's mode, when it is one of the lines that mode shapes (pure)."""
+    if mode and record.get("kind") in MEMORY_KINDS:
+        record["memory_mode"] = mode
+    return record
 
 
 def _parts(value: Any) -> dict | None:
@@ -102,6 +114,7 @@ def usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: Any, ok: b
         "warm": None,
         "prompt_parts": _parts(prompt_parts),  # v7 (v5.22): an answer's prompt, its parts' sizes in characters
         "tool_calls": _ms(tool_calls),  # v7.6 (AGORA-262): her answer's own recall calls; null where not offered
+        "memory_mode": None,  # v7.6 (AGORA-263): `layered` or `lumi`, set by her agent on the lines her memory shapes
     }
 
 
@@ -149,6 +162,7 @@ def tts_usage_line(ts_iso: str, agent: str, model: str, characters: int, ok: boo
         "warm": None,
         "prompt_parts": None,
         "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
+        "memory_mode": None,  # v7.6: set by her agent on the lines her memory shapes
     }
 
 
@@ -166,6 +180,7 @@ def fallback_usage_line(ts_iso: str, agent: str, kind: str, model: str, ok: bool
         "warm": None,
         "prompt_parts": _parts(prompt_parts),
         "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
+        "memory_mode": None,  # v7.6: set by her agent on the lines her memory shapes
     }
 
 
@@ -185,6 +200,7 @@ def judge_usage_line(ts_iso: str, agent: str, model: str, prompt_tokens: int | N
         "warm": None,
         "prompt_parts": None,
         "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
+        "memory_mode": None,  # v7.6: set by her agent on the lines her memory shapes
     }
 
 
@@ -203,6 +219,7 @@ def stt_usage_line(ts_iso: str, agent: str, model: str, audio_ms: int | None, ok
         "warm": None,
         "prompt_parts": None,
         "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
+        "memory_mode": None,  # v7.6: set by her agent on the lines her memory shapes
     }
 
 
@@ -223,6 +240,7 @@ def video_note_usage_line(ts_iso: str, agent: str, model: str, video_ms: int | N
         "warm": None,
         "prompt_parts": None,
         "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
+        "memory_mode": None,  # v7.6: set by her agent on the lines her memory shapes
     }
 
 
@@ -241,6 +259,7 @@ def image_usage_line(ts_iso: str, agent: str, model: str, images: int | None, ok
         "warm": None,
         "prompt_parts": None,
         "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
+        "memory_mode": None,  # v7.6: set by her agent on the lines her memory shapes
     }
 
 
@@ -279,6 +298,7 @@ def sdk_usage_line(ts_iso: str, agent: str, kind: str, model: str, usage: dict |
         "warm": warm if isinstance(warm, bool) else None,
         "prompt_parts": _parts(prompt_parts),
         "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
+        "memory_mode": None,  # v7.6: set by her agent on the lines her memory shapes
     }
 
 
@@ -295,7 +315,7 @@ def cache_usage_line(ts_iso: str, agent: str, model: str, tokens: int | None, tt
         "engine": "gemini", "billing": "api",
         "cache_read_tokens": None, "cache_write_tokens": _ms(tokens), "cache_ttl_s": _ms(ttl_s),
         "reported_cost_usd": None, "characters": None, "audio_ms": None, "blocked": None, "video_ms": None,
-        "latency_ms": None, "images": None, "warm": None, "prompt_parts": None, "tool_calls": None,
+        "latency_ms": None, "images": None, "warm": None, "prompt_parts": None, "tool_calls": None, "memory_mode": None,
     }
 
 
@@ -322,6 +342,7 @@ def api_usage_line(ts_iso: str, agent: str, kind: str, model: str, engine: str, 
         "video_ms": None, "latency_ms": _ms(latency_ms), "images": None, "warm": None,
         "prompt_parts": _parts(prompt_parts),
         "tool_calls": None,  # v7.6: a Gemini answer's own recall calls alone
+        "memory_mode": None,  # v7.6: set by her agent on the lines her memory shapes
     }
 
 
@@ -371,6 +392,7 @@ def _valid(rec: Any) -> bool:
             and rec.get("billing", "api") in BILLING and isinstance(rec.get("engine", "gemini"), str)
             and isinstance(rec.get("blocked") or "", str)  # v5.13: missing or null on an older line
             and (rec.get("warm") is None or isinstance(rec["warm"], bool))  # v9 (v7.2): a warm call, on Claude
+            and (rec.get("memory_mode") is None or isinstance(rec["memory_mode"], str))  # v7.6
             and (rec.get("prompt_parts") is None or (isinstance(rec["prompt_parts"], dict) and all(  # v5.22
                 isinstance(v, int) and not isinstance(v, bool) for v in rec["prompt_parts"].values()))))
 
@@ -1312,6 +1334,36 @@ def analyze_detail(records: list[dict], answers: list[dict], since: date, until:
                                                                     str(r.get("kind")))).items())
         if any(_int_of(r, "cache_read_tokens") for r in rows) or k in ("private", "private_nudge", "reply")]
     prompts_block["caches_made"] = sum(1 for r in now_l if r.get("kind") == "cache" and (r.get("prompt_tokens") or 0))
+
+    # v7.6 (AGORA-263): her memory, `layered` against `lumi` — by agent and mode, over the lines that mode shapes (a
+    # line from before v7.6 is `layered`): her private answers, their mean prompt, the share read from a cache, the
+    # cost an answer with the mode's own calls and her cache in it, the median call time, her own recall's calls
+    def memory_row(rows: list[dict]) -> dict:
+        answered = [r for r in rows if r.get("kind") in MEMORY_ANSWERS]
+        asked = [r for r in rows if r.get("kind") in MEMORY_ANSWERS or str(r.get("kind")).endswith("_recall")]
+        prompt = sum(_int_of(r, "prompt_tokens") or 0 for r in asked)
+        cached = sum(min(_int_of(r, "prompt_tokens") or 0, _int_of(r, "cache_read_tokens") or 0) for r in asked)
+        row = Row()
+        for r in rows:
+            _add_line(row, r)
+        total = _atom_cost(row, prices)
+        times = [r["latency_ms"] for r in answered if _int_of(r, "latency_ms") is not None]
+        return {"answers": len(answered),
+                "prompt_mean": mean_of([_int_of(r, "prompt_tokens") for r in answered
+                                        if _int_of(r, "prompt_tokens") is not None]),
+                "cached_share": round(cached / prompt, 4) if prompt else None,
+                "cost_per_answer": round(total / len(answered), 6) if total is not None and answered else None,
+                "time_median": median_of(times),
+                "tool_calls_per_answer": (round(sum(_int_of(r, "tool_calls") or 0 for r in answered) / len(answered), 3)
+                                          if answered else None),
+                "rounds": sum(1 for r in rows if str(r.get("kind")).endswith("_recall")),
+                "background": sum(1 for r in rows if r.get("kind") in ("talk_digest", "talk_gist", "memory_gist"))}
+
+    shaped = grouped([r for r in now_l if r.get("kind") in MEMORY_KINDS],
+                     lambda r: (str(r.get("agent")), str(r.get("memory_mode") or "layered")))
+    prompts_block["memory"] = [{"agent": a, "mode": m, **memory_row(rows)}
+                               for (a, m), rows in sorted(shaped.items())
+                               if any(r.get("kind") in MEMORY_ANSWERS for r in rows)]
 
     # the photos and videos
     photo = [r for r in now_l if r.get("kind") == "photo"]

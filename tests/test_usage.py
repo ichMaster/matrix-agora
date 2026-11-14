@@ -29,7 +29,8 @@ def test_usage_line_shape_and_no_text():
                          "images",  # v8 (v6.5): a fal photo's count
                          "warm",  # v9 (v7.2): a Claude call taken by a CLI started ahead
                          "prompt_parts",  # v7 (v5.22): an answer's prompt, its parts' sizes
-                         "tool_calls"}  # v10 (v7.6): her answer's own recall calls
+                         "tool_calls",  # v10 (v7.6): her answer's own recall calls
+                         "memory_mode"}  # v10 (v7.6): her memory's mode, set by her agent on the lines it shapes
     assert line["characters"] is None and line["audio_ms"] is None and line["blocked"] is None
     assert line["tool_calls"] is None                                     # not offered
     assert usage_line("2026-11-14T18:00:00+02:00", "kira", "private", "m", META, True, tool_calls=2)["tool_calls"] == 2

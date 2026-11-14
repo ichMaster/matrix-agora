@@ -383,6 +383,7 @@ from agents.usage import (
     cache_usage_line,
     fallback_usage_line,
     image_usage_line,
+    memory_tagged,
     parse_lines,
     sdk_usage_line,
     stt_usage_line,
@@ -3450,6 +3451,9 @@ class Agent:
                                                      latency_ms, parts, blocked, warm))
 
     def _append_usage(self, build) -> None:
+        if self.cfg.can("private"):  # v7.6 (AGORA-263): her memory's mode on the lines it shapes
+            mode, plain = self.memory_mode(), build
+            build = lambda ts: memory_tagged(plain(ts), mode)
         if not self.trace_calls:
             self._append_jsonl(self.usage_file, build, "usage")
             return

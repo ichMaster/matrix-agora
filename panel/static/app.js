@@ -917,7 +917,16 @@ function anPromptsHtml(d) {
     pr.cache.map((c) => `<tr><td>${esc(agentName(c.agent))}</td><td>${esc(c.model)}</td><td class="kind">${esc(c.kind)}</td>` +
       nCell(c.calls) + tokCell(c.prompt) + tokCell(c.cached) + `<td class="num">${pct(c.share)}</td></tr>`).join("")) +
     (pr.caches_made ? `<p class="muted">Caches made in this period: ${fmtInt(pr.caches_made)}</p>` : "") : "";
-  return tiles + structure + cache + lines + services + kinds + agents;
+  // v7.6 (AGORA-263): her memory, `layered` against `lumi`, by agent and mode
+  const ms = (v) => (v == null ? "—" : `${(v / 1000).toFixed(1)} s`);
+  const memory = (pr.memory || []).length ? anTable("By memory",
+    [["agent"], ["mode"], ["answers", 1], ["prompt", 1], ["cached", 1], ["cost an answer", 1], ["call time", 1],
+     ["recalls an answer", 1], ["her own calls", 1]],
+    pr.memory.map((m) => `<tr><td>${esc(agentName(m.agent))}</td><td class="kind">${esc(m.mode)}</td>` + nCell(m.answers) +
+      tokCell(m.prompt_mean) + `<td class="num">${pct(m.cached_share)}</td><td class="num">${fmtCost(m.cost_per_answer)}</td>` +
+      `<td class="num">${ms(m.time_median)}</td><td class="num">${m.tool_calls_per_answer == null ? "—" : m.tool_calls_per_answer.toFixed(2)}</td>` +
+      nCell(m.background) + "</tr>").join("")) : "";
+  return tiles + structure + cache + memory + lines + services + kinds + agents;
 }
 
 const MEDIA_COLOR = {photos: "var(--viz-1)", videos: "var(--viz-2)"};
@@ -1258,19 +1267,30 @@ function thoughtsTabHtml(a, mem) {
 
 // v5.20 — her private chat in layers: the summaries by level, newest first, each with its closed lines' count only;
 // v5.23 — the hours and the days are what her prompt reads; v5.20's four-hour blocks and weeks are kept, never read
-const TALK_LEVELS = [["hour", "Hours"], ["day", "Days"], ["4h", "Four hours (older, not in her prompt)"],
-  ["week", "Weeks (older, not in her prompt)"]];
+const TALK_LEVELS = [["gist_day", "Days in short (lumi)"], ["gist_week", "Weeks in short (lumi)"], ["hour", "Hours"],
+  ["day", "Days"], ["4h", "Four hours (older, not in her prompt)"], ["week", "Weeks (older, not in her prompt)"]];
 function talkSpan(r) {
   const s = new Date(r.start), e = new Date(r.end);
   const day = s.toLocaleDateString("en-US", {weekday: "short", month: "short", day: "numeric"});
   const hm = (d) => d.toTimeString().slice(0, 5);
-  return r.level === "week" ? `week of ${day}` : r.level === "day" ? day : `${day} · ${hm(s)}–${hm(e)}`;
+  return ["week", "gist_week"].includes(r.level) ? `week of ${day}` : ["day", "gist_day"].includes(r.level) ? day
+    : `${day} · ${hm(s)}–${hm(e)}`;
+}
+// v7.6 (AGORA-263): her day's running digest (her `lumi` memory), above the summaries
+function talkDigestHtml(dg) {
+  if (!dg || (!dg.text && !dg.previous_text)) return "";
+  const one = (label, day, text) => text ? `<div class="rule-b" style="padding:8px 0;display:flex;gap:12px;align-items:flex-start">
+      <span class="mono muted" style="font-size:12px;min-width:150px">${esc(label)} · ${esc(day)}</span>
+      <div style="flex:1;min-width:0" lang="uk">${esc(text)}</div></div>` : "";
+  return `<div class="section-label" style="margin:14px 0 6px">Her day's running digest (lumi)</div>` +
+    one("today", dg.day, dg.text) + one("the day before", dg.previous_day, dg.previous_text);
 }
 function talkTabHtml(a, mem) {
   const rows = mem.talk;
   if (!rows) return `<p class="muted">Talk unreadable.</p>`;
-  if (!rows.length) return `<p class="muted">${esc(a.display)}'s private chat has no summaries yet — each hour is written once it is over.</p>`;
-  return TALK_LEVELS.map(([level, title]) => {
+  const digest = talkDigestHtml(mem.talk_digest);
+  if (!rows.length) return digest + `<p class="muted">${esc(a.display)}'s private chat has no summaries yet — each hour is written once it is over.</p>`;
+  return digest + TALK_LEVELS.map(([level, title]) => {
     const mine = rows.filter((r) => r.level === level);
     if (!mine.length) return "";
     return `<div class="section-label" style="margin:14px 0 6px">${esc(title)}</div>` + mine.map((r) => {

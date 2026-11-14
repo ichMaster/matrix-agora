@@ -22,6 +22,7 @@ from agents.answer_models import MODEL_OF, THINKING_OF
 from agents.emotion import TAG_MODELS
 from agents.emotion import TAG_RE as VOICE_TAG_RE
 from agents.facts import load_facts
+from agents.lumi import load_digest
 from agents.usage import (
     PriceBook,
     Row,
@@ -171,6 +172,14 @@ def talk_view(state_dir: Path, name: str) -> list[dict] | None:
 
     return [{"level": level, "start": iso(start), "end": iso(end), "text": text, "open_lines": opened,
              "closed_lines": closed, "left_out": left} for level, start, end, text, opened, closed, left in rows]
+
+
+def talk_digest_view(state_dir: Path, name: str) -> dict:
+    """v7.6 (AGORA-263) — her day's running digest (`<name>.digest.json`, her `lumi` memory): her day, today's digest
+    and the last day's; none yet is all empty. It is written from the lines open to Gemini alone, never a closed one."""
+    digest = load_digest(state_dir / f"{name}.digest.json")
+    return {"day": digest.day, "text": digest.text, "previous_day": digest.previous_day,
+            "previous_text": digest.previous_text}
 
 
 def prompt_view(state_dir: Path, name: str) -> dict | None:
@@ -442,6 +451,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "facts_pending": (state_dir / f"{name}.facts.request").exists() if with_facts else None,
         "archive": archive_view(state_dir, name) if with_archive else None,              # v5.8: her archive
         "talk": talk_view(state_dir, name) if with_talk else None,                       # v5.20: her chat in layers
+        "talk_digest": talk_digest_view(state_dir, name) if with_talk else None,         # v7.6: her day's digest
         "models": models_view(state_dir, name, voice_spec, engine) if with_models else None,  # v5.9; v7.1 engine
         "events": events_view(state_dir, name, today) if with_events else None,          # v5.11: her events
         "thoughts": thoughts_view(state_dir, name, today) if with_thoughts else None,    # v5.12: her thoughts
