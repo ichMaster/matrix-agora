@@ -4019,8 +4019,12 @@ class Agent:
             return
         n, batch = self.live_window_n, self.live_window_batch
         hidden, calls, changed = self._soft_hidden(), 0, digest.day != load_digest(self.digest_file).day
-        for k in range(batches_due(len(waiting), n, batch)):
-            chunk = waiting[k * batch:(k + 1) * batch]
+        i = 0
+        while batches_due(len(waiting) - i, n, batch):
+            j = min(i + batch, len(waiting))
+            while j < len(waiting) and waiting[j].ts_ms == waiting[j - 1].ts_ms:  # code review v7.6 #4: a batch never
+                j += 1                                                            # ends inside one second's lines
+            chunk, i = waiting[i:j], j
             items = [(x.speaker, history_entry(strip_notes(x.text))) for x in chunk
                      if local_now(x.ts_ms, self.tz).date().isoformat() == today and (x.speaker, x.text) not in hidden]
             if items:

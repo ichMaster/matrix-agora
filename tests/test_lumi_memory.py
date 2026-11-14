@@ -278,3 +278,16 @@ def test_the_fold_and_the_window_never_leave_a_line_between_them_whatever_histor
     assert [x.text for x in window] == ["сьогодні 4", "сьогодні 5", "сьогодні 6", "сьогодні 7"]
     assert window[0].ts_ms > folded                                                # nothing between them
 
+
+def test_a_batch_never_ends_inside_one_seconds_lines(tmp_path, monkeypatch):
+    """Code review v7.6 #4: his Telegram lines carry a time to the second — a batch ending on the first of two left
+    the second in neither her window nor her digest."""
+    agent = lumi(tmp_path, monkeypatch, n=2, batch=2)
+    for i, t in enumerate([0, 1, 1, 2, 3, 4, 5]):                              # the 2nd and 3rd in one second
+        say(agent, f"s{i}", ms(2026, 11, 14, 9, 0, t), "Ich", f"рядок {i}")
+    tick(agent)
+    sent = "".join(f["contents"] for f in agent.llm.folds)
+    assert "Ich: рядок 1" in agent.llm.folds[0]["contents"] and "Ich: рядок 2" in agent.llm.folds[0]["contents"]
+    window = [x.text for x in agent._gemini_lines()]
+    assert all(f"рядок {i}" in sent or f"рядок {i}" in window for i in range(7))  # nothing lost between them
+
