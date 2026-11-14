@@ -245,6 +245,18 @@ def test_a_cache_made_and_renewed_writes_its_lines_and_the_cost_prices_reads_and
                     {"gemini-3.1-pro-preview": (2.0, 12.0)}) - (20_000 * 2 / 1e6 + 1_000 * 12 / 1e6)) < 1e-9  # old form
 
 
+def test_a_day_of_renewals_alone_prices_their_storage():
+    """Code review v7.5 #6: made before midnight, renewed after it — the day's storage is never $0."""
+    from datetime import date
+
+    from agents.usage import PriceBook, _atom_cost, _atoms, cache_usage_line, parse_model_prices
+    prices, _ = parse_model_prices("gemini-3.1-pro-preview=2/12/0.2/4.5")
+    line = cache_usage_line("2026-11-13T00:10:00+02:00", "kira", "gemini-3.1-pro-preview", 15_000, 1800, False)
+    [row] = _atoms([line], date(2026, 11, 13), date(2026, 11, 13)).values()
+    book = PriceBook(0.3, 2.5, prices)
+    assert abs(_atom_cost(row, book) - 15_000 * 0.5 * 4.5 / 1e6) < 1e-12
+
+
 def test_analytics_shows_the_share_of_her_prompt_read_from_the_cache(tmp_path):
     import json
 

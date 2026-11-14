@@ -839,7 +839,8 @@ def _atom_cost(row: Row, prices: PriceBook) -> float | None:
     """One atom's cost: a subscription's is None, never $0 (v4.4); an `api` atom with nothing billable (a failed
     call without counts) is $0; an `api` model with no price is None — named in `unpriced`."""
     if row.billing == "api" and not (row.priced_prompt or row.priced_output or row.ms_by_model
-                                     or row.images_by_model):
+                                     or row.images_by_model
+                                     or any(m[3] for m in row.by_model.values())):  # code review v7.5 #6: storage
         return 0.0
     return cost(row, prices.price_in, prices.price_out, prices.models, prices.seconds, prices.images)
 
