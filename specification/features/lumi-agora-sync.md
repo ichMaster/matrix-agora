@@ -440,4 +440,11 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
   treats 1 as «no initiative». Lumi's server-side contract checks follow the version it serves.
 - **The plan:** ROADMAP §v3.4, AGORA_SPACE.md §Her initiative (steps 10–16, gates G6–G8), and ARCHITECTURE (the
   contract bullet, §Spaces, «never into a space» with the initiative as the room's own path).
-
+- **Step 9's prod watch** (`lumi-b7`, 16:05–17:05). The Gemini credits incident (15:01–16:17 on Lumi's side) is set
+  apart; everything else passed:
+  - the room had 35 new lines and her 4 replies: 2 to her name and 2 to unnamed triggers (v8.2's ranked turns), with no
+    pass;
+  - 6 agora calls, at most 6 in an hour against the cap of 20, and no 429;
+  - his side is untouched: no room line in his words, his store or his vectors, and the 23 new outbox lines are all his
+    private talk;
+  - no findings for an 8.2.x or a Lumi patch.
