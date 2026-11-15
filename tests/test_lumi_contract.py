@@ -9,8 +9,8 @@ from pathlib import Path
 CONTRACT = json.loads((Path(__file__).parent / "fixtures" / "lumi_agora_api_v1.json").read_text(encoding="utf-8"))
 
 
-def test_it_is_api_v1_owned_by_lumi_on_the_box():
-    assert CONTRACT["version"] == 1 and CONTRACT["owner"] == "lumi"
+def test_it_is_api_v2_owned_by_lumi_on_the_box():
+    assert CONTRACT["version"] == 2 and CONTRACT["owner"] == "lumi"  # v2 (Lumi v3.4, sync step 11): + her initiative
     assert CONTRACT["base_url"] == {"prod": "http://192.168.1.197:8765", "dev": "http://192.168.1.197:8766"}
     assert CONTRACT["auth"]["client_header"] == "X-Lumi-Client: agora"
 
@@ -38,7 +38,7 @@ def test_observe_retract_and_health_as_the_bridge_reads_them():
     # a 404 means only that the space is off, never a retract
     assert retract["response_nothing_stored"] == {"status": 200, "body": {"retracted": False}}
     assert all("never a retract" in e["when"] for e in CONTRACT["errors"] if e["status"] == 404)
-    assert CONTRACT["endpoints"]["health"]["response"]["body"]["agora"] == 1
+    assert CONTRACT["endpoints"]["health"]["response"]["body"]["agora"] == 2  # 1 = the v1 routes, 2 = + her initiative
 
 
 def test_the_statuses_that_are_silence_and_the_limits():
@@ -55,3 +55,23 @@ def test_lumi_310_says_what_a_line_must_be_speaker_and_ts():
     assert "no ':'" in about and "offset" in about and "422" in about
     malformed = next(e for e in CONTRACT["errors"] if e["status"] == 422)["when"]
     assert "speaker" in malformed and "offset" in malformed
+
+
+
+def test_v2_her_initiative_is_an_offer_the_bridge_polls_and_acks_never_a_post():
+    """v8.3 (sync step 11, Lumi a9937b1): API v2 adds `GET /v1/initiative` — `say` with an offer or `none`, a poll never
+    calls the model — and `POST /v1/initiative/{id}/posted {event_id}` → `{stored}`, always 200; nothing is remembered
+    until acked; the v1 routes are unchanged; an initiative never names the owner or carries «Ich»."""
+    ep = CONTRACT["endpoints"]
+    say, none, posted = ep["initiative"], ep["initiative_none"], ep["initiative_posted"]
+    assert (say["request"]["method"], say["request"]["path"]) == ("GET", "/v1/initiative")
+    assert say["response"]["body"]["outcome"] == "say" and {"initiative_id", "text", "stats"} <= set(say["response"]["body"])
+    assert "thinking" not in say["response"]["body"] and "Ich" not in say["response"]["body"]["text"]
+    assert none["response"]["body"] == {"outcome": "none"}
+    assert posted["request"]["method"] == "POST" and posted["request"]["path"] == "/v1/initiative/{initiative_id}/posted"
+    assert posted["response"]["status"] == 200 and set(posted["response"]["body"]) == {"stored"}
+    limits = CONTRACT["limits"]
+    assert (limits["initiative_fresh_s"], limits["initiative_compose_gap_s"], limits["initiative_kept_s"]) == (1800, 1800, 86400)
+    assert not any("she only answers" in n for n in CONTRACT["never"])          # the `never` changed, contract first
+    assert any("Ich" in n for n in CONTRACT["never"])
+    assert set(ep) >= {"health", "observe", "turn", "turn_pass", "retract"}      # v1's routes unchanged

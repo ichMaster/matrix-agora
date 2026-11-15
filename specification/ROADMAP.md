@@ -4588,15 +4588,23 @@ room's rules — and the contract's `never` («Lumi posting to the room on its o
 the contract (contract first).
 
 **Tasks:**
-- **The contract** (Lumi's, step 10): a cheap route the bridge polls for an offered line — proposed
-  `GET /v1/initiative` → `{outcome: "say", initiative_id, text, stats}` or `{outcome: "none"}`, no model call per poll —
-  and how an offer that was not posted is dropped (a retract, as a turn's, or an expiry); `health` names the new API
-  version. Copied here byte for byte (step 11); the fake Lumi server learns it.
+- **The contract** (Lumi's API v2, `a9937b1`, copied byte for byte in step 11 into
+  `tests/fixtures/lumi_agora_api_v1.json` — the name the contract gives; pinned by `tests/test_lumi_contract.py`):
+  - `GET /v1/initiative` → `{outcome: "say", initiative_id, text, stats}` or `{outcome: "none"}`. A poll never calls the
+    model: a fresh offer comes as it is; otherwise Lumi answers `none` and, within its own guards, composes one in the
+    background for a later poll.
+  - `POST /v1/initiative/{initiative_id}/posted {event_id}` → `{stored: true|false}`, always 200, idempotent. Lumi stores
+    the line as hers only on this ack. An offer never acked is never remembered, so a dropped offer needs no retract.
+  - `limits`: `initiative_fresh_s` 1800 (and stale at once when a new room line arrives), `initiative_compose_gap_s`
+    1800, `initiative_kept_s` 86400 (a late ack still stores).
+  - `health` `"agora": 2`; the v1 routes are unchanged; the `never` reads «an offer, never a post» and forbids an
+    initiative about the owner or carrying «Ich».
 - **The bridge (matrix-agora, step 13):** an initiative of the `bridge` type (one member per initiative, as `nudge` and
   `news`): it polls Lumi while the room is quiet and posts an offered line only by the room's rules — after
   `LILI_INITIATIVE_IDLE_S` of silence (never under `BOT_WINDOW_S`, so it opens a fresh wave), in
   `LILI_INITIATIVE_HOURS`, at most `LILI_INITIATIVE_PER_DAY`, never twice in a row with nobody between, never an offer
-  older than its freshness; the persona rule as on every reply (a dropped offer is retracted); exactly as offered.
+  older than its freshness; the persona rule as on every reply (a dropped offer is simply never acked); exactly as
+  offered, then acked with its event id (`posted`). A bridge that reads `"agora": 1` offers no initiative.
   The others then answer her as any line (R2).
 - **Usage and the panel:** an initiative's line counted from Lumi's `stats` (`engine` `lumi`, kind `initiative`); her
   card shows today's initiatives beside her turns.
@@ -4610,9 +4618,9 @@ the contract (contract first).
   talk reaches the room.
 - A simulated day with her initiative never exceeds the cap or opens a line inside a running wave.
 
-**Tests:** unit — the poll against the fake Lumi server from the new contract (say, none, statuses); the room's rules
-(idle, hours, the cap, a fresh wave, not twice in a row, freshness) as pure decisions; the persona drop retracted; the
-usage line; the card.
+**Tests:** unit — the poll against the fake Lumi server from the new contract (say, none, statuses) and the `posted`
+ack; the room's rules (idle, hours, the cap, a fresh wave, not twice in a row, freshness) as pure decisions; a dropped
+offer never acked; `"agora": 1` → no initiative; the usage line; the card.
 
 ## v9 — Applications: the panel's System and Applications
 

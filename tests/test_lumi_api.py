@@ -147,7 +147,7 @@ def test_a_retract_is_url_encoded_and_reads_true_or_false():
 
 def test_health_reads_the_api_version_and_names_what_is_wrong():
     fake = FakeLumi()
-    assert run(client(fake).health()) == (True, None, 1)
+    assert run(client(fake).health()) == (True, None, 2)  # API v2 (Lumi v3.4): v1's routes + her initiative
     fake.health_body = {"ok": True, "env": "dev", "version": "3.0.0"}
     assert run(client(fake).health()) == (False, "space off", None)
     fake.health_body = {"ok": True, "agora": 0}
