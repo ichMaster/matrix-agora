@@ -4381,7 +4381,7 @@ a turn from any client is still the owner's turn in his one session — so a bri
 line as his words (his closeness, his facts, his recall), copy the room into his Telegram («💻») and his desktop, and
 block or delay his own turns behind one lock; no fast reply, no silence. So the room becomes **a channel of its own in
 Lumi first** — a new Lumi version, specified for her ROADMAP in
-[features/lumi-agora-channel.md](features/lumi-agora-channel.md) (the owner adds it to her project): the `agora`
+Lumi's own `specification/features/AGORA_SPACE.md` (her ROADMAP §v3; the handoff of 2026-11-15, now a pointer: [features/lumi-agora-channel.md](features/lumi-agora-channel.md)): the `agora`
 channel with its own session, lock and scoped token, `observe` (she hears every room line without answering), her
 memory of the room as Кіра's and Устина's (she remembers all of Agora and can tell him about it; in the room his side of
 her life stays out of her prompt and she says nothing about him), the voice register, `pass` and `retract`. Then the
@@ -4436,8 +4436,9 @@ in the tags.
 our agents, on Lumi's `agora` channel. Built and released by the synchronization above: its bridge is step 4 (against
 the contract), its live test step 6 (Lumi's dev), its release step 8 (after Lumi's in step 7).
 
-Design: [features/lumi-agora-channel.md](features/lumi-agora-channel.md) (Lumi's side) and more-agents.md §Lumi (the
-bridge). The bridge is our agent with all the room's rules; she is reactive — she only answers and never starts a
+Design: Lumi's side in `~/development/lumi/specification/features/AGORA_SPACE.md` (her ROADMAP §v3, ARCHITECTURE
+§Spaces and §Contracts), the API in her `docs/agora-space-api.json` (copied here as the contract below); ours in
+more-agents.md §Lumi (the bridge). The bridge is our agent with all the room's rules; she is reactive — she only answers and never starts a
 conversation. Depends on: the Lumi version above in prod; v4.1 (v4.2 for the scoped human-belief rule), v4.6 review #4
 (the `ask` addressee filter: a mention-only bridge is not asked by the personas).
 
@@ -4445,27 +4446,36 @@ conversation. Depends on: the Lumi version above in prod; v4.1 (v4.2 for the sco
 - **The `bridge` type; `agents/lili.toml`** (localpart `lili` — `agents/lumi.py` is v7.6's memory module): shown as
   «Лілі»; name forms for both «Лілі» and «Стхіра» («лілі», «стхіра», «стхіри», «стхірі», «стхіру», «стхірою»,
   «стхіро»); `engine = "lumi-http"`; `[turns] mode = "mention-only"`, weight 1.
-- **The contract** — `tests/fixtures/lumi_agora_api_v1.json`, Lumi's API v1 copied in step 2 of the synchronization;
-  the fake Lumi server and the payload tests are built from it; at start the bridge reads `/v1/health` and stays silent
-  — said by name in its log and on its card — while Lumi's `agora` API is older than 1.
-- **She hears the room** — `POST /v1/observe` with every room line her filter lets through (`{id: event_id, speaker,
-  text, ts}`, batched, idempotent by `event_id`; a failure retried with the batch, never a lost line), from the first
-  sync's point on, so her memory of the room is whole even on a day nobody names her.
-- **She answers when named** — `POST /v1/turn` with `channel: "agora"`, `speaker` (the trigger's), `register: "voice"`,
-  `turn_id` = the trigger's `event_id`, and the lines since her last turn as `"Name: text"`; header `X-Lumi-Client:
-  agora`; the room's token.
-  - only `reply` is posted, never `thinking` — in the room, the logs or the panel;
-  - `409`, `5xx`, a timeout (`LUMI_TIMEOUT_S`, 60) and `outcome: "pass"` are silence;
+- **The contract** — `tests/fixtures/lumi_agora_api_v1.json`, Lumi's API v1 copied byte for byte in step 2 of the
+  synchronization (2026-11-15, from Lumi's `2ed0bc0`; pinned by `tests/test_lumi_contract.py`); the fake Lumi server
+  and the payload tests are built from it. At start the bridge reads `/v1/health` and stays silent — said by name in
+  its log and on its card — while `agora` is absent (the space off) or older than 1. `401`, `403`, `404` and `422` are
+  said by name too (a wrong token, the space off, a malformed request), never retried.
+- **She hears the room** — `POST /v1/observe` `{channel: "agora", lines: [{id: event_id, speaker, text, ts}]}` with
+  every room line her filter lets through, batched (at most `observe_batch_max`, 200), idempotent by `event_id`
+  (`{stored, known}` back); a failed batch is sent again whole, never a lost line; from the first sync's point on, so
+  her memory of the room is whole even on a day nobody names her.
+- **She answers when named** — `POST /v1/turn` with exactly `{channel: "agora", speaker, register: "voice", turn_id,
+  text}`: the trigger alone — `turn_id` its `event_id` (already observed), `speaker` its sender, `text` its own line;
+  the bridge never resends earlier lines (Lumi builds the room's prompt from her own window of observed lines, R1);
+  header `X-Lumi-Client: agora`; the room's token.
+  - only `reply` (with `outcome: "reply"`) is posted, never `thinking` — in the room, the logs or the panel; the
+    response's `emotion` and `intensity` are not used;
+  - silence, never retried: `409` (a room turn running), `429` (the room's hourly cap, 20), `500`, `502`, `503`, `504`
+    (Lumi's own 20 s), the bridge's timeout (`LUMI_TIMEOUT_S`, 60 — always longer than Lumi's, so it never cuts a reply
+    Lumi still makes) and `outcome: "pass"` (an empty reply, or Lumi's name guard: a named call may end in silence);
   - never `/v1/session/new`, `/v1/events`, `/v1/command`; the bridge never posts except in reply to a trigger.
 - **The room's guard and her memory**: R3 is checked before the call only. After it, the one rule that may drop her
   reply is the persona rule (`outs_a_persona`: a reply calling a person in the room a model or a bot); a dropped reply is
-  retracted (`POST /v1/turn/{turn_id}/retract`), so she never remembers saying what the room never saw. No other
-  post-call filtering or trimming.
+  retracted (`POST /v1/turn/{turn_id}/retract`, the id URL-encoded; `{retracted: true}`), so she never remembers saying
+  what the room never saw; so is a turn the bridge gave up on at its own timeout (best effort — a `404` is fine). No
+  other post-call filtering or trimming.
 - **The `lili` compose service** (the agent image), her own env file `server/lili.env` — `LUMI_URL`
   (`http://192.168.1.197:8765`) and `LUMI_ROOM_TOKEN` (the scoped token; never Lumi's owner token) — synced 0600 by
   `deploy.sh`; text only (`VOICE_MESSAGES` off; her voice is a later choice).
-- **Usage:** a line per turn from Lumi's `stats` — `engine` `lumi`, her model's tokens priced by `PRICE_MODELS` (they are
-  the owner's Gemini spend all the same); `observe` costs no model call and writes no line.
+- **Usage:** a line per turn from Lumi's `stats` (`model`, `input_tokens`, `output_tokens`, `latency_ms`) — `engine`
+  `lumi`, a service of its own in Analytics, never added to matrix-agora's own Gemini spend: Lumi's ledgers record the
+  same calls with `channel: "agora"` (its v3, L5); `observe` costs no model call and writes no line.
 - **Лілі's panel card** (an agent card in today's panel, type `bridge`; v9 moves it under System → Agents as
   `external`): Lumi's reachability (`/v1/health`), the last turn's outcome and the lines observed today from
   `state/lili.bridge.json`; never her `thinking`, mood or replies; her token rows as above; no memory tabs, no Forget.
@@ -4479,17 +4489,19 @@ conversation. Depends on: the Lumi version above in prod; v4.1 (v4.2 for the sco
 
 **DoD:**
 - (Manual, owner) Лілі's card appears in the panel, and start/stop/restart of the bridge work from it.
-- (Manual, owner) Named («Лілі», «Стхіро»…), she answers in the room within seconds; unnamed, she stays silent; her
-  `thinking` never appears in the room, the logs or the panel.
+- (Manual, owner) Named («Лілі», «Стхіро»…), she answers in the room within seconds (Lumi's room turn on Gemini 2.5
+  Flash, 1–3 s) — or stays silent by Lumi's own `pass`; unnamed, she stays silent; her `thinking` never appears in the
+  room, the logs or the panel.
 - (Manual, owner) Nothing of the room reaches his Telegram or his desktop, and his own talk with her is never blocked or
   delayed by the room.
 - (Manual, owner) Asked privately «що було в Агорі?», she tells; in Agora she says nothing about him.
 - She never posts on her own.
 
-**Tests:** unit — the bridge against a fake Lumi server: every line observed once (batches, retries, idempotent ids), a
-turn's payload (channel, speaker, register, `turn_id`, the lines since her last turn, the header), `409`, `5xx`, timeout
-and `pass` → silence, `thinking` never posted, the persona drop retracted and nothing else filtered, no post without a
-trigger; mention detection for both names; the env-file isolation (the room's token in `lili.env` alone, never the owner
+**Tests:** unit — the bridge against a fake Lumi server built from the contract: every line observed once (batches of at
+most 200, retries, idempotent ids), a turn's payload (exactly the trigger: channel, speaker, register, `turn_id`, its
+own line; the header), `409`, `429`, `5xx`, the timeout and `pass` → silence, never retried, `401`/`403`/`404`/`422`
+said by name, `thinking` never posted, the persona drop and the bridge's own timeout retracted and nothing else
+filtered, no post without a trigger; mention detection for both names; the env-file isolation (the room's token in `lili.env` alone, never the owner
 token); the usage line from `stats`.
 
 ### v8.2 — Лілі under the full rules
