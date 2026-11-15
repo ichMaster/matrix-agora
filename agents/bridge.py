@@ -290,10 +290,12 @@ class Bridge(Agent):
         why = self._lumi_closed()
         if why:
             log.info("silent: lumi %s", why)
+            self._count("silent")  # code review v8.2 #1: a chosen turn counts once, whatever came of it
             return False
         found = self._line_at(answered) if answered else None
         if found is None or not speaker_ok(found[0]):
             log.info("silent: the trigger is not in the room's window")
+            self._count("silent")
             return False
         speaker, text = found
         try:
@@ -305,6 +307,7 @@ class Bridge(Agent):
             why = self._lumi_closed()  # code review v8.1 #6: the flush may have met a refused token or the space off
             if why:
                 log.info("silent: lumi %s", why)
+                self._count("silent")
                 return False
             got = await self.lumi.turn(speaker, answered, plain_body(text))
             self._turn_done(got)

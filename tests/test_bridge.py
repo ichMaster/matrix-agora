@@ -476,3 +476,13 @@ def test_todays_turns_are_counted_once_by_what_came_of_them_and_roll_at_midnight
         assert load_state(b.state_file)["turns"] == {"day": "2026-11-17", "reply": 0, "pass": 1, "silent": 0}
         assert "бот" not in b.state_file.read_text()
     asyncio.run(go())
+
+
+def test_a_chosen_turn_that_never_reaches_lumi_is_counted_silent():
+    """Code review v8.2 #1: Lumi away (or refused) when R1 chose her — the card must show those silences."""
+    async def go():
+        b, fake = make(healthy=False)
+        await hear(b, ev(OWNER, "Лілі?", T0, "$o1"))
+        await asyncio.wait_for(asyncio.gather(*b._tasks), 5)
+        assert fake.turns() == [] and load_state(b.state_file)["turns"]["silent"] == 1
+    asyncio.run(go())
