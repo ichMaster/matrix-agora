@@ -108,6 +108,8 @@ class GeminiClient:
         self.cache_start_only: Callable[[], bool] | None = None
         # v7.6 (AGORA-262): her own recall — the tools an answer of this kind offers (None: none), read at each answer
         self.tools_for: Callable[[str], Any] | None = None
+        # 7.6 (the owner, 2026-11-15): her Agora replies on a model of their own (`AGORA_REPLY_MODEL`; None: as hers)
+        self.agora_model: str | None = None
 
     @property
     def client(self):
@@ -226,12 +228,13 @@ class GeminiClient:
         LAST_BLOCK.set(None)
         split = split_prompt(system_instruction, PROMPT_SLOW.get()) if kind in ANSWER_KINDS else None
         lines = transcript.split("\n") if transcript else []
-        if self.reply_model not in THINKING_MODELS:
+        reply_model = self.agora_model if kind == "reply" and self.agora_model else self.reply_model  # 7.6: Agora's
+        if reply_model not in THINKING_MODELS:
             if split is not None:
                 system_instruction, transcript = split[0], _joined(lines, split[1])
-            return await self.complete(transcript, system_instruction, max_output_tokens, kind, self.reply_model,
+            return await self.complete(transcript, system_instruction, max_output_tokens, kind, reply_model,
                                        refusal=True)  # v5.13: an answer — a refusal in it is a block
-        model = self.reply_model
+        model = reply_model
         tools = self._tools(kind)  # v7.6 (AGORA-262): her own recall, in `lumi` mode
         cached = await self._cache_for(kind, model, split[0], lines, tools) if split is not None else None
         if split is not None:

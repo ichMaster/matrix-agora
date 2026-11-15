@@ -250,6 +250,11 @@ SCHEMA: tuple[Setting, ...] = (
                                                        "claudemax-opus", "codex-gpt-6.1sol")),
     # v7.6 (AGORA-260, the owner, 2026-11-12: «також в Люмі меньше підсумків розмов в промпті…»): her memory in the
     # prompt as today (`layered`) or as Lumi's (`lumi`: a short live window, her day's running digest) — a live switch
+    # 7.6 (the owner, 2026-11-15: «зробити щоб Кіра і Устина відповідали в Агорі на 2.5 флеш»): her Agora replies on a
+    # Gemini model of their own, whatever `ANSWER_MODEL` (empty: as her answers to him)
+    _s("AGORA_REPLY_MODEL", "choice", "", "model", "cap:private", None,
+       "Модель її відповідей в Агорі (порожньо — та сама, що з Ich)", choices=("", "gemini-2.5-flash",
+                                                                           "gemini-2.5-flash-lite")),
     _s("VOICE_MESSAGES", "choice", "on", "switches", "cap:voice", None,
        "Голосові повідомлення (off — усе текстом)", choices=("on", "off")),
     _s("MEMORY_MODE", "choice", "layered", "switches", "cap:private", None,

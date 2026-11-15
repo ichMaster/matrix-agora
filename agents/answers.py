@@ -33,8 +33,12 @@ class SwitchedResponder:
     (Gemini, as ever); the Gemini choice is `base` itself, so on it nothing differs from before v7.4."""
 
     def __init__(self, choice: Callable[[], str], responders: Mapping[str, Responder], base: Responder,
-                 mono: Callable[[], float] = time.monotonic, silent: Callable[[str], None] | None = None) -> None:
+                 mono: Callable[[], float] = time.monotonic, silent: Callable[[str], None] | None = None,
+                 agora_on_base: Callable[[], bool] | None = None) -> None:
         self._choice = choice
+        # 7.6 (the owner, 2026-11-15: «зробити щоб Кіра і Устина відповідали в Агорі на 2.5 флеш»): her Agora replies
+        # on Gemini whatever the switch, when her own Agora model is set (`AGORA_REPLY_MODEL`)
+        self._agora_on_base = agora_on_base
         self._silent = silent  # code review v7.4 #5: the agent's silence reason, for the owner's ⚙️ line
         self.responders = dict(responders)
         self.base = base
@@ -58,6 +62,10 @@ class SwitchedResponder:
     async def respond(self, turn: Turn) -> Reply | None:
         if turn.kind not in ANSWER_KINDS:
             return await self.base.respond(turn)
+        if turn.kind == "reply" and self._agora_on_base is not None and self._agora_on_base():
+            LAST_SERVED.set("gemini")
+            LAST_BLOCK.set(None)
+            return await self.base.respond(turn)  # 7.6: Agora on her own Gemini model
         name = self.chosen()
         LAST_SERVED.set(ENGINE_OF[name])  # the client's own fallback at a limit says `gemini` in its turn
         LAST_BLOCK.set(None)

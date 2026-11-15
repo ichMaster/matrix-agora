@@ -129,6 +129,7 @@ def gemini(caches=None, models=None, clock=None):
     g.cache_lines = []
     g.cache_start_only = None
     g.tools_for = None
+    g.agora_model = None
     g.cache_sink = lambda model, tokens, ttl_s, made: g.cache_lines.append((model, tokens, ttl_s, made))
     t = clock or [0.0]
     g._mono = lambda: t[0]

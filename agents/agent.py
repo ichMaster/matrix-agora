@@ -540,9 +540,14 @@ class Agent:
         # v7.4 — a companion's answers on the model the owner picks in her panel settings (`ANSWER_MODEL`, live)
         self.switch: SwitchedResponder | None = None
         if cfg.engine == "gemini" and cfg.type == "persona" and cfg.can("private"):
+            # 7.6 (the owner, 2026-11-15): her Agora replies on a Gemini model of their own, whatever her switch
+            agora_model = os.environ.get("AGORA_REPLY_MODEL", "").strip()
             self.switch = SwitchedResponder(
                 lambda: live_value(cfg.memory_file.parent, cfg.localpart, "ANSWER_MODEL", os.environ),
-                self._answer_responders(openai_key, sonnet_key), self.responder, silent=_silent)
+                self._answer_responders(openai_key, sonnet_key), self.responder, silent=_silent,
+                agora_on_base=lambda: bool(agora_model))
+            if isinstance(self.llm, GeminiClient) and agora_model:
+                self.llm.agora_model = agora_model
             self.responder = self.switch
             if isinstance(self.llm, GeminiClient):  # v7.6 (AGORA-262): her own recall, in `lumi` mode
                 self.llm.tools_for = self._memory_tools
