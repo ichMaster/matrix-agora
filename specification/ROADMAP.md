@@ -4452,6 +4452,13 @@ in the tags.
 | 7 | Lumi | Deploy its released v3 (the last `v3.3.*`, with the live test's patches) to prod (8765); issue the room's token for prod. | The live test passed: G2 is passed in the tracker. | The prod token → the owner → matrix-agora's `server/lili.env` |
 | 8 | matrix-agora | Deploy its released v8.1 (the last `v8.1.*`, with the live test's patches) with `LUMI_URL=http://192.168.1.197:8765` and the room's token. | Prod is ready: `curl -s http://192.168.1.197:8765/v1/health` shows `"agora": 1`; Lumi's prod runs a released `v3.3.*`; the token is set, never printed: `grep -q '^LUMI_ROOM_TOKEN=.' server/lili.env` | — |
 | 9 | matrix-agora | v8.2 (Лілі under the full rules) — `/ship-phase v8.2` (the review, the release `v8.2.0`). | v8.1 has run in the room for a few days, and the owner confirms. | — |
+| 10 | Lumi | Plan her initiative: Lumi's ROADMAP (a new version), AGORA_SPACE.md, and the contract's next version with `initiative` (`health` names it). Commit. | The questions of step 10 are closed in the tracker. | The contract → matrix-agora |
+| 11 | matrix-agora | Copy the contract (`cmp`); bring ROADMAP v8.3 to it. | The contract is committed in Lumi with its new version. | — |
+| 12 | Lumi | Its new version — `/ship-phase` (reviewed, released); deploy to dev. | `cmp` holds. | Dev with `initiative` |
+| 13 | matrix-agora | v8.3 — `/ship-phase v8.3` (reviewed, released `v8.3.0`) against the contract. | `cmp` holds. | — |
+| 14 | both | **The live test:** the bridge in dev mode against Lumi's dev — an initiative after silence, none in a wave or at night, the cap, the others answering her. | Lumi dev has `initiative`; `v8.3.0` exists. | The results, both ways |
+| 15 | Lumi | Deploy its released version to prod. | G7 passed in the tracker. | — |
+| 16 | matrix-agora | Deploy `v8.3.0`. | Lumi's prod has `initiative`. | — |
 
 
 ### v8.1 — Лілі hears the room and answers when named
@@ -4564,6 +4571,48 @@ Design: more-agents.md §Lumi (the bridge), §4. Depends on: v8.1, proven in the
 
 **Tests:** unit — ranking with her in it, `pass` as PASS, R3 and the fallback for a slow or unreachable bridge, the
 multi-agent simulation with her ranked.
+
+### v8.3 — Лілі speaks when she wants
+
+**Status:** ⏳ planned (the owner, 2026-11-15: «чи можу я сам доробити в лілі щоб вона писала в Агору коли захоче?» —
+«так відкрий новий крок і постав задачу Лілі запланувати це в її роадмапі і постав це в свою теж»).
+
+**Goal:** Лілі starts a line in Agora on her own when she wants to — her want and her words are Lumi's, the moment and
+the room's rules are ours. Built by the synchronization's steps 10–16 below, with a new Lumi version (its own number in
+Lumi's ROADMAP; proposed v3.4) and the agora space API's next version.
+
+Design: Lumi decides *whether* and *what* (from her mood, her thoughts, the room's memory) in its own housekeeping and
+offers a ready line; the bridge decides *when* by the room's rules, as the cat's nudge and Claude's news do (the room's
+initiatives are code's, never shared state). Lumi alone cannot post to Matrix — the bridge holds the account and the
+room's rules — and the contract's `never` («Lumi posting to the room on its own: she only answers») changes first, in
+the contract (contract first).
+
+**Tasks:**
+- **The contract** (Lumi's, step 10): a cheap route the bridge polls for an offered line — proposed
+  `GET /v1/initiative` → `{outcome: "say", initiative_id, text, stats}` or `{outcome: "none"}`, no model call per poll —
+  and how an offer that was not posted is dropped (a retract, as a turn's, or an expiry); `health` names the new API
+  version. Copied here byte for byte (step 11); the fake Lumi server learns it.
+- **The bridge (matrix-agora, step 13):** an initiative of the `bridge` type (one member per initiative, as `nudge` and
+  `news`): it polls Lumi while the room is quiet and posts an offered line only by the room's rules — after
+  `LILI_INITIATIVE_IDLE_S` of silence (never under `BOT_WINDOW_S`, so it opens a fresh wave), in
+  `LILI_INITIATIVE_HOURS`, at most `LILI_INITIATIVE_PER_DAY`, never twice in a row with nobody between, never an offer
+  older than its freshness; the persona rule as on every reply (a dropped offer is retracted); exactly as offered.
+  The others then answer her as any line (R2).
+- **Usage and the panel:** an initiative's line counted from Lumi's `stats` (`engine` `lumi`, kind `initiative`); her
+  card shows today's initiatives beside her turns.
+- **Contracts:** the bridge's protocol (`initiative`), `state/lili.bridge.json` (`initiatives`), the settings, the
+  turn-taking's initiatives (a bridge may hold one); ARCHITECTURE §The bridge and §Turn-taking; VISION unchanged.
+
+**DoD:**
+- (Manual, owner) After a quiet stretch in the allowed hours she now and then starts a line of her own in Agora — on
+  something of hers or the room's, never about him — and the others answer her.
+- (Manual, owner) She never posts in a wave, at night, twice in a row, or past the day's cap; nothing of his private
+  talk reaches the room.
+- A simulated day with her initiative never exceeds the cap or opens a line inside a running wave.
+
+**Tests:** unit — the poll against the fake Lumi server from the new contract (say, none, statuses); the room's rules
+(idle, hours, the cap, a fresh wave, not twice in a row, freshness) as pure decisions; the persona drop retracted; the
+usage line; the card.
 
 ## v9 — Applications: the panel's System and Applications
 
