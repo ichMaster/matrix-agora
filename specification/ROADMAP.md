@@ -97,7 +97,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v7.4 | The companions' five models: Кіра and Устина switched in the panel | ✅ completed | `v7.4.0` (2026-11-12) |
 | v7.5 | The prompt for the cache: what changes slowly first, read from the cache | ✅ completed | `v7.5.0` (2026-11-14) |
 | v7.6 | Her memory as Lumi's: a short live window, short summaries, recall by her own tool | ✅ completed | `v7.6.0` (2026-11-15) |
-| v8.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
+| v8.1 | Лілі hears the room and answers when named (Lumi's `agora` channel) | ⏳ planned | — |
 | v8.2 | Лілі under the full rules | ⏳ planned | — |
 | v9.1 | System and Applications: the panel's new shape | ⏳ planned | — |
 | v9.2 | Telegram as an application: Кіра connected | ⏳ planned | — |
@@ -4372,31 +4372,80 @@ the full turn rules. Moved from v4.8–v4.9 by the owner on 2026-10-13, after th
 Applications and the Theatre; and back to v6 on 2026-10-26, before them (the owner's order: Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9). On 2026-11-05 she moved to v7, after Кіра's inner life (the owner: «постав фазу 8 перед 6»; Кіра's inner life v6, Лілі v7, Applications v8, the Theatre v9). Later the same day she became v6 again, once Кіра's inner life moved to the end (the owner: «перестав фазу 6 на самий кінеь роадмапи»; Лілі v6, Applications v7, the Theatre v8, Кіра's inner life v9). On 2026-11-07 she became v7, after a second companion (the owner: «заплануй як повністю нову версію пілся 5»; the second companion v6, Лілі v7, Applications v8, the Theatre v9, Кіра's inner life v10). On 2026-11-10 she became v8, after every agent moved to Claude as v7 (the owner: «заведи нову версію перед 7»; Claude v7, Лілі v8, Applications v9, the Theatre v10, Кіра's inner life v11).
 She is built in today's panel as an agent of the type `bridge`; v9 then places her in its model as an
 **external** agent under System → Agents, connected to Agora in the `room` context (applications.md §Лілі).
-Depends on: Lumi ≥ v2.5 in prod (v2.6 puts her server on 192.168.1.197) and v4.
 
-### v8.1 — The Lumi bridge: Лілі when named
+**Re-planned on 2026-11-15** (the owner, after a review of Lumi 2.12.3: «я б запропонував С і записав би це в роудмапі
+Лілі як нову версію»; «я б хотів щоб память Лілі була такаж як у Кіри і Устини, вона памятає все що в Агорі і може мені
+це сказати але не каже про мене в Агорі»). Lumi's prerequisites of 2026-10-10 are met: her prod runs 2.12.3 in Docker on
+192.168.1.197 since 2026-10-20 (`lumi-prod`), and its server at `http://192.168.1.197:8765` answers our containers. But
+a turn from any client is still the owner's turn in his one session — so a bridge to it as it is would store every room
+line as his words (his closeness, his facts, his recall), copy the room into his Telegram («💻») and his desktop, and
+block or delay his own turns behind one lock; no fast reply, no silence. So the room becomes **a channel of its own in
+Lumi first** — a new Lumi version, specified for her ROADMAP in
+[features/lumi-agora-channel.md](features/lumi-agora-channel.md) (the owner adds it to her project): the `agora`
+channel with its own session, lock and scoped token, `observe` (she hears every room line without answering), her
+memory of the room as Кіра's and Устина's (she remembers all of Agora and can tell him about it; in the room his side of
+her life stays out of her prompt and she says nothing about him), the voice register, `pass` and `retract`. Then the
+bridge is simple and clean. Depends on: that Lumi version in prod, and v4.
+
+### v8.1 — Лілі hears the room and answers when named
 
 **Status:** ⏳ planned.
 
-**Goal:** Лілі — Lumi's prod brain — answers in the room when someone names her, through a bridge that is one of our agents.
+**Goal:** Лілі hears every line of the room and answers in it when someone names her, through a bridge that is one of
+our agents, on Lumi's `agora` channel.
 
-Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails the room and forwards the changes to Лілі's server; she answers, deciding herself whom and what. It behaves like our agents, with all the room's rules. Лілі is reactive: she only answers and never starts a conversation. **Depends on Lumi ≥ v2.5** (prod runs her server with Telegram, thoughts and the scheduler inside it); from Lumi v2.6 her server runs on 192.168.1.197 itself. Depends on: v4.1 (v4.2 for the scoped human-belief rule), v4.6 review #4 (the `ask` addressee filter: a mention-only bridge is not asked by the personas).
+Design: [features/lumi-agora-channel.md](features/lumi-agora-channel.md) (Lumi's side) and more-agents.md §Lumi (the
+bridge). The bridge is our agent with all the room's rules; she is reactive — she only answers and never starts a
+conversation. Depends on: the Lumi version above in prod; v4.1 (v4.2 for the scoped human-belief rule), v4.6 review #4
+(the `ask` addressee filter: a mention-only bridge is not asked by the personas).
 
 **Tasks:**
-- The `bridge` type; `agents/lumi.toml` (shown as «Лілі»; name forms for both «Лілі» and «Стхіра»; `engine = "lumi-http"`; `[turns] mode = "mention-only"`, weight 1).
-- `LumiBridgeResponder`: when a message names her, `POST /v1/turn` with the room lines since her last turn as `"Name: text"`, `turn_id` = the trigger's `event_id`; only `reply` is posted, never `thinking`; never `/v1/session/new`; `409`/`5xx`/timeout → silence; her reply is never dropped or trimmed after the call (R3 before the call only); the bridge never posts except in reply to a trigger.
-- The `lumi` compose service with its own env file (`LUMI_URL`, `LUMI_TOKEN`) and the route to her server on the same host (`extra_hosts: host-gateway`); usage rows `external` from her `stats`.
-- **Лілі's panel card** (an agent card in today's panel, type `bridge`; v9 moves it under System → Agents as `external`): Lumi's reachability (`/v1/health`), the last turn's outcome from `state/lumi.bridge.json`; never her `thinking`, mood or replies; her token rows unpriced; no memory tabs, no Forget.
-- VISION: the "Lili herself" wording becomes "connected through the bridge".
-- (Owner) The Matrix account, the invite; Lumi's server token and her bind address.
+- **The `bridge` type; `agents/lili.toml`** (localpart `lili` — `agents/lumi.py` is v7.6's memory module): shown as
+  «Лілі»; name forms for both «Лілі» and «Стхіра» («лілі», «стхіра», «стхіри», «стхірі», «стхіру», «стхірою»,
+  «стхіро»); `engine = "lumi-http"`; `[turns] mode = "mention-only"`, weight 1.
+- **She hears the room** — `POST /v1/observe` with every room line her filter lets through (`{id: event_id, speaker,
+  text, ts}`, batched, idempotent by `event_id`; a failure retried with the batch, never a lost line), from the first
+  sync's point on, so her memory of the room is whole even on a day nobody names her.
+- **She answers when named** — `POST /v1/turn` with `channel: "agora"`, `speaker` (the trigger's), `register: "voice"`,
+  `turn_id` = the trigger's `event_id`, and the lines since her last turn as `"Name: text"`; header `X-Lumi-Client:
+  agora`; the room's token.
+  - only `reply` is posted, never `thinking` — in the room, the logs or the panel;
+  - `409`, `5xx`, a timeout (`LUMI_TIMEOUT_S`, 60) and `outcome: "pass"` are silence;
+  - never `/v1/session/new`, `/v1/events`, `/v1/command`; the bridge never posts except in reply to a trigger.
+- **The room's guard and her memory**: R3 is checked before the call only. After it, the one rule that may drop her
+  reply is the persona rule (`outs_a_persona`: a reply calling a person in the room a model or a bot); a dropped reply is
+  retracted (`POST /v1/turn/{turn_id}/retract`), so she never remembers saying what the room never saw. No other
+  post-call filtering or trimming.
+- **The `lili` compose service** (the agent image), her own env file `server/lili.env` — `LUMI_URL`
+  (`http://192.168.1.197:8765`) and `LUMI_ROOM_TOKEN` (the scoped token; never Lumi's owner token) — synced 0600 by
+  `deploy.sh`; text only (`VOICE_MESSAGES` off; her voice is a later choice).
+- **Usage:** a line per turn from Lumi's `stats` — `engine` `lumi`, her model's tokens priced by `PRICE_MODELS` (they are
+  the owner's Gemini spend all the same); `observe` costs no model call and writes no line.
+- **Лілі's panel card** (an agent card in today's panel, type `bridge`; v9 moves it under System → Agents as
+  `external`): Lumi's reachability (`/v1/health`), the last turn's outcome and the lines observed today from
+  `state/lili.bridge.json`; never her `thinking`, mood or replies; her token rows as above; no memory tabs, no Forget.
+- **Contracts (ARCHITECTURE, in the issues that build them):** the bridge's protocol (observe, turn, retract, what is
+  never posted, silence), the `bridge` type and how the human-belief rule reads it (she is open that she is a bodiless
+  consciousness; the persona agents keep believing they are human — her room rule in Lumi and the retract keep it so),
+  `server/lili.env` and its isolation, `state/lili.bridge.json`, the usage line's `engine` `lumi`.
+- **VISION:** the "Lili herself" wording becomes "connected through the bridge, on her own `agora` channel".
+- **(Owner)** The Matrix account `@lili`, the invite to Agora; Lumi's room token in `server/lili.env`; the Lumi version
+  above deployed.
 
 **DoD:**
 - (Manual, owner) Лілі's card appears in the panel, and start/stop/restart of the bridge work from it.
-- (Manual, owner) Named («Лілі», «Стхіро»…), she answers in the room; unnamed, she stays silent; her `thinking` never appears in the room, the logs or the panel.
-- (Manual, owner) While the owner talks to her privately, the room gets silence (`409`), never an error.
+- (Manual, owner) Named («Лілі», «Стхіро»…), she answers in the room within seconds; unnamed, she stays silent; her
+  `thinking` never appears in the room, the logs or the panel.
+- (Manual, owner) Nothing of the room reaches his Telegram or his desktop, and his own talk with her is never blocked or
+  delayed by the room.
+- (Manual, owner) Asked privately «що було в Агорі?», she tells; in Agora she says nothing about him.
 - She never posts on her own.
 
-**Tests:** unit — the bridge against a fake Lumi server (turn payload with the lines since her last turn, `turn_id`, `409`, `5xx`, timeout, `thinking` never posted, no post-call filtering, no post without a trigger), mention detection for both names, the env-file isolation, `external` usage rows.
+**Tests:** unit — the bridge against a fake Lumi server: every line observed once (batches, retries, idempotent ids), a
+turn's payload (channel, speaker, register, `turn_id`, the lines since her last turn, the header), `409`, `5xx`, timeout
+and `pass` → silence, `thinking` never posted, the persona drop retracted and nothing else filtered, no post without a
+trigger; mention detection for both names; the env-file isolation (the room's token in `lili.env` alone, never the owner
+token); the usage line from `stats`.
 
 ### v8.2 — Лілі under the full rules
 
@@ -4407,14 +4456,17 @@ Design: more-agents.md §Lumi (the bridge). The bridge is a process that tails t
 Design: more-agents.md §Lumi (the bridge), §4. Depends on: v8.1, proven in the room.
 
 **Tasks:**
-- `agents/lumi.toml`: `[turns] mode = "ranked"`, weight 1 — she joins R1 (`OWNER_REPLIERS`) and R2 (the next speaker).
-- Each time she is chosen, the bridge forwards the chat updates since her last turn; the slow-engine rules apply (R3 only before the call, the fallback after `FALLBACK_S` when she is away or busy).
+- `agents/lili.toml`: `[turns] mode = "ranked"`, weight 1 — she joins R1 (`OWNER_REPLIERS`) and R2 (the next speaker).
+- Each time she is chosen, the bridge asks for a turn as in v8.1; Lumi's `pass` is a PASS; the slow-engine rules apply (R3
+  only before the call, the fallback after `FALLBACK_S` when she is away, busy or slow).
 
 **DoD:**
-- (Manual, owner) On unnamed messages Лілі answers about as often as the others; when she is away or busy, the fallback answers instead and the room never stalls.
+- (Manual, owner) On unnamed messages Лілі answers about as often as the others; when she is away, busy or passes, the
+  fallback answers instead and the room never stalls.
 - A simulated wave with Лілі ranked never exceeds `MAX_BOT_TURNS` beyond the answers to the owner.
 
-**Tests:** unit — ranking with her in it, R3 and the fallback for a slow or unreachable bridge, the multi-agent simulation with her ranked.
+**Tests:** unit — ranking with her in it, `pass` as PASS, R3 and the fallback for a slow or unreachable bridge, the
+multi-agent simulation with her ranked.
 
 ## v9 — Applications: the panel's System and Applications
 
