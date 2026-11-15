@@ -171,3 +171,18 @@ def test_every_speaker_reads_a_members_voiced_line_by_its_caption(tmp_path, monk
     seeded = make_agent()
     assert seeded.seed_context([member_voice("@bruno:agora.lan", "$b3", "Привіт усім.")]) == 1
     assert seeded.history == [("Бруно", "Привіт усім.")]
+
+
+def test_the_panels_switch_turns_the_voice_off_at_once_an_answer_to_his_voice_too(tmp_path, monkeypatch):
+    """7.6 (the owner, 2026-11-15: «зроби перемикач на панелі для відключання голосу»): `VOICE_MESSAGES` off — text
+    alone, even answering his voice; on again — voice, with no restart and the voice id kept."""
+    from agents.settings import OVERRIDES_FILE, save_json
+    agent = voiced_agent(tmp_path, monkeypatch, p="1.0", llm=FakeLLM("Привіт, Ich!"))
+    save_json(agent.memory_file.parent / OVERRIDES_FILE, {"services": {}, "agents": {"ada": {"VOICE_MESSAGES": "off"}}})
+    asyncio.run(agent.on_audio(ROOM, voice_event(OWNER, "$voice")))
+    asyncio.run(run_with_tasks(agent, ROOM, transcript("Адо, як ти?", eid="$tr")))
+    assert [c["msgtype"] for c in sent(agent)] == ["m.text"] and agent.tts.texts == []
+    save_json(agent.memory_file.parent / OVERRIDES_FILE, {"services": {}, "agents": {"ada": {"VOICE_MESSAGES": "on"}}})
+    asyncio.run(agent.send_line(ROOM.room_id, "Ще раз привіт.", "$next"))
+    assert sent(agent)[-2]["msgtype"] == "m.audio" and agent.tts.texts == ["Ще раз привіт."]
+

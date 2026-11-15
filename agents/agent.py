@@ -1783,6 +1783,17 @@ class Agent:
             return "layered"
         return mode if mode in MEMORY_MODES else "layered"
 
+    def _voice_switched_off(self) -> bool:
+        """7.6 (the owner, 2026-11-15: «зроби перемикач на панелі для відключання голосу») — `VOICE_MESSAGES` off: every
+        line goes out as text, in the rooms and in Telegram, an answer to his voice too; a live switch, read at each
+        line, so the panel's change works at once. Her voice id stays."""
+        if not self.cfg.can("voice"):
+            return False
+        try:
+            return live_value(self.memory_file.parent, self.cfg.localpart, "VOICE_MESSAGES", os.environ) == "off"
+        except Exception:  # noqa: BLE001 — a settings file that cannot be read: as before
+            return False
+
     def talk_digest_now(self, now) -> str | None:
         """v7.6 (AGORA-260) — her day's running digest for the prompt's tail, in `lumi` mode only."""
         if self.memory_mode() != "lumi":
@@ -2833,7 +2844,9 @@ class Agent:
         self.voice_held, self.voice_hold_miss = None, None
         text, speech = spoken(text)  # v5.9: her voice gets the tags, the message her words
         why = self.voice_off
-        if self.tts is not None:
+        if self.tts is not None and self._voice_switched_off():  # v7.6: the panel's switch, at once
+            why = "switched off"
+        elif self.tts is not None:
             if not voiceable(text) or not voiceable(speech):  # v5.12 review #3: a link alone is never voiced
                 why = "not voiceable"
             elif self._speakers_month_used() + len(speech) > self.voice_monthly_chars:
@@ -2880,7 +2893,9 @@ class Agent:
         voice_of = self._transcript_voice.get(answering or "") or None
         text, speech = spoken(text)  # v5.9: her voice gets the tags, the message her words
         why = self.voice_off
-        if self.tts is not None:
+        if self.tts is not None and self._voice_switched_off():  # v7.6: the panel's switch, at once
+            why = "switched off"
+        elif self.tts is not None:
             if not voiceable(text) or not voiceable(speech):  # v5.12 review #3: a link alone is never voiced
                 why = "not voiceable"
             elif not voice_due(voice_of is not None, event_key or "", self.cfg.localpart, self.voice_reply_p):

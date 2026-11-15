@@ -119,6 +119,8 @@ SCHEMA: tuple[Setting, ...] = (
     _s("LOCATION", "text", "Львів, Україна", "life", "cap:world", None, "Де живе"),
     # v5.3 — its own voice (the base is the agent's <NAME>_VOICE_ID) and how often it speaks in it
     _s("VOICE_ID", "id", "", "voice", "cap:voice", None, "Голос (ElevenLabs voice id; порожньо — текст)"),
+    # 7.6 (the owner, 2026-11-15: «зроби перемикач на панелі для відключання голосу»): her voice messages on or off — a
+    # live switch, so the voice id stays and nobody restarts
     _s("VOICE_REPLY_P", "float", "1.0", "voice", "cap:voice", None,
        "Частка реплік голосом (на голос Ich — завжди)", "", 0, 1),
     # v5.9 — a speaker's own ElevenLabs model and voice settings (Кіра: eleven_v4_turbo, 0.3 — the owner's ear)
@@ -248,6 +250,8 @@ SCHEMA: tuple[Setting, ...] = (
                                                        "claudemax-opus", "codex-gpt-6.1sol")),
     # v7.6 (AGORA-260, the owner, 2026-11-12: «також в Люмі меньше підсумків розмов в промпті…»): her memory in the
     # prompt as today (`layered`) or as Lumi's (`lumi`: a short live window, her day's running digest) — a live switch
+    _s("VOICE_MESSAGES", "choice", "on", "switches", "cap:voice", None,
+       "Голосові повідомлення (off — усе текстом)", choices=("on", "off")),
     _s("MEMORY_MODE", "choice", "layered", "switches", "cap:private", None,
        "Її пам'ять у промпті (lumi — коротке вікно і підсумок дня)", choices=("layered", "lumi")),
     _s("FALLBACK_MODEL", "choice", "", "fallback", "cap:fallback", None, "Резервна модель (порожньо — немає)",
@@ -354,7 +358,8 @@ BY_NAME: dict[str, Setting] = {s.name: s for s in SCHEMA}
 # v5.22 — the switches an agent reads while it runs (`live_value`): the panel's change works at once and restarts
 # nobody; only agent settings, never applied at the start
 LIVE = frozenset({"TRACE_CALLS", "FALLBACK_ROUTE", "ANSWER_MODEL",  # v7.4: her answers' model
-                  "MEMORY_MODE"})  # v7.6: her memory's shape
+                  "MEMORY_MODE",  # v7.6: her memory's shape
+                  "VOICE_MESSAGES"})  # 7.6: her voice messages
 # the groups in their order, for a service's card and for an agent's tab
 SERVICE_GROUPS = (("turns", "Room & turns"), ("moves", "Ада і Бруно: ходи"), ("cat", "Кіт у кімнаті"),
                   ("claude", "Клод у кімнаті"), ("hermes", "Гермес"), ("voice", "Голоси агентів"),

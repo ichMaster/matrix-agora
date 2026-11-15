@@ -495,3 +495,13 @@ def test_a_line_that_is_only_a_link_goes_out_as_text_alone(tmp_path, monkeypatch
     assert asyncio.run(agent.send_telegram("https://zaxid.net/news/n1"))
     assert agent.tts.calls == [] and not agent.telegram.send_voice.await_count
     agent.telegram.send_message.assert_awaited_with(OWNER_TG, "https://zaxid.net/news/n1")
+
+
+def test_the_panels_switch_turns_her_telegram_voice_notes_off(tmp_path, monkeypatch, ogg):
+    """7.6: `VOICE_MESSAGES` off — her answer in Telegram is the text alone, no voice note made."""
+    monkeypatch.setenv("VOICE_MESSAGES", "off")
+    agent = kira(tmp_path, monkeypatch)
+    run_batch(agent, tg(10, "Як ти?"))
+    assert agent.telegram.send_voice.await_count == 0 and agent.tts.calls == []
+    assert texts_sent(agent) == ["Привіт, сонце."]
+

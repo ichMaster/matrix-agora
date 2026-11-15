@@ -63,7 +63,7 @@ def test_the_service_view_holds_the_rooms_settings_and_the_agents_view_its_own(r
     assert {"MEMORY_DAYS", "PLAN_MAX_WORDS", "LOCATION", "GEMINI_MODEL"} <= ada and "MAX_BOT_TURNS" not in ada
     assert claude == {"CLAUDE_MODEL", "CLAUDE_TIMEOUT_S", "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
                       "AGORA_HISTORY_HOURS", "AGORA_HISTORY_MIN",  # v7.5: the room's window by the hour
-                      "VOICE_ID", "VOICE_REPLY_P",  # v5.3: his voice
+                      "VOICE_ID", "VOICE_REPLY_P", "VOICE_MESSAGES",  # v5.3: his voice; 7.6: its switch
                       "ELEVENLABS_MODEL", "VOICE_STABILITY", "VOICE_SPEED"}  # v5.9: its own model and settings
     assert "GEMINI_API_KEY" not in json.dumps(view) and "PANEL_TOKEN" not in json.dumps(view)
 
