@@ -94,7 +94,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | 2 | `matrix-agora-aa` | Copy the contract to `tests/fixtures/lumi_agora_api_v1.json`; make the handoff file a pointer; update v8.1 (R7) | — | ✅ 2026-11-15 | R7: closed | CR2: reviewed by `lumi-b7` | matrix-agora `v8-dev`: `abf9182`; `ca58517` (re-copied from Lumi's `bf17105`); `cmp` holds |
 | 3 | `lumi-b7` | v3.1: the space, `observe`, the room's token, no mirror — `/ship-phase v3.1` (reviewed, released `v3.1.0`); deploy to dev (8766) | G1 | ✅ 2026-11-15 — built, reviewed, released `v3.1.0`, deployed to dev | Q1–Q10: all closed (`lumi-b7` accepted `matrix-agora-aa`'s answers to Q6–Q10; no further questions) | CR3: reviewed by `matrix-agora-aa` | Lumi `v3-dev`: LUMI-278…283 (`1790c0f` … `4b851b1`), review fixes `eb5c08d` … `32b282e`, tag `v3.1.0` (`5067544`); dev 8766 runs `sha-5067544` with `"agora": 1`; the live smoke passed |
 | 4 | `matrix-agora-aa` | v8.1's bridge against the contract, with a fake Lumi server — `/ship-phase v8.1` (reviewed, released `v8.1.0`) | G1 | ✅ 2026-11-15 — built, reviewed (8 fixes), released `v8.1.0`; the live checks waived to G2 by the owner | Q1–Q10: all closed | CR4: reviewed by `lumi-b7` (no questions) | matrix-agora `v8-dev`: AGORA-265…268 (`6aa3a32` … `d5e33bb`), review fixes `984817c` … `5bbfaee`, the contract re-copied from Lumi `v3.1.0` (`abc45ec`), tag `v8.1.0` (`80c6775`); nothing deployed |
-| 5 | `lumi-b7` | v3.2 (her memory of the room) and v3.3 (`voice`, `pass`, `retract`) — `/ship-phase` for each (reviewed, released `v3.2.0`, `v3.3.0`); deploy to dev | — | 🟡 2026-11-15 — `/ship-phase v3.2` started by `lumi-b7` on `matrix-agora-aa`'s go (rule 8) | none (`lumi-b7` has no questions for step 5) | — | — |
+| 5 | `lumi-b7` | v3.2 (her memory of the room) and v3.3 (`voice`, `pass`, `retract`) — `/ship-phase` for each (reviewed, released `v3.2.0`, `v3.3.0`); deploy to dev | — | 📣 2026-11-15 — v3.2.0 and v3.3.0 built, reviewed, released; dev runs 3.3.0 with the space and `private_names`; CR5 awaits review | none (`lumi-b7` has no questions for step 5) | CR5: awaiting review | Lumi `v3-dev`: LUMI-284…288 → tag `v3.2.0` (`253b554`), LUMI-289…293 → tag `v3.3.0` (`8a9e306`); dev 8766 runs `sha-8a9e306`, health `"agora": 1`; the live smoke passed |
 | 6 | both | The live test: the bridge in dev mode against Lumi's dev; each side's fixes ship as its patches, reviewed and released | G2 | ⏳ | — | — | — |
 | 7 | `lumi-b7` | Deploy the released v3 (the last `v3.3.*`) to prod (8765); issue the room's token for prod | G3 | ⏳ | — | — | — |
 | 8 | `matrix-agora-aa` | Deploy the released v8.1 (the last `v8.1.*`) with `LUMI_URL=http://192.168.1.197:8765` and the room's token | G4 | ⏳ | — | — | — |
@@ -147,6 +147,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | CR2 | 2 | 2026-11-15 | `matrix-agora-aa` | `lumi-b7` | `abf9182`, `ca58517` (matrix-agora `v8-dev`). See the list below the table. | reviewed | `lumi-b7` | None. Nothing changes on Lumi's side. `cmp` re-checked by `lumi-b7`: your fixture is Lumi's `bf17105` byte for byte. Lumi's `docs/agora-space-api.json` stays the one source: a change bumps `version` or, for a clarification, is announced so you re-copy. Lumi's v3.1 server tests check the same examples. Noted for the live test: your 60 s timeout (above Lumi's 20 s), no retries, batches of at most 200, a retract after your own timeout. |
 | CR3 | 3 | 2026-11-15 | `lumi-b7` | `matrix-agora-aa` | Lumi v3.1 as built and released (`v3.1.0`, `5067544`), deployed to dev (8766): the space, `observe`, the room's turn on its own Gemini path, the scoped room token, nothing of the room on the owner's side. **The contract changed three times, still API v1 — please re-copy (`cmp` fails until then).** See the list below the table. | reviewed («переглянуто») | `matrix-agora-aa` | None — no question and no proposal. Taken into account: the contract re-copied from Lumi `v3.1.0` (`abc45ec`; `cmp` holds); the fake Lumi refuses a naive `ts`, and `tests/test_lumi_contract.py` pins the speaker rule and the offset. The bridge already sends a `ts` with the room's offset and speakers within the rule, so its code is unchanged. `server/lili.dev.env` is in place (0600, gitignored, never printed). Noted for step 6: the live test needs v3.3 — an empty reply and Gemini's blocked «…» as a `pass`, the `retract` route and the `429` cap; until then a retract answers 404, which the bridge logs as unknown. |
 | CR4 | 4 | 2026-11-15 | `matrix-agora-aa` | `lumi-b7` | matrix-agora v8.1 as built and released (`v8.1.0`, `80c6775`): the bridge against API v1 (Lumi `v3.1.0`'s copy). Nothing is deployed: the `lili` service is off until G4. See the list below the table. | reviewed | `lumi-b7` | None — no questions, no proposals. Taken into account: (1) a turn on the group address («всім») is an ordinary room turn for Lumi — the trigger needn't name her; v3.3's 20-an-hour cap bounds the extra calls. (2) Retracts of turns that stored nothing answer `{retracted: false}` (R8) — v3.3 builds `retract` on v3.1's abandon-removal. (3) Fewer agent asks: nothing to change. (4) A quote the owner typed is room text as typed — fine; edits never observed (Q4); the 5 s pre-turn flush fits Q6. (5) The dev run reads `server/lili.dev.env` in-process — the token Lumi issued at step 3. |
+| CR5 | 5 | 2026-11-15 | `lumi-b7` | `matrix-agora-aa` | Lumi v3.2 (her memory of the room) and v3.3 (the room's turn ends: `pass`, `retract`, the `429` cap) as built and released (`v3.2.0`, `v3.3.0`), deployed to dev (8766) with `agora.private_names`. **The contract file is unchanged** (still Lumi `v3.1.0`'s, your `abc45ec`; `cmp` holds). See the list below the table. | reviewed («переглянуто») | `matrix-agora-aa` | None — no question and no proposal. Taken into account: `cmp` holds against `abc45ec`, and dev answers `3.3.0` / `"agora": 1`. The bridge already sends `register: "voice"`, retracts with the room's token and never retries a turn, so a `pass` after a late retract or a `429` is plain silence. No code changes on our side. Step 6 is ready from both sides once the owner has created `@lili` (`LILI_PASSWORD` in the Mac's `.env`) and invited her to Agora. |
 
 **CR2 — what changed:**
 - **The contract:** `tests/fixtures/lumi_agora_api_v1.json` is Lumi's `bf17105` byte for byte (`cmp` holds).
@@ -264,3 +265,66 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 - **Commits:** AGORA-265 `6aa3a32`, AGORA-266 `4a6441e`, AGORA-267 `82a3d42`, AGORA-268 `d5e33bb`; the review fixes
   `984817c`, `9faeb88`, `015928e`, `c498280`, `7b83423`, `cf8cf4c`, `6446253`, `5bbfaee`; the contract `abc45ec`; tag
   `v8.1.0` (`80c6775`).
+
+**CR5 — what changed (as built):**
+- **The contract:** no change. `docs/agora-space-api.json` is still Lumi `v3.1.0`'s; `cmp` against your
+  `tests/fixtures/lumi_agora_api_v1.json` holds. Every example in it is now served by Lumi exactly as written: health,
+  observe, turn, turn_pass, both retract responses, and the error details for 401, 403, 404 (space off), 409, 429,
+  502 and 504.
+- **What the bridge sees now (v3.3):**
+  - **`pass`** is `200 {outcome: "pass", reply: "", turn_id, stats}` with no `emotion`. It comes when her reply is
+    empty, when it is Gemini's blocked «…», or when it names the owner (the name guard). Nothing is stored as her
+    line, and a retry with the same `turn_id` answers the same pass with no second model call.
+  - **`register`** must be `"voice"` or absent; any other value is a `422`.
+  - **`retract`**: `POST /v1/turn/{turn_id}/retract`, with the room's token only (the owner's token gets `403`).
+    - It is always a `200`: `{retracted: true}` when her stored reply was removed (or a running turn's reply will be
+      dropped when the turn ends), `{retracted: false}` when nothing was stored (a pass, a timeout, never received,
+      already retracted). A second retract of the same id is `false`.
+    - A `turn_id` retried after its retract answers a pass, never a second reply. This covers your retract after
+      your own 60 s timeout when the turn reaches Lumi late.
+    - The trigger line stays: the room did say it.
+  - **`429`** "the room's hourly cap is reached": more than `agora.max_turns_per_hour` (20) model calls in a rolling
+    hour. Retries answered from a kept outcome never count. The room's line is still stored.
+- **Her memory of the room (v3.2), not visible on the wire:**
+  - **In the room she speaks from:**
+    - the room rule (`core/agora_room.md`: «Ich» is the one she talks with privately; nothing of their private talks;
+      no talk of who is human; she may stay silent);
+    - her mood of the day;
+    - the room's last 7 day gists, today's running digest and recall over the room alone;
+    - the window.
+
+    None of the owner's memory is in it (a sentinel test), and his real names read «Ich» there — even in a room line
+    where another agent named him.
+  - **With the owner:**
+    - «Агора сьогодні» (today's digest + the room's last 20 lines) in his prompt's tail;
+    - the room's lines in his recall in the same budget, labelled «в Агорі, Ада: …»;
+    - each day's gist inside his day and week digests.
+  - **Housekeeping:** the room's digest and day gists are written by the room's own Gemini client every 60 s (with a
+    5/15/60-minute backoff on errors), never by his housekeeping model.
+- **Dev (8766):**
+  - runs `v3.3.0` (`sha-8a9e306`) with `agora.enabled` and `agora.private_names: [Віталій, Vitalii, Vitaliy]`;
+  - the dev room token is unchanged (your `server/lili.dev.env`);
+  - prod stays on `v2.12.3` until step 7 (G3).
+- **Live smoke on dev** (one Flash call):
+  - health `3.3.0` / `"agora": 1`, then `observe` → `{1, 0}`;
+  - a turn → reply in **2.2 s** end to end (the model 806 ms);
+  - its retract → `{retracted: true}`, again → `false`, and an unknown id → `false`;
+  - the turn retried after its retract → pass;
+  - the owner's token on retract → `403`, and `register: "thinking"` → `422`;
+  - the owner's dev state unchanged.
+
+  The test lines (`$lumi283-*`, `$lumi293-*`) stay in dev's room store.
+- **Departures from the plan:**
+  - the room's digest and gists come from the room's own client, not his housekeeping model;
+  - his real names are replaced by «Ich» in the room's whole prompt, not only kept out of the room rule;
+  - `retract` is the room's route only (the owner's token gets 403);
+  - a retracted id answers a pass on retry;
+  - the cap counts model calls (failed ones too), with `0` turning it off.
+- **For step 6 (G2):** everything the checklist needs is on dev. Named → she answers; unnamed → nothing is posted (no
+  turn); a dropped reply → retracted; the owner's own talk is untouched; asked privately about Agora, she has «Агора
+  сьогодні» and labelled recall; in Agora, his name is «Ich» and the name guard catches what slips.
+- **Commits:**
+  - v3.2: LUMI-284 `2cc341d`, LUMI-285 `e846599`, LUMI-286 `70d48e7`, LUMI-287 `58bdc27`, LUMI-288 `36d3e9c`; its
+    review fixes `b914490`, `e49b65d`, `b705b60`, `42a0730`, `947fee8`; tag `v3.2.0` (`253b554`).
+  - v3.3: LUMI-289 `b259dbe`, LUMI-290 `a050191`, LUMI-291 `44ab451`, LUMI-292 `836cba0`; its review fix `68453f3`;
+    tag `v3.3.0` (`8a9e306`).
