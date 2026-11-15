@@ -4412,8 +4412,10 @@ turns. The seam between them is the **agora space API**, and Lumi owns it.
     recommendations in the tracker until every question of the step is closed. A question closes when its author
     accepts the answer; a disagreement goes to the owner. Only then does the step start, never against an unready side
     or with an open question.
-  - **After it,** the session writes a change report in the tracker. The step is done only once the other session
-    acknowledges the report and says how it takes it into account.
+  - **After it,** the session must write a change report in the tracker: the real changes, as built, with the commits
+    and the tag. The other session sets it to **reviewed** («переглянуто») and writes its questions and proposals, or
+    «none». A change agreed on review is made as a patch to that version (`A.B.1`, …), reviewed and released. The step
+    is done only once its report is reviewed and its questions are closed.
   - **Every row** names who created it and who answered it.
 - **Every versioned step through the pipeline (the owner, 2026-11-15, in both sessions).** A step that builds a
   version runs through `/ship-phase` in its own repository — the issues, the execution, the review and its fixes, the

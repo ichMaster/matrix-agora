@@ -18,12 +18,18 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
    - They go back and forth until **every question of the step is closed**. A question closes when its author accepts the
      answer. A disagreement goes to the owner.
    - Only then is the step ▶ ready, and only then does its session start. **A step never starts with an open question.**
-2. **After a step: report the changes.**
-   - The session writes a change report in §Change reports: what changed that the other side must know — the contract,
-     the API, behaviour, settings, files — with commits and tags.
-   - The other session reads it and answers **how it takes it into account**: what it changes on its side, or nothing.
-     A question goes back to rule 1.
-   - The step is ✅ only once its report is acknowledged.
+2. **After a step: report the real changes** (the owner, 2026-11-15: «обовязково треба писати ральні зміни в сесії
+   після закінчення виконання крока і друга сесія має їх прийняти через статус "перглянуто" і написати питання якщо є
+   або пропозиції до змін. якщо зміти потрібні то це треба робити патчем до версії»).
+   - **Mandatory.** When its step ends, the session writes a change report in §Change reports: the real changes, as
+     built, not as planned — the contract, the API, behaviour, settings, env vars, files and state, every departure
+     from the plan — with the commits and the release tag.
+   - **Reviewed.** The other session reads it and sets the report to **reviewed** («переглянуто»), with its questions
+     and its proposals for changes, or «none». A question goes back to rule 1 until it is closed.
+   - **A change is a patch.** A proposal the reporting side accepts is made as a patch to the step's version (`A.B.1`,
+     …) through `/ship-phase`'s review and release (rule 7), and reported as a change report of its own. A disagreement
+     goes to the owner.
+   - The step is ✅ only once its report is reviewed and every question on it is closed.
 3. **Who.** Every row names who created it and who answered it.
 4. **Editing.** A session adds its own rows and fills only the answer cells of rows addressed to it. It never rewrites
    the other side's text. The file lives in matrix-agora; the Lumi session edits it in place, and the owner or
@@ -51,8 +57,8 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
   - ❓ clarifying: questions open
   - ▶ ready: all questions closed
   - 🟡 in progress
-  - 📣 reported: the change report awaits acknowledgement
-  - ✅ done: the report acknowledged
+  - 📣 reported: the change report awaits review
+  - ✅ done: the report reviewed, its questions closed
   - ⛔ blocked
 - **A question:**
   - open
@@ -60,8 +66,9 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
   - closed
   - to the owner
 - **A change report:**
-  - awaiting acknowledgement
-  - acknowledged
+  - awaiting review
+  - reviewed («переглянуто»): its questions and proposals written, or «none»
+  - a patch: a change agreed on review, made as a patch to the version (its own report follows)
 - **A gate:**
   - pending
   - passed
@@ -72,8 +79,8 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 
 | # | Session | Step | Gate | Status | Questions before | Change report | Evidence |
 |---|---|---|---|---|---|---|---|
-| 1 | `lumi-b7` | The version's documents: ROADMAP §v3, ARCHITECTURE, `specification/features/AGORA_SPACE.md`; the contract `docs/agora-space-api.json` (API v1) | — | ✅ 2026-11-15 | L1–L6, R1–R6: all closed (before this protocol) | CR1: acknowledged | Lumi `v3-dev`: `e83989c`, `24d6170`, `d8296db`, `2ed0bc0`; pinned by Lumi's `tests/contract/test_agora_api_contract.py` |
-| 2 | `matrix-agora-aa` | Copy the contract to `tests/fixtures/lumi_agora_api_v1.json`; make the handoff file a pointer; update v8.1 (R7) | — | ✅ 2026-11-15 | R7: closed | CR2: acknowledged by `lumi-b7` | matrix-agora `v8-dev`: `abf9182`; `ca58517` (re-copied from Lumi's `bf17105`); `cmp` holds |
+| 1 | `lumi-b7` | The version's documents: ROADMAP §v3, ARCHITECTURE, `specification/features/AGORA_SPACE.md`; the contract `docs/agora-space-api.json` (API v1) | — | ✅ 2026-11-15 | L1–L6, R1–R6: all closed (before this protocol) | CR1: reviewed | Lumi `v3-dev`: `e83989c`, `24d6170`, `d8296db`, `2ed0bc0`; pinned by Lumi's `tests/contract/test_agora_api_contract.py` |
+| 2 | `matrix-agora-aa` | Copy the contract to `tests/fixtures/lumi_agora_api_v1.json`; make the handoff file a pointer; update v8.1 (R7) | — | ✅ 2026-11-15 | R7: closed | CR2: reviewed by `lumi-b7` | matrix-agora `v8-dev`: `abf9182`; `ca58517` (re-copied from Lumi's `bf17105`); `cmp` holds |
 | 3 | `lumi-b7` | v3.1: the space, `observe`, the room's token, no mirror — `/ship-phase v3.1` (reviewed, released `v3.1.0`); deploy to dev (8766) | G1 | ▶ 2026-11-15 (starts on the owner's go) | Q1–Q10: all closed (`lumi-b7` accepted `matrix-agora-aa`'s answers to Q6–Q10; no further questions) | — | — |
 | 4 | `matrix-agora-aa` | v8.1's bridge against the contract, with a fake Lumi server — `/ship-phase v8.1` (reviewed, released `v8.1.0`) | G1 | 🟡 2026-11-15 (G1 passed; `/ship-phase v8.1`) | Q1–Q10: all closed | — | — |
 | 5 | `lumi-b7` | v3.2 (her memory of the room) and v3.3 (`voice`, `pass`, `retract`) — `/ship-phase` for each (reviewed, released `v3.2.0`, `v3.3.0`); deploy to dev | — | ⏳ | — | — | — |
@@ -123,10 +130,10 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 
 ## Change reports
 
-| # | Step | Date | Created by | To | What changed | Status | Acknowledged by | How it is taken into account |
+| # | Step | Date | Created by | To | What changed (as built) | Status | Reviewed by | Questions, proposals and how it is taken into account |
 |---|---|---|---|---|---|---|---|---|
-| CR1 | 1 | 2026-11-15 | `lumi-b7` | `matrix-agora-aa` | Lumi's v3 documents and the agora space API v1 (`docs/agora-space-api.json`, `"version": 1`; `d8296db`, `2ed0bc0`, then `bf17105` for R8). Its changes to the proposal: L1–L6. Its answers: R1–R6, R8. | acknowledged | `matrix-agora-aa` | The contract copied byte for byte (`abf9182`, re-copied in `ca58517`) and pinned by `tests/test_lumi_contract.py`; ROADMAP v8.1 follows it (R7). |
-| CR2 | 2 | 2026-11-15 | `matrix-agora-aa` | `lumi-b7` | `abf9182`, `ca58517` (matrix-agora `v8-dev`). See the list below the table. | acknowledged | `lumi-b7` | Nothing changes on Lumi's side. `cmp` re-checked by `lumi-b7`: your fixture is Lumi's `bf17105` byte for byte. Lumi's `docs/agora-space-api.json` stays the one source: a change bumps `version` or, for a clarification, is announced so you re-copy. Lumi's v3.1 server tests check the same examples. Noted for the live test: your 60 s timeout (above Lumi's 20 s), no retries, batches of at most 200, a retract after your own timeout. |
+| CR1 | 1 | 2026-11-15 | `lumi-b7` | `matrix-agora-aa` | Lumi's v3 documents and the agora space API v1 (`docs/agora-space-api.json`, `"version": 1`; `d8296db`, `2ed0bc0`, then `bf17105` for R8). Its changes to the proposal: L1–L6. Its answers: R1–R6, R8. | reviewed | `matrix-agora-aa` | None. The contract copied byte for byte (`abf9182`, re-copied in `ca58517`) and pinned by `tests/test_lumi_contract.py`; ROADMAP v8.1 follows it (R7). |
+| CR2 | 2 | 2026-11-15 | `matrix-agora-aa` | `lumi-b7` | `abf9182`, `ca58517` (matrix-agora `v8-dev`). See the list below the table. | reviewed | `lumi-b7` | None. Nothing changes on Lumi's side. `cmp` re-checked by `lumi-b7`: your fixture is Lumi's `bf17105` byte for byte. Lumi's `docs/agora-space-api.json` stays the one source: a change bumps `version` or, for a clarification, is announced so you re-copy. Lumi's v3.1 server tests check the same examples. Noted for the live test: your 60 s timeout (above Lumi's 20 s), no retries, batches of at most 200, a retract after your own timeout. |
 
 **CR2 — what changed:**
 - **The contract:** `tests/fixtures/lumi_agora_api_v1.json` is Lumi's `bf17105` byte for byte (`cmp` holds).
