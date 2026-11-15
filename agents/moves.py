@@ -71,8 +71,11 @@ def persona_move(event_id: str, me: Member, roster: Mapping[str, Member], owner_
         return Move("answer")
     if kind != "ask":
         return Move(kind)
-    # v5.1: never the herald — he takes no turn, so a question to him would hang
-    names = sorted({m.name for m in speakers(roster.values()) if m.user_id != me.user_id} | {owner_name})
+    # v5.1: never the herald — he takes no turn, so a question to him would hang; v8.1 (v4.6 review #4, code review
+    # v8.1 #1): never a mention-only member — a question names her, she alone may answer, and when she passes the chain
+    # stops (Лілі's 20 room turns an hour are hers, never the personas' to spend)
+    names = sorted({m.name for m in speakers(roster.values())
+                    if m.user_id != me.user_id and m.mode != "mention-only"} | {owner_name})
     pick = names[min(int(uniform(event_id, "ask:" + me.localpart) * len(names)), len(names) - 1)]
     return Move("ask", pick)
 

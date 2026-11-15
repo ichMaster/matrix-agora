@@ -47,8 +47,10 @@ def test_the_move_is_the_same_for_the_same_event_and_differs_between_the_two():
 def test_the_addressee_is_never_oneself_and_everyone_is_asked():
     for me in (ADA, BRUNO):
         asked = {m.addressee for m in (draw(f"$a{i}", me) for i in range(3000)) if m.kind == "ask"}
-        others = {m.name for m in ROOM.values() if m.user_id != me.user_id and m.mode != "none"} | {"Ich"}
+        others = {m.name for m in ROOM.values()
+                  if m.user_id != me.user_id and m.mode not in ("none", "mention-only")} | {"Ich"}
         assert "Гермес" not in asked  # v5.1: the herald takes no turn — a question to him would hang
+        assert "Лілі" not in asked  # v8.1 (code review #1, v4.6 #4): the mention-only bridge is never asked
         assert "Устина" in asked  # v6.4: Agora meets her — asked like any other member
         assert asked == others and me.name not in asked
 
