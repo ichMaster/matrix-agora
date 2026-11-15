@@ -32,7 +32,12 @@ def test_observe_retract_and_health_as_the_bridge_reads_them():
     assert set(observe["request"]["body"]) == {"channel", "lines"}
     assert all(set(line) == {"id", "speaker", "text", "ts"} for line in observe["request"]["body"]["lines"])
     assert set(observe["response"]["body"]) == {"stored", "known"}
-    assert CONTRACT["endpoints"]["retract"]["response"]["body"] == {"retracted": True}
+    retract = CONTRACT["endpoints"]["retract"]
+    assert retract["response"] == {"status": 200, "body": {"retracted": True}}
+    # R8 (Lumi bf17105): a retract is always a 200 — nothing stored (a pass, a timeout, a second retract) is `false`, and
+    # a 404 means only that the space is off, never a retract
+    assert retract["response_nothing_stored"] == {"status": 200, "body": {"retracted": False}}
+    assert all("never a retract" in e["when"] for e in CONTRACT["errors"] if e["status"] == 404)
     assert CONTRACT["endpoints"]["health"]["response"]["body"]["agora"] == 1
 
 
