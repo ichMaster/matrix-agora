@@ -44,6 +44,7 @@ from agents.lumi_api import (
 )
 from agents.roster import Member
 from agents.settings import save_json
+from agents.turns import ReplyDecision
 from agents.usage import lumi_usage_line
 from agents.world import local_now
 
@@ -60,6 +61,9 @@ STOP_FLUSH_S = 10.0        # the last flush at a stop, bounded
 # v8.1 — whether the line on its way through `Agent.on_message` is one she hears: a room `m.text` (the owner's voice by
 # Hermes's transcript included), never a member's voiced caption (the same words follow as `m.text`, Q8)
 _HEARABLE: ContextVar[bool] = ContextVar("bridge_hearable", default=False)
+# code review v8.1 #2 — the line on its way is an edit: it enters her timeline as it enters every agent's (shared input
+# for R3 and the wave), but she neither hears it (Q4) nor answers it
+_EDIT: ContextVar[bool] = ContextVar("bridge_edit", default=False)
 
 
 def load_state(path: Path) -> dict:
@@ -146,15 +150,18 @@ class Bridge(Agent):
 
     # --- she hears ---------------------------------------------------------------------------------------------------
     async def on_message(self, room, event) -> None:
-        if is_edit(event):  # Q4: only new lines — an edit is neither heard nor answered
-            if self.started and room.room_id == self.cfg.room_id:
-                log.info("ignored: edit")
-            return
-        token = _HEARABLE.set(isinstance(event, RoomMessageText))
+        edit = is_edit(event)  # Q4: only new lines are heard — but an edit is in every agent's timeline, so in hers
+        hearable, editing = _HEARABLE.set(isinstance(event, RoomMessageText) and not edit), _EDIT.set(edit)
         try:
             await super().on_message(room, event)
         finally:
-            _HEARABLE.reset(token)
+            _EDIT.reset(editing)
+            _HEARABLE.reset(hearable)
+
+    def decide(self, sender: str, text: str, event_id: str, now_ms: int, resumed: bool = False):
+        if _EDIT.get():  # code review v8.1 #2: never a turn on an edit (Lumi knows new lines alone, Q4)
+            return ReplyDecision(False, reason="edit")
+        return super().decide(sender, text, event_id, now_ms, resumed)
 
     def on_room_line(self, sender: str, text: str, event_id: str, ts_ms: int) -> None:
         if not _HEARABLE.get() or sender == self.cfg.user_id:

@@ -326,3 +326,19 @@ def test_the_token_is_in_no_log_line(caplog):
     caplog.set_level("DEBUG")
     asyncio.run(go())
     assert TOKEN not in caplog.text and "Лілі?" not in caplog.text
+
+
+def test_an_edit_enters_her_timeline_as_every_agents_but_is_neither_heard_nor_answered():
+    """Code review v8.1 #2: the room's agents keep an edit in their timeline (R3, the wave); so does she — never heard,
+    never answered."""
+    async def go():
+        b, fake = make()
+        edit = ev(OWNER, "* Лілі, а ти?", T0 + 2000, "$edit", content={
+            "msgtype": "m.text", "body": "* Лілі, а ти?", "m.relates_to": {"rel_type": "m.replace", "event_id": "$o1"}})
+        await hear(b, ev(OWNER, "Привіт усім", T0, "$o1"), ev(BRUNO, "Привіт!", T0 + 1000, "$b1"), edit)
+        await asyncio.sleep(0.01)
+        assert [e[2] for e in b.timeline] == ["$o1", "$b1", "$edit"]       # the same timeline as Ада's
+        assert "$edit" not in [line["id"] for line, _ in b.queue]           # never heard
+        assert not any(c["path"] == "/v1/turn" and c["body"]["turn_id"] == "$edit" for c in fake.calls)
+        assert b.decide(OWNER, "Лілі?", "$new", T0 + 3000).reply is True     # a new line is decided as ever
+    asyncio.run(go())
