@@ -1,3 +1,30 @@
+Version 8.1.0 (2026-11-15)
+---------------------------
+- Лілі in Agora through the bridge (v8.1, sync step 4): Lumi's own Лілі
+  joins the room as an agent of the type `bridge` on Lumi's agora space API
+  v1 (AGORA-265…268). She hears every room line (observe: batched, resent
+  whole, today's backlog after a restart, never her own lines or edits) and
+  answers only when named («Лілі», «Стхіра») with the trigger alone; her reply
+  is posted exactly as Lumi returned it; 409/429/5xx, a pass and her own 60 s
+  timeout are silence, never retried; a reply the persona rule drops, a turn
+  she gave up on or a send the room never got is retracted. Her thinking is
+  never kept
+- the `lumi-http` engine, agents/lili.toml (mention-only), agents/bridge.py
+  and agents/lumi_api.py; the fake Lumi server built from the contract
+  (re-copied from Lumi v3.1.0, still API v1)
+- her panel card (Lumi's reachability, the last turn, the lines heard today;
+  no forget), her turns as the service `lumi` in Analytics (billing external,
+  never priced), the `lili` compose service with her own lili.env behind the
+  profile `lili` (off until G4), the dev run with server/lili.dev.env
+- the code review's eight fixes: the personas never ask her (v4.6 #4); an
+  edit in her timeline as in every agent's; the compose profile; retracts for
+  what the room never saw; the observe queue's backoff and a bounded pre-turn
+  flush; a refusal stops the turn; only Element's reply fallback stripped; the
+  card says why when Lumi's address or token is missing
+- WAIVED by the owner (2026-11-15, rule 7): the live DoD (AGORA-269) is
+  checked at sync step 6, gate G2, against Lumi's dev; fixes ship as 8.1.x.
+  Nothing is deployed yet: the `lili` service starts at G4
+
 Version 7.6.1 (2026-11-15)
 ---------------------------
 - the room back on Gemini 2.5 Flash, as before v7.2: Ада, Бруно, Леон, Мія,
