@@ -394,3 +394,19 @@ def test_flushes_never_pile_up_past_the_backoff_and_the_turn_waits_for_them_no_l
         await asyncio.wait_for(asyncio.gather(*b._tasks), 3)   # the turn went within the bound
         assert any(c["path"] == "/v1/turn" for c in fake.calls)
     asyncio.run(go())
+
+
+@pytest.mark.parametrize("status", [401, 403, 404])
+def test_a_refusal_on_the_pre_turn_flush_stops_the_turn(status):
+    """Code review v8.1 #6: a 401/403 means no more calls until a restart, a 404 the space off — the turn never follows."""
+    async def go():
+        b, fake = make()
+        await hear(b, ev(ADA, "туман", T0, "$a1"))
+        if status == 401:
+            fake.token = "another"
+        else:
+            fake.observe_status = [status]
+        await hear(b, ev(OWNER, "Лілі?", T0 + 1000, "$o1"))
+        await asyncio.wait_for(asyncio.gather(*b._tasks), 5)
+        assert fake.paths() == ["/v1/observe"] and sent(b) == []
+    asyncio.run(go())

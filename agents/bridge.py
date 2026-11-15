@@ -298,6 +298,10 @@ class Bridge(Agent):
                 await asyncio.wait_for(self.flush(force=True), PRE_TURN_FLUSH_S)  # code review v8.1 #5: bounded
             except TimeoutError:
                 log.info("observe: still sending before the turn — the turn goes on")
+            why = self._lumi_closed()  # code review v8.1 #6: the flush may have met a refused token or the space off
+            if why:
+                log.info("silent: lumi %s", why)
+                return False
             got = await self.lumi.turn(speaker, answered, plain_body(text))
             self._turn_done(got)
             if got.outcome == "timeout":
