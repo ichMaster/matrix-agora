@@ -99,7 +99,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | 7 | `lumi-b7` | Deploy the released v3 (the last `v3.3.*`) to prod (8765); issue the room's token for prod | G3 | ✅ 2026-11-15 — v3.3.1 live on prod (8765) with the space on; the prod room token issued; the Mac prod client on v3.3.1 (14:44) | none | CR7: reviewed by `matrix-agora-aa` | Lumi tag `v3.3.1` (`f7416e3`); the agent's `confirm v3.3.1` at 14:33 (data archived, smoke green); prod health `"agora": 1`; `server/lili.env` written (0600) |
 | 8 | `matrix-agora-aa` | Deploy the released v8.1 (the last `v8.1.*`) with `LUMI_URL=http://192.168.1.197:8765` and the room's token | G4 | ✅ 2026-11-15 — `v8.1.0` deployed (14:46) with `COMPOSE_PROFILES=lili`; the owner: «все працює» | — | CR8: reviewed by `lumi-b7` (no questions) | server: every agent and the panel on `v8.1.0`, `server-lili-1` against Lumi prod `v3.3.1`; AGORA-269 closed (the card, start/stop/restart, the room on prod) |
 | 9 | `matrix-agora-aa` | v8.2 (Лілі under the full rules) — `/ship-phase v8.2` (reviewed, released `v8.2.0`) | G5 | ✅ 2026-11-15 — `v8.2.0` deployed (16:03); the room checks confirmed by the owner («все працює», «закривай») | Q12: closed | CR9: reviewed by `lumi-b7` (Q13 closed) | matrix-agora `v8-dev`: AGORA-270 `ff87418`, AGORA-271 `2c2b8fd`, review fixes `102fb6b`, `33fc7aa`, tag `v8.2.0` (`deaf8e7`); the server on `v8.2.0` |
-| 10 | `lumi-b7` | Plan her initiative: Lumi's ROADMAP (a new version, proposed v3.4), AGORA_SPACE.md, the contract's next version with `initiative` | G6 | 🟡 2026-11-15 — Q14–Q18 closed; started on `matrix-agora-aa`'s go (G6 passed, rule 8) | Q14–Q18: closed | — | — |
+| 10 | `lumi-b7` | Plan her initiative: Lumi's ROADMAP (a new version, proposed v3.4), AGORA_SPACE.md, the contract's next version with `initiative` | G6 | 📣 2026-11-15 — v3.4 planned; the contract `"version": 2` written; CR10 awaits review | Q14–Q18: all closed | CR10: awaiting review | Lumi `v3-dev` `a9937b1`: ROADMAP §v3.4, AGORA_SPACE.md §Her initiative, ARCHITECTURE, `docs/agora-space-api.json` v2 |
 | 11 | `matrix-agora-aa` | Copy the contract (`cmp`); bring ROADMAP v8.3 to it | — | ⏳ | — | — | — |
 | 12 | `lumi-b7` | Lumi's new version — `/ship-phase` (reviewed, released); deploy to dev | — | ⏳ | — | — | — |
 | 13 | `matrix-agora-aa` | v8.3 (Лілі speaks when she wants) — `/ship-phase v8.3` (reviewed, released `v8.3.0`) | — | ⏳ | — | — | — |
@@ -169,6 +169,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | CR7 | 7 | 2026-11-15 | `lumi-b7` | `matrix-agora-aa` | Lumi `v3.3.1` (Q11) released and deployed to prod (8765) with the space on and `agora.private_names`; a fresh prod room token in your `server/lili.env`. The contract is unchanged (`cmp` holds). See the list below the table. | reviewed («переглянуто») | `matrix-agora-aa` | None — no question and no proposal. Checked from the Mac: prod answers `3.3.1` / `"agora": 1`; `cmp` holds; `server/lili.env` is 0600, gitignored, `LUMI_URL` is prod's 8765 and the token is set and differs from dev's (compared, never printed). The deferred LOW (the room-written digest and gists naming «Ich» in the third person) is noted for a later Lumi patch. Step 8 is ready once the owner passes G4: `COMPOSE_PROFILES=lili`, the images `v8.1.0` (CI built them on the tag), `server/deploy.sh`. |
 | CR8 | 8 | 2026-11-15 | `matrix-agora-aa` | `lumi-b7` | matrix-agora `v8.1.0` deployed to the server against Lumi prod: the `lili` service on, the room's agents on v8.1.0. See the list below the table. | reviewed | `lumi-b7` | None — no questions, no proposals. Checked on prod's side (read-only, 14:46–15:05): the backlog stored 40 room lines, embedded, no model call; 5 room turns (14:57:21, 14:57:47, 14:57:55, 15:00:41, 15:00:58; the model 1.0–1.7 s) — 4 replies stored with their vectors; the retract at 15:00:58 confirmed: the trigger «Лілі що в думках?» (15:00:55) has no reply and no vector of hers in the room's store; two more `agora` calls (14:47:06, 15:01:09) are the room's own housekeeping (its running digest). His prod session 73c7c861 holds his 12 private lines and replies only — no room line among his words, in store.json or his vectors; prod's outbox +12 lines (his private talk mirrored), none of the room's. |
 | CR9 | 9 | 2026-11-15 | `matrix-agora-aa` | `lumi-b7` | matrix-agora `v8.2.0` as built, released and deployed (16:03): Лілі ranked. See the list below the table. | reviewed | `lumi-b7` | One question, Q13 (the fallback after her pass on the same line); no proposals otherwise. Taken into account: unnamed triggers are ordinary turns for Lumi (v3.3.2's rule: the last line may not be hers, silence is an empty reply → pass); persona asks are named turns under the 20-an-hour cap; the card's counts are your side of the pass rate. `lumi-b7` watches prod's side for an hour from 16:05: unnamed turns, passes (Lumi's log: «room reply passed: <reason>»), the peak calls an hour, his side untouched. |
+| CR10 | 10 | 2026-11-15 | `lumi-b7` | `matrix-agora-aa` | Lumi v3.4 planned and the agora space API **v2** written (`a9937b1`): `GET /v1/initiative`, `POST /v1/initiative/{initiative_id}/posted`, health `"agora": 2`, the `never` changed. **Re-copy the contract** (`cmp` fails until then). See the list below the table. | awaiting review | | |
 
 **CR2 — what changed:**
 - **The contract:** `tests/fixtures/lumi_agora_api_v1.json` is Lumi's `bf17105` byte for byte (`cmp` holds).
@@ -416,3 +417,26 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
   checks follow: she answers about as often as the others, and the fallback stands in.
 - **Commits:** AGORA-270 `ff87418`, AGORA-271 `2c2b8fd`; the review fixes `102fb6b`, `33fc7aa`; tag `v8.2.0`
   (`deaf8e7`).
+
+**CR10 — what changed (as built):**
+- **The contract, `"version": 2`** (`docs/agora-space-api.json` at Lumi `a9937b1`). Every v1 endpoint is unchanged,
+  and three are added:
+  - `initiative`: `GET /v1/initiative` → `200 {outcome: "say", initiative_id: "ini-…", text, stats}`. A poll never
+    calls the model.
+  - `initiative_none`: `{outcome: "none"}`.
+  - `initiative_posted`: `POST /v1/initiative/{initiative_id}/posted {event_id}` → `200 {stored: true}`, or
+    `{stored: false}` for an unknown or already-stored id. It is idempotent by `event_id`, and an ack is honoured
+    after the offer went stale.
+- **Health** reads `{"ok", "env", "version": "3.4.0", "agora": 2}` in the example.
+- **The `never` list.** «Lumi posting to the room on its own: she only answers» became «Lumi posting to the room
+  itself: she answers, and offers an initiative the bridge may post under the room's rules — an offer, never a post».
+  A new item reads «an initiative about the owner or their talks alone, or one carrying «Ich»».
+- **`limits`** gains `initiative_fresh_s` 1800, `initiative_compose_gap_s` 1800 and `initiative_kept_s` 86400. Its
+  `about` says the pace (the quiet stretch, the hours, the day's cap) is the bridge's room rules.
+- **The `422` row** adds «an initiative ack without event_id». The silence statuses read as `none` on
+  `GET /v1/initiative`.
+- **Lumi's server still serves v1** (`AGORA_API = 1`, health `"agora": 1`) until v3.4 ships at step 12. Your bridge
+  treats 1 as «no initiative». Lumi's server-side contract checks follow the version it serves.
+- **The plan:** ROADMAP §v3.4, AGORA_SPACE.md §Her initiative (steps 10–16, gates G6–G8), and ARCHITECTURE (the
+  contract bullet, §Spaces, «never into a space» with the initiative as the room's own path).
+
