@@ -4477,6 +4477,19 @@ conversation. Depends on: the Lumi version above in prod; v4.1 (v4.2 for the sco
   retracted (`POST /v1/turn/{turn_id}/retract`, the id URL-encoded; `{retracted: true}`), so she never remembers saying
   what the room never saw; so is a turn the bridge gave up on at its own timeout (best effort — a `404` is fine). No
   other post-call filtering or trimming.
+- **Agreed with Lumi before step 4** (the tracker, Q1–Q10):
+  - after a restart, the bridge observes the lines it missed — since the last observed line, today's at most, oldest
+    first, with their original `ts`; Lumi orders by `ts`;
+  - it never observes her own lines, and posts her `reply` **exactly as returned** (no trimming, no
+    `trim_to_sentence`), so what Lumi remembers is what the room saw;
+  - `speaker` is the member's stable display name («Ада», …, «Кіт», «Клод», «Кіра», «Устина») and «Ich» for the owner:
+    one line, 1–64 characters, no `:`;
+  - `text` is the plain `body`, the reply fallback stripped, `formatted_body` ignored; only new `m.text` lines;
+  - `ts` is ISO-8601 to the second with the room's offset, from `origin_server_ts`;
+  - the queue is flushed after 3 s of quiet or at 20 lines, and always before a turn; a failed batch is resent whole
+    (10 s, 30 s, 60 s, then every 60 s);
+  - the dev run loads `server/lili.dev.env` (`LUMI_URL` on 8766, `LUMI_ROOM_TOKEN`; Lumi writes it, `0600`, never
+    printed or synced).
 - **The `lili` compose service** (the agent image), her own env file `server/lili.env` — `LUMI_URL`
   (`http://192.168.1.197:8765`) and `LUMI_ROOM_TOKEN` (the scoped token; never Lumi's owner token) — synced 0600 by
   `deploy.sh`; text only (`VOICE_MESSAGES` off; her voice is a later choice).
