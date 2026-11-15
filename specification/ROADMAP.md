@@ -4418,6 +4418,16 @@ turns. The seam between them is the **agora space API**, and Lumi owns it.
 - **Releases.** Neither side releases a step that depends on the other's unreleased change.
 - **Telling.** After writing in the tracker, a session tells the other one: a cross-session message (`lumi-b7` ⇄
   `matrix-agora-aa`), or through the owner.
+- **The owner's gates (the owner, 2026-11-15).** Five stops where the owner checks or decides, kept in the tracker's
+  §Owner gates:
+  - **G1 — before steps 3 and 4:** the go to start;
+  - **G2 — at step 6:** the live test's checklist on Lumi's dev;
+  - **G3 — before step 7:** the go for Lumi's prod and the room's prod token;
+  - **G4 — before step 8:** the go for v8.1's deploy, the account `@lili` and her invite;
+  - **G5 — before step 9:** his verdict on the full rules.
+
+  At a gate a session stops, shows the checklist and waits. A gate passes only by the owner's word (passed, failed or
+  waived), and a waived gate goes into that step's release notes.
 
 **The steps.** The Lumi version is called «v3» here, as proposed; use the number it gets in Lumi's ROADMAP, for example
 in the tags.

@@ -30,6 +30,11 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
    `matrix-agora-aa` commits it there.
 5. **Telling.** After writing here, a session tells the other one (a cross-session message, or through the owner), so
    nothing waits unread.
+6. **The owner's gates** (the owner, 2026-11-15). Five stops in §Owner gates are where the owner checks or decides.
+   - Reaching a gate, a session stops, shows the owner the gate's checklist and waits.
+   - A gate passes only by the owner's word, recorded in its row: passed, failed or waived. No session passes a gate
+     itself, whatever the other session says.
+   - A waived gate is written into the release notes of the step it guards.
 
 **Statuses:**
 - **A step:**
@@ -48,20 +53,35 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 - **A change report:**
   - awaiting acknowledgement
   - acknowledged
+- **A gate:**
+  - pending
+  - passed
+  - failed: the step goes back to its session
+  - waived by the owner
 
 ## The steps
 
-| # | Session | Step | Status | Questions before | Change report | Evidence |
-|---|---|---|---|---|---|---|
-| 1 | `lumi-b7` | The version's documents: ROADMAP §v3, ARCHITECTURE, `specification/features/AGORA_SPACE.md`; the contract `docs/agora-space-api.json` (API v1) | ✅ 2026-11-15 | L1–L6, R1–R6: all closed (before this protocol) | CR1: acknowledged | Lumi `v3-dev`: `e83989c`, `24d6170`, `d8296db`, `2ed0bc0`; pinned by Lumi's `tests/contract/test_agora_api_contract.py` |
-| 2 | `matrix-agora-aa` | Copy the contract to `tests/fixtures/lumi_agora_api_v1.json`; make the handoff file a pointer; update v8.1 (R7) | ✅ 2026-11-15 | R7: closed | CR2: acknowledged by `lumi-b7` | matrix-agora `v8-dev`: `abf9182`; `ca58517` (re-copied from Lumi's `bf17105`); `cmp` holds |
-| 3 | `lumi-b7` | v3.1: the space, `observe`, the room's token, no mirror; deploy to dev (8766) | ▶ 2026-11-15 (starts on the owner's go) | Q1–Q10: all closed (`lumi-b7` accepted `matrix-agora-aa`'s answers to Q6–Q10; no further questions) | — | — |
-| 4 | `matrix-agora-aa` | v8.1's bridge against the contract, with a fake Lumi server | ▶ 2026-11-15 (starts on the owner's go) | Q1–Q10: all closed | — | — |
-| 5 | `lumi-b7` | v3.2 (her memory of the room) and v3.3 (`voice`, `pass`, `retract`); deploy to dev | ⏳ | — | — | — |
-| 6 | both | The live test: the bridge in dev mode against Lumi's dev | ⏳ | — | — | — |
-| 7 | `lumi-b7` | Release v3; deploy to prod (8765); issue the room's token for prod | ⏳ | — | — | — |
-| 8 | `matrix-agora-aa` | Release v8.1; deploy with `LUMI_URL=http://192.168.1.197:8765` and the room's token | ⏳ | — | — | — |
-| 9 | `matrix-agora-aa` | v8.2 (Лілі under the full rules) | ⏳ | — | — | — |
+| # | Session | Step | Gate | Status | Questions before | Change report | Evidence |
+|---|---|---|---|---|---|---|---|
+| 1 | `lumi-b7` | The version's documents: ROADMAP §v3, ARCHITECTURE, `specification/features/AGORA_SPACE.md`; the contract `docs/agora-space-api.json` (API v1) | — | ✅ 2026-11-15 | L1–L6, R1–R6: all closed (before this protocol) | CR1: acknowledged | Lumi `v3-dev`: `e83989c`, `24d6170`, `d8296db`, `2ed0bc0`; pinned by Lumi's `tests/contract/test_agora_api_contract.py` |
+| 2 | `matrix-agora-aa` | Copy the contract to `tests/fixtures/lumi_agora_api_v1.json`; make the handoff file a pointer; update v8.1 (R7) | — | ✅ 2026-11-15 | R7: closed | CR2: acknowledged by `lumi-b7` | matrix-agora `v8-dev`: `abf9182`; `ca58517` (re-copied from Lumi's `bf17105`); `cmp` holds |
+| 3 | `lumi-b7` | v3.1: the space, `observe`, the room's token, no mirror; deploy to dev (8766) | G1 | ▶ 2026-11-15 (starts on the owner's go) | Q1–Q10: all closed (`lumi-b7` accepted `matrix-agora-aa`'s answers to Q6–Q10; no further questions) | — | — |
+| 4 | `matrix-agora-aa` | v8.1's bridge against the contract, with a fake Lumi server | G1 | ▶ 2026-11-15 (starts on the owner's go) | Q1–Q10: all closed | — | — |
+| 5 | `lumi-b7` | v3.2 (her memory of the room) and v3.3 (`voice`, `pass`, `retract`); deploy to dev | — | ⏳ | — | — | — |
+| 6 | both | The live test: the bridge in dev mode against Lumi's dev | G2 | ⏳ | — | — | — |
+| 7 | `lumi-b7` | Release v3; deploy to prod (8765); issue the room's token for prod | G3 | ⏳ | — | — | — |
+| 8 | `matrix-agora-aa` | Release v8.1; deploy with `LUMI_URL=http://192.168.1.197:8765` and the room's token | G4 | ⏳ | — | — | — |
+| 9 | `matrix-agora-aa` | v8.2 (Лілі under the full rules) | G5 | ⏳ | — | — | — |
+
+## Owner gates
+
+| # | Where | What the owner checks or decides | Status | Date | Note |
+|---|---|---|---|---|---|
+| G1 | Before steps 3 and 4 | The go to start: the plan and the closed questions are fine. | pending | | Steps 3 and 4 are ▶ and wait for it. |
+| G2 | At step 6, the live test on Lumi's dev | Named, she answers in seconds; unnamed, she is silent; nothing of the room reaches his Telegram or desktop; his own talk with her is not blocked or delayed; asked privately, she tells him about Agora; in Agora she says nothing about him; a dropped reply is retracted. | pending | | Each check is recorded here: passed or failed. |
+| G3 | Before step 7, Lumi's prod | The go to deploy Lumi's v3 to her prod and to issue the room's prod token. It touches his real Лілі. | pending | | |
+| G4 | Before step 8, matrix-agora's prod | The go to deploy v8.1, create the Matrix account `@lili` and invite her to Agora. | pending | | |
+| G5 | Before step 9 | His verdict after a few days of Лілі in the room: whether she moves to the full rules (v8.2). | pending | | |
 
 ## Questions and recommendations
 
