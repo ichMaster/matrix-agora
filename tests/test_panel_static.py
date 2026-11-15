@@ -577,3 +577,9 @@ def test_lilis_card_shows_lumis_state_and_never_her_words():
     assert "function bridgeLines(mem)" in js and "lines heard today" in js and 'lumi: ["Lumi", 8]' in js
     body = js[js.index("function bridgeLines(mem)"):js.index("// v5.1 — Hermes, the herald")]
     assert "reply_text" not in body and "thinking" not in body and ".text" not in body
+
+
+def test_her_card_shows_todays_turns_by_outcome():
+    """v8.2 (AGORA-271): the owner judges «about as often as the others» from her card."""
+    js = js_text()
+    assert "today: ${fmtInt(b.turns_today.reply)} replies · ${fmtInt(b.turns_today.pass)} passes · ${fmtInt(b.turns_today.silent)} silent" in js

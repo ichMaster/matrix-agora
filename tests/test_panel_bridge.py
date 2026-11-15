@@ -25,7 +25,8 @@ TODAY = date(2026, 11, 16)
 STATE = {"health": {"ok": True, "agora": 1, "why": None, "checked_ms": 1},
          "last_turn": {"at_ms": 2, "outcome": "reply", "latency_ms": 1840, "reply": "SECRET-WORDS"},
          "observed": {"day": "2026-11-16", "count": 42, "last_ts_ms": 3, "last_id": "$x"},
-         "refused": None, "thinking": "SECRET-THOUGHT"}
+         "refused": None, "thinking": "SECRET-THOUGHT",
+         "turns": {"day": "2026-11-16", "reply": 5, "pass": 2, "silent": 1}}
 
 
 def registry(tmp_path) -> Registry:
@@ -45,11 +46,14 @@ def test_the_bridge_view_holds_lumis_state_and_none_of_her_words(tmp_path):
     view = bridge_view(tmp_path, "lili", TODAY)
     assert view == {"health": {"ok": True, "agora": 1, "why": None, "checked_ms": 1},
                     "last_turn": {"at_ms": 2, "outcome": "reply", "latency_ms": 1840},
-                    "observed_today": 42, "refused": None}
+                    "observed_today": 42, "refused": None,
+                    "turns_today": {"reply": 5, "pass": 2, "silent": 1}}  # v8.2 (AGORA-271)
     assert "SECRET" not in json.dumps(view)
     assert bridge_view(tmp_path, "lili", date(2026, 11, 17))["observed_today"] == 0  # another day
+    assert bridge_view(tmp_path, "lili", date(2026, 11, 17))["turns_today"] == {"reply": 0, "pass": 0, "silent": 0}
     assert bridge_view(tmp_path, "nobody", TODAY) == {"health": None, "last_turn": None, "observed_today": 0,
-                                                      "refused": None}
+                                                      "refused": None,
+                                                      "turns_today": {"reply": 0, "pass": 0, "silent": 0}}
     (tmp_path / "lili.bridge.json").write_text("{torn")
     assert bridge_view(tmp_path, "lili", TODAY) is None                               # never a 500
     assert memory_view(tmp_path, "ada", TODAY)["bridge"] is None

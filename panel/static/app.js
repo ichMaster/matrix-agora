@@ -1110,7 +1110,8 @@ function bridgeLines(mem) {
   const outcome = t ? (TURN_WORDS[t.outcome] || String(t.outcome || "").replace(/^refused:/, "refused · ")) : "";
   const last = t ? `last turn ${when} · ${outcome}${t.latency_ms != null ? ` · ${(t.latency_ms / 1000).toFixed(1)} s` : ""}` : "no turn yet";
   return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${reach}</div>
-    <div class="muted" style="font-size:12px">${esc(last)} · ${esc(fmtInt(b.observed_today))} lines heard today</div>`;
+    <div class="muted" style="font-size:12px">${esc(last)} · ${esc(fmtInt(b.observed_today))} lines heard today</div>
+    ${b.turns_today ? `<div class="muted" style="font-size:12px">${esc(`today: ${fmtInt(b.turns_today.reply)} replies · ${fmtInt(b.turns_today.pass)} passes · ${fmtInt(b.turns_today.silent)} silent`)}</div>` : ""}`;  // v8.2: how often she answers
 }
 
 // v5.1 — Hermes, the herald: «last digest 14:05 · 2 today» and the month's spoken characters against the cap

@@ -268,7 +268,10 @@ def bridge_view(state_dir: Path, name: str, today: date) -> dict | None:
     seen = data.get("observed") if isinstance(data.get("observed"), dict) else {}
     count = seen.get("count") if seen.get("day") == today.isoformat() and isinstance(seen.get("count"), int) else 0
     refused = data.get("refused") if isinstance(data.get("refused"), str) else None
-    return {"health": health, "last_turn": last, "observed_today": count, "refused": refused}
+    turns = data.get("turns") if isinstance(data.get("turns"), dict) else {}  # v8.2 (AGORA-271): today's, by outcome
+    fresh = turns.get("day") == today.isoformat()
+    turns_today = {k: turns[k] if fresh and isinstance(turns.get(k), int) else 0 for k in ("reply", "pass", "silent")}
+    return {"health": health, "last_turn": last, "observed_today": count, "refused": refused, "turns_today": turns_today}
 
 
 def _usage_records(path: Path) -> list[dict]:

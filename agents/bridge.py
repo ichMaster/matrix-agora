@@ -310,6 +310,7 @@ class Bridge(Agent):
             self._turn_done(got)
             if got.outcome == "timeout":
                 await self._retract(answered, "the bridge's own timeout")
+                self._count("silent")
                 return False
             if got.outcome.startswith("refused:"):
                 name = got.outcome.split(":", 1)[1]
@@ -318,15 +319,19 @@ class Bridge(Agent):
                 elif got.status == 404:
                     self.healthy, self.health_why = False, name
                 log.info("silent: lumi %s", name)
+                self._count("silent")
                 return False
             if got.outcome in ("bad", "unreachable"):  # code review v8.1 #4: Lumi may have stored a reply we never got
                 await self._retract(answered, f"lumi {got.outcome}")
+                self._count("silent")
                 return False
             if got.outcome != "reply":
                 log.info("silent: lumi %s", got.outcome)
+                self._count("pass" if got.outcome == "pass" else "silent")
                 return False
             if outs_a_persona(got.reply, self.personas):  # the human-belief rule holds for the room's people (v4.2)
                 await self._retract(answered, "would out a persona")
+                self._count("silent")
                 return False
             try:
                 posted = await self.send_line(room_id, got.reply, answered, answering=answered)  # exactly as returned
@@ -335,13 +340,27 @@ class Bridge(Agent):
                 log.warning("send failed (%s)", type(exc).__name__)
             if posted is None:
                 await self._retract(answered, "the room never got it")
+                self._count("silent")
                 return False
+            self._count("reply")
             asked = self._event_at(answered)
             self.record_answer("agora", "matrix", asked[1] if asked else "none", asked[0] if asked else None,
                                delay_ms, "lumi", [])
             return True
         finally:
             await self.client.room_typing(room_id, False)
+
+    def _count(self, kind: str) -> None:
+        """v8.2 (AGORA-271) — today's turns by what came of them: `reply` (posted), `pass` (Lumi's), `silent` (anything
+        else: busy, the cap, a timeout, unreachable, refused, off the contract, the persona drop, a failed send); reset
+        at the room's midnight. Counts only, never a text."""
+        today = self._today()
+        turns = self.state.get("turns") if isinstance(self.state.get("turns"), dict) else {}
+        if turns.get("day") != today:
+            turns = {"day": today, "reply": 0, "pass": 0, "silent": 0}
+        turns[kind] = int(turns.get(kind, 0)) + 1
+        self.state["turns"] = turns
+        self._save()
 
     def _turn_done(self, got: TurnResult) -> None:
         log.info("turn: %s in %s ms", got.outcome, got.wall_ms)

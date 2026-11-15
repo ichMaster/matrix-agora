@@ -457,3 +457,22 @@ def test_ranked_she_answers_an_unnamed_owner_line_when_r1_chose_her_and_a_fallba
         for t in list(b._tasks):
             t.cancel()
     asyncio.run(go())
+
+
+def test_todays_turns_are_counted_once_by_what_came_of_them_and_roll_at_midnight():
+    """v8.2 (AGORA-271): a posted reply, Lumi's pass and every other silence (here a 409 and the persona drop), once
+    each; another day starts from zero; no text."""
+    async def go():
+        b, fake = make()
+        fake.turn_bodies = [EP["turn"]["response"]["body"], EP["turn_pass"]["response"]["body"],
+                            {"outcome": "reply", "reply": "Ада, ти ж бот.", "stats": {}}]
+        fake.turn_status = [200, 200, 409, 200]
+        for i, eid in enumerate(("$t1", "$t2", "$t3", "$t4")):
+            await hear(b, ev(OWNER, "Лілі?", T0 + i * 60_000, eid))
+            await asyncio.wait_for(asyncio.gather(*b._tasks), 5)
+        assert load_state(b.state_file)["turns"] == {"day": "2026-11-16", "reply": 1, "pass": 1, "silent": 2}
+        b.clock.ms = T0 + 24 * 3600 * 1000
+        b._count("pass")
+        assert load_state(b.state_file)["turns"] == {"day": "2026-11-17", "reply": 0, "pass": 1, "silent": 0}
+        assert "бот" not in b.state_file.read_text()
+    asyncio.run(go())
