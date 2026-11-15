@@ -416,6 +416,8 @@ def concerns(setting: Setting, member: Member) -> bool:
     kind, _, value = setting.scope.partition(":")
     if member.type == "herald" and kind not in ("cap", "client"):  # v7.1: Hermes on Claude reads his client's
         return False
+    if member.type == "bridge":  # v8.1: Лілі reads the room's shared turn settings alone — her model, memory and
+        return setting.scope == "shared"  # voice are Lumi's
     if setting.scope == "shared":
         return True
     if setting.scope == "speaker":  # v7.5: each agent that speaks in the room, its own value (never the herald)

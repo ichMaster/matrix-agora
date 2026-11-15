@@ -31,6 +31,7 @@ KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
 # v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan; v5.1 also the ElevenLabs
 # plan's credits), `external` (Lumi's own)
 BILLING = ("api", "subscription", "external")
+UNPRICED = ("subscription", "external")  # v8.1: never priced here and never an incomplete total — Lumi's own too
 
 
 # v5.22 (the owner, 2026-11-02: «аналіз структури промпта … і динаміка») — the answer call's prompt in parts, each
@@ -913,7 +914,7 @@ class _Sum:
         self.row.add(row)
         if c is not None:
             self.cost, self.priced = self.cost + c, True
-        elif row.billing != "subscription":
+        elif row.billing not in UNPRICED:
             self.complete = False
 
     def totals(self) -> dict:
@@ -1074,7 +1075,7 @@ def analyze(records: list[dict], since: date, until: date, agent: str | None = N
         "trend": {**trend([x["cost"] for x in lived]),
                   "month_at_rate": round(per_day * 30, 6) if per_day is not None else None},
         "agents": agents, "subscriptions": subscriptions,
-        "unpriced": sorted({a[3] for a, r in now.items() if costs[a] is None and r.billing != "subscription"}),
+        "unpriced": sorted({a[3] for a, r in now.items() if costs[a] is None and r.billing not in UNPRICED}),
         "rows": [{"day": a[0], "agent": a[1], "service": a[2], "model": a[3], "kind": a[4], **{
             k: v for k, v in _Sum(r, costs[a] or 0.0, costs[a] is not None).totals().items() if k != "complete"},
             "latency_median_ms": percentile(r.latencies, 0.5), "latency_p95_ms": percentile(r.latencies, 0.95)}
@@ -1100,7 +1101,7 @@ def render_analysis(report: dict, by: str, markdown: bool = False, records: list
         g["billing"] = _merge(g["billing"], r["billing"])
         if r["cost"] is not None:
             g["cost"], g["priced"] = g["cost"] + r["cost"], True
-        elif r["billing"] != "subscription":
+        elif r["billing"] not in UNPRICED:
             g["complete"] = False
 
     def money(c, priced, complete) -> str:

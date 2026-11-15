@@ -223,7 +223,8 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
                            # v5.9: the palette by the registry's own path, never request data
                            Path(found.voice_spec) if found.voice_spec and "emotion" in found.capabilities else None,
                            "events" in found.capabilities, "thoughts" in found.capabilities,
-                           "fallback" in found.capabilities, "talk" in found.capabilities, found.engine)
+                           "fallback" in found.capabilities, "talk" in found.capabilities, found.engine,
+                           found.type == "bridge")  # v8.1: Лілі's bridge — Lumi's state, never her words
 
     @app.get("/api/agents/{name}/prompt")
     def agent_prompt(name: str) -> dict:
@@ -314,6 +315,8 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
         found = reg.agent(name)
         if found is None:
             raise HTTPException(404, "not found")
+        if found.type == "bridge":  # v8.1: her memory is Lumi's — nothing of ours to forget
+            raise HTTPException(409, "a bridge keeps no memory here")
         return run(sup.forget, found.name)
 
     @app.post("/api/agents/{name}/{action}")

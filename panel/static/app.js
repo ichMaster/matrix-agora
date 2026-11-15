@@ -417,6 +417,7 @@ function agentCardHtml(a) {
     ${a.capabilities && can(a, "thoughts") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Last thought</div>${lastThoughtLine(mem)}</div>` : ""}
     ${can(a, "pastlife") || can(a, "nudge") ? `<div class="muted" style="font-size:12px">${pastLifeLine(mem)}</div>` : ""}
     ${a.engine === "claude-sdk" ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Subscription</div>${claudeLines(mem)}</div>` : ""}
+    ${a.type === "bridge" ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Lumi</div>${bridgeLines(mem)}</div>` : ""}
     ${can(a, "digest") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Digests</div>${digestLine(mem)}</div>` : ""}
     ${a.capabilities && can(a, "recall") ? `<div class="muted" style="font-size:12px">${archiveLine(mem)}</div>` : ""}
     ${a.capabilities && can(a, "fallback") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Route</div><div class="muted" style="font-size:13px">${esc(routeLine(mem))}</div></div>` : ""}
@@ -501,7 +502,8 @@ function usageCardHtml() {
 // The colours follow the service, never its rank: one fixed slot each (`--viz-N` in panel.css, validated for both
 // themes); a legend always names them, and the tables carry every number a chart shows.
 const SERVICES = {gemini: ["Gemini", 1], fal: ["fal.ai", 2], openrouter: ["OpenRouter", 3], elevenlabs: ["ElevenLabs", 4],
-                  deepgram: ["Deepgram", 5], novelai: ["NovelAI", 6], "claude-sdk": ["Claude", 7]};
+                  deepgram: ["Deepgram", 5], novelai: ["NovelAI", 6], "claude-sdk": ["Claude", 7],
+                  lumi: ["Lumi", 8]};  // v8.1: Лілі's turns through the bridge — Lumi's own, never priced here
 const svcName = (s) => SERVICES[s]?.[0] || s;
 const svcColor = (s) => `var(--viz-${SERVICES[s]?.[1] || 8})`;
 const PRESETS = [["today", "Today"], ["yesterday", "Yesterday"], ["7d", "7 days"], ["30d", "30 days"],
@@ -587,7 +589,8 @@ function change(now, before, money = false) {
   const pct = before ? ` (${sign}${Math.abs(diff / before * 100).toFixed(0)}%)` : "";
   return `${arrow} ${sign}${money ? fmtCost(Math.abs(diff)) : fmtM(Math.abs(diff))}${pct}`;
 }
-const costCell = (x) => x.billing === "subscription" ? `<span class="muted">subscription</span>`
+const UNPRICED = ["subscription", "external"];  // v8.1: Lumi's own calls, like a subscription, are never priced here
+const costCell = (x) => UNPRICED.includes(x.billing) ? `<span class="muted">${esc(x.billing)}</span>`
   : x.cost == null ? "—" : `${x.complete ? "" : "≥"}${fmtCost(x.cost)}`;  // a subscription is never $0
 const nCell = (n, digits = 0) => `<td class="r">${n ? (digits ? n.toFixed(digits) : fmtInt(n)) : "—"}</td>`;
 
@@ -771,13 +774,13 @@ function anChartsHtml(d) {
 }
 function anTablesHtml(d) {
   const svcRows = d.services.map((s) => {
-    const open = S.an.open[s.service], sub = s.billing === "subscription";
+    const open = S.an.open[s.service], sub = UNPRICED.includes(s.billing);
     const delta = sub ? change(s.calls, s.previous.calls) : change(s.cost, s.previous.cost, true);
     const cells = (x) => [x.calls, x.failed, x.input, x.output, x.characters].map((n) => nCell(n)).join("") + nCell(x.audio_s, 1) + nCell(x.video_s, 1);
     const main = `<tr><td><button class="an-caret" data-act="an-open" data-id="${esc(s.service)}" aria-expanded="${Boolean(open)}" aria-label="Models of ${esc(svcName(s.service))}">${icon(open ? "caret-down" : "caret-right", 12)}</button><i class="an-key" style="background:${svcColor(s.service)}"></i>${esc(svcName(s.service))}</td>
       <td class="muted">${esc(s.billing)}</td><td>${svgSparkline(sub ? s.series.calls : s.series.cost, svcColor(s.service))}</td>${cells(s)}<td class="r">${costCell(s)}</td><td class="r muted">${esc(delta)}</td></tr>`;
     const models = open ? s.models.map((m) => `<tr class="an-sub"><td>${esc(m.model)}</td><td class="muted">${esc(m.billing)}</td><td></td>${cells(m)}<td class="r">${costCell(m)}</td>
-      <td class="r muted">${esc(m.billing === "subscription" ? change(m.calls, m.previous.calls) : change(m.cost, m.previous.cost, true))}</td></tr>`).join("") : "";
+      <td class="r muted">${esc(UNPRICED.includes(m.billing) ? change(m.calls, m.previous.calls) : change(m.cost, m.previous.cost, true))}</td></tr>`).join("") : "";
     return main + models;
   }).join("");
   const services = `<section class="card"><h3 class="card-title">Services</h3><div class="table-scroll an-table"><table class="table"><thead><tr>
@@ -1087,6 +1090,27 @@ function claudeLines(mem) {
   return `<div class="today-line">${esc(`claude-sdk · ${r.model || "opus"} · subscription`)}</div>
     ${news ? `<div class="muted" style="font-size:12px">${esc(news)}</div>` : ""}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${pill(cls, limit)}<span class="muted" style="font-size:12px">${esc(auth)}</span></div>`;
+}
+
+// v8.1 — Лілі's bridge: Lumi's reachability, the last turn's outcome, the lines Lumi heard today — never her words
+const TURN_WORDS = {reply: "reply", pass: "pass", timeout: "timeout", unreachable: "unreachable", bad: "off the contract",
+                    "silence:409": "busy", "silence:429": "hourly cap", "silence:500": "error", "silence:502": "model unavailable",
+                    "silence:503": "unavailable", "silence:504": "Lumi's timeout"};
+function bridgeLines(mem) {
+  if (!mem.available) return `<div class="muted" style="font-size:13px">Memory unavailable</div>`;
+  const b = mem.bridge;
+  if (!b) return `<div class="muted" style="font-size:13px">Bridge state unreadable</div>`;
+  const h = b.health;
+  const reach = b.refused ? pill("err", `refused · ${b.refused}`)
+    : !h ? pill("unknown", "not checked yet")
+    : h.ok ? pill("ok", `reachable · agora ${h.agora}`) : pill("warn", h.why || "unreachable");
+  const t = b.last_turn, at = t && t.at_ms ? new Date(t.at_ms) : null;
+  const when = at ? (at.toDateString() === new Date().toDateString() ? "" : `${at.toLocaleDateString("en-US", {month: "short", day: "numeric"})}, `)
+    + at.toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"}) : "";
+  const outcome = t ? (TURN_WORDS[t.outcome] || String(t.outcome || "").replace(/^refused:/, "refused · ")) : "";
+  const last = t ? `last turn ${when} · ${outcome}${t.latency_ms != null ? ` · ${(t.latency_ms / 1000).toFixed(1)} s` : ""}` : "no turn yet";
+  return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${reach}</div>
+    <div class="muted" style="font-size:12px">${esc(last)} · ${esc(fmtInt(b.observed_today))} lines heard today</div>`;
 }
 
 // v5.1 — Hermes, the herald: «last digest 14:05 · 2 today» and the month's spoken characters against the cap

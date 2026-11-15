@@ -433,7 +433,8 @@ def test_the_tiles_show_the_change_the_trend_and_the_month_at_the_rate():
 
 def test_a_subscription_is_never_zero_and_the_services_expand_to_their_models():
     js = js_text()
-    assert 'x.billing === "subscription" ? `<span class="muted">subscription</span>`' in js
+    assert 'const UNPRICED = ["subscription", "external"];' in js  # v8.1: Lumi's own calls, like a subscription
+    assert 'UNPRICED.includes(x.billing) ? `<span class="muted">${esc(x.billing)}</span>`' in js
     assert 'data-act="an-open"' in js and 'class="an-sub"' in js and "svgSparkline(sub ? s.series.calls : s.series.cost" in js
 
 
@@ -566,3 +567,13 @@ def test_a_live_on_off_switch_is_two_buttons_saved_at_a_click():
     assert 'else if (act === "set-live") saveLive(id, el.dataset.value);' in js
     assert "await put(st.path, {set: {[name]: value}});" in js
     assert "names.filter((n) => !rows[n].live).flatMap((n) => rows[n].agents)" in js
+
+
+def test_lilis_card_shows_lumis_state_and_never_her_words():
+    """v8.1 (AGORA-267) — a bridge's card: reachability, the last turn's outcome and the lines heard today; her
+    service in Analytics is Lumi's own."""
+    js = js_text()
+    assert '${a.type === "bridge" ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Lumi</div>${bridgeLines(mem)}</div>` : ""}' in js
+    assert "function bridgeLines(mem)" in js and "lines heard today" in js and 'lumi: ["Lumi", 8]' in js
+    body = js[js.index("function bridgeLines(mem)"):js.index("// v5.1 — Hermes, the herald")]
+    assert "reply_text" not in body and "thinking" not in body and ".text" not in body

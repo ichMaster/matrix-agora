@@ -244,6 +244,33 @@ def ratelimit_view(state_dir: Path, name: str) -> dict | None:
             for k in RATELIMIT_FIELDS}
 
 
+def bridge_view(state_dir: Path, name: str, today: date) -> dict | None:
+    """v8.1 (AGORA-267) — Лілі's bridge from `<name>.bridge.json`: Lumi's reachability, the last turn's outcome and
+    the lines Lumi heard today. Times, words and counts only: never a text, her thinking, mood or the token. No file
+    yet → an empty view; unreadable → None, never a 500."""
+    try:
+        data = json.loads((state_dir / f"{name}.bridge.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        data = {}
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    def pick(part, fields):
+        got = data.get(part)
+        if not isinstance(got, dict):
+            return None
+        return {k: got.get(k) if isinstance(got.get(k), str | int | float | bool) else None for k in fields}
+
+    health = pick("health", ("ok", "agora", "why", "checked_ms"))
+    last = pick("last_turn", ("at_ms", "outcome", "latency_ms"))
+    seen = data.get("observed") if isinstance(data.get("observed"), dict) else {}
+    count = seen.get("count") if seen.get("day") == today.isoformat() and isinstance(seen.get("count"), int) else 0
+    refused = data.get("refused") if isinstance(data.get("refused"), str) else None
+    return {"health": health, "last_turn": last, "observed_today": count, "refused": refused}
+
+
 def _usage_records(path: Path) -> list[dict]:
     try:
         return parse_lines(path.read_text(encoding="utf-8").splitlines())[0]
@@ -403,7 +430,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
                 with_news: bool = False, with_digest: bool = False, with_facts: bool = False,
                 with_archive: bool = False, with_models: bool = False, voice_spec: Path | None = None,
                 with_events: bool = False, with_thoughts: bool = False, with_route: bool = False,
-                with_talk: bool = False, engine: str = "gemini") -> dict:
+                with_talk: bool = False, engine: str = "gemini", with_bridge: bool = False) -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -456,6 +483,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "events": events_view(state_dir, name, today) if with_events else None,          # v5.11: her events
         "thoughts": thoughts_view(state_dir, name, today) if with_thoughts else None,    # v5.12: her thoughts
         "route": route_view(state_dir, name, today) if with_route else None,             # v5.14: her backup
+        "bridge": bridge_view(state_dir, name, today) if with_bridge else None,          # v8.1: Лілі's bridge
     }
 
 
