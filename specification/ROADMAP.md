@@ -95,9 +95,8 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v7.2 | The room on Claude: Ада, Бруно, Леон, Мія, Ірма, Кіт and Гермес | ✅ completed | `v7.2.0` (2026-11-11) |
 | v7.3 | Кіра on Claude | ✅ completed | `v7.3.0` (2026-11-11) |
 | v7.4 | The companions' five models: Кіра and Устина switched in the panel | ✅ completed | `v7.4.0` (2026-11-12) |
-| v7.5 | The prompt for the cache: what changes slowly first, read from the cache | ⏳ planned | — |
-| v7.6 | Her memory as Lumi's: a short live window, short summaries, recall by her own tool | ⏳ planned | — |
-| v7.7 | The panel for Claude: the subscription's analytics and cards | ⏳ planned | — |
+| v7.5 | The prompt for the cache: what changes slowly first, read from the cache | ✅ completed | `v7.5.0` (2026-11-14) |
+| v7.6 | Her memory as Lumi's: a short live window, short summaries, recall by her own tool | ✅ completed | `v7.6.0` (2026-11-15) |
 | v8.1 | The Lumi bridge: Лілі when named | ⏳ planned | — |
 | v8.2 | Лілі under the full rules | ⏳ planned | — |
 | v9.1 | System and Applications: the panel's new shape | ⏳ planned | — |
@@ -3953,8 +3952,9 @@ then Кіра (the owner, 2026-11-10: «навпаки» — decision 2); then t
 GPT-6.1 Sol through Codex on the ChatGPT plan (v7.4, the owner, 2026-11-11 — it replaced «Устина on Claude»); last, the prompt
 laid out for the cache (v7.5; the owner, 2026-11-10: «переробити промпт адаптований під кеш» — «це має бути в 7
 версії» — «постав кеш в кінець версії 7»), then (v7.6; the owner, 2026-11-12) the companions' memory as Lumi's — a short live window, short summaries,
-recall by her own tool —, and the panel read for Claude (v7.7; the owner, 2026-11-11: «переробити
-адмін панель … на аналіз під Claude» — «зроби це в кінці 7 версії»). Inserted before Лілі on 2026-11-10: Лілі moved to v8,
+recall by her own tool. **v7 ends with v7.6** (the owner, 2026-11-15: «забери взагалі 7.7 з роадмапи»): the room
+went back to Gemini 2.5 Flash in 7.6.1 — the subscription's warnings had muted it daily — and only Claude and Гермес
+stay on the subscription, so the panel read for Claude (once v7.7) has nothing to read beyond Claude's own card. Inserted before Лілі on 2026-11-10: Лілі moved to v8,
 Applications to v9, the Theatre to v10 and Кіра's inner life to v11. Depends on: v6.
 
 **The owner's decisions** (asked before v7.1's issues; when he started v7.1 without answering, the proposals became
@@ -4245,7 +4245,7 @@ both services; nothing reaches the network.
 
 ### v7.5 — The prompt for the cache: what changes slowly first, read from the cache
 
-**Status:** ⏳ planned. **Widened 2026-11-12** (the owner, after the cost analysis
+**Status:** ✅ completed — `v7.5.0` (2026-11-14); 7.5.1 (2026-11-14): her Agora answers without the cache. **Widened 2026-11-12** (the owner, after the cost analysis
 [docs/companions-gemini-cost.md](../docs/companions-gemini-cost.md) and a look at Lumi's prompt: «Дві фази поспіль»).
 Кіра and Устина stay on Gemini 3.1 Pro (the owner: «наразі найліпша їх поведінка на 3.1 про»), whose cache served 0.1%
 of their 52M prompt tokens in a week — so this phase lays the prompt out for the cache on Gemini first, as Lumi does
@@ -4317,7 +4317,7 @@ price.
 
 ### v7.6 — Her memory as Lumi's: a short live window, short summaries, recall by her own tool
 
-**Status:** ⏳ planned (the owner, 2026-11-12: «також в Люмі меньше підсумків розмов в промпті і вона сама може шукати
+**Status:** ✅ completed — `v7.6.0` (2026-11-15; the days of talk in `lumi` waived by the owner); 7.6.1: the room back on Gemini 2.5 Flash. Planned (the owner, 2026-11-12: «також в Люмі меньше підсумків розмов в промпті і вона сама може шукати
 в РАГ через тул», «окрім того живої розмови там лише значно менше, вона періодично самарізується»; «Дві фази поспіль»
 — after the cache, so each change is measured on its own).
 
@@ -4364,50 +4364,6 @@ ways.
 **Tests:** the window's steps and the day's running digest (folded in batches, reset at her midnight into the day's
 gist), the day and week gists, the tool's calls and results (no `blocked` line), the cap on tool rounds, the switch,
 the parts of a prompt in both modes.
-
-### v7.7 — The panel for Claude: the subscription's analytics and cards
-
-**Status:** ⏳ planned.
-
-The owner, 2026-11-11: «додай ще версію щоб переробити адмін панель якщо це не передбачено в існуючих версіях на аналіз
-під Claude» — «ні зроби це в кінці 7 версії». The panel's Analytics (v5.19, v5.22) was built for Gemini — tokens priced
-by `PRICE_*`, the spending by service and agent. On the subscription a Claude token has no price: what matters is the
-share of the plan's limits each agent takes, the windows and their resets, the mutes and the calls Gemini took instead,
-the declines, the warm and the cold calls, the cache. No other version plans it (v9 reshapes the panel into System and
-Applications and adds `app` to the usage line; v7.1–v7.6 only add what each move needs). Last in v7, once every agent
-is on Claude.
-
-**Goal:** the panel reads an agent on Claude by the subscription — its share of the limits, its windows, mutes,
-fallbacks, declines, speed and cache — beside the money still spent on Gemini, fal and the rest.
-
-**Tasks:**
-- **The subscription's history:** every change the CLI reports (`RateLimitEvent`: status, utilization, window type,
-  reset) a line in `state/<name>.ratelimit.jsonl` — names and numbers, never a text — written by `ClaudeClient` and by
-  Claude himself; the status file stays the card's latest.
-- **Who served a call:** a Gemini call made for an agent on Claude (decision 1, at the limit or blocked) marked on its
-  usage line (`fallback`), so the fallback's calls and spend are counted apart.
-- **Analytics · Subscription** (a tab of its own): the windows' utilization over time (five-hour, weekly) across the
-  agents on Claude, with their resets; the mutes and their reasons; each agent's and each kind's share of the calls and
-  the tokens on Claude — fresh input, cache read, cache write, output, thinking — by model, warm and cold; the calls
-  the fallback took and its spend; the declines by the classifier's category; Today and Yesterday by the hour as the
-  other tabs.
-- **Speed and Prompts on Claude:** Speed's warm and cold apart (v7.2) beside each agent's last week on Gemini before
-  its move; Prompts' share read from the cache (v7.5), by agent and kind.
-- **Cost:** what is still paid — Gemini (the fallback, the embeddings, Кіра's and Устина's photos), fal, VEED,
-  ElevenLabs, Deepgram, NovelAI — as before; Claude's tokens shown, never priced (an API-price equivalent only if the
-  owner asks).
-- **The agents' cards:** the subscription's status for every agent on Claude (v4.4's card for Claude himself, now for
-  each): auth, status, utilization, the window's reset, muted until, the last error, warm or cold of the last answer.
-- The design handoff (`specification/design/`) gains the tab and the cards first; the UI in English as the rest.
-
-**DoD:**
-- (Manual, owner) A day of the room and the companions on Claude read in the panel: who took how much of the limits,
-  the windows and their resets, any mute or fallback, the declines; each agent's card shows its subscription.
-- The usage line's `fallback` and the `ratelimit.jsonl` lines carry no text (pinned).
-
-**Tests:** the rate-limit history (one line a change, no text, a corrupt line skipped), the fallback mark on a Gemini
-line served for Claude, Analytics' subscription block (shares, windows, mutes, fallbacks, declines; warm and cold), the
-cards' view, the panel's static pins.
 
 ## v8 — Лілі: the Lumi bridge
 
