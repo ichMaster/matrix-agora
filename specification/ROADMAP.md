@@ -4387,12 +4387,51 @@ memory of the room as Кіра's and Устина's (she remembers all of Agora 
 her life stays out of her prompt and she says nothing about him), the voice register, `pass` and `retract`. Then the
 bridge is simple and clean. Depends on: that Lumi version in prod, and v4.
 
+### Synchronization with Lumi (v8's way of working)
+
+Two repositories, two Claude sessions — one in `~/development/lumi`, one in `~/development/matrix-agora` — working by
+turns. The seam between them is the **agora space API**, and Lumi owns it.
+
+**Rules:**
+- **Contract first.** Lumi defines API v1 in its ARCHITECTURE §Contracts and in `docs/agora-space-api.json`: the
+  request and response examples for `turn`, `observe`, `retract` and `health`, with `"version": 1`. Neither side writes
+  code against the API before this file exists.
+- **One contract, two test suites.** The file is copied into matrix-agora as `tests/fixtures/lumi_agora_api_v1.json`.
+  - Lumi's tests check that its server accepts and returns those examples.
+  - matrix-agora's fake Lumi server is built from them, and its tests check that the bridge's payloads match them.
+  - A change to the API bumps `version`, and the file is copied again. A mismatch then fails a test, not the room.
+- **The version, live.** `GET /v1/health` reports the API version (`"agora": 1`). The bridge checks it when it starts
+  and says by name when Lumi is too old.
+- **Dev before prod.** The live tests run on Lumi's dev instance (`192.168.1.197:8766`), never on prod, until both
+  sides pass.
+- **Check before you start.** Before its step, a session runs that step's checks below. If the other side is not
+  ready, it stops and says what is missing; it never builds against an unready side.
+- **Releases.** Neither side releases a step that depends on the other's unreleased change.
+- **Handing over.** The owner tells the other session what was handed over (or `/send`, where both sessions are joined).
+
+**The steps.** The Lumi version is called «v3» here, as proposed; use the number it gets in Lumi's ROADMAP, for example
+in the tags.
+
+| # | Session | Step | Before starting, check that the other side is ready | Hands over |
+|---|---|---|---|---|
+| 1 | Lumi | Add the version to Lumi's ROADMAP, the changes to its ARCHITECTURE, `specification/features/AGORA_SPACE.md` (the goal and the assessment); write `docs/agora-space-api.json` (API v1). Commit. | The handoff file is there: `test -f ~/development/matrix-agora/specification/features/lumi-agora-channel.md` | The contract → matrix-agora |
+| 2 | matrix-agora | Copy the contract into `tests/fixtures/lumi_agora_api_v1.json`; replace its copy of this file by a pointer in ROADMAP §v8. Commit. | The contract is committed in Lumi with `"version": 1`: `git -C ~/development/lumi log -1 --oneline -- docs/agora-space-api.json` and `grep -q '"version": 1' ~/development/lumi/docs/agora-space-api.json` | — |
+| 3 | Lumi | v3.1: the space, `observe`, the room's token, no mirror; its tests; deploy to dev. | matrix-agora holds the same contract: `cmp ~/development/lumi/docs/agora-space-api.json ~/development/matrix-agora/tests/fixtures/lumi_agora_api_v1.json` | Dev on 8766 with `turn` and `observe` |
+| 4 | matrix-agora | v8.1's bridge against the contract, with a fake Lumi server (in parallel with 3 and 5); every test without the network. | The same `cmp` as in step 3. | — |
+| 5 | Lumi | v3.2 (her memory of the room) and v3.3 (`voice`, `pass`, `retract`); deploy to dev. | v3.1 is on dev: `curl -s http://192.168.1.197:8766/v1/health` shows `"agora": 1`; its tag exists: `git -C ~/development/lumi tag -l 'v3.1.*'` | Dev complete |
+| 6 | both | **The live test:** matrix-agora's bridge in dev mode against Lumi's dev, with a dev room token in a local env file. Bugs go back to the side that owns them. Checks: named, she answers in seconds; `observe` arrives; nothing reaches his Telegram or desktop; his own turns are not blocked; asked privately, she tells him about Agora; in Agora she says nothing about him; a dropped reply is retracted. | Lumi dev is complete: health shows `"agora": 1` and its `v3.3` tag exists (`git -C ~/development/lumi tag -l 'v3.3.*'`); matrix-agora's bridge tests are green (`uv run pytest` in matrix-agora); the `cmp` still holds. | The results, both ways |
+| 7 | Lumi | Release the version; deploy to prod (8765); issue the room's token for prod. | The live test passed: recorded in matrix-agora's `specification/implementation/v8.1-execution-report.md`. | The prod token → the owner → matrix-agora's `server/lili.env` |
+| 8 | matrix-agora | Release v8.1; deploy with `LUMI_URL=http://192.168.1.197:8765` and the room's token. | Prod is ready: `curl -s http://192.168.1.197:8765/v1/health` shows `"agora": 1`; Lumi's release tag exists; the token is set, never printed: `grep -q '^LUMI_ROOM_TOKEN=.' server/lili.env` | — |
+| 9 | matrix-agora | v8.2 (Лілі under the full rules). | v8.1 has run in the room for a few days, and the owner confirms. | — |
+
+
 ### v8.1 — Лілі hears the room and answers when named
 
 **Status:** ⏳ planned.
 
 **Goal:** Лілі hears every line of the room and answers in it when someone names her, through a bridge that is one of
-our agents, on Lumi's `agora` channel.
+our agents, on Lumi's `agora` channel. Built and released by the synchronization above: its bridge is step 4 (against
+the contract), its live test step 6 (Lumi's dev), its release step 8 (after Lumi's in step 7).
 
 Design: [features/lumi-agora-channel.md](features/lumi-agora-channel.md) (Lumi's side) and more-agents.md §Lumi (the
 bridge). The bridge is our agent with all the room's rules; she is reactive — she only answers and never starts a
@@ -4403,6 +4442,9 @@ conversation. Depends on: the Lumi version above in prod; v4.1 (v4.2 for the sco
 - **The `bridge` type; `agents/lili.toml`** (localpart `lili` — `agents/lumi.py` is v7.6's memory module): shown as
   «Лілі»; name forms for both «Лілі» and «Стхіра» («лілі», «стхіра», «стхіри», «стхірі», «стхіру», «стхірою»,
   «стхіро»); `engine = "lumi-http"`; `[turns] mode = "mention-only"`, weight 1.
+- **The contract** — `tests/fixtures/lumi_agora_api_v1.json`, Lumi's API v1 copied in step 2 of the synchronization;
+  the fake Lumi server and the payload tests are built from it; at start the bridge reads `/v1/health` and stays silent
+  — said by name in its log and on its card — while Lumi's `agora` API is older than 1.
 - **She hears the room** — `POST /v1/observe` with every room line her filter lets through (`{id: event_id, speaker,
   text, ts}`, batched, idempotent by `event_id`; a failure retried with the batch, never a lost line), from the first
   sync's point on, so her memory of the room is whole even on a day nobody names her.
