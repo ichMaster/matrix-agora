@@ -244,7 +244,8 @@ def test_answers_still_on_their_way_are_reserved_in_the_wave():
 
 
 # --- the multi-agent simulation: no wave beyond the limit, one candidate per message ---------------------------------
-def simulate(roster, owner_text, seed, *, k=2, max_turns=3, p=0.5, purr_p=0.8, react_p=0.3):
+def simulate(roster, owner_text, seed, *, k=2, max_turns=3, p=0.5, purr_p=0.8, react_p=0.3, silent=frozenset()):
+    """`silent` (code review v8.2 #2): members whose turns fire but post nothing — Лілі's `pass`."""
     rnd = random.Random(seed)
     timeline = [("Ich", 0, "$owner", False)]
     kw = {"owner_repliers_k": k, "max_bot_turns": max_turns, "bot_reply_p": p, "reply_delay_s": 4.0,
@@ -265,6 +266,8 @@ def simulate(roster, owner_text, seed, *, k=2, max_turns=3, p=0.5, purr_p=0.8, r
         pending.sort()
         ts, who, trigger, purr = pending.pop(0)
         if trigger and not purr and not still_current(timeline, trigger, "Ich", ts, W, max_turns, reserved(ts, who)):
+            continue
+        if who in silent:  # her pass: the turn came, nothing was said, nobody hears anything
             continue
         eid = f"${who}-{ts}"
         text = "Мрррр." if purr else "думка"
@@ -595,8 +598,8 @@ def test_a_ranked_bridge_who_stays_silent_never_grows_the_wave_and_the_fallback_
         for seed in range(200):
             n_owner, sent, followers = simulate(roster, text, seed)
             assert len(sent) <= max(3, n_owner), (seed, sent)
-            silent = [w for w in sent if w != "lili"]          # her pass: everything she would say, unsaid
-            assert len(silent) <= len(sent) and all(f <= 2 for f in followers)
+            n_owner, quiet, followers = simulate(roster, text, seed, silent={"lili"})  # code review v8.2 #2: her pass
+            assert "lili" not in quiet and len(quiet) <= max(3, n_owner) and all(f <= 2 for f in followers)
     chose_her = [f"$o{i}" for i in range(400) if "lili" in owner_repliers(f"$o{i}", "як вам вечір?", roster, 2)]
     assert 0.12 < len(chose_her) / 400 < 0.35                  # about as often as each person (2 of ~8.4 by weight)
     eid = chose_her[0]
