@@ -47,3 +47,11 @@ def test_the_statuses_that_are_silence_and_the_limits():
     assert silence["timeout_s"] > CONTRACT["limits"]["timeout_s"]          # R7: never cut a reply Lumi still makes
     assert {e["status"] for e in CONTRACT["errors"]} >= {401, 403, 404, 409, 422, 429, 502, 504}
     assert CONTRACT["limits"]["observe_batch_max"] >= 1 and CONTRACT["limits"]["max_turns_per_hour"] >= 1
+
+
+def test_lumi_310_says_what_a_line_must_be_speaker_and_ts():
+    """Lumi v3.1.0 (CR3, still API v1): a speaker of 1–64 characters with no ':', a ts with its offset — else a 422."""
+    about = CONTRACT["endpoints"]["observe"]["about"]
+    assert "no ':'" in about and "offset" in about and "422" in about
+    malformed = next(e for e in CONTRACT["errors"] if e["status"] == 422)["when"]
+    assert "speaker" in malformed and "offset" in malformed

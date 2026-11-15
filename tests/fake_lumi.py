@@ -12,6 +12,7 @@ import asyncio
 import copy
 import json
 import urllib.parse
+from datetime import datetime
 from pathlib import Path
 
 CONTRACT = json.loads((Path(__file__).parent / "fixtures" / "lumi_agora_api_v1.json").read_text(encoding="utf-8"))
@@ -77,6 +78,8 @@ class FakeLumi:
         for line in body["lines"]:
             if set(line) != line_keys or ":" in line["speaker"] or not 1 <= len(line["speaker"]) <= 64:
                 raise ContractError(f"observe line {sorted(line)}")
+            if datetime.fromisoformat(line["ts"]).tzinfo is None:  # Lumi v3.1.0: a ts without its offset is a 422 (Q9)
+                raise ContractError("observe ts without its offset")
         if self.observe_status:
             status = self.observe_status.pop(0)
             if status != 200:
