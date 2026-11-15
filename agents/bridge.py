@@ -57,6 +57,7 @@ BACKOFF_S = (10, 30, 60)   # a failed batch is sent again whole after these, the
 BACKLOG_N = 300            # after a restart: the room's lines paged back, for today's she missed (Q1)
 HEALTH_S = 60.0            # `/v1/health` at start and this often
 STOP_FLUSH_S = 10.0        # the last flush at a stop, bounded
+PRE_TURN_FLUSH_S = 5.0     # code review v8.1 #5: the flush before a turn waits no longer; the turn goes anyway (Q6)
 
 # v8.1 — whether the line on its way through `Agent.on_message` is one she hears: a room `m.text` (the owner's voice by
 # Hermes's transcript included), never a member's voiced caption (the same words follow as `m.text`, Q8)
@@ -167,7 +168,7 @@ class Bridge(Agent):
         if not _HEARABLE.get() or sender == self.cfg.user_id:
             return
         self._queue(sender, text, event_id, ts_ms)
-        if len(self.queue) >= OBSERVE_LINES:
+        if len(self.queue) >= OBSERVE_LINES and not self._flush_lock.locked():  # code review v8.1 #5: one at a time
             self._spawn(self.flush())
 
     def _queue(self, sender: str, text: str, event_id: str, ts_ms: int) -> None:
@@ -217,6 +218,9 @@ class Bridge(Agent):
         if self._lumi_closed() or (not force and self.clock() < self._retry_at):
             return False
         async with self._flush_lock:
+            # code review v8.1 #5: a flush that waited on the lock reads the backoff and the state again
+            if self._lumi_closed() or (not force and self.clock() < self._retry_at):
+                return False
             while self.queue:
                 batch = self.queue[:BATCH_MAX]
                 status, body = await self.lumi.observe([line for line, _ in batch])
@@ -290,7 +294,10 @@ class Bridge(Agent):
         speaker, text = found
         try:
             await self.client.room_typing(room_id, True)
-            await self.flush(force=True)  # Q6: the lines before the trigger first; if it fails, the turn still goes
+            try:  # Q6: the lines before the trigger first; if it fails or is slow, the turn still goes
+                await asyncio.wait_for(self.flush(force=True), PRE_TURN_FLUSH_S)  # code review v8.1 #5: bounded
+            except TimeoutError:
+                log.info("observe: still sending before the turn — the turn goes on")
             got = await self.lumi.turn(speaker, answered, plain_body(text))
             self._turn_done(got)
             if got.outcome == "timeout":

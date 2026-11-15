@@ -368,3 +368,29 @@ def test_a_reply_the_room_never_saw_is_retracted(case):
         assert fake.paths()[-1] == "/v1/turn/%24o1/retract"
         assert not b.answers_file.exists()
     asyncio.run(go())
+
+
+def test_flushes_never_pile_up_past_the_backoff_and_the_turn_waits_for_them_no_longer_than_its_bound(monkeypatch):
+    """Code review v8.1 #5: from 20 lines every line spawned a flush that called Lumi past the backoff, and the
+    pre-turn flush waited on them without a bound."""
+    import agents.bridge as bridge_mod
+    monkeypatch.setattr(bridge_mod, "PRE_TURN_FLUSH_S", 0.2)
+
+    async def go():
+        b, fake = make()
+        fake.observe_status = [503] * 50
+        for i in range(26):
+            await hear(b, ev(ADA, f"рядок {i}", T0 + i, f"$q{i}"))
+        await asyncio.sleep(0.05)
+        assert len(fake.observes()) == 1                       # one call, then the backoff holds the rest
+        orig = fake.__call__
+
+        async def held(method, url, body, headers, timeout_s):
+            if url.endswith("/v1/observe"):
+                await asyncio.sleep(10)                         # Lumi hangs on observe
+            return await orig(method, url, body, headers, timeout_s)
+        b.transport = b.lumi._transport = held
+        await hear(b, ev(OWNER, "Лілі?", T0 + 100, "$o1"))
+        await asyncio.wait_for(asyncio.gather(*b._tasks), 3)   # the turn went within the bound
+        assert any(c["path"] == "/v1/turn" for c in fake.calls)
+    asyncio.run(go())
