@@ -4456,7 +4456,7 @@ in the tags.
 
 ### v8.1 — Лілі hears the room and answers when named
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v8.1.0` (2026-11-15); G2 passed on Lumi's dev, deployed at G4 against Lumi prod `v3.3.1`.
 
 **Goal:** Лілі hears every line of the room and answers in it when someone names her, through a bridge that is one of
 our agents, on Lumi's `agora` channel. Built and released by the synchronization above: its bridge is step 4 (against
@@ -4546,7 +4546,7 @@ token); the usage line from `stats`.
 
 ### v8.2 — Лілі under the full rules
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v8.2.0` (2026-11-15) after G5; deployed the same day, the room checks confirmed by the owner.
 
 **Goal:** Лілі takes part in the room like Ada and Bruno — chosen by the turn-taking, not only when named.
 
