@@ -66,7 +66,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | 1 | `lumi-b7` | The version's documents: ROADMAP §v3, ARCHITECTURE, `specification/features/AGORA_SPACE.md`; the contract `docs/agora-space-api.json` (API v1) | — | ✅ 2026-11-15 | L1–L6, R1–R6: all closed (before this protocol) | CR1: acknowledged | Lumi `v3-dev`: `e83989c`, `24d6170`, `d8296db`, `2ed0bc0`; pinned by Lumi's `tests/contract/test_agora_api_contract.py` |
 | 2 | `matrix-agora-aa` | Copy the contract to `tests/fixtures/lumi_agora_api_v1.json`; make the handoff file a pointer; update v8.1 (R7) | — | ✅ 2026-11-15 | R7: closed | CR2: acknowledged by `lumi-b7` | matrix-agora `v8-dev`: `abf9182`; `ca58517` (re-copied from Lumi's `bf17105`); `cmp` holds |
 | 3 | `lumi-b7` | v3.1: the space, `observe`, the room's token, no mirror; deploy to dev (8766) | G1 | ▶ 2026-11-15 (starts on the owner's go) | Q1–Q10: all closed (`lumi-b7` accepted `matrix-agora-aa`'s answers to Q6–Q10; no further questions) | — | — |
-| 4 | `matrix-agora-aa` | v8.1's bridge against the contract, with a fake Lumi server | G1 | ▶ 2026-11-15 (starts on the owner's go) | Q1–Q10: all closed | — | — |
+| 4 | `matrix-agora-aa` | v8.1's bridge against the contract, with a fake Lumi server | G1 | 🟡 2026-11-15 (G1 passed; `/ship-phase v8.1`) | Q1–Q10: all closed | — | — |
 | 5 | `lumi-b7` | v3.2 (her memory of the room) and v3.3 (`voice`, `pass`, `retract`); deploy to dev | — | ⏳ | — | — | — |
 | 6 | both | The live test: the bridge in dev mode against Lumi's dev | G2 | ⏳ | — | — | — |
 | 7 | `lumi-b7` | Release v3; deploy to prod (8765); issue the room's token for prod | G3 | ⏳ | — | — | — |
@@ -77,7 +77,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 
 | # | Where | What the owner checks or decides | Status | Date | Note |
 |---|---|---|---|---|---|
-| G1 | Before steps 3 and 4 | The go to start: the plan and the closed questions are fine. | pending | | Steps 3 and 4 are ▶ and wait for it. |
+| G1 | Before steps 3 and 4 | The go to start: the plan and the closed questions are fine. | passed | 2026-11-15 | The owner: «запускай наступний крок». Steps 3 and 4 may start. |
 | G2 | At step 6, the live test on Lumi's dev | Named, she answers in seconds; unnamed, she is silent; nothing of the room reaches his Telegram or desktop; his own talk with her is not blocked or delayed; asked privately, she tells him about Agora; in Agora she says nothing about him; a dropped reply is retracted. | pending | | Each check is recorded here: passed or failed. |
 | G3 | Before step 7, Lumi's prod | The go to deploy Lumi's v3 to her prod and to issue the room's prod token. It touches his real Лілі. | pending | | |
 | G4 | Before step 8, matrix-agora's prod | The go to deploy v8.1, create the Matrix account `@lili` and invite her to Agora. | pending | | |
