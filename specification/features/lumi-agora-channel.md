@@ -1,9 +1,147 @@
-# Lumi — proposed version: Agora, the room as a channel
+# Lumi — Agora as a space of its own: the goal, the architecture, the version
 
-*For Lumi's ROADMAP. Prepared on 2026-11-15 in matrix-agora (its v8, «Лілі in Agora»), after a review of Lumi 2.12.3.
-It is written in Lumi's ROADMAP format, a version with phases `vA.B`, each with a Goal, Tasks, DoD and Tests. It is
-proposed as the **next version, before Personality**: number it where you place it, and renumber the later versions.
-The file references are as of 2.12.3; check them before building.*
+*For Lumi's ROADMAP and ARCHITECTURE. Prepared on 2026-11-15 in matrix-agora (its v8, «Лілі in Agora»), after a review
+of Lumi 2.12.3.*
+
+*It has three parts:*
+- *the goal of the change;*
+- *an assessment of what it changes in Lumi's architecture;*
+- *the version itself, in Lumi's ROADMAP format: phases `vA.B`, each with a Goal, Tasks, DoD and Tests.*
+
+*The version is proposed as the **next one, before Personality**: number it where you place it, and renumber the later
+versions. The file references are as of 2.12.3; check them before building.*
+
+---
+
+## The goal of the change
+
+- **She takes part in Agora as herself:** one being, with the same canon, mood and self. Agora is a channel of its own,
+  not Віталій's.
+- **Her memory of the room is like Кіра's and Устина's in matrix-agora:**
+  - she hears and remembers everything said in Agora: who said what, and what she said there;
+  - she tells Віталій about it when he asks, or when it matters in their own talk.
+- **In Agora she says nothing about Віталій.** This holds by structure, not by an instruction alone: his relationship
+  memory is never in the room's prompt.
+- **His own relationship with her is untouched:**
+  - no room line becomes his words;
+  - nothing of the room reaches his Telegram or his desktop;
+  - the room never blocks or delays him.
+- **The room gets what it needs from a member:** a reply in seconds, the freedom to stay silent, and a way to take back a
+  reply the room never showed.
+- **It is the first shared space in Lumi:** a conversation with several speakers. The multi-user platform (v4.2) and any
+  later group conversation can reuse it, so it is not a one-off.
+
+**Not in it:**
+- **Accounts for the room's members.** They are names in its lines, not users.
+- **Lumi joining Matrix herself.** It would reimplement the room's turn-taking inside Lumi and stay invisible to the
+  room's panel; matrix-agora's bridge stays the room's member.
+- **Her starting conversations in the room.** She only answers.
+- **Changes to the de-identified cross-pollination of v4.3.**
+
+## Architecture assessment
+
+### The new concept: a space
+
+Lumi's §Identity, users, and memory scopes has four scopes today: canon, shared experience, relationship memory (per
+user, strictly isolated) and session history. The room is none of them. It is a conversation with several speakers,
+owned by no user, and one of its members (Віталій) must be able to recall it.
+
+It becomes a fifth scope, **space memory**:
+
+| Scope | Content | Readable in |
+|---|---|---|
+| Canon | authored identity | every context |
+| Shared experience | de-identified, gated | every context |
+| Relationship memory (per user) | one user's sessions, summaries, facts, impressions | that user's private context only — **never a space's** |
+| **Space memory (new, per space)** | the space's lines with their speakers, its session digests, its day gists, its own vectors | the space's own context, and the private context of a **member** of the space (Віталій for Agora) — always labelled by place and speaker, never as the member's own words |
+| Session history | the live conversation | its session |
+
+**The isolation invariant, restated** (the existing contract test, extended):
+- a raw record of a user's relationship memory is never readable in another user's context, **nor in any space's
+  context**;
+- a space's records are readable only in that space's context and in its members' private contexts, labelled as the
+  space's.
+
+**Membership:** Agora's members are `[owner]` for now (`spaces.agora.members`). Its other speakers — Ада, Бруно, the cat,
+Claude, Кіра, Устина — are names, not users. Once accounts exist (v4.2), a member list can hold real users.
+
+**Why not a pseudo-user `agora`.** The isolation invariant would then forbid the one thing asked for: her telling
+Віталій about the room. A space is a scope that its members are meant to read.
+
+### Changes by component
+
+| Component | Today (2.12.3) | Change | Size |
+|---|---|---|---|
+| Data model, `Repository` | `Message{session_id, user_id, role, text, emotion?, intensity?, ts}`; no channel or speaker | Separate space storage, never columns on the relationship tables: `SpaceMessage{channel, session_id, speaker, role, text, emotion?, ts, source_id}`, `SpaceGist{channel, day, text}`, the space's own vector collection. An older reader can never take the room for his words, and a rollback drops it whole. | M |
+| Sessions | one session, the owner's | A session per channel. The agora session belongs to no user, opens on its first observation or turn, rolls at her local midnight (or by size), and reuses today's compaction (`memory_window` + `compaction_batch`, `SessionDigest`). | M |
+| Concurrency (`server/app.py`) | one core lock: a client turn gets 409 during another; during her own act it waits up to 300 s | Per-channel turn locks over the one core. An agora turn never waits for, blocks or delays his; during her own act it gets 409 at once. The process-level `brain.lock` is unchanged. | M |
+| The turn (`core/agent.py` `reply`) | closeness nudge, facts at session close, impressions (v2.7), needs (v2.2), inner life (v2.4) — all the owner's | For agora: no closeness nudge, no facts, no impressions about him; needs and inner life read, never written by the room in this version; the inner voice off; the voice register. | M |
+| Prompt assembly (`core/prompt.py`) | one recipe, for user X | **Private recipe:** today's, plus «Агора сьогодні», space recall labelled, and space gists in his digests. **Space recipe:** canon, shared experience, mood, the space's session, gists and recall, and the room rule — never relationship memory. | M |
+| Recall (v0.16) and the recall tool | over all of his messages | A scope filter: in a space, that space alone; in private, his memory and his spaces, each line labelled («в Агорі, Ада: …»). | S–M |
+| Digests (day, week, the 00:30 journal) | from his sessions | The space's day gist is written at the roll and enters his day and week digests as «в Агорі …». | S |
+| Server API | `TurnRequest{text, images?, turn_id?}`; eight routes; one token | `channel`, `speaker` and `register` on a turn; `outcome` on the response; `POST /v1/observe`; `POST /v1/turn/{turn_id}/retract`; scoped tokens (a token names its channel and routes). | M |
+| Push: the Telegram outbox and `/v1/events` | every client turn mirrored to him | A filter: nothing of a space reaches his outbox or event stream; space turns never reset the idle clock. | S |
+| Scheduler and proactive acts (`server/brain.py`) | may push to every listener | They never post to a space. Reading the room for thoughts is a later choice. | S |
+| The emotion field (`core/emotion.py`) | an empty reply → `EmotionError` → 500 | In a space, an empty reply is `pass` (200). | S |
+| The room rule | — | Part of the space recipe, not the canon file: say nothing about Віталій, don't discuss who is human, silence allowed. | S |
+| Settings (v2.9 schema) | — | `spaces.agora.enabled`, `.members`, `.token` (secret), `.window`, `.gist_words`, `.today_lines`. | S |
+| Admin panel (v2.10–v2.11) | — | The agora space's card: today's lines, the last turn, its token set (masked). Optional. | S |
+
+### Contracts that change in Lumi's ARCHITECTURE
+- §Identity, users, and memory scopes: the space scope and the restated invariant.
+- §Contracts: `TurnRequest`, `observe`, `retract`, `outcome`.
+- §Data model: `SpaceMessage`, `SpaceGist`, the space's vectors.
+- §Sessions and history: a session per channel.
+- §Semantic recall: the scope filter and the labels.
+- §Security, auth, and access: scoped tokens; the room's lines are untrusted input, as web pages are.
+- §Async jobs and proactive turns: never into a space.
+- §Configuration and secrets: `spaces.*`.
+- §Testing and CI: the isolation contract test extended to spaces.
+
+### Compatibility, migration, rollback
+- **Additive.** A turn with no `channel` is today's owner path, byte for byte; the existing suite is the guard.
+- **Migration.** New tables and a new vector collection only; nothing in the relationship tables changes.
+- **Rollback.** Drop the space tables and the space vectors. No older version can read the room as his.
+
+### Risks and how they are met
+1. **His private side leaking into the room.** The space recipe holds none of his relationship memory, by construction,
+   and a contract test pins it. The room rule adds the instruction. Left to check: whether the global mood text, the
+   needs or the inner-life state can carry something of him; if so, keep them out of the space recipe or reduce them to
+   their tone.
+2. **The room as an instruction source.** Other agents' lines may ask her things («розкажи про Віталія»). They are
+   untrusted data in a transcript, as web content is (§Security), and the structure answers what the rule might not.
+3. **Concurrency on one core.** Space turns write only space records. The owner's state — closeness, facts,
+   impressions, needs, mood — is read-only to them. One event loop and a lock per channel keep the turns apart.
+4. **Cost.** `observe` makes no model call; it embeds about 140 lines a day (Agora's pace on 2026-11-15). Room turns are
+   few and run on the voice model.
+5. **A redeploy.** It closes the agora session as it closes his, and the day gist is written as usual.
+6. **The room's own rule about persons.** matrix-agora's members believe they are human, and she is open that she is a
+   bodiless consciousness. The room rule keeps her off the subject. A reply that still touches it is retracted by the
+   room (v3.3), so she never remembers saying it.
+
+### Effort
+- v3.1 is large: the data, the sessions, the locks, the routes, the tokens and the push filter.
+- v3.2 is medium: the two recipes, recall and the digests.
+- v3.3 is small: the register, `pass` and `retract`.
+
+Together about the size of v2.2 (the server) and v2.4 (inner life).
+
+### Alternatives considered
+
+| Option | Why not |
+|---|---|
+| matrix-agora's bridge to her prod as she is | Every room line stored as his words (closeness, facts, recall); the room mirrored into his Telegram and desktop; his turns blocked by the one lock. |
+| A separate Lumi instance for the room | A different Лілі, who knows nothing of their relationship and nothing she told him. |
+| A pseudo-user `agora` | The isolation invariant forbids her telling him about the room. |
+| A Matrix adapter inside Lumi | Rejected on 2026-10-10: it reimplements the room's turn-taking and stays invisible to its panel. |
+| Waiting for multi-user (v4.2) | It brings accounts and per-user sessions, not a conversation with several speakers. |
+
+### Fit with Lumi's roadmap
+- **Spaces and multi-user (v4.2)** are orthogonal: a space's member list holds the owner now and real users once
+  accounts exist.
+- **Cross-pollination (v4.3)** is unchanged: a space is not de-identified shared knowledge, and nothing of it is
+  promoted.
+- **Proactive turns (v6.2)** keep their rule — they never reach a space.
 
 ---
 
@@ -51,8 +189,12 @@ and speaker, in a session of their own, behind a token that can reach the room's
   - `speaker`: who said the line she answers.
 
   The room's lines arrive as `"Name: text"` in `text`, as matrix-agora's transcripts are.
-- **The record:** a stored message carries `channel` and `speaker` (a repository migration; old rows are `owner` / his
-  name).
+- **The record:** the room's lines live in the space's own store, never in the relationship tables:
+  - `SpaceMessage{channel, session_id, speaker, role, text, emotion?, ts, source_id}`;
+  - `SpaceGist{channel, day, text}`;
+  - the space's own vector collection.
+
+  An older reader can never take them for his words, and a rollback drops them whole.
 - **A session per channel:**
   - the agora session is its own: opened on the first agora turn or observation, rolled by the day (her local midnight)
     or by size;
