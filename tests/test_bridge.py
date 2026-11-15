@@ -4,6 +4,7 @@ retracts what the room never saw. nio mocked, the clock injected, made-up lines 
 
 import asyncio
 import json
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -26,9 +27,12 @@ CFG = AgentConfig(name="Лілі", user_id=LILI, canon="", homeserver="http://hs
                   password="pw", type="bridge", engine="lumi-http", capabilities=frozenset())
 
 
-def roster():
+def roster(lili_mode=None):
     names = ("ada", "bruno", "hermes")
-    return {**{n: load_member(Path(f"agents/{n}.toml")) for n in names}, "lili": load_member(Path("agents/lili.toml"))}
+    lili = load_member(Path("agents/lili.toml"))
+    if lili_mode:  # v8.2: she is ranked; a test of v8.1's mention-only behaviour pins that mode
+        lili = replace(lili, mode=lili_mode)
+    return {**{n: load_member(Path(f"agents/{n}.toml")) for n in names}, "lili": lili}
 
 
 def ev(sender, body, ts, eid=None, msgtype="m.text", content=None):
@@ -46,10 +50,10 @@ class Clock:
         return self.ms
 
 
-def make(fake=None, env=None, healthy=True):
+def make(fake=None, env=None, healthy=True, lili_mode=None):
     fake = fake or FakeLumi()
     env = {"LUMI_URL": BASE, "LUMI_ROOM_TOKEN": TOKEN} if env is None else env
-    b = Bridge(CFG, roster=roster(), transport=fake, env=env)
+    b = Bridge(CFG, roster=roster(lili_mode), transport=fake, env=env)
     b.client = SimpleNamespace(room_send=AsyncMock(return_value=SimpleNamespace(event_id="$mine")),
                                room_typing=AsyncMock(), join=AsyncMock(), room_leave=AsyncMock())
     b.clock = Clock()
@@ -212,8 +216,9 @@ def test_named_by_the_owner_she_answers_with_the_trigger_alone_exactly_as_lumi_r
 
 
 def test_unnamed_she_stays_silent_and_named_by_an_agent_she_answers_it():
+    """v8.1's mention-only rule (v8.2 ranks her — pinned here as mention-only)."""
     async def go():
-        b, fake = make()
+        b, fake = make(lili_mode="mention-only")
         await hear(b, ev(OWNER, "Як там погода?", T0, "$o1"), ev(ADA, "Сонячно.", T0 + 1000, "$a1"))
         await asyncio.sleep(0.01)
         assert fake.turns() == [] and not b._reply_pending
@@ -377,7 +382,7 @@ def test_flushes_never_pile_up_past_the_backoff_and_the_turn_waits_for_them_no_l
     monkeypatch.setattr(bridge_mod, "PRE_TURN_FLUSH_S", 0.2)
 
     async def go():
-        b, fake = make()
+        b, fake = make(lili_mode="mention-only")  # Ada's lines never choose her: the queue alone is under test
         fake.observe_status = [503] * 50
         for i in range(26):
             await hear(b, ev(ADA, f"рядок {i}", T0 + i, f"$q{i}"))
@@ -419,4 +424,36 @@ def test_without_an_address_the_card_says_why_and_nothing_is_queued():
         assert load_state(b.state_file)["health"]["why"] == "no LUMI_ROOM_TOKEN"
         await hear(b, ev(OWNER, "Лілі?", T0, "$o1"), ev(ADA, "туман", T0 + 1, "$a1"))
         assert b.queue == []
+    asyncio.run(go())
+
+
+def test_ranked_she_answers_an_unnamed_owner_line_when_r1_chose_her_and_a_fallback_turn_answers_its_line():
+    """v8.2 (AGORA-270): ranked with weight 1 — R1 picks her for some unnamed owner lines (by the event's hash), and a
+    fallback turn answers the owner line it stands in for, never a newer one."""
+    from agents.turns import owner_repliers
+
+    async def go():
+        b, fake = make()
+        assert b.me.mode == "ranked"
+        b.fallback_s, b.reply_delay_s = 3600, 1.0          # a stand-in's wait never fires inside this test
+        text = "Як вам сьогоднішній вечір?"
+        ids = [f"$u{i}" for i in range(60)]
+        mine = next(e for e in ids if "lili" in owner_repliers(e, text, b.roster, b.owner_repliers))
+        theirs = next(e for e in ids if "lili" not in owner_repliers(e, text, b.roster, b.owner_repliers))
+        await hear(b, ev(OWNER, text, T0, theirs))
+        await asyncio.sleep(0.01)
+        assert fake.turns() == []                          # not chosen: silent
+        await hear(b, ev(OWNER, text, T0 + 60_000, mine))
+        for _ in range(100):
+            if fake.turns():
+                break
+            await asyncio.sleep(0.05)
+        assert [t["body"]["turn_id"] for t in fake.turns()] == [mine]
+        await hear(b, ev(OWNER, "ще одне", T0 + 120_000, "$newer"))
+        await asyncio.sleep(0.01)
+        n = len(fake.turns())
+        assert await b.reply(ROOM, fallback_for=mine) is True   # the stand-in answers its own line
+        assert fake.turns()[n]["body"]["turn_id"] == mine
+        for t in list(b._tasks):
+            t.cancel()
     asyncio.run(go())

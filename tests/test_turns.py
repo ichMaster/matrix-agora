@@ -427,11 +427,12 @@ def test_claude_is_chosen_by_r1_and_r2_like_the_others():
     from agents.roster import load_roster
     roster = load_roster("agora")
     ranked = {n for n, m in roster.items() if m.mode == "ranked"}
-    assert ranked == {"ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "claude"}  # v6.4: seven people + Claude
+    assert ranked == {"ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "claude",
+                      "lili"}  # v6.4: seven people + Claude; v8.2: Лілі, the bridge, ranked
     picks = [tuple(sorted(owner_repliers(f"$o{i}", "як вам вечір?", roster, 2))) for i in range(600)]
     assert all(len(p) == 2 and set(p) <= ranked for p in picks)
     share = sum("claude" in p for p in picks) / len(picks)
-    assert 0.06 < share < 0.17                                   # weight 0.4 against seven people at 1.0: ~12 %
+    assert 0.05 < share < 0.16                                   # weight 0.4 against eight at 1.0 (v8.2): ~11 %
     nexts = {next_speaker(f"$a{i}", roster["ada"].user_id, "думка", roster) for i in range(400)}
     assert nexts == ranked - {"ada"}                              # never the sender, never the ambient cat
 
@@ -453,7 +454,7 @@ def _without_her(roster):
     return {**roster, "ustyna": replace(roster["ustyna"], mode="none")}
 
 
-@pytest.mark.parametrize("text,ranked_repliers", [("як справи?", 2), ("всім привіт", 8), ("Устю, а ти?", 1)])
+@pytest.mark.parametrize("text,ranked_repliers", [("як справи?", 2), ("всім привіт", 9), ("Устю, а ти?", 1)])  # v8.2: Лілі
 def test_simulated_waves_with_ten_members_never_exceed_the_limit(text, ranked_repliers):
     """v6.4: the owner, nine speakers and the herald — a wave never grows past `MAX_BOT_TURNS` beyond the owner's own
     repliers, each agent message draws one R2 candidate (and at most the cat's own reaction), and the owner's ranked
@@ -550,9 +551,9 @@ def test_claudes_lower_weight_leaves_ada_and_bruno_more_first_places():
     from agents.turns import rank
     ranked = [m for m in load_roster("agora").values() if m.mode == "ranked"]
     firsts = [rank(f"$w{i}", ranked)[0] for i in range(6000)]
-    assert 0.04 < firsts.count("claude") / 6000 < 0.09
-    for person in ("ada", "bruno", "leon", "mia", "irma", "kira"):
-        assert 0.12 < firsts.count(person) / 6000 < 0.19 and firsts.count(person) > 2 * firsts.count("claude")
+    assert 0.03 < firsts.count("claude") / 6000 < 0.08                # v8.2: 0.4 of 8.4 — ~4.8 %
+    for person in ("ada", "bruno", "leon", "mia", "irma", "kira", "lili"):  # v8.2: Лілі at 1.0 like the people
+        assert 0.08 < firsts.count(person) / 6000 < 0.15 and firsts.count(person) > 2 * firsts.count("claude")
 
 
 # --- v5.1: the herald takes no turn ----------------------------------------------------------------------------------
@@ -580,3 +581,25 @@ def test_the_ask_move_never_addresses_the_herald():
         move = persona_move(f"$e{i}", ME, WITH_HERMES, "Ich", weights, has_plans=True, has_life=True)
         assert move.kind == "ask" and move.addressee != "Гермес"
         assert move == persona_move(f"$e{i}", ME, ROSTER, "Ich", weights, has_plans=True, has_life=True)
+
+
+
+def test_a_ranked_bridge_who_stays_silent_never_grows_the_wave_and_the_fallback_stands_in():
+    """v8.2 (AGORA-270): Лілі ranked — whatever she does, a wave never grows past `MAX_BOT_TURNS` beyond the owner's
+    repliers; when R1 chose her and she passes (Lumi's `pass`), the best-ranked member R1 did not choose answers him."""
+    from agents.roster import load_roster
+    from agents.turns import fallback_due, fallback_replier
+    roster = load_roster("agora")
+    assert roster["lili"].mode == "ranked" and roster["lili"].weight == 1.0
+    for text in ("як справи?", "всім привіт", "Лілі, а ти?"):
+        for seed in range(200):
+            n_owner, sent, followers = simulate(roster, text, seed)
+            assert len(sent) <= max(3, n_owner), (seed, sent)
+            silent = [w for w in sent if w != "lili"]          # her pass: everything she would say, unsaid
+            assert len(silent) <= len(sent) and all(f <= 2 for f in followers)
+    chose_her = [f"$o{i}" for i in range(400) if "lili" in owner_repliers(f"$o{i}", "як вам вечір?", roster, 2)]
+    assert 0.12 < len(chose_her) / 400 < 0.35                  # about as often as each person (2 of ~8.4 by weight)
+    eid = chose_her[0]
+    stand_in = fallback_replier(eid, "як вам вечір?", roster, 2)
+    assert stand_in and stand_in != "lili" and stand_in not in owner_repliers(eid, "як вам вечір?", roster, 2)
+    assert fallback_due([("Ich", 0, eid, False)], eid)          # nobody answered: the stand-in's turn comes

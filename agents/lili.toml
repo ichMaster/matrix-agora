@@ -7,7 +7,7 @@ engine = "lumi-http"     # Lumi's agora space API v1 (tests/fixtures/lumi_agora_
 name_forms = ["лілі", "стхіра", "стхіри", "стхірі", "стхіру", "стхірою", "стхіро"]
 
 [turns]
-mode = "mention-only"    # v8.1: she answers only when named; v8.2 ranks her
+mode = "ranked"          # v8.2 (the owner, G5: «все гаразд ідемо далі»): chosen by R1/R2 like Ада (v8.1: mention-only)
 weight = 1
 
 [panel]                  # shown by the panel only — never part of a prompt

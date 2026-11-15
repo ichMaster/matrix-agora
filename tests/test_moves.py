@@ -50,7 +50,7 @@ def test_the_addressee_is_never_oneself_and_everyone_is_asked():
         others = {m.name for m in ROOM.values()
                   if m.user_id != me.user_id and m.mode not in ("none", "mention-only")} | {"Ich"}
         assert "Гермес" not in asked  # v5.1: the herald takes no turn — a question to him would hang
-        assert "Лілі" not in asked  # v8.1 (code review #1, v4.6 #4): the mention-only bridge is never asked
+        assert "Лілі" in asked  # v8.2: ranked, she is asked like the others (v8.1: mention-only, never asked)
         assert "Устина" in asked  # v6.4: Agora meets her — asked like any other member
         assert asked == others and me.name not in asked
 
@@ -126,3 +126,15 @@ def test_a_persona_is_reminded_of_its_own_questions_of_this_session():
     assert "Твої питання в цій розмові — не повторюй їх: «Ich, а ти бував у Флоренції?»" in prompt
     agent.session = []
     assert "Твої питання в цій розмові" not in agent.build_prompt()
+
+
+
+def test_a_mention_only_member_is_never_asked():
+    """v8.1 (code review #1, v4.6 #4) — kept for any mention-only member: a question names her and she alone may
+    answer, so the personas never spend her turns."""
+    from dataclasses import replace
+    room = {**ROOM, "lili": replace(ROOM["lili"], mode="mention-only")}
+    asked = {m.addressee for m in (persona_move(f"$m{i}", ADA, room, "Ich", DEFAULT_WEIGHTS, has_plans=True, has_life=True)
+                        for i in range(3000))
+             if m.kind == "ask"}
+    assert "Лілі" not in asked and "Ада" not in asked

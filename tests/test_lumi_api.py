@@ -32,17 +32,17 @@ def run(coro):
 
 
 # --- the roster: the bridge type and Лілі's TOML -------------------------------------------------------------------
-def test_lili_is_a_mention_only_bridge_on_lumi_http_with_nothing_of_ours():
+def test_lili_is_a_ranked_bridge_on_lumi_http_with_nothing_of_ours():
     m = load_member(Path("agents/lili.toml"))
     assert (m.user_id, m.name, m.type, m.engine, m.mode, m.weight) == (
-        "@lili:agora.lan", "Лілі", "bridge", "lumi-http", "mention-only", 1.0)
+        "@lili:agora.lan", "Лілі", "bridge", "lumi-http", "ranked", 1.0)  # v8.2 (v8.1: mention-only)
     assert m.capabilities == frozenset() and m.panel["pronoun"] == "she"
 
 
 @pytest.mark.parametrize("toml, why", [
     ('type = "bridge"\n', "lumi-http"),                                   # a bridge on Gemini
     ('engine = "lumi-http"\n', "lumi-http"),                              # Lumi's API for a persona
-    ('type = "bridge"\nengine = "lumi-http"\n[turns]\nmode = "ranked"\n', "mention-only"),  # v8.2's, not yet
+    ('type = "bridge"\nengine = "lumi-http"\n[turns]\nmode = "ambient"\n', "mention-only"),  # v8.2: ranked or mention-only
     ('type = "bridge"\nengine = "lumi-http"\n[capabilities]\nvoice = true\n', "no capability"),
 ])
 def test_a_bridge_off_its_shape_is_refused(toml, why):

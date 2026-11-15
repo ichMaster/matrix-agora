@@ -285,7 +285,8 @@ class Bridge(Agent):
                     fallback_for: str | None = None, delay_ms: int | None = None) -> bool:
         """One room turn of hers: R3 was checked before (`reply_later`); after the call the persona rule alone may drop
         her reply — and then it is retracted, as is a turn the bridge gave up on."""
-        answered = trigger or (self.last_owner[0] if self.last_owner else "")
+        # v8.2 (AGORA-270): a fallback turn answers the owner's line it stands in for, never a newer one
+        answered = trigger or fallback_for or (self.last_owner[0] if self.last_owner else "")
         why = self._lumi_closed()
         if why:
             log.info("silent: lumi %s", why)

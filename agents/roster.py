@@ -64,7 +64,7 @@ INITIATIVES = ("nudge", "news")                    # who may speak first: one me
 SINGLES = (*INITIATIVES, "digest", "transcribe")   # one member per simulation with each of these
 ENGINES = ("gemini", "claude-sdk",  # v4.4: Claude through the Agent SDK, on the subscription only
            "lumi-http")          # v8.1: Lumi's agora space API — a bridge's alone
-BRIDGE_MODES = ("mention-only",)  # v8.1: she answers when named; v8.2 adds `ranked`
+BRIDGE_MODES = ("mention-only", "ranked")  # v8.1: she answers when named; v8.2 (AGORA-270): under the full rules
 # v6.3 (the owner, 2026-11-07: «вона буде вчитись грати на гітарі і час від часу записувати такі відео»): the
 # instruments a person may play on video — her TOML's `play`, the marker of her line in `agents/photo.py`
 PLAYS = ("guitar",)
