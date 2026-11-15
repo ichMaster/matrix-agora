@@ -1,3 +1,21 @@
+Version 8.2.0 (2026-11-15)
+---------------------------
+- Лілі under the full rules (v8.2, sync step 9; the owner's G5: «все гаразд
+  ідемо далі»): the bridge may be `ranked`, and Лілі is, weight 1 like Ада —
+  R1 may choose her for the owner's unnamed lines, R2 for an agent's line,
+  and she may be R1's fallback, whose turn answers the owner line it stands
+  in for. Her pass (Lumi's) is silence and the room's fallback answers
+  (AGORA-270). Lumi's side: v3.3.2's room rule lets her stay silent on a
+  line meant for someone else
+- her card shows today's turns by outcome — «today: N replies · M passes ·
+  K silent», every chosen turn counted once (AGORA-271, review #1)
+- the turn pins moved to an eleventh ranked member; a simulated wave with
+  her ranked — and with her silent — never grows past MAX_BOT_TURNS
+  beyond the owner's repliers (review #2)
+- WAIVED by the owner (2026-11-15, rule 7): the room checks (she answers
+  about as often as the others; the fallback stands in) follow the deploy
+  (AGORA-272); fixes ship as 8.2.x
+
 Version 8.1.0 (2026-11-15)
 ---------------------------
 - Лілі in Agora through the bridge (v8.1, sync step 4): Lumi's own Лілі
