@@ -1,3 +1,20 @@
+Version 7.6.1 (2026-11-15)
+---------------------------
+- the room back on Gemini 2.5 Flash, as before v7.2: Ада, Бруно, Леон, Мія,
+  Ірма and Кіт engine gemini on the agent image, without the subscription.
+  The subscription's warnings had muted them daily since 2026-11-12. Гермес
+  and Claude stay on the subscription
+- VOICE_MESSAGES, a live panel switch per speaker: off sends every line as
+  text, in the rooms and in Telegram, an answer to his voice too. It is off
+  for Ада, Бруно, Леон, Мія, Ірма, Кіт and Claude
+- AGORA_REPLY_MODEL per companion: her Agora replies on their own Gemini
+  model, whatever her answer switch. Кіра and Устина answer in Agora on 2.5
+  Flash (~$0.009 a reply against ~$0.07); with him they stay on 3.1 Pro
+- the owner's panel settings that day:
+  - Agora three times as active: MAX_BOT_TURNS 8, BOT_REPLY_P 0.7,
+    PERSONA_ASK_P 0.25, CAT_NUDGE_IDLE_S 1800;
+  - Гермес's digest once a day at 21:00 with at least 15 new messages
+
 Version 7.6.0 (2026-11-15)
 ---------------------------
 - v7.6 her memory as Lumi's, MEMORY_MODE layered|lumi, a live switch per
