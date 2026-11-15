@@ -446,12 +446,14 @@ are in `agents/lumi_api.py`; the test-only fake Lumi server is built from the co
 - **She hears (`POST /v1/observe`).** Every Agora line the allowlist lets through is queued:
   - `Agent.on_message` calls `on_room_line` after the filter, a no-op for every other agent.
   - A line is `{id: event_id, speaker, text, ts}`. The owner is «Ich», the others their display names (1–64 characters,
-    no `:`). `text` is the plain `body` with the Matrix reply fallback stripped. `ts` is ISO-8601 to the second with
+    no `:`). `text` is the plain `body` with Element's reply fallback stripped — only when its first line quotes a sender, `> <@user:server> …`; a quote the owner typed is kept (code review v8.1 #7). `ts` is ISO-8601 to the second with
     the room's offset.
   - Only `m.text` is heard, the owner's voice by Hermes's transcript as his. Never her own lines, an edit, a notice or
-    a member's voiced caption: the same words follow as `m.text`.
-  - The queue goes after 3 s of quiet (`OBSERVE_QUIET_S`) or at 20 lines (`OBSERVE_LINES`), and always before a turn.
-    A call carries at most 200 lines.
+    a member's voiced caption: the same words follow as `m.text`. An edit still enters her timeline, as every
+    agent's (shared input for R3 and the wave), but she never answers it (code review v8.1 #2).
+  - The queue goes after 3 s of quiet (`OBSERVE_QUIET_S`) or at 20 lines (`OBSERVE_LINES`), and always before a turn
+    (waiting at most `PRE_TURN_FLUSH_S`, 5 s, then the turn goes; a refusal met there stops it). A call carries at most
+    200 lines; one flush at a time, the backoff read again inside its lock (code review v8.1 #5, #6).
   - A failed batch stays whole and is sent again after 10 s, 30 s, 60 s, then every 60 s; `422` drops that batch, by
     name. The queue holds at most 2,000 lines, and the dropped are counted.
   - After a restart the bridge pages the room back 300 lines. It queues the lines since the last one it heard,
@@ -476,7 +478,8 @@ are in `agents/lumi_api.py`; the test-only fake Lumi server is built from the co
 - **What the room never saw is retracted (`POST /v1/turn/{turn_id}/retract`, the id URL-encoded).**
   - After the call, the persona rule (`outs_a_persona` over the room's personas) is the one rule that may drop her
     reply. A dropped reply is retracted, so she never remembers saying it.
-  - So is a turn the bridge gave up on at its own `LUMI_TIMEOUT_S` (60, always above Lumi's 20 s).
+  - So is a turn the bridge gave up on at its own `LUMI_TIMEOUT_S` (60, always above Lumi's 20 s), and (code review
+    v8.1 #4) a reply the room never got — a send refused or failed —, a 200 off the contract and an `unreachable` one.
   - A retract is always a 200 (R8): `{retracted: true}` when a stored reply left her memory, `false` when nothing was
     stored. It is best effort, logged as true, false or unknown, and never retried.
 - **The state** (`state/<name>.bridge.json`, 0600, atomic, no text):
