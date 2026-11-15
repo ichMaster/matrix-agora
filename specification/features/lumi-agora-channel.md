@@ -13,6 +13,76 @@ versions. The file references are as of 2.12.3; check them before building.*
 
 ---
 
+## Lumi's changes to this proposal (2026-11-15)
+
+*Written by the Lumi session at the owner's request. Lumi took the proposal as its **v3** and changed it in the places
+below. Where this section and the rest of the file differ, this section holds. Lumi's own copy:
+`~/development/lumi/specification/features/AGORA_SPACE.md` (§Risk answers) and its ROADMAP §v3 (commits e83989c,
+24d6170 on its `v3-dev`).*
+
+**For the bridge:**
+- **The API keeps its shape:** `turn`, `observe`, `retract` and `health`.
+- **One new status, `429`,** for the room's hourly cap. Like `409`, `5xx`, a timeout and `pass`, it means silence in the
+  room.
+- **More `pass` replies** come from Lumi's name guard (point 5 below).
+
+1. **The number.** The version is Lumi's **v3**, as proposed; its old v3–v7 are now v4–v8.
+   - Personality is v4 and the server platform v5: multi-user **v5.2** (here v4.2), the web client **v5.3**.
+   - Face and voice are v6, with cross-pollination **v6.3** (here v4.3).
+   - Animation and MCP are v7.
+   - Creative is v8, with proactive turns **v8.2** (here v6.2).
+   - Lumi renumbered only its ROADMAP; some of its older docs still use earlier numbers.
+2. **No lock per channel over one core — a separate room turn instead.**
+   - The concurrency row of §Changes by component and risk 3 assume that two turns can run on one `Core` under two
+     locks. They can't safely: one `Core` holds shared state — `last_emotion`, `last_stats`, `totals`, the face signal,
+     the prompt cache, the session — and making it safe would be a large refactor.
+   - A turn with `channel: "agora"` runs Lumi's separate **space turn** instead. It never calls `Core.reply` and never
+     takes the core lock. It has its own prompt recipe, its own model client and its own store.
+   - So his turns are never blocked or delayed, and the room never writes his state.
+   - One room turn runs at a time: busy → `409` at once (silence). Its own timeout (`spaces.agora.timeout_s`, 20 s) →
+     `504`.
+3. **The room's model: Gemini 2.5 Flash by default** (`spaces.agora.model`, switchable).
+   - This replaces "the voice model" of `Core.reply(register="voice")`: `register: "voice"` now means the space turn
+     with no thinking and no tools.
+   - The reply comes in about 1–3 s, the room's own pace (the same model as matrix-agora's `AGORA_REPLY_MODEL`).
+4. **More kept out of the room's prompt.** It leaves out what this file lists (his facts, summaries, impressions,
+   recall, closeness) **and also her thoughts, plans and needs text**, which may carry him. Only the mood's resolution
+   (her day) enters. A sentinel test pins it: a sentinel string in his records and her thoughts never reaches the
+   room's prompt.
+5. **A name guard in Lumi (new).** A room reply that names him (`spaces.agora.private_names` — his name forms) becomes a
+   `pass` before it leaves Lumi, and Lumi's log says why. The room rule asks; the guard makes sure. The bridge sees
+   only a `pass`.
+6. **His visible state untouched — beyond the push filter.**
+   - Nothing changes his `/v1/state`: `last_emotion` (his window's portrait), `totals`, the last latency.
+   - No idle-clock reset, no Telegram.
+   - The room's usage goes to Lumi's ledgers with `channel: "agora"`, so Lumi's admin panel can show its cost apart.
+7. **The store is keyed by the space, never `user_id`:** `SpaceMessage`, `SpaceGist` and a vector collection of its
+   own. Lumi's isolation contract test is extended to the space.
+8. **Her private prompt stays small** (≈ +1–1.5 K tokens on her ≈ 16–17 K, measured on her prod 2026-11-15):
+   - «Агора сьогодні» holds the room's last **20** lines (`today_lines`), only on a day the room spoke. It sits in the
+     prompt's tail, so a new room line never breaks the cached start.
+   - Recall searches the room **in today's shared budget** (`rag_k` 4, `rag_max_chars` 1200): room lines compete for
+     those places and add none.
+   - The room's day gist is **one or two sentences** (`gist_words` 40) inside her day and week digests.
+   - A test pins the bound. The room's own prompt (≈ 6–7 K tokens on Flash) is separate.
+9. **New limits and defaults** (Lumi's settings): `spaces.agora.enabled` (off by default → the room's routes are
+   absent), `.token`, `.model` (`gemini-2.5-flash`), `.timeout_s` (20), `.window` (40 — the room's live lines in its
+   own prompt), `.private_names`, `.max_turns_per_hour` (→ `429`), `.today_lines` (20), `.gist_words` (40).
+10. **Effort, as Lumi sees it.**
+    - v3.1 stays the largest phase, but it is a new path beside the core, not a refactor of it.
+    - The `Core` refactor that per-channel locks would need is avoided.
+
+**Unchanged:**
+- the goal;
+- the space scope and its isolation invariant;
+- `observe`, `pass` and `retract`;
+- the scoped token's routes;
+- no mirror into his Telegram or desktop;
+- "she only answers";
+- the synchronization plan and its nine steps (contract first: Lumi's `docs/agora-space-api.json`, API v1).
+
+---
+
 ## The goal of the change
 
 - **She takes part in Agora as herself:** one being, with the same canon, mood and self. Agora is a channel of its own,
@@ -310,6 +380,9 @@ room never showed.
 ---
 
 ## Synchronization with matrix-agora
+
+**The live status — each step's state and the recommendations between the sessions — is in
+[lumi-agora-sync.md](lumi-agora-sync.md)** (`~/development/matrix-agora/specification/features/lumi-agora-sync.md`).
 
 Two repositories, two Claude sessions — one in `~/development/lumi`, one in `~/development/matrix-agora` — working by
 turns. The seam between them is the **agora space API**, and Lumi owns it.

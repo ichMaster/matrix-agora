@@ -4389,6 +4389,9 @@ bridge is simple and clean. Depends on: that Lumi version in prod, and v4.
 
 ### Synchronization with Lumi (v8's way of working)
 
+**The live status — each step's state and the recommendations between the sessions — is in
+[features/lumi-agora-sync.md](features/lumi-agora-sync.md).**
+
 Two repositories, two Claude sessions — one in `~/development/lumi`, one in `~/development/matrix-agora` — working by
 turns. The seam between them is the **agora space API**, and Lumi owns it.
 
