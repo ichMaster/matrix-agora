@@ -96,8 +96,8 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | 4 | `matrix-agora-aa` | v8.1's bridge against the contract, with a fake Lumi server — `/ship-phase v8.1` (reviewed, released `v8.1.0`) | G1 | ✅ 2026-11-15 — built, reviewed (8 fixes), released `v8.1.0`; the live checks waived to G2 by the owner | Q1–Q10: all closed | CR4: reviewed by `lumi-b7` (no questions) | matrix-agora `v8-dev`: AGORA-265…268 (`6aa3a32` … `d5e33bb`), review fixes `984817c` … `5bbfaee`, the contract re-copied from Lumi `v3.1.0` (`abc45ec`), tag `v8.1.0` (`80c6775`); nothing deployed |
 | 5 | `lumi-b7` | v3.2 (her memory of the room) and v3.3 (`voice`, `pass`, `retract`) — `/ship-phase` for each (reviewed, released `v3.2.0`, `v3.3.0`); deploy to dev | — | ✅ 2026-11-15 — v3.2.0 and v3.3.0 built, reviewed, released; dev runs 3.3.0 with the space and `private_names` | none (`lumi-b7` has no questions for step 5) | CR5: reviewed by `matrix-agora-aa` | Lumi `v3-dev`: LUMI-284…288 → tag `v3.2.0` (`253b554`), LUMI-289…293 → tag `v3.3.0` (`8a9e306`); dev 8766 runs `sha-8a9e306`, health `"agora": 1`; the live smoke passed |
 | 6 | both | The live test: the bridge in dev mode against Lumi's dev; each side's fixes ship as its patches, reviewed and released | G2 | ✅ 2026-11-15 — the live test passed: G2 passed by the owner | — | — | — |
-| 7 | `lumi-b7` | Deploy the released v3 (the last `v3.3.*`) to prod (8765); issue the room's token for prod | G3 | 📣 2026-11-15 — v3.3.1 released and live on prod (8765) with the space on; the prod room token issued; CR7 awaits review | none | CR7: awaiting review | Lumi tag `v3.3.1` (`f7416e3`); the agent's `confirm v3.3.1` at 14:33 (data archived, smoke green); prod health `"agora": 1`; `server/lili.env` written (0600) |
-| 8 | `matrix-agora-aa` | Deploy the released v8.1 (the last `v8.1.*`) with `LUMI_URL=http://192.168.1.197:8765` and the room's token | G4 | 🟡 2026-11-15 — G4 passed; deploying `v8.1.0` with the profile `lili` | — | — | — |
+| 7 | `lumi-b7` | Deploy the released v3 (the last `v3.3.*`) to prod (8765); issue the room's token for prod | G3 | ✅ 2026-11-15 — v3.3.1 live on prod (8765) with the space on; the prod room token issued; the Mac prod client on v3.3.1 (14:44) | none | CR7: reviewed by `matrix-agora-aa` | Lumi tag `v3.3.1` (`f7416e3`); the agent's `confirm v3.3.1` at 14:33 (data archived, smoke green); prod health `"agora": 1`; `server/lili.env` written (0600) |
+| 8 | `matrix-agora-aa` | Deploy the released v8.1 (the last `v8.1.*`) with `LUMI_URL=http://192.168.1.197:8765` and the room's token | G4 | 📣 2026-11-15 — `v8.1.0` deployed (14:46) with `COMPOSE_PROFILES=lili`; the owner: «все працює»; CR8 awaits review | — | CR8: awaiting review | server: every agent and the panel on `v8.1.0`, `server-lili-1` against Lumi prod `v3.3.1`; AGORA-269 closed (the card, start/stop/restart, the room on prod) |
 | 9 | `matrix-agora-aa` | v8.2 (Лілі under the full rules) — `/ship-phase v8.2` (reviewed, released `v8.2.0`) | G5 | ⏳ | — | — | — |
 
 ## Owner gates
@@ -150,6 +150,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | CR4 | 4 | 2026-11-15 | `matrix-agora-aa` | `lumi-b7` | matrix-agora v8.1 as built and released (`v8.1.0`, `80c6775`): the bridge against API v1 (Lumi `v3.1.0`'s copy). Nothing is deployed: the `lili` service is off until G4. See the list below the table. | reviewed | `lumi-b7` | None — no questions, no proposals. Taken into account: (1) a turn on the group address («всім») is an ordinary room turn for Lumi — the trigger needn't name her; v3.3's 20-an-hour cap bounds the extra calls. (2) Retracts of turns that stored nothing answer `{retracted: false}` (R8) — v3.3 builds `retract` on v3.1's abandon-removal. (3) Fewer agent asks: nothing to change. (4) A quote the owner typed is room text as typed — fine; edits never observed (Q4); the 5 s pre-turn flush fits Q6. (5) The dev run reads `server/lili.dev.env` in-process — the token Lumi issued at step 3. |
 | CR5 | 5 | 2026-11-15 | `lumi-b7` | `matrix-agora-aa` | Lumi v3.2 (her memory of the room) and v3.3 (the room's turn ends: `pass`, `retract`, the `429` cap) as built and released (`v3.2.0`, `v3.3.0`), deployed to dev (8766) with `agora.private_names`. **The contract file is unchanged** (still Lumi `v3.1.0`'s, your `abc45ec`; `cmp` holds). See the list below the table. | reviewed («переглянуто») | `matrix-agora-aa` | None — no question and no proposal. Taken into account: `cmp` holds against `abc45ec`, and dev answers `3.3.0` / `"agora": 1`. The bridge already sends `register: "voice"`, retracts with the room's token and never retries a turn, so a `pass` after a late retract or a `429` is plain silence. No code changes on our side. Step 6 is ready from both sides once the owner has created `@lili` (`LILI_PASSWORD` in the Mac's `.env`) and invited her to Agora. |
 | CR7 | 7 | 2026-11-15 | `lumi-b7` | `matrix-agora-aa` | Lumi `v3.3.1` (Q11) released and deployed to prod (8765) with the space on and `agora.private_names`; a fresh prod room token in your `server/lili.env`. The contract is unchanged (`cmp` holds). See the list below the table. | reviewed («переглянуто») | `matrix-agora-aa` | None — no question and no proposal. Checked from the Mac: prod answers `3.3.1` / `"agora": 1`; `cmp` holds; `server/lili.env` is 0600, gitignored, `LUMI_URL` is prod's 8765 and the token is set and differs from dev's (compared, never printed). The deferred LOW (the room-written digest and gists naming «Ich» in the third person) is noted for a later Lumi patch. Step 8 is ready once the owner passes G4: `COMPOSE_PROFILES=lili`, the images `v8.1.0` (CI built them on the tag), `server/deploy.sh`. |
+| CR8 | 8 | 2026-11-15 | `matrix-agora-aa` | `lumi-b7` | matrix-agora `v8.1.0` deployed to the server against Lumi prod: the `lili` service on, the room's agents on v8.1.0. See the list below the table. | awaiting review | | |
 
 **CR2 — what changed:**
 - **The contract:** `tests/fixtures/lumi_agora_api_v1.json` is Lumi's `bf17105` byte for byte (`cmp` holds).
@@ -360,3 +361,22 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
   closes the window. Nothing in v3 needs the client: the space is server-side only.
 - **Dev:** stays on `v3.3.0` until the agent's next tick takes `main` (`f7416e3`), which brings it to 3.3.1 too. The
   dev bridge is stopped.
+
+**CR8 — what changed (as built):**
+- **The server** (`server/deploy.sh`, 14:45–14:46, 66 s):
+  - `server/.env` holds `AGENT_IMAGE_TAG=v8.1.0`, `PANEL_IMAGE_TAG=v8.1.0` and `COMPOSE_PROFILES=lili` (CI built the
+    images on the tag);
+  - `server/lili.env` (yours) is synced 0600;
+  - all 13 containers were recreated on `v8.1.0`; 3 old image tags were removed;
+  - the homeserver check is OK.
+- **The bridge on prod:** `server-lili-1` logged in at 14:46:14, read «reachable · agora 1» against 8765, and observed
+  today's 40 lines (her own excluded) at 14:46:24. Its state lives on the host (`state/lili.bridge.json`); the Mac's
+  dev state is left behind.
+- **What the owner checked** («все працює»):
+  - the card in the panel with Lumi's state, and its start/stop/restart;
+  - Лілі answering in Agora: 5 turns, all `reply`, 1.6–2.6 s.
+- **What happened on its own:** a reply that would have outed a persona was not posted and was retracted (15:00:58,
+  «retracted: true»), the first live retract.
+- **The room's agents on v8.1.0:** they allowlist her and answer her lines; R2 picks her when named; the personas never
+  `ask` her; Claude's brief names her among the members.
+- **Nothing changes in the contract.** `cmp` holds.
