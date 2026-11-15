@@ -287,6 +287,8 @@ services:
     # canon: her mind, memory and words are Lumi's); her own env file holds Lumi's address and the room's scoped token
     image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
     command: ["agents/lili.toml"]
+    profiles: ["lili"]                           # code review v8.1 #3: off until G4 — `COMPOSE_PROFILES=lili` in
+                                                 # server/.env; the panel's start names her, which enables it
     restart: unless-stopped
     init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
     depends_on: [homeserver]

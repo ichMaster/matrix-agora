@@ -61,7 +61,8 @@ def test_server_env_example_carries_every_agent_variable():
     agent_keys = env_keys(ROOT / ".env.example")
     server_keys = env_keys(ROOT / "server" / ".env.example")
     assert agent_keys <= server_keys
-    assert server_keys - agent_keys == {"REGISTRATION_TOKEN", "AGENT_IMAGE_TAG", "PANEL_TOKEN", "PANEL_IMAGE_TAG", "DOCKER_GID", "PANEL_BIND", "STACK_DIR"}
+    assert server_keys - agent_keys == {"REGISTRATION_TOKEN", "AGENT_IMAGE_TAG", "PANEL_TOKEN", "PANEL_IMAGE_TAG", "DOCKER_GID", "PANEL_BIND", "STACK_DIR",
+                                        "COMPOSE_PROFILES"}  # v8.1: `lili` once G4 passes
 
 
 CANON_MOUNT = "../canon:/app/agents/canon:ro"  # v5.9.1: the private canon, from the host, read-only
@@ -564,3 +565,21 @@ def test_the_dev_run_reads_lumis_dev_file_in_process_and_never_prints_it():
     assert not any(w in code for w in ("source ", ". server/", "cat server", "echo $LUMI", "printenv"))
     deploy = (ROOT / "server" / "deploy.sh").read_text()
     assert "dev.env" not in deploy                              # the dev token never reaches the host
+
+
+def test_a_deploy_before_g4_never_starts_her():
+    """Code review v8.1 #3: `deploy.sh`'s `up -d` starts every service — `lili` sits behind her own profile, off until
+    the owner sets `COMPOSE_PROFILES=lili` (G4); without it she would crash-loop with no password or account."""
+    assert SERVICES["lili"]["profiles"] == ["lili"]
+    assert all("profiles" not in svc for name, svc in SERVICES.items() if name != "lili")
+    env = {line.split("=", 1)[0]: line.split("=", 1)[1] for line in (ROOT / "server" / ".env.example").read_text().splitlines()
+           if "=" in line and not line.startswith("#")}
+    assert env["COMPOSE_PROFILES"] == ""                       # off in the example
+    try:
+        plain = subprocess.run(["docker", "compose", "-f", str(ROOT / "server" / "docker-compose.yml"), "config",
+                                "--services"], capture_output=True, text=True, check=False,
+                               env={**os.environ, "REGISTRATION_TOKEN": "dummy", "COMPOSE_PROFILES": ""})
+    except FileNotFoundError:                                  # no docker here (CI): the profile pin above stands
+        return
+    if plain.returncode == 0:                                  # where docker is installed: `up -d` leaves her out
+        assert "lili" not in plain.stdout.split() and "ada" in plain.stdout.split()
