@@ -1,3 +1,24 @@
+Version 7.6.0 (2026-11-15)
+---------------------------
+- v7.6 her memory as Lumi's, MEMORY_MODE layered|lumi, a live switch per
+  companion (AGORA-260..263):
+  - a live window of 40-60 lines; her day's older talk folded into a running
+    digest in the prompt's tail;
+  - a line a day and a line a week (gist_day, gist_week); her day memories in
+    one line;
+  - her own recall on Gemini (recall, day_talk; at most three rounds, the
+    tools in her cache);
+  - «By memory» in Analytics compares the two modes
+- the code review's six fixes:
+  - an unfit memory gist never asked for again;
+  - a failing gist or digest batch gives way after three tries;
+  - the fold reads every line after its point;
+  - a batch never ends inside one second's lines;
+  - nothing gisted from nothing;
+  - lumi's own checks counted
+- deployed 2026-11-14 11:33; Кіра and Устина in lumi since 11:34. The days
+  of talk in lumi waived by the owner - memory bugs go to 7.6.x patches
+
 Version 7.5.1 (2026-11-14)
 ---------------------------
 - the companions' Agora answers go without the Gemini cache: it held the
