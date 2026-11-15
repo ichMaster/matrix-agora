@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 import urllib.parse
 from collections.abc import Awaitable, Callable
@@ -104,11 +105,15 @@ def health_ok(status: int | None, body: dict | None) -> tuple[bool, str | None, 
     return True, None, agora
 
 
+REPLY_FALLBACK_RE = re.compile(r"^> ?(\* )?<@[^>\s]+:[^>\s]+> ")  # Element's first fallback line: «> <@user:server> …»
+
+
 def plain_body(body: str) -> str:
     """Q8 — a line's plain text: the Matrix reply fallback (the leading `> ` quote lines and the blank line after
-    them) stripped; anything else as written (pure)."""
+    them) stripped — only when its first line quotes a sender (`> <@user:server> …`, code review v8.1 #7), so a quote
+    the owner typed himself stays as typed; anything else as written (pure)."""
     lines = (body or "").split("\n")
-    if not lines or not lines[0].startswith(">"):
+    if not lines or not REPLY_FALLBACK_RE.match(lines[0]):
         return body or ""
     i = 0
     while i < len(lines) and lines[i].startswith(">"):

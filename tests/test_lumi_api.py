@@ -165,7 +165,10 @@ def test_the_token_is_in_no_repr():
 # --- the line helpers ------------------------------------------------------------------------------------------------
 def test_the_reply_fallback_is_stripped_and_anything_else_kept():
     assert plain_body("> <@ada:agora.lan> туман\n> ще рядок\n\nА я бачив.") == "А я бачив."
-    assert plain_body("> цитата без порожнього рядка\nтекст") == "текст"
+    assert plain_body("> <@bruno:agora.lan> цитата\nтекст") == "текст"
+    # code review v8.1 #7: a quote the owner typed himself is his words — kept as typed
+    assert plain_body("> Бути чи не бути\n\nось питання, Лілі") == "> Бути чи не бути\n\nось питання, Лілі"
+    assert plain_body("> лише цитата") == "> лише цитата"
     assert plain_body("звичайний рядок\n> не на початку") == "звичайний рядок\n> не на початку"
     assert plain_body("") == ""
 
@@ -173,7 +176,7 @@ def test_the_reply_fallback_is_stripped_and_anything_else_kept():
 def test_ts_is_iso_to_the_second_with_the_rooms_offset():
     ms = 1_794_808_872_345  # 2026-11-16 06:01:12.345 UTC
     assert line_ts(ms, "Europe/Kyiv") == "2026-11-16T08:01:12+02:00"
-    line = observed_line("$e1", "Ich", "> q\n\nвідповідь", ms, "Europe/Kyiv")
+    line = observed_line("$e1", "Ich", "> <@ada:agora.lan> q\n\nвідповідь", ms, "Europe/Kyiv")
     assert line == {"id": "$e1", "speaker": "Ich", "text": "відповідь", "ts": "2026-11-16T08:01:12+02:00"}
 
 
