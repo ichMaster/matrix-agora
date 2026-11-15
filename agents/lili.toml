@@ -1,0 +1,16 @@
+name = "Лілі"
+user_id = "@lili:agora.lan"
+simulation = "agora"
+type = "bridge"          # v8.1: Lumi's Лілі through the bridge — her mind, memory and words are Lumi's, on its `agora` space
+engine = "lumi-http"     # Lumi's agora space API v1 (tests/fixtures/lumi_agora_api_v1.json); the room's token in server/lili.env
+# «Лілі», and «Стхіра» — her other name — in its cases (the room names her either way)
+name_forms = ["лілі", "стхіра", "стхіри", "стхірі", "стхіру", "стхірою", "стхіро"]
+
+[turns]
+mode = "mention-only"    # v8.1: she answers only when named; v8.2 ranks her
+weight = 1
+
+[panel]                  # shown by the panel only — never part of a prompt
+name = "Лілі"
+role = "bridge · Lumi's agora space"
+pronoun = "she"

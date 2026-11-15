@@ -20,7 +20,7 @@ from agents.registry import REGISTRY_PATH, RegistryError, load_registry
 AGENTS_DIR = Path("agents")
 log = logging.getLogger("agent.roster")
 
-# the type sets the default capabilities; a later phase adds the bridge
+# the type sets the default capabilities
 CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood", "pastlife", "nudge",
                 "news", "digest", "transcribe", "voice", "private", "telegram", "recall", "facts",
                 "emotion", "events", "thoughts", "fallback", "photos", "videos", "talk",
@@ -38,6 +38,9 @@ TYPES: dict[str, frozenset[str]] = {
     # in his own room (`digest`); his canon is his own file only. v5.2 — he hears the owner's voice (`transcribe`):
     # his transcript in the room is the owner's line for every speaker
     "herald": frozenset({"canon", "digest", "transcribe"}),
+    # v8.1 — a bridge (Лілі): another agent's own mind behind an API (Lumi's `agora` space) — no canon, no life, no
+    # memory and no voice of ours; she hears the room and answers when named, through `agents/bridge.py`
+    "bridge": frozenset(),
 }
 CREATURE_ONLY = frozenset({"pastlife", "nudge"})  # v4.3: no persona remembers a past life or speaks first
 ASSISTANT_ONLY = frozenset({"news"})               # v4.5: only Claude brings news unasked
@@ -59,7 +62,9 @@ NEEDS = {"telegram": "private",                    # v5.7: the bot is a door to 
          "photos_fal": "photos"}                   # v6.5: the switch moves her photos, never without them
 INITIATIVES = ("nudge", "news")                    # who may speak first: one member per initiative
 SINGLES = (*INITIATIVES, "digest", "transcribe")   # one member per simulation with each of these
-ENGINES = ("gemini", "claude-sdk")  # v4.4: Claude through the Agent SDK, on the subscription only
+ENGINES = ("gemini", "claude-sdk",  # v4.4: Claude through the Agent SDK, on the subscription only
+           "lumi-http")          # v8.1: Lumi's agora space API — a bridge's alone
+BRIDGE_MODES = ("mention-only",)  # v8.1: she answers when named; v8.2 adds `ranked`
 # v6.3 (the owner, 2026-11-07: «вона буде вчитись грати на гітарі і час від часу записувати такі відео»): the
 # instruments a person may play on video — her TOML's `play`, the marker of her line in `agents/photo.py`
 PLAYS = ("guitar",)
@@ -123,6 +128,10 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
     for cap in sorted(caps & PERSONA_ONLY):
         if kind != "persona":
             raise RosterError(f"{source}: '{cap}' belongs to the persona type only")
+    if (kind == "bridge") != (engine == "lumi-http"):  # v8.1: the bridge speaks through Lumi alone, and only it
+        raise RosterError(f"{source}: a bridge runs on 'lumi-http', and 'lumi-http' belongs to a bridge alone")
+    if kind == "bridge" and caps:  # v8.1: her memory, voice and mind are Lumi's — nothing of ours switched on
+        raise RosterError(f"{source}: a bridge takes no capability, got {', '.join(sorted(caps))}")
     for cap, needs in NEEDS.items():
         for needed in (needs if isinstance(needs, tuple) else (needs,)):
             if cap in caps and needed not in caps:
@@ -135,6 +144,8 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
     mode = "none" if kind == "herald" else str(turns.get("mode", "ranked"))
     if mode not in MODES:
         raise RosterError(f"{source}: unknown turn mode {mode!r} (known: {', '.join(MODES)})")
+    if kind == "bridge" and mode not in BRIDGE_MODES:
+        raise RosterError(f"{source}: a bridge's turn mode is one of {', '.join(BRIDGE_MODES)} (v8.1), got {mode!r}")
     if mode == "none" and kind not in ("herald", "persona"):
         raise RosterError(f"{source}: turn mode 'none' belongs to a herald, or a person not yet in the room")
     weight = turns.get("weight", 1.0)
