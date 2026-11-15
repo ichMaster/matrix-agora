@@ -423,6 +423,74 @@ joins only the owner's invite into Agora and leaves any other.
   `recording: nothing in the period` and `recording: the asked period is not valid`, the
   guard's drops, `ignored` lines — never a text or a sound.
 
+## The bridge (v8.1)
+
+**Лілі** (`agents/bridge.py`, the `bridge` type, `agents/lili.toml`) is Lumi's own Лілі in Agora. Her mind, memory and
+words are Lumi's, on Lumi's own `agora` space (Lumi v3, its `specification/features/AGORA_SPACE.md`). The bridge is one
+of our agents with all the room's rules: `Bridge` is an `Agent`, so the filter and allowlist, R1–R4, the wave and the
+coalescing are the room's own. What is hers is the hearing and the reply path, over Lumi's **agora space API v1**. The
+API is Lumi's: `~/development/lumi/docs/agora-space-api.json`, copied byte for byte as
+`tests/fixtures/lumi_agora_api_v1.json` and pinned by `tests/test_lumi_contract.py`. The client and its pure helpers
+are in `agents/lumi_api.py`; the test-only fake Lumi server is built from the contract (`tests/fake_lumi.py`).
+
+- **The room's token.** Every call carries `Authorization: Bearer <LUMI_ROOM_TOKEN>` and `X-Lumi-Client: agora`.
+  - The token is Lumi's room token, scoped to the `agora` channel and these routes, never Lumi's owner token.
+  - It and `LUMI_URL` leave the environment at start. In dev, `LUMI_ENV_FILE` names the gitignored
+    `server/lili.dev.env`, read in-process.
+  - It is never in a log, the state or a usage line. Without either value she stays silent, said by name («no
+    LUMI_URL»).
+- **Health.** `GET /v1/health` (open) runs at start and every `LUMI_HEALTH_S` (60).
+  - While `agora` is absent (the space is off) or below 1 (Lumi too old), or Lumi is unreachable, she hears nothing and
+    takes no turn. The reason is logged by name and kept in the state; the queue waits.
+  - A `401`/`403` on any call stops every call until a restart (`refused`).
+- **She hears (`POST /v1/observe`).** Every Agora line the allowlist lets through is queued:
+  - `Agent.on_message` calls `on_room_line` after the filter, a no-op for every other agent.
+  - A line is `{id: event_id, speaker, text, ts}`. The owner is «Ich», the others their display names (1–64 characters,
+    no `:`). `text` is the plain `body` with the Matrix reply fallback stripped. `ts` is ISO-8601 to the second with
+    the room's offset.
+  - Only `m.text` is heard, the owner's voice by Hermes's transcript as his. Never her own lines, an edit, a notice or
+    a member's voiced caption: the same words follow as `m.text`.
+  - The queue goes after 3 s of quiet (`OBSERVE_QUIET_S`) or at 20 lines (`OBSERVE_LINES`), and always before a turn.
+    A call carries at most 200 lines.
+  - A failed batch stays whole and is sent again after 10 s, 30 s, 60 s, then every 60 s; `422` drops that batch, by
+    name. The queue holds at most 2,000 lines, and the dropped are counted.
+  - After a restart the bridge pages the room back 300 lines. It queues the lines since the last one it heard,
+    today's at most (the room's `TIMEZONE`), oldest first, with their own `ts`. Lumi keys them by `id` (`{stored,
+    known}`), so a line is never stored twice.
+  - `observe` costs no model call and writes no usage line.
+- **She answers (`POST /v1/turn`)**, mention-only (`agents/lili.toml`, «Лілі», «Стхіра» and its cases): the owner
+  naming her, a group address, an agent naming her as R2's candidate.
+  - R3 is checked before the call only, in `reply_later`.
+  - The bridge flushes the queue first, so Lumi has heard the lines before the trigger. Then it sends the trigger alone
+    (R1): `{channel: "agora", speaker, register: "voice", turn_id: <its event_id>, text: <its own line>}`. Lumi builds
+    the room's prompt from what she heard; nothing earlier is ever resent.
+  - Typing is on while she waits and off in `finally`.
+  - **Posted:** only an `outcome: "reply"`, exactly as returned (`send_line`, `m.text`, text only; no trimming, no
+    `clean_reply`, no PASS handling, no duplicate check), so what Lumi remembers is what the room saw.
+  - **Silence, never retried:** `pass` (an empty reply, or Lumi's name guard), `409`, `429`, `5xx` and anything off
+    the contract. `401`, `403`, `404` and `422` are said by name.
+  - **Never kept:** her `thinking`, `emotion`, `intensity` or state is dropped at the parse (`lumi_api.kept`), so it
+    never reaches the room, a log, the state or the panel.
+  - **Never:** a post without a trigger (no nudge, no news; a mention-only member is never R1's fallback), and never
+    `/v1/session/new`, `/v1/events` or `/v1/command`.
+- **What the room never saw is retracted (`POST /v1/turn/{turn_id}/retract`, the id URL-encoded).**
+  - After the call, the persona rule (`outs_a_persona` over the room's personas) is the one rule that may drop her
+    reply. A dropped reply is retracted, so she never remembers saying it.
+  - So is a turn the bridge gave up on at its own `LUMI_TIMEOUT_S` (60, always above Lumi's 20 s).
+  - A retract is always a 200 (R8): `{retracted: true}` when a stored reply left her memory, `false` when nothing was
+    stored. It is best effort, logged as true, false or unknown, and never retried.
+- **The state** (`state/<name>.bridge.json`, 0600, atomic, no text):
+  - `health {ok, agora, why, checked_ms}`;
+  - `last_turn {at_ms, outcome, latency_ms}`;
+  - `observed {day, count, last_ts_ms, last_id}`;
+  - `refused`.
+- **Usage.** A turn writes one usage line (`lumi_usage_line`): `engine` `lumi`, `billing` `external`, kind `reply`,
+  her `stats` (`model`, `input_tokens` → `prompt_tokens`, `output_tokens`) and the bridge's own wall time; a turn Lumi
+  never answered has null counts and `ok` false. Lumi's ledgers price the same calls with `channel: "agora"`, so the
+  line is never added to our spend. A posted answer goes to `answers.jsonl` with `by` `lumi`.
+- **The human-belief rule.** She is open that she is a bodiless consciousness. The persona agents keep believing they
+  are human: Lumi's room rule, her outgoing guard here and the retract keep it so (§Contracts).
+
 ## Voice messages (v5.1)
 
 Hermes's digest goes out as an **Element voice message** (`agents/voice.py`). ElevenLabs speaks the text
@@ -690,7 +758,8 @@ adult age in a selfie on fal), switched on in Устина's TOML and never in �
 `{"route": "google" | "fal"}`, 0600, atomic, missing or corrupt read as `google` — no text; pinned by
 `tests/test_photos_switch.py`). Files may be absent by capability (a creature has no summary, memories, plans or today block).
 - The message filter and allowlist rule (from v5.6 also the person's own private room, the owner only — pinned by `tests/test_private.py`) (`{OWNER} ∪` the roster's other members — from v5.1 never a herald — pinned by `tests/test_logic.py` and `tests/test_roster.py`); from v5.2 the audio filter and the transcript rule (`🎙 Ich: …`, a reply to the owner's voice event, read as the owner's message; pinned by `tests/test_transcripts.py`).
-- The human-belief rule's scope (persona agents) and the outgoing guard (`outs_a_persona`), pinned by `tests/test_logic.py`.
+- The human-belief rule's scope (persona agents) and the outgoing guard (`outs_a_persona`), pinned by `tests/test_logic.py`; from v8.1 the `bridge` is a non-persona: her reply the guard drops is never posted and is retracted (pinned by `tests/test_bridge.py`).
+- The bridge's protocol (v8.1, §The bridge): Lumi's agora space API v1 as the bridge speaks it — what is heard, the turn's body (the trigger alone), the statuses that are silence, the retract, what is never posted or kept — pinned by `tests/test_lumi_contract.py` (the fixture), `tests/test_lumi_api.py` and `tests/test_bridge.py`.
 - The transcript format (`"Name: text"` per line; from 2026-11-01 her private history for Gemini also holds nameless time lines, `world.history_times`), the `PASS` sentinel, and the prompt-assembly order.
 - The turn-taking semantics (from v4.1: `rank`, R1–R4, the group address, `wave_count` with `pending_answers`, the modes and the fallback; v4.2: the `ambient` mode, purrs and `owner_speakers`; v4.3: the cat as an initiator — `nudge_due`, `nudge_kind`, the `nudge` capability; v4.5: Claude's `news` under the same `nudge_due`; pinned by `tests/test_turns.py` and `tests/test_nudge.py`).
 - The `server/docker-compose.yml` environment (server name, federation, encryption, registration). `CONTINUWUITY_SERVER_NAME` cannot change without wiping the database.
@@ -717,7 +786,7 @@ There is no database, and nothing the agents lived is ever deleted: all durable 
 | `state/<name>.plans/week-YYYY-MM-DD.md` | first build of a new week | week plan, ≤ `PLAN_MAX_WORDS` words; frozen after its week |
 | `state/<name>.plans/YYYY-MM-DD.md` | first build of a new day | day plan, ≤ `PLAN_MAX_WORDS` words; frozen after its day |
 | `state/<name>.today.md` | hourly; reset at midnight | the today block (+ the hour it was built for, and from v5.11 the day's event count: `<!-- 2026-10-28T14 e2 -->`; every reader accepts both), ≤ `TODAY_MAX_WORDS` words |
-| `state/<name>.usage.jsonl` | every Gemini call (v4.4 every SDK call, v5.1 every text-to-speech call) | one JSON line: `ts`, `agent`, `kind`, `model`, token counts, `ok`, `engine`, `billing`, cache tokens, `reported_cost_usd`, v5.1 `characters`, v5.2 `audio_ms`, v5.13 `blocked` (a safety block's stage, else null), v5.18 `video_ms`, v5.22 `latency_ms` (the call's time; the kind `frame` for a video's first frame) and `prompt_parts` (an answer's prompt, each part's characters); from v7.4 a companion's answer on GPT-6.1 Sol or Sonnet through their APIs is `engine` `openai` or `anthropic`, `billing` `api` (`api_usage_line`: the prompt whole with its cached part apart, the output with the thinking in it, `blocked` `refusal` on a refused answer), priced by `PRICE_MODELS` under `gpt-6.1-sol` and `claude-sonnet-5-5`; through Codex on the ChatGPT plan it is `engine` `codex`, `billing` `subscription`, never priced; from v7.5 (AGORA-258) a companion's Gemini cache made or renewed is a line of kind `cache` (`cache_usage_line`: made, its tokens read once at the input price as `prompt_tokens`; made, `cache_write_tokens` stored for `cache_ttl_s` seconds, its TTL; renewed, for the seconds the renewal added to its life — code review v7.5 #5), and an answer's `cache_read_tokens` are priced at the cache-read price; from v7.6 (AGORA-262) `tool_calls` (usage line v10) — her own recall's calls on a Gemini answer's line (null where none was offered), each recall round its own line of kind `<kind>_recall` (`private_recall`, `private_nudge_recall`), so the answers stay counted once; and `memory_mode` (v7.6, AGORA-263) — `layered` or `lumi`, set by her agent at the record on the lines her memory shapes (`MEMORY_KINDS`: her private answers and writing first, their recall rounds, `talk_digest`, `talk_gist`, `memory_gist`, `lumi_check`, her `cache` lines); `prompt_parts` ride on an answer's line and its recall rounds alone (code review v7.6 #6), null on every other line; a line from before it reads `layered` — no texts |
+| `state/<name>.usage.jsonl` | every Gemini call (v4.4 every SDK call, v5.1 every text-to-speech call) | one JSON line: `ts`, `agent`, `kind`, `model`, token counts, `ok`, `engine`, `billing`, cache tokens, `reported_cost_usd`, v5.1 `characters`, v5.2 `audio_ms`, v5.13 `blocked` (a safety block's stage, else null), v5.18 `video_ms`, v5.22 `latency_ms` (the call's time; the kind `frame` for a video's first frame) and `prompt_parts` (an answer's prompt, each part's characters); from v7.4 a companion's answer on GPT-6.1 Sol or Sonnet through their APIs is `engine` `openai` or `anthropic`, `billing` `api` (`api_usage_line`: the prompt whole with its cached part apart, the output with the thinking in it, `blocked` `refusal` on a refused answer), priced by `PRICE_MODELS` under `gpt-6.1-sol` and `claude-sonnet-5-5`; through Codex on the ChatGPT plan it is `engine` `codex`, `billing` `subscription`, never priced; from v7.5 (AGORA-258) a companion's Gemini cache made or renewed is a line of kind `cache` (`cache_usage_line`: made, its tokens read once at the input price as `prompt_tokens`; made, `cache_write_tokens` stored for `cache_ttl_s` seconds, its TTL; renewed, for the seconds the renewal added to its life — code review v7.5 #5), and an answer's `cache_read_tokens` are priced at the cache-read price; from v8.1 (AGORA-266) a bridge's room turn is `engine` `lumi`, `billing` `external` (`lumi_usage_line`: Lumi's `stats` — `model`, `input_tokens` as `prompt_tokens`, `output_tokens` —, the bridge's own `latency_ms`; null counts when Lumi never answered; Lumi's own ledgers price it, never added to our spend); from v7.6 (AGORA-262) `tool_calls` (usage line v10) — her own recall's calls on a Gemini answer's line (null where none was offered), each recall round its own line of kind `<kind>_recall` (`private_recall`, `private_nudge_recall`), so the answers stay counted once; and `memory_mode` (v7.6, AGORA-263) — `layered` or `lumi`, set by her agent at the record on the lines her memory shapes (`MEMORY_KINDS`: her private answers and writing first, their recall rounds, `talk_digest`, `talk_gist`, `memory_gist`, `lumi_check`, her `cache` lines); `prompt_parts` ride on an answer's line and its recall rounds alone (code review v7.6 #6), null on every other line; a line from before it reads `layered` — no texts |
 | `state/<name>.answers.jsonl` | every answer the agent sends (v5.22): an Agora line from `reply()`, a private answer in Matrix or Telegram | one JSON line (`answer_line`): `ts`, `agent`, `place` (`agora` \| `private`), `door` (`matrix` \| `telegram`), `answered` (`owner` \| `agent` \| `none` — she wrote first), `wait_ms` (from the answered message's own time — the Matrix event's `server_timestamp`, Telegram's date — to the answer sent; null for `none`), `delay_ms` (the deliberate pause: the reply delay, the private chat's «answering (in N s)»), `by` (`gemini` \| `backup` \| `claude`; from v7.4 a companion's switch also `openai`, `anthropic`, `codex` — the engine that served her answer, `gemini` when a subscription's limit fell back to her Gemini), `parts` (`voice`, `photo`); 0600, appended, a failed write never stops an answer — no texts |
 | `state/<name>.mood.log` | the day's first mood call (v4.2, an agent with `mood`) | the daily horoscope readings, `===== YYYY-MM-DD =====` blocks; append-only, 0600 |
 | `state/<name>.nudge.json` | every nudge attempt (v4.3, an agent with `nudge`) | `last_ms` (the last attempt), `day`, `count` (nudges sent that day), `sent_ms` (the last nudge sent, for the panel) — no texts; atomic, 0600 |
@@ -734,6 +803,7 @@ There is no database, and nothing the agents lived is ever deleted: all durable 
 | `state/<name>.scan.json` | **no longer written from AGORA-212** — v5.24's Opus scan's list (`made_ms`, the range, `candidates` and `borderline` as `[ref, code]`, facts by their id's sha256, summaries by `[level, start_ms]`, `facts_seen`, `spent`, `last_end_ms` — never a text); a file left on the host is read by nothing |
 | `state/<name>.route.json` | her private answer's route, after each outcome or command (v5.14, a person with `fallback`) | JSON (v5.21): `pin` (`auto` / `backup`), `pinned_at_ms`, `blocks` (the last hour's block times), `window_until_ms` (the backup mode's end, or null), `day` and `answers` (today's `gemini` / `backup` counts) — no text; 0600, atomic; missing or corrupt → `auto` with nothing open; a file from before v5.21 loads with the pin `gemini` as `auto` and `judged`, `pinned_blocks` and `probed` ignored (`agents/route.py`, pinned by `tests/test_route.py`) |
 | `state/<name>.digest.json` | her day's running digest, after each fold (v7.6, AGORA-260; a person with `private` in `lumi` mode) | JSON: `day` (her local date), `upto_ms` (the last line folded, any day's), `text` (her day's digest — **text inside**), `previous_day`, `previous_text` (the last day's, kept when the day rolls) — 0600, atomic; missing or corrupt → an empty digest (`agents/lumi.py`, pinned by `tests/test_lumi_memory.py`) |
+| `state/<name>.bridge.json` | the bridge, after a health check, a batch heard and a turn (v8.1, AGORA-266; Лілі) | JSON: `health {ok, agora, why, checked_ms}`, `last_turn {at_ms, outcome, latency_ms}`, `observed {day, count, last_ts_ms, last_id}` (the last line Lumi heard: where the backlog starts after a restart), `refused` (a `401`/`403`'s name, reset at start) — **no text**, never the token; 0600, atomic; missing or corrupt → empty (`agents/bridge.py`, pinned by `tests/test_bridge.py`) |
 | `state/<name>.emptied.json` | the day of the last daily emptying of her closed talk (v5.21, a person with `recall`) | JSON: `day` (her local ISO date) — no text; 0600, atomic; missing or corrupt → the emptying is due at 05:00 (`Agent.maybe_empty_blocked`, pinned by `tests/test_archive.py`) |
 | `state/<name>.facts/` | a fact asked for, extracted at a session's end, or seeded once from her private chat (v5.8, a person with `facts`) | one Markdown file per fact: `pin`, `added`, `source`, v5.14 `mark` (only when not `gemini`: `waiting` for a fact the backup's answer asked her to keep — closed to Gemini, in no Gemini prompt or extraction, mirrored into the archive with its mark; from v5.21 the backup never keeps a fact), v5.15 `clean`, `reopened` or `censored` after the judge's verdict, `set_mark`; v5.21 `blocked`, the one closed mark for good — the older closed marks became it once at her start (`migrate_marks`), and `set_mark` never changes a `blocked` fact or opens a closed one), then the text — **facts about the owner**: 0600, `state/` only, never in the repo or a log; the panel may re-pin or delete one (`agents/facts.py`, pinned by `tests/test_facts.py`) |
 | `state/<name>.facts.request` | the panel's «Update now» (AGORA-116), removed by the agent once handled | `{"requested_ms": …}` — no text; atomic, 0600; written by the panel, read and removed by the agent with `facts` |

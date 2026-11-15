@@ -11,7 +11,7 @@ import pytest
 
 import agents.llm as llm_mod
 from agents.agent import Agent
-from agents.usage import KINDS, Row, usage_line
+from agents.usage import KINDS, Row, parse_lines, usage_line
 from tests.test_chronicle import CFG, SeqLLM
 
 META = SimpleNamespace(prompt_token_count=1200, candidates_token_count=80, total_token_count=1280)
@@ -517,3 +517,19 @@ def test_a_fal_photo_is_priced_per_image_and_unpriced_is_none():
 def test_the_trace_line_names_a_fal_photos_images():
     from agents.usage import image_usage_line, trace_line
     assert "1 фото" in trace_line(image_usage_line("t", "ustyna", SEEDREAM, 1, True, latency_ms=40_000))
+
+
+def test_a_lumi_line_is_the_bridges_external_call_with_her_stats_and_one_shape():
+    """v8.1 (AGORA-266) — a room turn through the bridge: `lumi` / `external`, her stats, the bridge's own time."""
+    from agents.usage import lumi_usage_line
+    line = lumi_usage_line("2026-11-16T08:01:12+02:00", "lili",
+                           {"model": "gemini-2.5-flash", "input_tokens": 6420, "output_tokens": 38, "latency_ms": 1840,
+                            "thinking": "never"}, True, 2100)
+    assert set(line) == set(usage_line("t", "a", "k", "m", None, True))                # one line shape
+    assert (line["engine"], line["billing"], line["kind"], line["model"]) == ("lumi", "external", "reply",
+                                                                             "gemini-2.5-flash")
+    assert (line["prompt_tokens"], line["output_tokens"], line["total_tokens"], line["latency_ms"]) == (6420, 38, 6458, 2100)
+    failed = lumi_usage_line("t", "lili", None, False, 60000)
+    assert failed["prompt_tokens"] is None and failed["model"] == "lumi" and failed["ok"] is False
+    assert "never" not in json.dumps(line)
+    assert parse_lines([json.dumps(line)]) == ([line], 0)                                # a valid line

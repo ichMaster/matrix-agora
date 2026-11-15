@@ -320,6 +320,26 @@ def cache_usage_line(ts_iso: str, agent: str, model: str, tokens: int | None, tt
     }
 
 
+def lumi_usage_line(ts_iso: str, agent: str, stats: dict | None, ok: bool, latency_ms: int | None = None,
+                    kind: str = "reply") -> dict:
+    """v8.1 (AGORA-266) — one record per room turn the bridge asked Lumi for: `engine` `lumi`, `billing` `external`
+    (Lumi's own ledgers price it, with `channel: "agora"` — never added to our spend); the counts from her `stats`
+    (`input_tokens`, `output_tokens`, `model`), the bridge's own wall time. A turn Lumi never answered has null counts.
+    Never any text."""
+    stats = stats if isinstance(stats, dict) else {}
+    prompt, output = _int(stats, "input_tokens"), _int(stats, "output_tokens")
+    model = stats.get("model")
+    return {
+        "ts": ts_iso, "agent": agent, "kind": kind, "model": model if isinstance(model, str) and model else "lumi",
+        "prompt_tokens": prompt, "output_tokens": output,
+        "total_tokens": prompt + output if prompt is not None and output is not None else None, "ok": bool(ok),
+        "engine": "lumi", "billing": "external",
+        "cache_read_tokens": None, "cache_write_tokens": None, "reported_cost_usd": None, "characters": None,
+        "audio_ms": None, "blocked": None, "video_ms": None, "latency_ms": _ms(latency_ms), "images": None,
+        "warm": None, "prompt_parts": None, "tool_calls": None, "memory_mode": None,
+    }
+
+
 API_ENGINES = ("openai", "anthropic", "codex")  # v7.4: a companion's answer models beside Gemini and Claude
 
 

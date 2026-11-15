@@ -534,6 +534,9 @@ class Agent:
                 timeout_s=float(os.environ.get("CLAUDE_TIMEOUT_S", "300")),
                 workspace=os.environ.get("CLAUDE_WORKSPACE", "/workspace"),  # v4.5: his own folder, the web
                 news_source=Guardian(news_key) if cfg.can("news") and news_key else None)
+        elif cfg.engine == "lumi-http":  # v8.1: a bridge — no model of ours; `agents/bridge.py` speaks to Lumi
+            self.llm = llm
+            self.responder = None
         else:
             self.llm = llm or GeminiClient(sink=self.record_usage)
             self.responder = responder_for(cfg.engine, self.llm)  # the reply engine seam (v4.1)
@@ -1098,6 +1101,7 @@ class Agent:
             if not verdict.handle:
                 log.info("ignored: %s (room %s)", verdict.reason, room.room_id)
                 return
+            self.on_room_line(event.sender, event.body, event_id, now_ms)  # v8.1: a bridge hears it (a no-op here)
             decision = self.decide(event.sender, event.body, event_id, now_ms)
             if decision.reason == "wave-limit":
                 self.pause_until_window_frees(room.room_id, event.sender, event.body, event_id, now_ms)
@@ -1128,6 +1132,10 @@ class Agent:
             self._spawn(self.reply_later(room.room_id, decision.delay_s))
         except Exception:
             log.exception("message handler failed (bot keeps running)")
+
+    def on_room_line(self, sender: str, text: str, event_id: str, ts_ms: int) -> None:
+        """v8.1 — every Agora line the allowlist lets through, as it is about to be decided on: a no-op for every agent
+        but the bridge, which queues it for Lumi to hear (`agents/bridge.py`)."""
 
     # --- v5.6: the private chat with the owner --------------------------------------------------------------------
     def _set_private_room(self, room_id: str) -> None:
@@ -5183,6 +5191,9 @@ def main() -> None:
         if cfg.type == "herald":  # v5.1: Hermes — his own process, no turns, never a word in the room
             from agents.herald import Herald
             agent = Herald(cfg)  # code review v7.1 #5: on Claude he is refused as any agent is
+        elif cfg.type == "bridge":  # v8.1: Лілі — the room's rules are ours, her words Lumi's
+            from agents.bridge import Bridge
+            agent = Bridge(cfg)
         else:
             agent = Agent(cfg)
     except AuthRefused as exc:  # v4.4: the names of what tripped it, never a value
