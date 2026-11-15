@@ -80,7 +80,7 @@ PEOPLE = {"ada", "bruno", "leon", "mia", "irma", "kira", "ustyna"}  # v5.5: the 
 
 
 @pytest.mark.parametrize("name,who", [
-    ("MAX_BOT_TURNS", {*PEOPLE, "kit", "claude"}), ("CAT_REACT_P", {*PEOPLE, "kit", "claude"}),
+    ("MAX_BOT_TURNS", {*PEOPLE, "kit", "claude", "lili"}), ("CAT_REACT_P", {*PEOPLE, "kit", "claude", "lili"}),  # v8.1
     ("PERSONA_ASK_P", PEOPLE), ("MEMORY_DAYS", PEOPLE), ("CAT_NUDGE_IDLE_S", {"kit"}),
     ("CLAUDE_TIMEOUT_S", {"claude"}), ("CLAUDE_NEWS_EVERY_S", {"claude"}), ("GEMINI_MODEL", {*PEOPLE, "kit"}),
 ])

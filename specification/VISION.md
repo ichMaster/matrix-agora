@@ -45,7 +45,7 @@ The panel is what this project is really building. Today it manages the first **
 - Cloud-to-LAN CD, container orchestration beyond docker compose, registries beyond GHCR.
 - A general remote shell: the panel offers only fixed actions (deploy state, start/stop/restart, logs, health, forget) — never command input.
 - A second simulation. The registry and the model are ready for more, but this roadmap builds only the chat.
-- Lili herself. This PoC runs simple stand-in agents; connecting real agents is the follow-up rework, not a phase here.
+- Lili herself inside this project. From v8 she is connected through the bridge, on her own `agora` channel in Lumi (her mind, memory and words stay Lumi's); the PoC's other agents stay simple stand-ins.
 
 ## Glossary
 

@@ -282,6 +282,27 @@ services:
       - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
     stop_grace_period: 30s
 
+  lili:
+    # v8.1 — Лілі, the bridge: Lumi's own Лілі in Agora on Lumi's `agora` space. The shared agent image (no Claude, no
+    # canon: her mind, memory and words are Lumi's); her own env file holds Lumi's address and the room's scoped token
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}
+    command: ["agents/lili.toml"]
+    restart: unless-stopped
+    init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
+    depends_on: [homeserver]
+    env_file:
+      - path: .env
+        required: false
+      - path: lili.env                           # LUMI_URL, LUMI_ROOM_TOKEN — the room's token, never Lumi's owner token
+        required: false                          # — read by no other service
+    environment:
+      HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
+      TZ: ${TIMEZONE:-Europe/Kyiv}
+    user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
+    volumes:
+      - ../state:/app/state
+    stop_grace_period: 30s                       # SIGTERM → the last flush of what she heard, then SIGKILL
+
   usage-report:
     # the daily token report (v3.1.1), 07:00 in TIMEZONE → ~/matrix-agora/reports/usage/
     image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}

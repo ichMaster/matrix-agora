@@ -62,7 +62,8 @@ def test_she_is_named_by_both_her_names_and_her_id():
 def test_no_name_form_of_hers_belongs_to_another_member():
     import tomllib
     sims = tomllib.loads(Path("simulations.toml").read_text(encoding="utf-8"))
-    others = [load_member(Path(f"agents/{n}.toml")) for n in sims["agora"]["agents"]]
+    others = [load_member(Path(f"agents/{n}.toml")) for n in sims["agora"]["agents"] if n != "lili"]
+    assert "lili" in sims["agora"]["agents"]                                    # v8.1 (AGORA-268): in the room
     theirs = {f for m in others for f in m.name_forms}
     assert not theirs & set(load_member(Path("agents/lili.toml")).name_forms)
 

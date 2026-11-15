@@ -18,7 +18,7 @@ def env_keys(path: Path) -> set[str]:
 
 def test_the_service_set():
     assert set(SERVICES) == {"homeserver", "ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "kit", "claude",
-                             "hermes", "usage-report", "panel"}  # v5.1, v5.5, v6.3
+                             "hermes", "lili", "usage-report", "panel"}  # v5.1, v5.5, v6.3, v8.1
 
 
 def test_the_homeserver_stays_closed():
@@ -532,3 +532,35 @@ def test_the_subscription_file_holds_the_token_alone_and_is_synced_privately_nev
     for ignore in (".gitignore", ".dockerignore"):
         patterns = [x for x in (ROOT / ignore).read_text().splitlines() if x and not x.startswith(("#", "!"))]
         assert any(fnmatch.fnmatch("server/subscription.env", p) for p in patterns), ignore
+
+
+# --- v8.1: Лілі, the bridge --------------------------------------------------------------------------------------------
+def test_lili_runs_the_shared_image_with_the_shared_file_and_her_own_and_nothing_else():
+    svc = SERVICES["lili"]
+    assert svc["image"] == IMAGE and svc["command"] == ["agents/lili.toml"] and svc["init"] is True
+    assert svc["env_file"] == [{"path": ".env", "required": False}, {"path": "lili.env", "required": False}]
+    assert svc["environment"]["HOMESERVER"] == "http://homeserver:8008" and svc["user"] == "1000:1000"
+    assert svc["volumes"] == ["../state:/app/state"]          # no canon: her mind is Lumi's
+    assert svc["stop_grace_period"] == "30s" and "ports" not in svc and "tmpfs" not in svc
+
+
+def test_the_rooms_lumi_token_reaches_her_container_alone():
+    readers = {n for n, svc in SERVICES.items()
+               if any((e.get("path") if isinstance(e, dict) else e) == "lili.env" for e in svc.get("env_file", []))}
+    assert readers == {"lili"}
+    assert env_keys(ROOT / "server" / "lili.env.example") == {"LUMI_URL", "LUMI_ROOM_TOKEN"}
+    example = (ROOT / "server" / "lili.env.example").read_text()
+    assert "LUMI_ROOM_TOKEN=\n" in example and "never Lumi's owner token" in example.lower().replace("never lumi", "never Lumi")
+    assert "LILI_PASSWORD" in env_keys(ROOT / ".env.example") and "LILI_PASSWORD" in env_keys(ROOT / "server" / ".env.example")
+    assert not any(k.startswith("LUMI_") for k in env_keys(ROOT / ".env.example") | env_keys(ROOT / "server" / ".env.example"))
+    ignored = (ROOT / ".gitignore").read_text().splitlines()
+    assert "server/*.env*" in ignored and "!server/*.env.example" in ignored   # lili.env and lili.dev.env never committed
+
+
+def test_the_dev_run_reads_lumis_dev_file_in_process_and_never_prints_it():
+    run = (ROOT / "scripts" / "run-agent.sh").read_text()
+    assert 'LUMI_ENV_FILE="server/$name.dev.env" exec uv run agents/agent.py "agents/$name.toml"' in run
+    code = "\n".join(line for line in run.splitlines() if not line.lstrip().startswith("#"))
+    assert not any(w in code for w in ("source ", ". server/", "cat server", "echo $LUMI", "printenv"))
+    deploy = (ROOT / "server" / "deploy.sh").read_text()
+    assert "dev.env" not in deploy                              # the dev token never reaches the host

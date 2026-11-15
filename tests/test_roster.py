@@ -43,7 +43,8 @@ def write_roster(tmp_path, kit_toml: str):
 
 def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
     roster = load_roster("agora")
-    assert list(roster) == ["ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "kit", "claude", "hermes"]  # v5.1 the herald, v5.5 four people, v6.3 Устина
+    assert list(roster) == ["ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "kit", "claude", "hermes",
+                            "lili"]  # v5.1 the herald, v5.5 four people, v6.3 Устина, v8.1 Лілі the bridge
     ada = roster["ada"]
     assert (ada.user_id, ada.name, ada.type, ada.engine, ada.mode, ada.weight) == (
         "@ada:agora.lan", "Ада", "persona", "gemini", "ranked", 1.0)  # 7.6: back on Gemini (v7.2: on Claude)
@@ -231,7 +232,8 @@ def test_world_tick_does_nothing_without_chronicle_or_plans():
 def test_the_agent_reads_its_members_from_the_roster():
     agent = Agent(CFG, llm=FakeLLM())
     assert set(agent.others) == {"@bruno:agora.lan", "@leon:agora.lan", "@mia:agora.lan", "@irma:agora.lan",
-                                 "@kira:agora.lan", "@ustyna:agora.lan", "@kit:agora.lan", "@claude:agora.lan"}  # v6.4
+                                 "@kira:agora.lan", "@ustyna:agora.lan", "@kit:agora.lan", "@claude:agora.lan",
+                                 "@lili:agora.lan"}  # v6.4, v8.1: Лілі speaks in the room
     assert agent.names["@bruno:agora.lan"] == "Бруно" and agent.names["@ich:agora.lan"] == "Ich"
     assert "адо" in agent.me.name_forms
     injected = {"ada": Member("ada", "@ada:agora.lan", "Ада", ("ада",)),
@@ -241,7 +243,7 @@ def test_the_agent_reads_its_members_from_the_roster():
 
 def test_the_launcher_lists_the_registry_agents():
     out = subprocess.run([sys.executable, "-m", "agents.roster"], capture_output=True, text=True, check=True).stdout
-    assert out.split() == ["ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "kit", "claude", "hermes"]
+    assert out.split() == ["ada", "bruno", "leon", "mia", "irma", "kira", "ustyna", "kit", "claude", "hermes", "lili"]
 
 
 def test_an_unreadable_toml_is_a_roster_error_not_a_crash(tmp_path):
@@ -425,7 +427,7 @@ def test_ustyna_is_a_second_companion_with_every_one_of_kiras_capabilities_in_th
     assert (ustyna.user_id, ustyna.name, ustyna.type, ustyna.mode, ustyna.weight, ustyna.play) == (
         "@ustyna:agora.lan", "Устина", "persona", "ranked", 1.0, "guitar")
     assert (kira.mode, kira.weight) == ("ranked", 1.0)
-    assert len(roster) == 10 and len(speakers(roster.values())) == 9 and ustyna in speakers(roster.values())
+    assert len(roster) == 11 and len(speakers(roster.values())) == 10 and ustyna in speakers(roster.values())  # v8.1 Лілі
     assert named("Устю, як ти?", roster.values()) == [ustyna]
     assert ustyna.capabilities == kira.capabilities | {"photos_fal"} and kira.play == ""  # v6.5: hers alone
     assert {"устина", "устино", "устю", "ustyna"} <= set(ustyna.name_forms)

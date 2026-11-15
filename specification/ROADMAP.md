@@ -4460,7 +4460,8 @@ in the tags.
 
 **Goal:** Лілі hears every line of the room and answers in it when someone names her, through a bridge that is one of
 our agents, on Lumi's `agora` channel. Built and released by the synchronization above: its bridge is step 4 (against
-the contract), its live test step 6 (Lumi's dev), its release step 8 (after Lumi's in step 7).
+the contract, released as `v8.1.0` at the step's end — rule 7), its live test step 6 (Lumi's dev, G2; fixes as
+`8.1.x`), its prod deploy step 8 (after Lumi's in step 7, G4).
 
 Design: Lumi's side in `~/development/lumi/specification/features/AGORA_SPACE.md` (her ROADMAP §v3, ARCHITECTURE
 §Spaces and §Contracts), the API in her `docs/agora-space-api.json` (copied here as the contract below); ours in
@@ -4494,7 +4495,7 @@ conversation. Depends on: the Lumi version above in prod; v4.1 (v4.2 for the sco
 - **The room's guard and her memory**: R3 is checked before the call only. After it, the one rule that may drop her
   reply is the persona rule (`outs_a_persona`: a reply calling a person in the room a model or a bot); a dropped reply is
   retracted (`POST /v1/turn/{turn_id}/retract`, the id URL-encoded; `{retracted: true}`), so she never remembers saying
-  what the room never saw; so is a turn the bridge gave up on at its own timeout (best effort — a `404` is fine). No
+  what the room never saw; so is a turn the bridge gave up on at its own timeout (best effort; R8: a retract is always a 200, `false` when nothing was stored). No
   other post-call filtering or trimming.
 - **Agreed with Lumi before step 4** (the tracker, Q1–Q10):
   - after a restart, the bridge observes the lines it missed — since the last observed line, today's at most, oldest

@@ -58,5 +58,6 @@ def test_each_speaker_has_its_own_window_setting_and_the_herald_none():
     for name in ("AGORA_HISTORY_HOURS", "AGORA_HISTORY_MIN"):
         s = BY_NAME[name]
         assert s.service is None and s.scope == "speaker"                            # an agent's own, per agent
-        assert {n for n, m in ROOM.items() if concerns(s, m)} == {n for n, m in ROOM.items() if m.type != "herald"}
+        assert {n for n, m in ROOM.items() if concerns(s, m)} == {n for n, m in ROOM.items()
+                                                                 if m.type not in ("herald", "bridge")}  # v8.1: Lumi's window
     assert BY_NAME["AGORA_HISTORY_HOURS"].default == "0"                             # off unless set

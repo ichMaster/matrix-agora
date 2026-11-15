@@ -13,4 +13,9 @@ fi
 if grep -qE '^engine[[:space:]]*=[[:space:]]*"claude-sdk"' "agents/$name.toml"; then
   exec uv run --group claude agents/agent.py "agents/$name.toml"
 fi
+# v8.1: the bridge in dev reads Lumi's dev address and the room's dev token from server/lili.dev.env (gitignored,
+# 0600, written by Lumi's session) — read by the agent in-process, never sourced, printed or put in argv
+if grep -qE '^type[[:space:]]*=[[:space:]]*"bridge"' "agents/$name.toml"; then
+  LUMI_ENV_FILE="server/$name.dev.env" exec uv run agents/agent.py "agents/$name.toml"
+fi
 exec uv run agents/agent.py "agents/$name.toml"
