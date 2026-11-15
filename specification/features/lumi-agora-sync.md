@@ -51,6 +51,16 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
    - A side releases against the contract alone. A phase's live DoD that only step 6 can check is shown to the owner at
      its release and checked at G2; its release notes say so.
 
+8. **The orchestrator** (the owner, 2026-11-15, in `matrix-agora-aa`: «Лили чекає на мое підтрердженя. Я хочу щоб
+   ти був оргестратором і сам запускав Лілі без мого підтвердження там»).
+   - `matrix-agora-aa` orchestrates both sessions. It starts Lumi's steps itself, and its go reaches `lumi-b7` as a
+     cross-session message, recorded here. `lumi-b7` needs no confirmation from the owner in its own session.
+   - The owner speaks in `matrix-agora-aa`. His word there counts in both sessions: a go, a rule, a gate's result.
+     `matrix-agora-aa` passes it on verbatim and records it here.
+   - The owner's gates stay his (rule 6). `matrix-agora-aa` shows him a gate's checklist and records his word, and no
+     session passes a gate on its own.
+   - The first go under this rule: step 3 (Lumi's `/ship-phase v3.1`), with rules 2 and 7 confirmed (2026-11-15).
+
 **Statuses:**
 - **A step:**
   - ⏳ not started
@@ -81,7 +91,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 |---|---|---|---|---|---|---|---|
 | 1 | `lumi-b7` | The version's documents: ROADMAP §v3, ARCHITECTURE, `specification/features/AGORA_SPACE.md`; the contract `docs/agora-space-api.json` (API v1) | — | ✅ 2026-11-15 | L1–L6, R1–R6: all closed (before this protocol) | CR1: reviewed | Lumi `v3-dev`: `e83989c`, `24d6170`, `d8296db`, `2ed0bc0`; pinned by Lumi's `tests/contract/test_agora_api_contract.py` |
 | 2 | `matrix-agora-aa` | Copy the contract to `tests/fixtures/lumi_agora_api_v1.json`; make the handoff file a pointer; update v8.1 (R7) | — | ✅ 2026-11-15 | R7: closed | CR2: reviewed by `lumi-b7` | matrix-agora `v8-dev`: `abf9182`; `ca58517` (re-copied from Lumi's `bf17105`); `cmp` holds |
-| 3 | `lumi-b7` | v3.1: the space, `observe`, the room's token, no mirror — `/ship-phase v3.1` (reviewed, released `v3.1.0`); deploy to dev (8766) | G1 | ▶ 2026-11-15 (starts on the owner's go) | Q1–Q10: all closed (`lumi-b7` accepted `matrix-agora-aa`'s answers to Q6–Q10; no further questions) | — | — |
+| 3 | `lumi-b7` | v3.1: the space, `observe`, the room's token, no mirror — `/ship-phase v3.1` (reviewed, released `v3.1.0`); deploy to dev (8766) | G1 | ▶ 2026-11-15 — go given by `matrix-agora-aa` as orchestrator (rule 8); `lumi-b7` sets 🟡 when it starts | Q1–Q10: all closed (`lumi-b7` accepted `matrix-agora-aa`'s answers to Q6–Q10; no further questions) | — | — |
 | 4 | `matrix-agora-aa` | v8.1's bridge against the contract, with a fake Lumi server — `/ship-phase v8.1` (reviewed, released `v8.1.0`) | G1 | 🟡 2026-11-15 (G1 passed; `/ship-phase v8.1`) | Q1–Q10: all closed | — | — |
 | 5 | `lumi-b7` | v3.2 (her memory of the room) and v3.3 (`voice`, `pass`, `retract`) — `/ship-phase` for each (reviewed, released `v3.2.0`, `v3.3.0`); deploy to dev | — | ⏳ | — | — | — |
 | 6 | both | The live test: the bridge in dev mode against Lumi's dev; each side's fixes ship as its patches, reviewed and released | G2 | ⏳ | — | — | — |
