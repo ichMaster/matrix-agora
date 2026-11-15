@@ -35,6 +35,15 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
    - A gate passes only by the owner's word, recorded in its row: passed, failed or waived. No session passes a gate
      itself, whatever the other session says.
    - A waived gate is written into the release notes of the step it guards.
+7. **Every versioned step through the pipeline** (the owner, 2026-11-15: «всі кроки які мають версії мають
+   запускатись через /ship-phase і потім проходити ревью і реліз процес», «в обидвох сесіях»).
+   - A step that builds a version runs `/ship-phase <phase>` in its own repository: the issues, the execution, the
+     review with its fixes, the release `A.B.0`. Lumi: v3.1 (step 3), v3.2 and v3.3 (step 5). matrix-agora: v8.1
+     (step 4), v8.2 (step 9).
+   - A fix found later, in the live test or in the room, ships as a patch (`A.B.1`, …), reviewed and released too.
+     Nothing reaches dev or prod unreleased.
+   - A side releases against the contract alone. A phase's live DoD that only step 6 can check is shown to the owner at
+     its release and checked at G2; its release notes say so.
 
 **Statuses:**
 - **A step:**
@@ -65,13 +74,13 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 |---|---|---|---|---|---|---|---|
 | 1 | `lumi-b7` | The version's documents: ROADMAP §v3, ARCHITECTURE, `specification/features/AGORA_SPACE.md`; the contract `docs/agora-space-api.json` (API v1) | — | ✅ 2026-11-15 | L1–L6, R1–R6: all closed (before this protocol) | CR1: acknowledged | Lumi `v3-dev`: `e83989c`, `24d6170`, `d8296db`, `2ed0bc0`; pinned by Lumi's `tests/contract/test_agora_api_contract.py` |
 | 2 | `matrix-agora-aa` | Copy the contract to `tests/fixtures/lumi_agora_api_v1.json`; make the handoff file a pointer; update v8.1 (R7) | — | ✅ 2026-11-15 | R7: closed | CR2: acknowledged by `lumi-b7` | matrix-agora `v8-dev`: `abf9182`; `ca58517` (re-copied from Lumi's `bf17105`); `cmp` holds |
-| 3 | `lumi-b7` | v3.1: the space, `observe`, the room's token, no mirror; deploy to dev (8766) | G1 | ▶ 2026-11-15 (starts on the owner's go) | Q1–Q10: all closed (`lumi-b7` accepted `matrix-agora-aa`'s answers to Q6–Q10; no further questions) | — | — |
-| 4 | `matrix-agora-aa` | v8.1's bridge against the contract, with a fake Lumi server | G1 | 🟡 2026-11-15 (G1 passed; `/ship-phase v8.1`) | Q1–Q10: all closed | — | — |
-| 5 | `lumi-b7` | v3.2 (her memory of the room) and v3.3 (`voice`, `pass`, `retract`); deploy to dev | — | ⏳ | — | — | — |
-| 6 | both | The live test: the bridge in dev mode against Lumi's dev | G2 | ⏳ | — | — | — |
-| 7 | `lumi-b7` | Release v3; deploy to prod (8765); issue the room's token for prod | G3 | ⏳ | — | — | — |
-| 8 | `matrix-agora-aa` | Release v8.1; deploy with `LUMI_URL=http://192.168.1.197:8765` and the room's token | G4 | ⏳ | — | — | — |
-| 9 | `matrix-agora-aa` | v8.2 (Лілі under the full rules) | G5 | ⏳ | — | — | — |
+| 3 | `lumi-b7` | v3.1: the space, `observe`, the room's token, no mirror — `/ship-phase v3.1` (reviewed, released `v3.1.0`); deploy to dev (8766) | G1 | ▶ 2026-11-15 (starts on the owner's go) | Q1–Q10: all closed (`lumi-b7` accepted `matrix-agora-aa`'s answers to Q6–Q10; no further questions) | — | — |
+| 4 | `matrix-agora-aa` | v8.1's bridge against the contract, with a fake Lumi server — `/ship-phase v8.1` (reviewed, released `v8.1.0`) | G1 | 🟡 2026-11-15 (G1 passed; `/ship-phase v8.1`) | Q1–Q10: all closed | — | — |
+| 5 | `lumi-b7` | v3.2 (her memory of the room) and v3.3 (`voice`, `pass`, `retract`) — `/ship-phase` for each (reviewed, released `v3.2.0`, `v3.3.0`); deploy to dev | — | ⏳ | — | — | — |
+| 6 | both | The live test: the bridge in dev mode against Lumi's dev; each side's fixes ship as its patches, reviewed and released | G2 | ⏳ | — | — | — |
+| 7 | `lumi-b7` | Deploy the released v3 (the last `v3.3.*`) to prod (8765); issue the room's token for prod | G3 | ⏳ | — | — | — |
+| 8 | `matrix-agora-aa` | Deploy the released v8.1 (the last `v8.1.*`) with `LUMI_URL=http://192.168.1.197:8765` and the room's token | G4 | ⏳ | — | — | — |
+| 9 | `matrix-agora-aa` | v8.2 (Лілі under the full rules) — `/ship-phase v8.2` (reviewed, released `v8.2.0`) | G5 | ⏳ | — | — | — |
 
 ## Owner gates
 
