@@ -4,7 +4,7 @@ canon = "agents/canon/irma.md"
 life = "agents/canon/irma.life.md"
 simulation = "agora"
 type = "persona"         # v5.5: one of the four newcomers — a person, like Ada and Bruno
-engine = "claude-sdk"         # v7.2: on Claude (ClaudeClient), the owner's subscription — answers on Haiku (server/.env)
+engine = "gemini"             # 7.6 (the owner, 2026-11-15: «зробити треба так як було до того як перейшли на антропік підписку»): back on Gemini 2.5 Flash, as before v7.2 — the subscription kept muting the room; claude-sdk is one line away
 name_forms = ["ірма", "ірми", "ірмі", "ірму", "ірмою", "ірмо", "irma"]  # what addresses this agent in the room (any case, a whole word)
 
 [turns]

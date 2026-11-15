@@ -4,7 +4,7 @@ canon = "agents/canon/bruno.md"
 life = "agents/canon/bruno.life.md"
 simulation = "agora"
 type = "persona"         # v4.1: the type sets the capabilities (canon, life, memories, plans, today, …)
-engine = "claude-sdk"         # v7.2: on Claude (ClaudeClient), the owner's subscription — answers on Haiku (server/.env)
+engine = "gemini"             # 7.6 (the owner, 2026-11-15: «зробити треба так як було до того як перейшли на антропік підписку»): back on Gemini 2.5 Flash, as before v7.2 — the subscription kept muting the room; claude-sdk is one line away
 name_forms = ["бруно", "bruno"]  # what addresses this agent in the room (any case, a whole word)
 
 [turns]

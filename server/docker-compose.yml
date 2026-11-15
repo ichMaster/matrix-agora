@@ -19,7 +19,7 @@ services:
       CONTINUWUITY_REGISTRATION_TOKEN: "${REGISTRATION_TOKEN}"
   ada:
     # one container per agent, the same image (v3.2); the TOML picks the agent
-    image: ghcr.io/ichmaster/matrix-agora-agent-claude:${AGENT_IMAGE_TAG:-latest}  # v7.2: on Claude
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}  # 7.6 (the owner, 2026-11-15): back on Gemini, 3.1 Pro
     command: ["agents/ada.toml"]
     restart: unless-stopped
     init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
@@ -29,16 +29,10 @@ services:
         required: false
       - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
         required: false
-      - path: subscription.env                   # v7.2: the OAuth token alone, last
-        required: false
     environment:
-      HOME: /tmp/claude                          # v7.2: the CLI's home and config on a tmpfs
-      CLAUDE_CONFIG_DIR: /tmp/claude
       HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
       TZ: ${TIMEZONE:-Europe/Kyiv}
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
-    tmpfs:
-      - /tmp/claude:uid=1000,gid=1000,mode=0700,size=64m   # bounded: a waiting CLI and a cold call
     volumes:
       - ../state:/app/state
       - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
@@ -46,7 +40,7 @@ services:
 
   bruno:
     # one container per agent, the same image (v3.2); the TOML picks the agent
-    image: ghcr.io/ichmaster/matrix-agora-agent-claude:${AGENT_IMAGE_TAG:-latest}  # v7.2: on Claude
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}  # 7.6 (the owner, 2026-11-15): back on Gemini, 3.1 Pro
     command: ["agents/bruno.toml"]
     restart: unless-stopped
     init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
@@ -56,16 +50,10 @@ services:
         required: false
       - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
         required: false
-      - path: subscription.env                   # v7.2: the OAuth token alone, last
-        required: false
     environment:
-      HOME: /tmp/claude                          # v7.2: the CLI's home and config on a tmpfs
-      CLAUDE_CONFIG_DIR: /tmp/claude
       HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
       TZ: ${TIMEZONE:-Europe/Kyiv}
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
-    tmpfs:
-      - /tmp/claude:uid=1000,gid=1000,mode=0700,size=64m   # bounded: a waiting CLI and a cold call
     volumes:
       - ../state:/app/state
       - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
@@ -74,7 +62,7 @@ services:
 
   leon:
     # v5.5 — one of the four newcomers, a person like Ada and Bruno: the same image, the TOML picks the agent
-    image: ghcr.io/ichmaster/matrix-agora-agent-claude:${AGENT_IMAGE_TAG:-latest}  # v7.2: on Claude
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}  # 7.6 (the owner, 2026-11-15): back on Gemini, 3.1 Pro
     command: ["agents/leon.toml"]
     restart: unless-stopped
     init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
@@ -84,16 +72,10 @@ services:
         required: false
       - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
         required: false
-      - path: subscription.env                   # v7.2: the OAuth token alone, last
-        required: false
     environment:
-      HOME: /tmp/claude                          # v7.2: the CLI's home and config on a tmpfs
-      CLAUDE_CONFIG_DIR: /tmp/claude
       HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
       TZ: ${TIMEZONE:-Europe/Kyiv}
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
-    tmpfs:
-      - /tmp/claude:uid=1000,gid=1000,mode=0700,size=64m   # bounded: a waiting CLI and a cold call
     volumes:
       - ../state:/app/state
       - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
@@ -101,7 +83,7 @@ services:
 
   mia:
     # v5.5 — one of the four newcomers, a person like Ada and Bruno: the same image, the TOML picks the agent
-    image: ghcr.io/ichmaster/matrix-agora-agent-claude:${AGENT_IMAGE_TAG:-latest}  # v7.2: on Claude
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}  # 7.6 (the owner, 2026-11-15): back on Gemini, 3.1 Pro
     command: ["agents/mia.toml"]
     restart: unless-stopped
     init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
@@ -111,16 +93,10 @@ services:
         required: false
       - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
         required: false
-      - path: subscription.env                   # v7.2: the OAuth token alone, last
-        required: false
     environment:
-      HOME: /tmp/claude                          # v7.2: the CLI's home and config on a tmpfs
-      CLAUDE_CONFIG_DIR: /tmp/claude
       HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
       TZ: ${TIMEZONE:-Europe/Kyiv}
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
-    tmpfs:
-      - /tmp/claude:uid=1000,gid=1000,mode=0700,size=64m   # bounded: a waiting CLI and a cold call
     volumes:
       - ../state:/app/state
       - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
@@ -128,7 +104,7 @@ services:
 
   irma:
     # v5.5 — one of the four newcomers, a person like Ada and Bruno: the same image, the TOML picks the agent
-    image: ghcr.io/ichmaster/matrix-agora-agent-claude:${AGENT_IMAGE_TAG:-latest}  # v7.2: on Claude
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}  # 7.6 (the owner, 2026-11-15): back on Gemini, 3.1 Pro
     command: ["agents/irma.toml"]
     restart: unless-stopped
     init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
@@ -138,16 +114,10 @@ services:
         required: false
       - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
         required: false
-      - path: subscription.env                   # v7.2: the OAuth token alone, last
-        required: false
     environment:
-      HOME: /tmp/claude                          # v7.2: the CLI's home and config on a tmpfs
-      CLAUDE_CONFIG_DIR: /tmp/claude
       HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
       TZ: ${TIMEZONE:-Europe/Kyiv}
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
-    tmpfs:
-      - /tmp/claude:uid=1000,gid=1000,mode=0700,size=64m   # bounded: a waiting CLI and a cold call
     volumes:
       - ../state:/app/state
       - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
@@ -213,7 +183,7 @@ services:
 
   kit:
     # one container per agent, the same image (v3.2); the TOML picks the agent
-    image: ghcr.io/ichmaster/matrix-agora-agent-claude:${AGENT_IMAGE_TAG:-latest}  # v7.2: on Claude
+    image: ghcr.io/ichmaster/matrix-agora-agent:${AGENT_IMAGE_TAG:-latest}  # 7.6 (the owner, 2026-11-15): back on Gemini, 3.1 Pro
     command: ["agents/kit.toml"]
     restart: unless-stopped
     init: true                                   # tini as PID 1: SIGTERM reaches python (code review #1)
@@ -223,16 +193,10 @@ services:
         required: false
       - path: voice.env                          # v5.3: ELEVENLABS_API_KEY — only the members who speak
         required: false
-      - path: subscription.env                   # v7.2: the OAuth token alone, last
-        required: false
     environment:
-      HOME: /tmp/claude                          # v7.2: the CLI's home and config on a tmpfs
-      CLAUDE_CONFIG_DIR: /tmp/claude
       HOMESERVER: http://homeserver:8008         # the compose network; the LAN URL stays for dev mode
       TZ: ${TIMEZONE:-Europe/Kyiv}
     user: "1000:1000"                            # the host user: the bind-mounted state/ stays theirs
-    tmpfs:
-      - /tmp/claude:uid=1000,gid=1000,mode=0700,size=64m   # bounded: a waiting CLI and a cold call
     volumes:
       - ../state:/app/state
       - ../canon:/app/agents/canon:ro              # v5.9.1: the private canon, synced by deploy.sh
