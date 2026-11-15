@@ -410,3 +410,13 @@ def test_a_refusal_on_the_pre_turn_flush_stops_the_turn(status):
         await asyncio.wait_for(asyncio.gather(*b._tasks), 5)
         assert fake.paths() == ["/v1/observe"] and sent(b) == []
     asyncio.run(go())
+
+
+def test_without_an_address_the_card_says_why_and_nothing_is_queued():
+    """Code review v8.1 #8: the reason is said by name on her card, and lines with nowhere to go are never queued."""
+    async def go():
+        b, _ = make(env={"LUMI_URL": BASE})
+        assert load_state(b.state_file)["health"]["why"] == "no LUMI_ROOM_TOKEN"
+        await hear(b, ev(OWNER, "Лілі?", T0, "$o1"), ev(ADA, "туман", T0 + 1, "$a1"))
+        assert b.queue == []
+    asyncio.run(go())

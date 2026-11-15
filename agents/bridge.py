@@ -109,6 +109,9 @@ class Bridge(Agent):
         self.state_file = self.memory_file.parent / f"{cfg.localpart}.bridge.json"
         self.state = load_state(self.state_file)
         self.state["refused"] = None  # a restart tries again
+        if self.missing:  # code review v8.1 #8: the card says why she is silent, by name
+            self.state["health"] = {"ok": False, "agora": None, "why": self.missing, "checked_ms": self.clock()}
+            self._save()
         self.healthy, self.health_why = False, "not checked yet"
         self.refused: str | None = None
         self.queue: list[tuple[dict, int]] = []  # (the line as observe takes it, its time in ms)
@@ -165,7 +168,7 @@ class Bridge(Agent):
         return super().decide(sender, text, event_id, now_ms, resumed)
 
     def on_room_line(self, sender: str, text: str, event_id: str, ts_ms: int) -> None:
-        if not _HEARABLE.get() or sender == self.cfg.user_id:
+        if not _HEARABLE.get() or sender == self.cfg.user_id or self.lumi is None:  # code review v8.1 #8: nowhere to go
             return
         self._queue(sender, text, event_id, ts_ms)
         if len(self.queue) >= OBSERVE_LINES and not self._flush_lock.locked():  # code review v8.1 #5: one at a time
