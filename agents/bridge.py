@@ -304,13 +304,23 @@ class Bridge(Agent):
                     self.healthy, self.health_why = False, name
                 log.info("silent: lumi %s", name)
                 return False
+            if got.outcome in ("bad", "unreachable"):  # code review v8.1 #4: Lumi may have stored a reply we never got
+                await self._retract(answered, f"lumi {got.outcome}")
+                return False
             if got.outcome != "reply":
                 log.info("silent: lumi %s", got.outcome)
                 return False
             if outs_a_persona(got.reply, self.personas):  # the human-belief rule holds for the room's people (v4.2)
                 await self._retract(answered, "would out a persona")
                 return False
-            await self.send_line(room_id, got.reply, answered, answering=answered)  # exactly as returned
+            try:
+                posted = await self.send_line(room_id, got.reply, answered, answering=answered)  # exactly as returned
+            except Exception as exc:  # noqa: BLE001 — code review v8.1 #4: what the room never saw leaves her memory
+                posted = None
+                log.warning("send failed (%s)", type(exc).__name__)
+            if posted is None:
+                await self._retract(answered, "the room never got it")
+                return False
             asked = self._event_at(answered)
             self.record_answer("agora", "matrix", asked[1] if asked else "none", asked[0] if asked else None,
                                delay_ms, "lumi", [])

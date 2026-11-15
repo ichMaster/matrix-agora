@@ -342,3 +342,29 @@ def test_an_edit_enters_her_timeline_as_every_agents_but_is_neither_heard_nor_an
         assert not any(c["path"] == "/v1/turn" and c["body"]["turn_id"] == "$edit" for c in fake.calls)
         assert b.decide(OWNER, "Лілі?", "$new", T0 + 3000).reply is True     # a new line is decided as ever
     asyncio.run(go())
+
+
+@pytest.mark.parametrize("case", ["send-refused", "send-raises", "bad", "unreachable"])
+def test_a_reply_the_room_never_saw_is_retracted(case):
+    """Code review v8.1 #4 (Q2): what Lumi remembers is what the room saw — a refused or failed send, a body off the
+    contract and a reset after Lumi answered are all retracted, and never recorded as answered."""
+    async def go():
+        b, fake = make()
+        if case == "send-refused":
+            b.client.room_send = AsyncMock(return_value=SimpleNamespace(message="M_FORBIDDEN"))  # a RoomSendError
+        elif case == "send-raises":
+            b.client.room_send = AsyncMock(side_effect=OSError("reset"))
+        elif case == "bad":
+            fake.turn_bodies = [{"outcome": "dance", "reply": "x"}]
+        await hear(b, ev(OWNER, "Лілі?", T0, "$o1"))
+        if case == "unreachable":
+            orig = fake._turn
+
+            async def stored_then_reset(body, timeout_s):
+                await orig(body, timeout_s)             # Lumi stored her reply …
+                raise ConnectionError("reset")          # … and the answer never arrived
+            fake._turn = stored_then_reset
+        await asyncio.wait_for(asyncio.gather(*b._tasks), 5)
+        assert fake.paths()[-1] == "/v1/turn/%24o1/retract"
+        assert not b.answers_file.exists()
+    asyncio.run(go())
