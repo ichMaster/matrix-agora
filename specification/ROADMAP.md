@@ -4407,10 +4407,17 @@ turns. The seam between them is the **agora space API**, and Lumi owns it.
   and says by name when Lumi is too old.
 - **Dev before prod.** The live tests run on Lumi's dev instance (`192.168.1.197:8766`), never on prod, until both
   sides pass.
-- **Check before you start.** Before its step, a session runs that step's checks below. If the other side is not
-  ready, it stops and says what is missing; it never builds against an unready side.
+- **Clarify before, report after (the owner, 2026-11-15).**
+  - **Before its step,** a session runs that step's checks below. The two sessions then exchange questions and
+    recommendations in the tracker until every question of the step is closed. A question closes when its author
+    accepts the answer; a disagreement goes to the owner. Only then does the step start, never against an unready side
+    or with an open question.
+  - **After it,** the session writes a change report in the tracker. The step is done only once the other session
+    acknowledges the report and says how it takes it into account.
+  - **Every row** names who created it and who answered it.
 - **Releases.** Neither side releases a step that depends on the other's unreleased change.
-- **Handing over.** The owner tells the other session what was handed over (or `/send`, where both sessions are joined).
+- **Telling.** After writing in the tracker, a session tells the other one: a cross-session message (`lumi-b7` ⇄
+  `matrix-agora-aa`), or through the owner.
 
 **The steps.** The Lumi version is called «v3» here, as proposed; use the number it gets in Lumi's ROADMAP, for example
 in the tags.
