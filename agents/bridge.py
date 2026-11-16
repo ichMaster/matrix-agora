@@ -42,6 +42,7 @@ from agents.lumi_api import (
     plain_body,
     speaker_ok,
 )
+from agents.nudge import parse_hours
 from agents.roster import Member
 from agents.settings import save_json
 from agents.turns import ReplyDecision
@@ -100,6 +101,16 @@ class Bridge(Agent):
         self.wide_n = BACKLOG_N  # Q1: the backfill pages back far enough for today's missed lines
         self.timeout_s = float(env.get("LUMI_TIMEOUT_S", str(TIMEOUT_S)))
         self.health_s = float(env.get("LUMI_HEALTH_S", str(HEALTH_S)))
+        # v8.3 (AGORA-273) — the room's rules for her own line: read only with `initiative` (a typo never takes the room
+        # down, as the cat's); the silence never under the wave's window, so her line opens a fresh wave
+        self.initiative_idle_ms, self.initiatives_per_day, self.initiative_hours = 0, 0, (0, 0)
+        if cfg.can("initiative"):
+            self.initiative_hours = parse_hours(os.environ.get("LILI_INITIATIVE_HOURS", "09-23"))
+            self.initiatives_per_day = int(os.environ.get("LILI_INITIATIVE_PER_DAY", "4"))
+            self.initiative_idle_ms = int(float(os.environ.get("LILI_INITIATIVE_IDLE_S", "1800")) * 1000)
+            if self.initiative_idle_ms < self.bot_window_ms:
+                log.warning("LILI_INITIATIVE_IDLE_S below BOT_WINDOW_S — using %d s", self.bot_window_ms // 1000)
+                self.initiative_idle_ms = self.bot_window_ms
         self.transport = transport or AiohttpTransport()
         self.missing = None if url and token else ("no LUMI_URL" if not url else "no LUMI_ROOM_TOKEN")
         self.lumi = LumiClient(url, token, self.transport, self.timeout_s, clock=lambda: self.mono()) \

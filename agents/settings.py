@@ -103,6 +103,13 @@ SCHEMA: tuple[Setting, ...] = (
     _s("HERMES_TTS_MONTHLY_CHARS", "int", "150000", "hermes", "cap:digest", CHAT,
        "Межа озвучених знаків на місяць (0 — лише текст)", "chars", 0, 1_000_000),
     _s("HERMES_VOICE_ID", "id", "", "hermes", "cap:digest", CHAT, "Голос Гермеса (ElevenLabs voice id; порожньо — текст)"),
+    # v8.3 — Лілі opens a line herself when Lumi offers one: the room's rules for it — read only by the member with
+    # `initiative` (the bridge); Lumi's own fences are its own
+    _s("LILI_INITIATIVE_IDLE_S", "int", "1800", "lili", "cap:initiative", CHAT,
+       "Тиша, після якої Лілі може почати сама (не менше вікна хвилі)", "s", 600, 86400),
+    _s("LILI_INITIATIVE_HOURS", "hours", "09-23", "lili", "cap:initiative", CHAT, "Години, коли Лілі починає сама (HH-HH)"),
+    _s("LILI_INITIATIVE_PER_DAY", "int", "4", "lili", "cap:initiative", CHAT,
+       "Найбільше її власних реплік на день (0 — вимкнено)", "", 0, 48),
     # v5.3 — the speakers' voices: one budget for all of them (Hermes keeps his own); v5.5: 200,000 (the owner)
     _s("VOICE_MONTHLY_CHARS", "int", "200000", "voice", "cap:voice", CHAT,
        "Межа озвучених знаків агентів на місяць (0 — лише текст)", "chars", 0, 1_000_000),
@@ -367,7 +374,8 @@ LIVE = frozenset({"TRACE_CALLS", "FALLBACK_ROUTE", "ANSWER_MODEL",  # v7.4: her 
                   "VOICE_MESSAGES"})  # 7.6: her voice messages
 # the groups in their order, for a service's card and for an agent's tab
 SERVICE_GROUPS = (("turns", "Room & turns"), ("moves", "Ада і Бруно: ходи"), ("cat", "Кіт у кімнаті"),
-                  ("claude", "Клод у кімнаті"), ("hermes", "Гермес"), ("voice", "Голоси агентів"),
+                  ("claude", "Клод у кімнаті"), ("hermes", "Гермес"), ("lili", "Лілі в кімнаті"),
+                  ("voice", "Голоси агентів"),
                   ("session", "Сесії розмови"))
 AGENT_GROUPS = (("switches", "Перемикачі"), ("memory", "Пам'ять"), ("plans", "Плани"), ("life", "Життя"),
                 ("model", "Модель"), ("voice", "Голос"), ("private", "Особистий чат"), ("fallback", "Резерв"))
@@ -416,8 +424,9 @@ def concerns(setting: Setting, member: Member) -> bool:
     kind, _, value = setting.scope.partition(":")
     if member.type == "herald" and kind not in ("cap", "client"):  # v7.1: Hermes on Claude reads his client's
         return False
-    if member.type == "bridge":  # v8.1: Лілі reads the room's shared turn settings alone — her model, memory and
-        return setting.scope == "shared"  # voice are Lumi's
+    if member.type == "bridge":  # v8.1: Лілі reads the room's shared turn settings — her model, memory and voice are
+        # Lumi's; v8.3: and the room's rules for her own line (`initiative`), while she holds it
+        return setting.scope == "shared" or (kind == "cap" and value in member.capabilities)
     if setting.scope == "shared":
         return True
     if setting.scope == "speaker":  # v7.5: each agent that speaks in the room, its own value (never the herald)

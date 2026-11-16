@@ -69,6 +69,28 @@ def nudge_due(now_ms: int, local_now: datetime, last_room_ms: int | None, last_n
     return last_nudge_ms is None or now_ms - last_nudge_ms >= (idle_ms if gap_ms is None else gap_ms)
 
 
+def initiative_due(now_ms: int, local_now: datetime, last_room_ms: int | None, last_is_hers: bool, sent_today: int,
+                   last_poll_ms: int | None, idle_ms: int, per_day: int, hours: tuple[int, int],
+                   poll_gap_ms: int) -> bool:
+    """v8.3 (AGORA-273) — whether the bridge may ask Lumi for an offer of hers now: all of in `hours` (local), under
+    the day's cap (`sent_today` posted), her own line not the room's last (never twice in a row with nobody between),
+    the room quiet for `idle_ms` (an empty room counts as quiet; never under `BOT_WINDOW_S`, so her line opens a fresh
+    wave) and the last poll at least `poll_gap_ms` ago. The same rules hold again before an offer is posted."""
+    if not in_hours(local_now.hour, hours) or sent_today >= per_day or last_is_hers:
+        return False
+    if last_room_ms is not None and now_ms - last_room_ms < idle_ms:
+        return False
+    return last_poll_ms is None or now_ms - last_poll_ms >= poll_gap_ms
+
+
+def last_speaker(timeline: list) -> str | None:
+    """The room's last speaker by name, purrs transparent (a purr is nobody between — v4.2), or None (pure)."""
+    for entry in reversed(timeline):
+        if not (len(entry) > 3 and entry[3]):
+            return str(entry[0])
+    return None
+
+
 def nudge_kind(day: str, n: int) -> str:
     """The day's n-th nudge: memory, command, horoscope or telegram — a deterministic draw over the day and the
     number."""

@@ -24,7 +24,8 @@ log = logging.getLogger("agent.roster")
 CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "world", "mood", "pastlife", "nudge",
                 "news", "digest", "transcribe", "voice", "private", "telegram", "recall", "facts",
                 "emotion", "events", "thoughts", "fallback", "photos", "videos", "talk",
-                "photos_fal")  # v6.5: the owner's switch of her photos to fal (Seedream, the checker off)
+                "photos_fal",  # v6.5: the owner's switch of her photos to fal (Seedream, the checker off)
+                "initiative")  # v8.3: a bridge's own line in the room, when Lumi offers one
 TYPES: dict[str, frozenset[str]] = {
     # a human persona: the full memory stack, no horoscope — v5.10: a person's TOML may switch `mood` on (Кіра)
     "persona": frozenset({"canon", "life", "summary", "chronicle", "plans", "today", "world", "voice"}),
@@ -39,12 +40,14 @@ TYPES: dict[str, frozenset[str]] = {
     # his transcript in the room is the owner's line for every speaker
     "herald": frozenset({"canon", "digest", "transcribe"}),
     # v8.1 — a bridge (Лілі): another agent's own mind behind an API (Lumi's `agora` space) — no canon, no life, no
-    # memory and no voice of ours; she hears the room and answers when named, through `agents/bridge.py`
-    "bridge": frozenset(),
+    # memory and no voice of ours; she hears the room and answers when named, through `agents/bridge.py`;
+    # v8.3 — she may open a line herself when Lumi offers one (`initiative`), under the room's rules
+    "bridge": frozenset({"initiative"}),
 }
 CREATURE_ONLY = frozenset({"pastlife", "nudge"})  # v4.3: no persona remembers a past life or speaks first
 ASSISTANT_ONLY = frozenset({"news"})               # v4.5: only Claude brings news unasked
 HERALD_ONLY = frozenset({"digest", "transcribe"})  # v5.1: only the herald digests; v5.2: and transcribes
+BRIDGE_ONLY = frozenset({"initiative"})            # v8.3: only a bridge posts Lumi's offers
 PERSONA_ONLY = frozenset({"private", "telegram", "recall", "facts", "emotion", "events", "thoughts", "fallback",
                           "photos", "videos", "talk", "photos_fal"})  # v5.6: a private chat with the owner is a person's;
                                                   # no type has it by default — a person's TOML switches it on;
@@ -60,7 +63,7 @@ NEEDS = {"telegram": "private",                    # v5.7: the bot is a door to 
          "videos": ("photos", "voice"),            # v5.18: a video starts from her photo; her кружечок is her voice
          "talk": ("private", "recall"),            # v5.20: summaries of her private chat, from her archive
          "photos_fal": "photos"}                   # v6.5: the switch moves her photos, never without them
-INITIATIVES = ("nudge", "news")                    # who may speak first: one member per initiative
+INITIATIVES = ("nudge", "news", "initiative")      # who may speak first: one member per initiative (v8.3: a bridge)
 SINGLES = (*INITIATIVES, "digest", "transcribe")   # one member per simulation with each of these
 ENGINES = ("gemini", "claude-sdk",  # v4.4: Claude through the Agent SDK, on the subscription only
            "lumi-http")          # v8.1: Lumi's agora space API — a bridge's alone
@@ -125,13 +128,17 @@ def parse_member(localpart: str, data: dict, source: str = "<toml>") -> Member:
     for cap in sorted(caps & HERALD_ONLY):
         if kind != "herald":
             raise RosterError(f"{source}: '{cap}' belongs to the herald type only")
+    for cap in sorted(caps & BRIDGE_ONLY):
+        if kind != "bridge":
+            raise RosterError(f"{source}: '{cap}' belongs to the bridge type only")
     for cap in sorted(caps & PERSONA_ONLY):
         if kind != "persona":
             raise RosterError(f"{source}: '{cap}' belongs to the persona type only")
     if (kind == "bridge") != (engine == "lumi-http"):  # v8.1: the bridge speaks through Lumi alone, and only it
         raise RosterError(f"{source}: a bridge runs on 'lumi-http', and 'lumi-http' belongs to a bridge alone")
-    if kind == "bridge" and caps:  # v8.1: her memory, voice and mind are Lumi's — nothing of ours switched on
-        raise RosterError(f"{source}: a bridge takes no capability, got {', '.join(sorted(caps))}")
+    if kind == "bridge" and caps - BRIDGE_ONLY:  # v8.1: her memory, voice and mind are Lumi's; v8.3: but `initiative`
+        raise RosterError(f"{source}: a bridge takes no capability but 'initiative', got "
+                          f"{', '.join(sorted(caps - BRIDGE_ONLY))}")
     for cap, needs in NEEDS.items():
         for needed in (needs if isinstance(needs, tuple) else (needs,)):
             if cap in caps and needed not in caps:

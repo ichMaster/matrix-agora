@@ -1,4 +1,4 @@
-"""v8.1 — Lumi's agora space API v1, as the bridge speaks it (AGORA-265).
+"""v8.1 — Lumi's agora space API v1, as the bridge speaks it (AGORA-265); v8.3 (AGORA-273) — API v2: her initiative.
 
 The contract is Lumi's: `~/development/lumi/docs/agora-space-api.json`, copied byte for byte as
 `tests/fixtures/lumi_agora_api_v1.json` (pinned by `tests/test_lumi_contract.py`). This module holds the pure helpers
@@ -6,7 +6,8 @@ The contract is Lumi's: `~/development/lumi/docs/agora-space-api.json`, copied b
 so every test runs against the fake Lumi server built from the contract (`tests/fake_lumi.py`) and never the network.
 
 Never in a log, a `repr` or an exception: the room's token, a line's text, her reply. Never kept from a response: her
-thinking, emotion, intensity or state — only `outcome`, `reply`, `turn_id` and `stats`.
+thinking, emotion, intensity or state — only `outcome`, `reply`, `turn_id` and `stats` of a turn, and `outcome`,
+`initiative_id`, `text` and `stats` of an offer.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 API_VERSION = 1                          # the `agora` field of /v1/health the bridge expects at least
+INITIATIVE_API = 2                       # v8.3: from this `agora` version on she may offer a line (API v2); below, none
 CHANNEL = "agora"
 REGISTER = "voice"                       # v8.1: the room's register (Lumi's v3.3)
 CLIENT_HEADER = ("X-Lumi-Client", "agora")
@@ -32,6 +34,8 @@ BATCH_MAX = 200                          # `limits.observe_batch_max`
 SPEAKER_MAX = 64                         # Q3: one line, 1–64 characters, no `:`
 KEPT = ("outcome", "reply", "turn_id", "stats")  # all the bridge keeps of a turn's response
 STATS = ("model", "input_tokens", "output_tokens", "latency_ms")
+INITIATIVE_KEPT = ("outcome", "initiative_id", "text", "stats")  # v8.3: all the bridge keeps of an offer
+INITIATIVE_ID_RE = re.compile(r"^[A-Za-z0-9._~-]{1,128}$")       # the contract: an offer's id is URL-safe
 
 # (method, path, body | None, headers, timeout_s) → (status, parsed JSON | None); raises TimeoutError past timeout_s
 Transport = Callable[[str, str, dict | None, dict, float], Awaitable[tuple[int, dict | None]]]
@@ -55,6 +59,46 @@ class TurnResult:
 
     def __repr__(self) -> str:  # never her words in a log line or a traceback
         return f"TurnResult(outcome={self.outcome!r}, status={self.status!r}, wall_ms={self.wall_ms!r})"
+
+
+@dataclass(frozen=True)
+class InitiativeResult:
+    """v8.3 (AGORA-273) — what a poll of `GET /v1/initiative` came to: `say` (an offer: its id and text exactly as Lumi
+    wrote it, her stats), `none` (nothing now — every silence status too), `refused:<name>`, `timeout`, `unreachable`
+    or `bad` (off the contract); the bridge's own wall time and Lumi's status. Never her text in a `repr`."""
+    outcome: str
+    initiative_id: str = ""
+    text: str = ""
+    stats: dict = field(default_factory=dict)
+    wall_ms: int | None = None
+    status: int | None = None
+
+    def __repr__(self) -> str:  # never her words in a log line or a traceback
+        return f"InitiativeResult(outcome={self.outcome!r}, status={self.status!r}, wall_ms={self.wall_ms!r})"
+
+
+def classify_initiative(status: int | None, body: dict | None, timed_out: bool = False) -> str:
+    """An offer's outcome from Lumi's status and body (pure): a `say` needs a non-empty text and a URL-safe id; an
+    empty text is `none` (nothing to post); every silence status is `none` (the contract's `silence`)."""
+    if timed_out:
+        return "timeout"
+    if status is None:
+        return "unreachable"
+    if status in NAMED:
+        return f"refused:{NAMED[status]}"
+    if status in SILENCE:
+        return "none"
+    if status != 200 or not isinstance(body, dict):
+        return "bad"
+    outcome = body.get("outcome")
+    if outcome == "none":
+        return "none"
+    if outcome == "say":
+        text, iid = body.get("text"), body.get("initiative_id")
+        if not isinstance(text, str) or not isinstance(iid, str) or not INITIATIVE_ID_RE.match(iid):
+            return "bad"
+        return "say" if text.strip() else "none"
+    return "bad"
 
 
 def classify(status: int | None, body: dict | None, timed_out: bool = False) -> str:
@@ -139,7 +183,8 @@ def observed_line(event_id: str, speaker: str, body: str, origin_server_ts: int,
 
 
 class LumiClient:
-    """The four routes of API v1 over a transport; the room's token in every call's header, never anywhere else."""
+    """The four routes of API v1 and (v8.3) the two of API v2's initiative over a transport; the room's token in every
+    call's header, never anywhere else."""
 
     def __init__(self, base_url: str, token: str, transport: Transport, timeout_s: float = TIMEOUT_S,
                  clock: Callable[[], float] = time.monotonic) -> None:
@@ -209,6 +254,35 @@ class LumiClient:
         if status != 200 or not isinstance(body, dict) or not isinstance(body.get("retracted"), bool):
             return None
         return body["retracted"]
+
+
+    async def initiative(self) -> InitiativeResult:
+        """v8.3 — `GET /v1/initiative`: an offer of hers or none. A poll never makes Lumi call her model."""
+        start = self._clock()
+        try:
+            status, raw = await self._call("GET", "/v1/initiative", None, timeout_s=20.0)
+        except TimeoutError:
+            return InitiativeResult("timeout", wall_ms=round((self._clock() - start) * 1000))
+        wall = round((self._clock() - start) * 1000)
+        outcome = classify_initiative(status, raw)
+        if outcome != "say":
+            return InitiativeResult(outcome, wall_ms=wall, status=status)
+        stats = raw.get("stats")
+        stats = {k: stats[k] for k in STATS if isinstance(stats, dict) and k in stats}
+        return InitiativeResult("say", raw["initiative_id"], raw["text"], stats, wall, status)
+
+    async def posted(self, initiative_id: str, event_id: str) -> tuple[int | None, bool | None]:
+        """v8.3 — `POST /v1/initiative/{initiative_id}/posted {event_id}` (the id URL-encoded): `(status, stored)` —
+        `stored` as Lumi gave it (always a 200: true when stored, false when unknown or stored already), None when it
+        could not be read or Lumi was unreachable or slow (`status` None). Never retried here."""
+        path = f"/v1/initiative/{urllib.parse.quote(initiative_id, safe='')}/posted"
+        try:
+            status, body = await self._call("POST", path, {"event_id": event_id}, timeout_s=20.0)
+        except TimeoutError:
+            return None, None
+        if status != 200 or not isinstance(body, dict) or not isinstance(body.get("stored"), bool):
+            return status, None
+        return status, body["stored"]
 
 
 class AiohttpTransport:

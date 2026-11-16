@@ -20,6 +20,8 @@ from agents.nudge import (
     NUDGE_KINDS,
     NUDGE_RULE,
     NudgeState,
+    initiative_due,
+    last_speaker,
     load_nudge_state,
     nudge_due,
     nudge_kind,
@@ -62,6 +64,45 @@ def test_due_after_silence_in_the_daytime_under_the_cap():
 def test_only_inside_the_hours(hhmm, due):
     now_ms, now = at(hhmm)
     assert nudge_due(now_ms, now, None, None, 0, IDLE, 6, HOURS) is due
+
+
+# --- v8.3 (AGORA-273): Лілі's own line — the room's rules -----------------------------------------------------------
+LILI_IDLE, LILI_HOURS, POLL = 1_800_000, (9, 23), 60_000
+
+
+def lili_due(now_ms, now, last_room, last_is_hers=False, sent=0, last_poll=None, per_day=4, hours=LILI_HOURS):
+    return initiative_due(now_ms, now, last_room, last_is_hers, sent, last_poll, LILI_IDLE, per_day, hours, POLL)
+
+
+def test_her_line_is_due_only_when_every_room_rule_holds():
+    now_ms, now = at("14:00")
+    quiet = now_ms - LILI_IDLE
+    assert lili_due(now_ms, now, quiet)
+    assert lili_due(now_ms, now, None)                                        # an empty room is quiet
+    assert not lili_due(now_ms, now, quiet + 1)                               # the room spoke recently
+    assert not lili_due(now_ms, now, quiet, last_is_hers=True)                # never twice in a row
+    assert not lili_due(now_ms, now, quiet, sent=4)                           # the day's cap
+    assert lili_due(now_ms, now, quiet, sent=3)
+    assert not lili_due(now_ms, now, quiet, per_day=0)                        # 0: off
+    assert not lili_due(now_ms, now, quiet, last_poll=now_ms - POLL + 1)      # polled a moment ago
+    assert lili_due(now_ms, now, quiet, last_poll=now_ms - POLL)
+
+
+@pytest.mark.parametrize("hhmm,due", [("08:59", False), ("09:00", True), ("22:59", True), ("23:00", False),
+                                      ("03:00", False)])
+def test_her_line_only_inside_her_hours(hhmm, due):
+    now_ms, now = at(hhmm)
+    assert lili_due(now_ms, now, None) is due
+    assert lili_due(now_ms, now, None, hours=(22, 2)) is (hhmm in ("22:59", "23:00"))  # wrapping past midnight
+
+
+def test_the_rooms_last_speaker_sees_through_purrs():
+    """A purr after her line is nobody between (v4.2: purrs are transparent)."""
+    timeline = [("Ада", 1, "$a", False), ("Лілі", 2, "$l", False), ("Кіт", 3, "$k", True)]
+    assert last_speaker(timeline) == "Лілі"
+    assert last_speaker([*timeline, ("Бруно", 4, "$b", False)]) == "Бруно"
+    assert last_speaker([("Кіт", 1, "$k", True)]) is None and last_speaker([]) is None
+    assert last_speaker([("Ich", 1, "$o")]) == "Ich"                          # an entry without the purr flag
 
 
 def test_hours_parse():

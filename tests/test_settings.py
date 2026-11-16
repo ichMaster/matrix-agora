@@ -83,6 +83,7 @@ PEOPLE = {"ada", "bruno", "leon", "mia", "irma", "kira", "ustyna"}  # v5.5: the 
     ("MAX_BOT_TURNS", {*PEOPLE, "kit", "claude", "lili"}), ("CAT_REACT_P", {*PEOPLE, "kit", "claude", "lili"}),  # v8.1
     ("PERSONA_ASK_P", PEOPLE), ("MEMORY_DAYS", PEOPLE), ("CAT_NUDGE_IDLE_S", {"kit"}),
     ("CLAUDE_TIMEOUT_S", {"claude"}), ("CLAUDE_NEWS_EVERY_S", {"claude"}), ("GEMINI_MODEL", {*PEOPLE, "kit"}),
+    ("LILI_INITIATIVE_IDLE_S", {"lili"}), ("LILI_INITIATIVE_HOURS", {"lili"}), ("LILI_INITIATIVE_PER_DAY", {"lili"}),
 ])
 def test_a_setting_concerns_exactly_the_agents_it_changes(name, who):
     assert {k for k, m in ROOM.items() if concerns(BY_NAME[name], m)} == who
@@ -305,3 +306,17 @@ def test_the_dev_run_gives_an_agent_on_claude_the_sdk():
     script = Path("scripts/run-agent.sh").read_text(encoding="utf-8")
     assert '''grep -qE '^engine[[:space:]]*=[[:space:]]*"claude-sdk"' "agents/$name.toml"''' in script
     assert 'exec uv run --group claude agents/agent.py "agents/$name.toml"' in script
+
+
+def test_her_own_lines_rules_are_the_rooms_settings_in_their_own_group():
+    """v8.3 (AGORA-273): the idle, the hours and the day's cap of Лілі's initiative — Agora's, under «Лілі в кімнаті»,
+    read only by the member holding `initiative`; a bridge without it reads the shared settings alone."""
+    from agents.settings import SERVICE_GROUPS
+    names = ("LILI_INITIATIVE_IDLE_S", "LILI_INITIATIVE_HOURS", "LILI_INITIATIVE_PER_DAY")
+    assert all((BY_NAME[n].service, BY_NAME[n].scope, BY_NAME[n].group) == ("matrix-chat", "cap:initiative", "lili")
+               for n in names)
+    assert ("lili", "Лілі в кімнаті") in SERVICE_GROUPS
+    assert [BY_NAME[n].default for n in names] == ["1800", "09-23", "4"]
+    assert validate("LILI_INITIATIVE_IDLE_S", "599")[0] is None and validate("LILI_INITIATIVE_PER_DAY", "0")[0] == "0"
+    off = ROOM["lili"].__class__(**{**ROOM["lili"].__dict__, "capabilities": frozenset()})
+    assert not any(concerns(BY_NAME[n], off) for n in names) and concerns(BY_NAME["MAX_BOT_TURNS"], off)

@@ -55,7 +55,8 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
                                                                               "telegram", "recall", "facts",
                                                                               "emotion", "events", "thoughts",
                                                                               "fallback", "photos", "videos",
-                                                                              "talk", "photos_fal"}
+                                                                              "talk", "photos_fal",
+                                                                              "initiative"}  # v8.3: a bridge's
     assert ada.panel["name"] == "Ada"
 
 
@@ -358,6 +359,35 @@ def test_only_a_creature_may_remember_a_past_life_or_speak_first(cap):
     with pytest.raises(RosterError, match=f"'{cap}' belongs to the creature type only"):
         parse_member("ada", data)
     assert parse_member("kit", {"name": "Кіт", "user_id": "@kit:agora.lan", "type": "creature"}).can(cap)
+
+
+BRIDGE = 'name = "Лілі"\nuser_id = "@lili:agora.lan"\ntype = "bridge"\nengine = "lumi-http"\n'
+
+
+def test_a_bridge_holds_the_initiative_by_default_and_may_switch_it_off():
+    """v8.3 (AGORA-273): a bridge opens a line herself when Lumi offers one — on by its type, off in its TOML."""
+    import tomllib
+    assert TYPES["bridge"] == frozenset({"initiative"}) and "initiative" in CAPABILITIES
+    assert parse_member("lili", tomllib.loads(BRIDGE)).capabilities == frozenset({"initiative"})
+    off = parse_member("lili", tomllib.loads(BRIDGE + "[capabilities]\ninitiative = false\n"))
+    assert off.capabilities == frozenset() and not off.can("initiative")
+
+
+@pytest.mark.parametrize("kind", ["persona", "creature", "assistant", "herald"])
+def test_only_a_bridge_may_hold_the_initiative(kind):
+    data = {"name": "X", "user_id": "@x:agora.lan", "type": kind, "capabilities": {"initiative": True}}
+    with pytest.raises(RosterError, match="'initiative' belongs to the bridge type only"):
+        parse_member("x", data)
+
+
+def test_a_room_holds_one_bridge_with_the_initiative(tmp_path):
+    """v8.3: two bridges with `initiative` would race on the same silence (SINGLES), as two cats would."""
+    reg, agents = write_roster(tmp_path, BRIDGE.replace("Лілі", "Ліля").replace("@lili", "@lilia"))
+    (agents / "bruno.toml").write_text(BRIDGE)
+    with pytest.raises(RosterError, match="only one member may start conversations with 'initiative'"):
+        load_roster("sim", reg, agents)
+    (agents / "bruno.toml").write_text(BRIDGE + "[capabilities]\ninitiative = false\n")
+    assert [n for n, m in load_roster("sim", reg, agents).items() if m.can("initiative")] == ["kit"]
 
 
 def test_a_room_has_at_most_one_initiator(tmp_path):

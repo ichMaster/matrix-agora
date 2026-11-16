@@ -8,9 +8,12 @@ import pytest
 
 from agents.lumi_api import (
     BATCH_MAX,
+    INITIATIVE_API,
     AiohttpTransport,
+    InitiativeResult,
     LumiClient,
     classify,
+    classify_initiative,
     health_ok,
     kept,
     line_ts,
@@ -36,14 +39,14 @@ def test_lili_is_a_ranked_bridge_on_lumi_http_with_nothing_of_ours():
     m = load_member(Path("agents/lili.toml"))
     assert (m.user_id, m.name, m.type, m.engine, m.mode, m.weight) == (
         "@lili:agora.lan", "Лілі", "bridge", "lumi-http", "ranked", 1.0)  # v8.2 (v8.1: mention-only)
-    assert m.capabilities == frozenset() and m.panel["pronoun"] == "she"
+    assert m.capabilities == frozenset({"initiative"}) and m.panel["pronoun"] == "she"  # v8.3: her own line
 
 
 @pytest.mark.parametrize("toml, why", [
     ('type = "bridge"\n', "lumi-http"),                                   # a bridge on Gemini
     ('engine = "lumi-http"\n', "lumi-http"),                              # Lumi's API for a persona
     ('type = "bridge"\nengine = "lumi-http"\n[turns]\nmode = "ambient"\n', "mention-only"),  # v8.2: ranked or mention-only
-    ('type = "bridge"\nengine = "lumi-http"\n[capabilities]\nvoice = true\n', "no capability"),
+    ('type = "bridge"\nengine = "lumi-http"\n[capabilities]\nvoice = true\n', "no capability but 'initiative'"),
 ])
 def test_a_bridge_off_its_shape_is_refused(toml, why):
     import tomllib
@@ -160,6 +163,95 @@ def test_health_reads_the_api_version_and_names_what_is_wrong():
 
 def test_the_token_is_in_no_repr():
     assert TOKEN not in repr(client(FakeLumi()))
+
+
+# --- v8.3 (AGORA-273): her initiative, API v2 -----------------------------------------------------------------------
+def test_a_poll_is_a_get_with_the_header_and_the_token_and_reads_an_offer():
+    fake = FakeLumi()
+    fake.initiative_bodies = [FakeLumi.say()]
+    got = run(client(fake).initiative())
+    want = EP["initiative"]["response"]["body"]
+    assert (got.outcome, got.initiative_id, got.text) == ("say", want["initiative_id"], want["text"])
+    assert got.stats == want["stats"] and got.status == 200 and got.wall_ms is not None
+    call = fake.polls()[0]
+    assert (call["method"], call["path"], call["body"]) == ("GET", "/v1/initiative", None)
+    assert call["headers"]["Authorization"] == f"Bearer {TOKEN}" and call["headers"]["X-Lumi-Client"] == "agora"
+    assert run(client(fake).initiative()).outcome == "none"            # the contract's `initiative_none`
+    assert INITIATIVE_API == 2 == CONTRACT["version"]
+
+
+def test_an_offer_keeps_its_id_text_and_stats_alone_and_never_shows_its_text():
+    fake = FakeLumi()
+    fake.initiative_bodies = [{**FakeLumi.say("Свій рядок"), "thinking": "приватне", "emotion": "calm", "mood": 3,
+                               "stats": {"model": "m", "input_tokens": 5, "output_tokens": 2, "latency_ms": 9,
+                                         "closeness": 0.9}}]
+    got = run(client(fake).initiative())
+    assert got.text == "Свій рядок" and got.stats == {"model": "m", "input_tokens": 5, "output_tokens": 2,
+                                                       "latency_ms": 9}
+    assert set(vars(got)) == {"outcome", "initiative_id", "text", "stats", "wall_ms", "status"}
+    assert "Свій рядок" not in repr(got) and "приватне" not in repr(got)
+
+
+@pytest.mark.parametrize("status, body, outcome", [
+    (200, {"outcome": "none"}, "none"),
+    (200, {"outcome": "say", "initiative_id": "ini-1", "text": "Рядок"}, "say"),
+    (200, {"outcome": "say", "initiative_id": "ini-1", "text": "  "}, "none"),       # nothing to post
+    (200, {"outcome": "say", "initiative_id": "ini/1", "text": "Рядок"}, "bad"),     # not URL-safe
+    (200, {"outcome": "say", "initiative_id": 7, "text": "Рядок"}, "bad"),
+    (200, {"outcome": "say", "initiative_id": "ini-1"}, "bad"),
+    (200, {"outcome": "dance"}, "bad"), (200, None, "bad"),
+    (409, None, "none"), (429, None, "none"), (500, None, "none"), (502, None, "none"), (503, None, "none"),
+    (504, None, "none"), (401, None, "refused:wrong token"), (403, None, "refused:token not allowed"),
+    (404, None, "refused:space off"), (418, None, "bad"), (None, None, "unreachable"),
+])
+def test_every_poll_maps_to_its_outcome(status, body, outcome):
+    assert classify_initiative(status, body) == outcome
+    assert classify_initiative(status, body, timed_out=True) == "timeout"
+
+
+def test_a_poll_past_its_wait_and_an_unreachable_lumi_are_named():
+    fake = FakeLumi()
+    fake.initiative_delay_s = 99
+    assert run(client(fake).initiative()).outcome == "timeout"
+    fake = FakeLumi()
+    fake.unreachable = True
+    assert run(client(fake).initiative()) == InitiativeResult("unreachable", wall_ms=0)
+    fake = FakeLumi()
+    fake.initiative_status = [503, 401]
+    assert run(client(fake).initiative()).outcome == "none"
+    got = run(client(fake).initiative())
+    assert (got.outcome, got.status) == ("refused:wrong token", 401)
+
+
+def test_an_ack_is_url_encoded_stored_once_and_reads_its_status():
+    fake = FakeLumi()
+    c = client(fake)
+    iid = "ini.5f2c~9a1e"
+    fake.initiative_bodies = [FakeLumi.say(initiative_id=iid)]
+    run(c.initiative())
+    event_id = EP["initiative_posted"]["request"]["body"]["event_id"]
+    assert run(c.posted(iid, event_id)) == (200, True)
+    call = fake.acks()[0]
+    assert call["path"] == f"/v1/initiative/{iid}/posted" and call["body"] == {"event_id": event_id}
+    assert call["headers"]["Authorization"] == f"Bearer {TOKEN}"
+    assert run(c.posted(iid, event_id)) == (200, False)              # idempotent: stored already
+    assert run(c.posted("ini-unknown", "$other")) == (200, False)    # an id Lumi no longer keeps
+    assert run(c.posted("a/b", "$x")) == (200, False)                # the id is URL-encoded: never a path of its own
+    fake.posted_status = [503, 422]
+    assert run(c.posted(iid, "$y")) == (503, None) and run(c.posted(iid, "$y")) == (422, None)
+    fake.unreachable = True
+    assert run(c.posted(iid, "$z")) == (None, None)
+
+
+def test_an_example_ack_path_is_the_contracts():
+    fake = FakeLumi()
+    want = EP["initiative_posted"]
+    fake.initiative_bodies = [FakeLumi.say()]
+    c = client(fake)
+    run(c.initiative())
+    assert run(c.posted("ini-5f2c9a1e7b3d", want["request"]["body"]["event_id"])) == (200, want["response"]["body"]
+                                                                                       ["stored"])
+    assert fake.acks()[0]["path"] == want["request"]["example_path"]
 
 
 # --- the line helpers ------------------------------------------------------------------------------------------------

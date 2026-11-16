@@ -51,8 +51,8 @@ def test_the_service_view_holds_the_rooms_settings_and_the_agents_view_its_own(r
     view = client.get(SIM, headers=AUTH).json()
     rows = {r["name"]: r for r in view["settings"]}
     assert view["scope"] == "services" and view["owner"] == "agora"
-    assert [g["id"] for g in view["groups"]] == ["turns", "moves", "cat", "claude", "hermes", "voice",
-                                                 "session"]  # v5.1, v5.3
+    assert [g["id"] for g in view["groups"]] == ["turns", "moves", "cat", "claude", "hermes", "lili", "voice",
+                                                 "session"]  # v5.1, v5.3, v8.3: Лілі's own line
     assert "MEMORY_DAYS" not in rows and "GEMINI_MODEL" not in rows                     # the agents' own
     mbt = rows["MAX_BOT_TURNS"]
     assert (mbt["default"], mbt["override"], sorted(mbt["agents"])) == (

@@ -68,7 +68,7 @@ def test_lilis_routes_carry_the_bridge_and_forget_is_refused(tmp_path):
     c = TestClient(create_app(token=TOKEN, registry=reg, docker_reader=DockerReader(client_factory=lambda: no_containers),
                               prober=Prober(reg), state_dir=state, background=False))
     lili = c.get("/api/agents/lili", headers=AUTH).json()
-    assert (lili["type"], lili["engine"], lili["capabilities"]) == ("bridge", "lumi-http", [])
+    assert (lili["type"], lili["engine"], lili["capabilities"]) == ("bridge", "lumi-http", ["initiative"])  # v8.3
     mem = c.get("/api/agents/lili/memory", headers=AUTH).json()
     assert mem["bridge"]["observed_today"] in (0, 42) and mem["bridge"]["health"]["agora"] == 1
     assert "SECRET" not in json.dumps(mem)
@@ -77,10 +77,12 @@ def test_lilis_routes_carry_the_bridge_and_forget_is_refused(tmp_path):
     assert c.post("/api/agents/lili/forget").status_code == 401                       # still token-gated
 
 
-def test_her_settings_are_the_rooms_shared_turns_alone():
+def test_her_settings_are_the_rooms_shared_turns_and_her_own_lines_rules_alone():
     lili = load_member(Path("agents/lili.toml"))
     mine = {s.name for s in SETTINGS if concerns(s, lili)}
-    assert mine and all(s.scope == "shared" for s in SETTINGS if s.name in mine)
+    # v8.3 (AGORA-273): beside the shared turns, the room's rules for her own line (`initiative`)
+    assert mine and all(s.scope in ("shared", "cap:initiative") for s in SETTINGS if s.name in mine)
+    assert {"LILI_INITIATIVE_IDLE_S", "LILI_INITIATIVE_HOURS", "LILI_INITIATIVE_PER_DAY"} <= mine
     assert not {"GEMINI_MODEL", "VOICE_MESSAGES", "AGORA_HISTORY_HOURS", "MEMORY_MODE"} & mine
 
 

@@ -215,6 +215,27 @@ def test_the_cats_example_values_are_the_agents_defaults(monkeypatch):
     assert parse_hours(example["CAT_NUDGE_HOURS"]) == cat.nudge_hours
 
 
+def test_her_own_lines_rules_are_in_both_env_examples_with_the_bridges_defaults(monkeypatch):
+    """v8.3 (AGORA-273): Лілі's initiative — the example values are what the bridge reads by default."""
+    from agents.bridge import Bridge
+    from agents.config import AgentConfig
+    from agents.nudge import parse_hours
+    from agents.roster import TYPES
+    from tests.test_first_sync import CFG
+    names = {"LILI_INITIATIVE_IDLE_S", "LILI_INITIATIVE_PER_DAY", "LILI_INITIATIVE_HOURS"}
+    assert names <= env_keys(ROOT / ".env.example") and names <= env_keys(ROOT / "server" / ".env.example")
+    example = dict(line.split("=", 1) for line in (ROOT / ".env.example").read_text().splitlines()
+                   if line.startswith("LILI_INITIATIVE_"))
+    for key in example:
+        monkeypatch.delenv(key, raising=False)
+    lili = Bridge(AgentConfig(**{**CFG.__dict__, "name": "Лілі", "user_id": "@lili:agora.lan", "type": "bridge",
+                                 "engine": "lumi-http", "capabilities": TYPES["bridge"]}),
+                  env={})
+    assert int(example["LILI_INITIATIVE_IDLE_S"]) * 1000 == lili.initiative_idle_ms
+    assert int(example["LILI_INITIATIVE_PER_DAY"]) == lili.initiatives_per_day
+    assert parse_hours(example["LILI_INITIATIVE_HOURS"]) == lili.initiative_hours
+
+
 # --- v4.4: Claude's own service and env file; no API credential anywhere in the stack -------------------------------
 def _forbidden(name: str) -> bool:
     from agents.claude_sdk import forbidden_vars  # the one list (v4.4 review #10)
