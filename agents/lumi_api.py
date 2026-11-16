@@ -37,7 +37,9 @@ STATS = ("model", "input_tokens", "output_tokens", "latency_ms")
 INITIATIVE_KEPT = ("outcome", "initiative_id", "text", "stats")  # v8.3: all the bridge keeps of an offer
 INITIATIVE_FRESH_S = 1800                # `limits.initiative_fresh_s`: an offer older than this is never posted
 INITIATIVE_KEPT_S = 86400                # `limits.initiative_kept_s`: Lumi honours an ack this long
-INITIATIVE_ID_RE = re.compile(r"^[A-Za-z0-9._~-]{1,128}$")       # the contract: an offer's id is URL-safe
+# the contract: an offer's id is URL-safe; code review v8.3 #3: it starts with a letter or a digit, so no id is dots alone
+# (`quote` leaves `..` as it is, and `/v1/initiative/../posted` is another route)
+INITIATIVE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$")
 
 # (method, path, body | None, headers, timeout_s) → (status, parsed JSON | None); raises TimeoutError past timeout_s
 Transport = Callable[[str, str, dict | None, dict, float], Awaitable[tuple[int, dict | None]]]

@@ -198,6 +198,11 @@ def test_an_offer_keeps_its_id_text_and_stats_alone_and_never_shows_its_text():
     (200, {"outcome": "say", "initiative_id": "ini-1", "text": "  "}, "none"),       # nothing to post
     (200, {"outcome": "say", "initiative_id": "ini/1", "text": "Рядок"}, "bad"),     # not URL-safe
     (200, {"outcome": "say", "initiative_id": 7, "text": "Рядок"}, "bad"),
+    (200, {"outcome": "say", "initiative_id": "..", "text": "Рядок"}, "bad"),       # code review v8.3 #3: dots alone
+    (200, {"outcome": "say", "initiative_id": ".", "text": "Рядок"}, "bad"),
+    (200, {"outcome": "say", "initiative_id": "-x", "text": "Рядок"}, "bad"),
+    (200, {"outcome": "say", "initiative_id": "a" * 129, "text": "Рядок"}, "bad"),
+    (200, {"outcome": "say", "initiative_id": "a" * 128, "text": "Рядок"}, "say"),
     (200, {"outcome": "say", "initiative_id": "ini-1"}, "bad"),
     (200, {"outcome": "dance"}, "bad"), (200, None, "bad"),
     (409, None, "none"), (429, None, "none"), (500, None, "none"), (502, None, "none"), (503, None, "none"),
