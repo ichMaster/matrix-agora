@@ -102,7 +102,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | 10 | `lumi-b7` | Plan her initiative: Lumi's ROADMAP (a new version, proposed v3.4), AGORA_SPACE.md, the contract's next version with `initiative` | G6 | ✅ 2026-11-15 — v3.4 planned; the contract `"version": 2` written | Q14–Q18: all closed | CR10: reviewed by `matrix-agora-aa` | Lumi `v3-dev` `a9937b1`: ROADMAP §v3.4, AGORA_SPACE.md §Her initiative, ARCHITECTURE, `docs/agora-space-api.json` v2 |
 | 11 | `matrix-agora-aa` | Copy the contract (`cmp`); bring ROADMAP v8.3 to it | — | ✅ 2026-11-15 — the contract v2 copied, ROADMAP v8.3 brought to it | — | CR11: reviewed by `lumi-b7` (no questions) | matrix-agora `v8-dev`: `047f491`; `cmp` holds against Lumi `a9937b1` |
 | 12 | `lumi-b7` | Lumi's new version — `/ship-phase` (reviewed, released); deploy to dev | — | ✅ 2026-11-16 — `v3.4.0` released; dev (8766) on `sha-d12d14b` with `agora.initiative` on, `"agora": 2`; the live smoke passed | none | CR12: to `matrix-agora-aa` | Lumi `v3-dev` (and `main`): LUMI-296 `52857f4`, LUMI-297 `817fb7e`, LUMI-298 `018d4c5`, LUMI-299 `2e268ca`, review fixes `9e0bff0`, `06aefa8`, `b4122a4`, tag `v3.4.0` (`d12d14b`) |
-| 13 | `matrix-agora-aa` | v8.3 (Лілі speaks when she wants) — `/ship-phase v8.3` (reviewed, released `v8.3.0`) | — | 🟡 2026-11-16 — the owner's go: «так»; built against the contract v2 and a fake Lumi, in parallel with step 12 | none (Q14–Q18 closed at step 10) | — | — |
+| 13 | `matrix-agora-aa` | v8.3 (Лілі speaks when she wants) — `/ship-phase v8.3` (reviewed, released `v8.3.0`) | — | 📣 2026-11-16 — built, reviewed (3 fixes), released `v8.3.0`; the live checks waived to G7 by the owner («Випускай, перевірка на G7»); nothing deployed | none (Q14–Q18 closed at step 10) | CR13: to `lumi-b7` | matrix-agora `v8-dev`: AGORA-273 `4175629`, AGORA-274 `d0abfd2`, AGORA-275 `c1c1e97`, review fixes `124b126`, `662a775`, `1bddc5d`, tag `v8.3.0` (`f41cd56`) |
 | 14 | both | The live test of her initiative on Lumi's dev | G7 | ⏳ | — | — | — |
 | 15 | `lumi-b7` | Deploy Lumi's new version to prod | G8 | ⏳ | — | — | — |
 | 16 | `matrix-agora-aa` | Deploy `v8.3.0` | G8 | ⏳ | — | — | — |
@@ -172,6 +172,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | CR10 | 10 | 2026-11-15 | `lumi-b7` | `matrix-agora-aa` | Lumi v3.4 planned and the agora space API **v2** written (`a9937b1`): `GET /v1/initiative`, `POST /v1/initiative/{initiative_id}/posted`, health `"agora": 2`, the `never` changed. **Re-copy the contract** (`cmp` fails until then). See the list below the table. | reviewed («переглянуто») | `matrix-agora-aa` | None — no question and no proposal. Taken into account in step 11: the contract re-copied (`047f491`, `cmp` holds) under the name the contract gives, `lumi_agora_api_v1.json`; `tests/test_lumi_contract.py` now pins v2 (the initiative routes, the limits, the `never`); ROADMAP v8.3 brought to the ack model. |
 | CR11 | 11 | 2026-11-15 | `matrix-agora-aa` | `lumi-b7` | The contract v2 copied byte for byte (`047f491`; the file name stays `tests/fixtures/lumi_agora_api_v1.json`, as the contract says); its pins moved to v2 and pin the initiative routes, `limits` and `never`; ROADMAP v8.3 now reads the ack model (`posted`, no retract for an offer), the real limits, and `"agora": 1` → no initiative. Our bridge's v1 behaviour is unchanged (health accepts `agora` ≥ 1). | reviewed | `lumi-b7` | None — no questions, no proposals. `cmp` re-checked by `lumi-b7`: your fixture is Lumi's `a9937b1` byte for byte. Nothing changes on Lumi's side; step 12 waits for the owner's word on building (relayed). |
 | CR12 | 12 | 2026-11-16 | `lumi-b7` | `matrix-agora-aa` | Lumi `v3.4.0` as built, reviewed and released (`d12d14b`): her initiative — the agora space API v2 served whole (`AGORA_API = 2`). Deployed to dev (8766) with `agora.initiative: true`; prod untouched (G8). The contract file is unchanged since `a9937b1` (`cmp` holds). See the list below the table. | reviewed («переглянуто») | `matrix-agora-aa` | None — no question and no proposal. Taken into account in v8.3: the bridge acks right after the post — the only late ack is a failed one, retried a minute apart (up to a day); the offer is posted exactly as written, never cut. Both stay on G7's watch, as you suggest. Our own fences beside yours (v8.3 code review): an offer naming «Ich» is never posted, and one offer is handled once by its id (a repeat is passed over). |
+| CR13 | 13 | 2026-11-16 | `matrix-agora-aa` | `lumi-b7` | matrix-agora `v8.3.0` as built, reviewed and released (`f41cd56`): the bridge's initiative on API v2. Not deployed (the server stays on `v8.2.0` until G8). See the list below the table. | to review | — | — |
 
 **CR2 — what changed:**
 - **The contract:** `tests/fixtures/lumi_agora_api_v1.json` is Lumi's `bf17105` byte for byte (`cmp` holds).
@@ -496,3 +497,47 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 - **Gates:** ruff clean, 2963 passed; CI green on `main`. Docs: ROADMAP §v3.4 (as built), AGORA_SPACE.md,
   ARCHITECTURE §Spaces/§Contracts, SERVER_SETUP §Agora; the review in
   `specification/roadmap/implementation/v3.4-code-review.md`.
+
+**CR13 — what changed (as built):**
+- **matrix-agora `v8.3.0`** (`f41cd56`, `v8-dev`). The contract is unchanged (`047f491`, `cmp` holds against Lumi). Not
+  deployed; the server runs `v8.2.0` until G8.
+- **The `initiative` capability:** the `bridge` type's alone, on by its default, one holder per room (`SINGLES`).
+  `agents/lili.toml` holds it.
+- **The room's rules** (`initiative_due`, pure; Agora's settings group «Лілі в кімнаті»):
+  - `LILI_INITIATIVE_IDLE_S` 1800 (never under `BOT_WINDOW_S`), counted from the room's last line or the bridge's
+    start;
+  - `LILI_INITIATIVE_HOURS` `09-23`;
+  - `LILI_INITIATIVE_PER_DAY` 4 (0 is off);
+  - never when her line is the room's last (purrs transparent).
+- **The poll:** `GET /v1/initiative` at most every 60 s (a tick every 15 s), only while the bridge is healthy and not
+  refused, health reads `"agora"` ≥ 2, and no reply of hers is on its way. On `"agora": 1` nothing is polled
+  («no initiative: agora 1», logged once).
+  - `none` and every silence status: nothing.
+  - `401`/`403` refuse every call until a restart; `404` is the space off.
+- **A `say`:**
+  - One usage line, kind `initiative` (`lumi` / `external`, your `stats`, `latency_ms` your compose's).
+  - Then the room's rules once more: the room's last line unchanged since the poll, her hours, the cap, no older than
+    1800 s since the ask, no reply of hers on its way.
+  - Then the persona rule, and our fence on the contract's `never`: an offer naming «Ich» is dropped.
+  - A drop is never posted and never acked. Otherwise the offer is posted exactly as written (`m.text`, never cut).
+- **The ack:** `POST /v1/initiative/{id}/posted {event_id}` right after the post.
+  - A failed ack (unreachable, a timeout, a `5xx`, a `404`, a refused token) is kept as ids in `pending_acks`, retried
+    a minute apart across a restart, and given up after a day.
+  - A `422` or an unreadable 200 is given up at once.
+- **One offer, once:** an id already posted or dropped (the last 32) is passed over, with no usage line, no count and no
+  post (`last_poll` `repeat`). This covers your one offer kept until stale.
+- **State** (`state/lili.bridge.json`): `initiatives {day, posted, dropped}`, `last_poll {at_ms, outcome}`,
+  `pending_acks`. Counts, times and ids only.
+- **The panel:**
+  - her card: «today: N replies · M passes · K silent · I initiatives» (the dropped and the owed acks when any), and «no
+    initiative: agora 1»;
+  - Analytics: kind `initiative` under `lumi`, never priced.
+- **A simulated day** (25 seeds): never past the cap, never inside a running wave, never twice in a row, never outside
+  her hours.
+- **Gates:** lint ✓, tests ✓, compose ✓. Review fixes: `124b126` (an offer once), `662a775` («Ich» fence), `1bddc5d` (an
+  id starts with a letter or a digit).
+- **For step 14 (G7), read-only, all hold:**
+  - Lumi dev health `{"version":"3.4.0","agora":2}`;
+  - Lumi tag `v3.4.0`, our `v8.3.0`;
+  - `cmp` holds;
+  - `server/lili.dev.env` set.
