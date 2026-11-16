@@ -246,7 +246,8 @@ def ratelimit_view(state_dir: Path, name: str) -> dict | None:
 
 def bridge_view(state_dir: Path, name: str, today: date) -> dict | None:
     """v8.1 (AGORA-267) — Лілі's bridge from `<name>.bridge.json`: Lumi's reachability, the last turn's outcome and
-    the lines Lumi heard today. Times, words and counts only: never a text, her thinking, mood or the token. No file
+    the lines Lumi heard today; v8.2 today's turns by outcome; v8.3 her own lines today, the last poll and the acks
+    owed. Times, words and counts only: never a text, her thinking, mood or the token. No file
     yet → an empty view; unreadable → None, never a 500."""
     try:
         data = json.loads((state_dir / f"{name}.bridge.json").read_text(encoding="utf-8"))
@@ -271,7 +272,15 @@ def bridge_view(state_dir: Path, name: str, today: date) -> dict | None:
     turns = data.get("turns") if isinstance(data.get("turns"), dict) else {}  # v8.2 (AGORA-271): today's, by outcome
     fresh = turns.get("day") == today.isoformat()
     turns_today = {k: turns[k] if fresh and isinstance(turns.get(k), int) else 0 for k in ("reply", "pass", "silent")}
-    return {"health": health, "last_turn": last, "observed_today": count, "refused": refused, "turns_today": turns_today}
+    # v8.3 (AGORA-275): her own lines today, the last poll and the acks Lumi still owes her memory — counts and times
+    ini = data.get("initiatives") if isinstance(data.get("initiatives"), dict) else {}
+    ini_fresh = ini.get("day") == today.isoformat()
+    initiatives = {k: ini[k] if ini_fresh and isinstance(ini.get(k), int) else 0 for k in ("posted", "dropped")}
+    poll = pick("last_poll", ("at_ms", "outcome"))
+    owed = data.get("pending_acks")
+    return {"health": health, "last_turn": last, "observed_today": count, "refused": refused, "turns_today": turns_today,
+            "initiatives_today": initiatives, "last_poll": poll,
+            "pending_acks": len(owed) if isinstance(owed, list) else 0}
 
 
 def _usage_records(path: Path) -> list[dict]:

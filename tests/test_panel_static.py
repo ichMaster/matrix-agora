@@ -582,4 +582,14 @@ def test_lilis_card_shows_lumis_state_and_never_her_words():
 def test_her_card_shows_todays_turns_by_outcome():
     """v8.2 (AGORA-271): the owner judges «about as often as the others» from her card."""
     js = js_text()
-    assert "today: ${fmtInt(b.turns_today.reply)} replies · ${fmtInt(b.turns_today.pass)} passes · ${fmtInt(b.turns_today.silent)} silent" in js
+    assert "today: ${fmtInt(b.turns_today.reply)} replies · ${fmtInt(b.turns_today.pass)} passes · ${fmtInt(b.turns_today.silent)} silent${initiativeWords(b)}" in js
+
+
+def test_her_card_shows_her_own_lines_today_and_why_she_offers_none():
+    """v8.3 (AGORA-275): «· 2 initiatives», the dropped and the acks owed when any; «no initiative: agora 1» while Lumi
+    is older — counts only, never an offer's text."""
+    js = js_text()
+    body = js[js.index("function initiativeWords(b)"):js.index("// v5.1 — Hermes, the herald")]
+    assert "i.posted" in body and "i.dropped" in body and "b.pending_acks" in body and "initiatives" in body
+    assert ".text" not in body
+    assert "no initiative: agora ${esc(String(h.agora))}" in js and "Number(h.agora) < 2" in js

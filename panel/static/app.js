@@ -1111,7 +1111,17 @@ function bridgeLines(mem) {
   const last = t ? `last turn ${when} · ${outcome}${t.latency_ms != null ? ` · ${(t.latency_ms / 1000).toFixed(1)} s` : ""}` : "no turn yet";
   return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${reach}</div>
     <div class="muted" style="font-size:12px">${esc(last)} · ${esc(fmtInt(b.observed_today))} lines heard today</div>
-    ${b.turns_today ? `<div class="muted" style="font-size:12px">${esc(`today: ${fmtInt(b.turns_today.reply)} replies · ${fmtInt(b.turns_today.pass)} passes · ${fmtInt(b.turns_today.silent)} silent`)}</div>` : ""}`;  // v8.2: how often she answers
+    ${b.turns_today ? `<div class="muted" style="font-size:12px">${esc(`today: ${fmtInt(b.turns_today.reply)} replies · ${fmtInt(b.turns_today.pass)} passes · ${fmtInt(b.turns_today.silent)} silent${initiativeWords(b)}`)}</div>` : ""}
+    ${h && h.ok && Number(h.agora) < 2 ? `<div class="muted" style="font-size:12px">no initiative: agora ${esc(String(h.agora))}</div>` : ""}`;  // v8.2: how often she answers; v8.3: and speaks first
+}
+
+// v8.3 (AGORA-275) — her own lines today: « · 2 initiatives», « · 1 dropped» when any, « · 1 ack owed» when any
+function initiativeWords(b) {
+  const i = b.initiatives_today;
+  if (!i) return "";
+  return ` · ${fmtInt(i.posted)} ${Number(i.posted) === 1 ? "initiative" : "initiatives"}`
+    + (Number(i.dropped) ? ` · ${fmtInt(i.dropped)} dropped` : "")
+    + (Number(b.pending_acks) ? ` · ${fmtInt(b.pending_acks)} ${Number(b.pending_acks) === 1 ? "ack" : "acks"} owed` : "");
 }
 
 // v5.1 — Hermes, the herald: «last digest 14:05 · 2 today» and the month's spoken characters against the cap

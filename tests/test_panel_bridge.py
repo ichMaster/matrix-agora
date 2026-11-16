@@ -26,7 +26,10 @@ STATE = {"health": {"ok": True, "agora": 1, "why": None, "checked_ms": 1},
          "last_turn": {"at_ms": 2, "outcome": "reply", "latency_ms": 1840, "reply": "SECRET-WORDS"},
          "observed": {"day": "2026-11-16", "count": 42, "last_ts_ms": 3, "last_id": "$x"},
          "refused": None, "thinking": "SECRET-THOUGHT",
-         "turns": {"day": "2026-11-16", "reply": 5, "pass": 2, "silent": 1}}
+         "turns": {"day": "2026-11-16", "reply": 5, "pass": 2, "silent": 1},
+         "initiatives": {"day": "2026-11-16", "posted": 2, "dropped": 1},                     # v8.3 (AGORA-275)
+         "last_poll": {"at_ms": 4, "outcome": "posted", "text": "SECRET-OFFER"},
+         "pending_acks": [{"initiative_id": "ini-1", "event_id": "$e", "at_ms": 4}]}
 
 
 def registry(tmp_path) -> Registry:
@@ -47,13 +50,18 @@ def test_the_bridge_view_holds_lumis_state_and_none_of_her_words(tmp_path):
     assert view == {"health": {"ok": True, "agora": 1, "why": None, "checked_ms": 1},
                     "last_turn": {"at_ms": 2, "outcome": "reply", "latency_ms": 1840},
                     "observed_today": 42, "refused": None,
-                    "turns_today": {"reply": 5, "pass": 2, "silent": 1}}  # v8.2 (AGORA-271)
+                    "turns_today": {"reply": 5, "pass": 2, "silent": 1},  # v8.2 (AGORA-271)
+                    "initiatives_today": {"posted": 2, "dropped": 1}, "last_poll": {"at_ms": 4, "outcome": "posted"},
+                    "pending_acks": 1}                                     # v8.3 (AGORA-275)
     assert "SECRET" not in json.dumps(view)
     assert bridge_view(tmp_path, "lili", date(2026, 11, 17))["observed_today"] == 0  # another day
     assert bridge_view(tmp_path, "lili", date(2026, 11, 17))["turns_today"] == {"reply": 0, "pass": 0, "silent": 0}
+    assert bridge_view(tmp_path, "lili", date(2026, 11, 17))["initiatives_today"] == {"posted": 0, "dropped": 0}
     assert bridge_view(tmp_path, "nobody", TODAY) == {"health": None, "last_turn": None, "observed_today": 0,
                                                       "refused": None,
-                                                      "turns_today": {"reply": 0, "pass": 0, "silent": 0}}
+                                                      "turns_today": {"reply": 0, "pass": 0, "silent": 0},
+                                                      "initiatives_today": {"posted": 0, "dropped": 0},
+                                                      "last_poll": None, "pending_acks": 0}
     (tmp_path / "lili.bridge.json").write_text("{torn")
     assert bridge_view(tmp_path, "lili", TODAY) is None                               # never a 500
     assert memory_view(tmp_path, "ada", TODAY)["bridge"] is None
@@ -100,3 +108,17 @@ def test_her_turns_are_lumis_own_service_counted_never_priced_never_incomplete()
     assert lumi["cost"] is None and lumi["complete"] is True
     assert report["total"]["complete"] is True and report["unpriced"] == []
     assert report["total"]["cost"] == pytest.approx(1000 * 0.3 / 1e6 + 10 * 2.5 / 1e6)  # Gemini's alone
+
+
+def test_her_own_lines_are_counted_in_analytics_as_lumis_never_priced():
+    """v8.3 (AGORA-275): the kind `initiative` is a Lumi line like her turns — counted under the service `lumi`,
+    never priced, never an incomplete total."""
+    ts = "2026-11-16T14:01:12+02:00"
+    records = [lumi_usage_line(ts, "lili", {"model": "gemini-2.5-flash", "input_tokens": 5880, "output_tokens": 21,
+                                            "latency_ms": 1520}, True, 1520, kind="initiative"),
+               lumi_usage_line(ts, "lili", {"model": "gemini-2.5-flash", "input_tokens": 6420, "output_tokens": 38},
+                               True, 1900)]
+    report = analyze(records, TODAY, TODAY, prices=PriceBook(0.3, 2.5), today=date(2026, 11, 17))
+    lumi = next(s for s in report["services"] if s["service"] == "lumi")
+    assert (lumi["calls"], lumi["input"], lumi["output"], lumi["billing"]) == (2, 5880 + 6420, 21 + 38, "external")
+    assert lumi["cost"] is None and lumi["complete"] is True and report["total"]["complete"] is True
