@@ -1,3 +1,33 @@
+Version 8.3.0 (2026-11-16)
+---------------------------
+- Лілі speaks when she wants (v8.3, sync step 13; the owner's go: «так»):
+  the bridge holds the room's one `initiative` (the bridge type's alone, on
+  by its default). While the room's rules hold — quiet for
+  LILI_INITIATIVE_IDLE_S (1800 s, never under BOT_WINDOW_S, so her line
+  opens a fresh wave), in LILI_INITIATIVE_HOURS (09-23), under
+  LILI_INITIATIVE_PER_DAY (4), never twice in a row — it polls Lumi's
+  GET /v1/initiative (agora space API v2) at most once a minute; a fresh
+  offer is checked once more (the room's last line unchanged, her hours,
+  the cap, the persona rule), posted exactly as Lumi wrote it and acked
+  with its event id (POST /v1/initiative/{id}/posted), so Lumi remembers
+  only what the room saw; an ack Lumi never got is kept as ids and retried
+  up to a day. A Lumi on "agora": 1 offers nothing and she answers as in
+  v8.2 (AGORA-273, AGORA-274)
+- her card: «… · N initiatives» (dropped and acks owed when any), «no
+  initiative: agora 1»; Agora's settings group «Лілі в кімнаті»; usage
+  kind `initiative`, counted as Lumi's in Analytics, never priced
+  (AGORA-275)
+- a simulated day never exceeds her cap, never opens a line inside a
+  running wave, never comes twice in a row or outside her hours
+- code review: one offer is handled once by its id (#1); an offer naming
+  «Ich» is never posted — a fence beside Lumi's guard (#2); an offer id
+  starts with a letter or a digit (#3)
+- WAIVED by the owner (2026-11-16, rule 7): the live checks (AGORA-276 —
+  she opens a line after a quiet stretch and the others answer; never in a
+  wave, at night, twice in a row or past the cap; nothing of his private
+  talk) are checked at G7 on Lumi's dev (sync step 14); fixes ship as
+  8.3.x. Not deployed: the server stays on v8.2.0 until G8
+
 Version 8.2.0 (2026-11-15)
 ---------------------------
 - Лілі under the full rules (v8.2, sync step 9; the owner's G5: «все гаразд
