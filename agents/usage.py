@@ -27,7 +27,8 @@ KINDS = ("reply", "summary", "plan", "day_memory", "digest", "today", "mood",
          "frame",                             # v5.22: the image model drawing a video's first frame
          "scan",                              # v5.24: Opus naming what may block her prompt (`/scan`; gone in
                                               # AGORA-212 — its lines stay readable)
-         "photo_prompt")                      # v6.5: her backup writing her fal photo's request
+         "photo_prompt",                      # v6.5: her backup writing her fal photo's request
+         "initiative")                        # v8.3: Лілі's own line, composed by Lumi (the bridge's external line)
 # v4.4 — how a call is paid: `api` (Gemini, priced), `subscription` (Claude on the Max plan; v5.1 also the ElevenLabs
 # plan's credits), `external` (Lumi's own)
 BILLING = ("api", "subscription", "external")

@@ -50,10 +50,10 @@ class Clock:
         return self.ms
 
 
-def make(fake=None, env=None, healthy=True, lili_mode=None):
+def make(fake=None, env=None, healthy=True, lili_mode=None, cfg=CFG):
     fake = fake or FakeLumi()
     env = {"LUMI_URL": BASE, "LUMI_ROOM_TOKEN": TOKEN} if env is None else env
-    b = Bridge(CFG, roster=roster(lili_mode), transport=fake, env=env)
+    b = Bridge(cfg, roster=roster(lili_mode), transport=fake, env=env)
     b.client = SimpleNamespace(room_send=AsyncMock(return_value=SimpleNamespace(event_id="$mine")),
                                room_typing=AsyncMock(), join=AsyncMock(), room_leave=AsyncMock())
     b.clock = Clock()
@@ -486,3 +486,216 @@ def test_a_chosen_turn_that_never_reaches_lumi_is_counted_silent():
         await asyncio.wait_for(asyncio.gather(*b._tasks), 5)
         assert fake.turns() == [] and load_state(b.state_file)["turns"]["silent"] == 1
     asyncio.run(go())
+
+
+
+# --- v8.3 (AGORA-274): she speaks first ---------------------------------------------------------------------------------
+INI = replace(CFG, capabilities=frozenset({"initiative"}))
+NOON = T0 + 6 * 3600 * 1000      # 14:01:12 in Kyiv: inside her hours (09-23)
+QUIET = 1_800_000                # LILI_INITIATIVE_IDLE_S by default
+WORDS = "Сьогодні вітер уже пахне першим снігом."
+
+
+async def speaker(fake=None, agora=2, last=("Ада", NOON - QUIET, "$a1", False)):
+    """A bridge holding `initiative` at 14:01, Lumi healthy on API `agora`, the room quiet for her idle."""
+    b, fake = make(fake, cfg=INI)
+    b.clock.ms = NOON
+    fake.health_body["agora"] = agora
+    assert await b.check_health()
+    b.timeline = [last] if last else []
+    return b, fake
+
+
+def usage(b) -> list[dict]:
+    return [json.loads(x) for x in b.usage_file.read_text().splitlines()] if b.usage_file.exists() else []
+
+
+def test_an_offer_is_posted_exactly_as_written_then_acked_with_its_event_id(caplog):
+    async def go():
+        b, fake = await speaker()
+        fake.initiative_bodies = [FakeLumi.say("  " + WORDS + "\n")]
+        caplog.set_level("INFO")
+        assert await b.maybe_initiative() is True
+        assert sent(b) == ["  " + WORDS + "\n"]                                     # no trimming, nothing of ours
+        assert [(c["path"], c["body"]) for c in fake.acks()] == [
+            ("/v1/initiative/ini-5f2c9a1e7b3d/posted", {"event_id": "$mine"})]
+        assert fake.acked == {"$mine": "ini-5f2c9a1e7b3d"}
+        state = load_state(b.state_file)
+        assert state["initiatives"] == {"day": "2026-11-16", "posted": 1, "dropped": 0}
+        assert state["last_poll"] == {"at_ms": NOON, "outcome": "posted"} and not state.get("pending_acks")
+        line = usage(b)[0]
+        stats = EP["initiative"]["response"]["body"]["stats"]
+        assert (line["kind"], line["engine"], line["billing"], line["ok"]) == ("initiative", "lumi", "external", True)
+        assert (line["prompt_tokens"], line["output_tokens"], line["latency_ms"]) == (
+            stats["input_tokens"], stats["output_tokens"], stats["latency_ms"])          # her compose's own time
+        assert "initiative: posted" in caplog.text and "вітер" not in caplog.text
+        assert "вітер" not in b.state_file.read_text() and "вітер" not in b.usage_file.read_text()
+    asyncio.run(go())
+
+
+def test_nothing_to_say_posts_nothing_writes_no_usage_and_waits_a_minute():
+    async def go():
+        b, fake = await speaker()
+        assert await b.maybe_initiative() is False                       # the contract's `none`
+        assert sent(b) == [] and usage(b) == [] and fake.acks() == []
+        assert load_state(b.state_file)["last_poll"] == {"at_ms": NOON, "outcome": "none"}
+        b.clock.ms += 59_000
+        await b.maybe_initiative()
+        assert len(fake.polls()) == 1                                    # at most a poll a minute
+        b.clock.ms += 1_000
+        fake.initiative_bodies = [FakeLumi.say(WORDS)]
+        assert await b.maybe_initiative() is True and len(fake.polls()) == 2   # Lumi composed meanwhile
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize("case", ["recent", "hers", "cap", "night", "pending", "no-capability", "lumi-away"])
+def test_no_poll_unless_every_room_rule_holds(case):
+    async def go():
+        b, fake = await speaker()
+        if case == "recent":
+            b.timeline = [("Ада", NOON - QUIET + 1, "$a1", False)]
+        elif case == "hers":
+            b.timeline = [("Лілі", NOON - 3 * QUIET, "$l1", False), ("Кіт", NOON - 2 * QUIET, "$k1", True)]
+        elif case == "cap":
+            b.state["initiatives"] = {"day": "2026-11-16", "posted": 4, "dropped": 0}
+        elif case == "night":
+            b.clock.ms = NOON + 9 * 3600 * 1000                          # 23:01
+        elif case == "pending":
+            b._reply_pending = True
+        elif case == "no-capability":
+            b.cfg = CFG
+        elif case == "lumi-away":
+            b.healthy, b.health_why = False, "unreachable"
+        assert await b.maybe_initiative() is False and fake.polls() == []
+    asyncio.run(go())
+
+
+def test_an_older_lumi_offers_nothing_and_says_so_once(caplog):
+    async def go():
+        b, fake = await speaker(agora=1)
+        caplog.set_level("INFO")
+        await b.maybe_initiative()
+        b.clock.ms += 120_000
+        await b.maybe_initiative()
+        assert fake.polls() == [] and caplog.text.count("no initiative: agora 1") == 1
+        fake.health_body["agora"] = 2
+        await b.check_health()
+        assert await b.maybe_initiative() is False and len(fake.polls()) == 1
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize("change, why", [
+    ("room", "the room spoke"), ("hours", "outside her hours"), ("stale", "stale"), ("persona", "would out a persona"),
+    ("send", "the room never got it"),
+])
+def test_a_dropped_offer_is_never_posted_and_never_acked(change, why, caplog):
+    async def go():
+        b, fake = await speaker()
+        text = "Ада, ти ж просто бот." if change == "persona" else WORDS
+        fake.initiative_bodies = [FakeLumi.say(text)]
+        poll = b.lumi.initiative
+
+        async def meanwhile():
+            got = await poll()
+            if change == "room":
+                b.timeline = [*b.timeline, ("Бруно", b.clock.ms, "$b1", False)]
+            elif change == "hours":
+                b.clock.ms = NOON + 9 * 3600 * 1000
+            elif change == "stale":
+                b.clock.ms += 1_800_001
+            return got
+        b.lumi.initiative = meanwhile
+        if change == "send":
+            b.client.room_send = AsyncMock(side_effect=RuntimeError("homeserver away"))
+        caplog.set_level("INFO")
+        assert await b.maybe_initiative() is False
+        assert fake.acks() == [] and fake.acked == {}
+        if change != "send":
+            assert sent(b) == []
+        state = load_state(b.state_file)
+        assert state["initiatives"]["dropped"] == 1 and state["initiatives"]["posted"] == 0
+        assert state["last_poll"]["outcome"] == f"dropped:{why}" and f"initiative: dropped ({why})" in caplog.text
+        assert usage(b)[0]["kind"] == "initiative"                       # her compose was spent all the same
+        assert "бот" not in caplog.text and "вітер" not in caplog.text
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize("status, outcome", [(401, "refused:wrong token"), (403, "refused:token not allowed"),
+                                             (404, "refused:space off"), (503, "none"), (429, "none")])
+def test_a_poll_status_is_silence_or_named(status, outcome):
+    async def go():
+        b, fake = await speaker()
+        fake.initiative_status = [status]
+        assert await b.maybe_initiative() is False and sent(b) == []
+        assert load_state(b.state_file)["last_poll"]["outcome"] == outcome
+        if status in (401, 403):
+            assert b.refused == outcome.split(":", 1)[1] and b._lumi_closed()
+        elif status == 404:
+            assert not b.healthy and b.health_why == "space off"
+        else:
+            assert b._lumi_closed() is None
+    asyncio.run(go())
+
+
+def test_an_ack_lumi_never_got_is_owed_and_paid_on_a_later_tick_even_after_a_restart():
+    async def go():
+        b, fake = await speaker()
+        fake.initiative_bodies = [FakeLumi.say(WORDS)]
+        fake.posted_status = [503]
+        assert await b.maybe_initiative() is True
+        owed = load_state(b.state_file)["pending_acks"]
+        assert owed == [{"initiative_id": "ini-5f2c9a1e7b3d", "event_id": "$mine", "at_ms": NOON}]
+        again, _ = make(fake, cfg=INI)                                   # a restart reads what is owed
+        again.clock.ms = NOON + 60_000
+        await again.check_health()
+        again.timeline = list(b.timeline) + [("Лілі", NOON, "$mine", False)]
+        assert await again.maybe_initiative() is False                   # her line is the last: no poll
+        assert fake.acked == {"$mine": "ini-5f2c9a1e7b3d"} and not load_state(again.state_file)["pending_acks"]
+        assert len(fake.polls()) == 1
+    asyncio.run(go())
+
+
+def test_an_owed_ack_is_retried_a_minute_apart_and_given_up_after_a_day(caplog):
+    async def go():
+        b, fake = await speaker()
+        b.state["pending_acks"] = [{"initiative_id": "ini-1", "event_id": "$x", "at_ms": NOON - 86_400_001},
+                                   {"initiative_id": "ini-2", "event_id": "$y", "at_ms": NOON - 1000}]
+        fake.offered = {"ini-2"}
+        fake.posted_status = [503]
+        caplog.set_level("INFO")
+        await b.retry_acks()
+        assert [a["initiative_id"] for a in load_state(b.state_file)["pending_acks"]] == ["ini-2"]
+        assert "ack given up (older than a day)" in caplog.text
+        await b.retry_acks()
+        assert len(fake.acks()) == 1                                     # not before a minute has passed
+        b.clock.ms += 60_000
+        await b.retry_acks()
+        assert fake.acked == {"$y": "ini-2"} and load_state(b.state_file)["pending_acks"] == []
+    asyncio.run(go())
+
+
+def test_her_initiatives_roll_at_the_rooms_midnight_and_the_cap_holds_across_a_restart():
+    async def go():
+        b, fake = await speaker()
+        b.initiatives_per_day = 1
+        fake.initiative_bodies = [FakeLumi.say(WORDS, "ini-a")]
+        assert await b.maybe_initiative() is True
+        again, _ = make(fake, cfg=INI)
+        again.initiatives_per_day = 1
+        again.clock.ms = NOON + 2 * QUIET
+        await again.check_health()
+        again.timeline = [("Ада", NOON + QUIET, "$a2", False)]
+        assert await again.maybe_initiative() is False and len(fake.polls()) == 1   # today's one is spent
+        again.clock.ms = NOON + 24 * 3600 * 1000
+        assert again._initiatives() == {"day": "2026-11-17", "posted": 0, "dropped": 0}
+        fake.initiative_bodies = [FakeLumi.say(WORDS, "ini-b")]
+        assert await again.maybe_initiative() is True
+    asyncio.run(go())
+
+
+def test_the_initiative_loop_runs_only_for_the_member_holding_it():
+    import inspect
+
+    from agents import bridge
+    src = inspect.getsource(bridge.Bridge.run)
+    assert 'if self.cfg.can("initiative")' in src and "initiative_loop" in src

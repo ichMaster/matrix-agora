@@ -9,6 +9,10 @@ inherited from `Agent`. What is hers is the hearing and the reply path:
   never retried.
 - **What the room never saw is retracted** (`/v1/turn/{id}/retract`): a reply the persona rule drops, a turn the bridge
   gave up on.
+- **She speaks first** (v8.3, API v2 — `/v1/initiative`, `/v1/initiative/{id}/posted`): while the room's rules hold
+  (quiet, her hours, under the day's cap, never twice in a row) she is asked for an offer; a fresh one is posted exactly
+  as Lumi wrote it and acked with its event id, so Lumi remembers only what the room saw. A dropped offer is never
+  acked.
 
 Never in a log, the state or a usage line: the room's token, a line's text, her reply, her thinking.
 """
@@ -32,6 +36,9 @@ from agents.config import AgentConfig
 from agents.logic import is_edit, outs_a_persona, should_handle
 from agents.lumi_api import (
     BATCH_MAX,
+    INITIATIVE_API,
+    INITIATIVE_FRESH_S,
+    INITIATIVE_KEPT_S,
     NAMED,
     TIMEOUT_S,
     AiohttpTransport,
@@ -42,7 +49,7 @@ from agents.lumi_api import (
     plain_body,
     speaker_ok,
 )
-from agents.nudge import parse_hours
+from agents.nudge import in_hours, initiative_due, last_speaker, parse_hours
 from agents.roster import Member
 from agents.settings import save_json
 from agents.turns import ReplyDecision
@@ -59,6 +66,8 @@ BACKLOG_N = 300            # after a restart: the room's lines paged back, for t
 HEALTH_S = 60.0            # `/v1/health` at start and this often
 STOP_FLUSH_S = 10.0        # the last flush at a stop, bounded
 PRE_TURN_FLUSH_S = 5.0     # code review v8.1 #5: the flush before a turn waits no longer; the turn goes anyway (Q6)
+INITIATIVE_TICK_S = 15.0   # v8.3: the initiative loop looks this often …
+INITIATIVE_POLL_S = 60.0   # … and asks Lumi (or retries an ack) at most this often
 
 # v8.1 — whether the line on its way through `Agent.on_message` is one she hears: a room `m.text` (the owner's voice by
 # Hermes's transcript included), never a member's voiced caption (the same words follow as `m.text`, Q8)
@@ -131,6 +140,9 @@ class Bridge(Agent):
         self._fails = 0
         self._retry_at = 0
         self._flush_lock = asyncio.Lock()
+        self._initiating = False                  # v8.3: one initiative at a time
+        self._no_initiative: str | None = None    # why she offers nothing now, said once
+        self._ack_retry_ms = 0
 
     # --- the state ---------------------------------------------------------------------------------------------------
     def _save(self) -> None:
@@ -388,6 +400,168 @@ class Bridge(Agent):
         retracted = await self.lumi.retract(turn_id)
         log.info("silent: %s — retracted: %s", why, "unknown" if retracted is None else str(retracted).lower())
 
+    # --- she speaks first (v8.3, AGORA-274) ---------------------------------------------------------------------------
+    def _initiatives(self) -> dict:
+        """Today's initiatives by what came of them: `posted` (the room saw it) and `dropped` (offered, never posted);
+        another day starts from zero. Counts only."""
+        got = self.state.get("initiatives") if isinstance(self.state.get("initiatives"), dict) else {}
+        if got.get("day") != self._today():
+            got = {"day": self._today(), "posted": 0, "dropped": 0}
+        return {"day": got["day"], **{k: int(got.get(k, 0)) if isinstance(got.get(k, 0), int) else 0
+                                      for k in ("posted", "dropped")}}
+
+    def _initiative_done(self, kind: str | None, outcome: str) -> None:
+        if kind is not None:
+            got = self._initiatives()
+            got[kind] += 1
+            self.state["initiatives"] = got
+        self.state["last_poll"] = {"at_ms": self.clock(), "outcome": outcome}
+        self._save()
+
+    def _quiet_since(self) -> int | None:
+        """The room's silence counts from the later of its last line (purrs included) and this start — a restart
+        never asks at once (as the cat's, v4.3 review #9)."""
+        marks = [int(self.timeline[-1][1])] if self.timeline else []
+        return max([*marks, *([self.started_ms] if self.started_ms is not None else [])], default=None)
+
+    def initiative_is_due(self, now_ms: int) -> bool:
+        """The room's rules for her own line (`initiative_due`), over the shared timeline and her state."""
+        last_poll = (self.state.get("last_poll") or {}).get("at_ms") if isinstance(self.state.get("last_poll"), dict) \
+            else None
+        return initiative_due(now_ms, local_now(now_ms, self.tz), self._quiet_since(),
+                              last_speaker(self.timeline) == self.cfg.name, self._initiatives()["posted"],
+                              last_poll if isinstance(last_poll, int) else None, self.initiative_idle_ms,
+                              self.initiatives_per_day, self.initiative_hours, int(INITIATIVE_POLL_S * 1000))
+
+    def _offers_none(self, why: str | None) -> None:
+        if why != self._no_initiative:
+            log.info("initiative: %s", why or "she may offer")
+        self._no_initiative = why
+
+    async def maybe_initiative(self) -> bool:
+        """One tick: the acks still owed, then — when Lumi is open on API v2, no reply of hers is on its way and the
+        room's rules hold — one poll; a fresh offer is posted exactly as written and acked."""
+        if not (self.started and self.cfg.can("initiative")) or self._initiating:
+            return False
+        if self._lumi_closed():
+            return False
+        await self.retry_acks()
+        agora = (self.state.get("health") or {}).get("agora") if isinstance(self.state.get("health"), dict) else None
+        if not isinstance(agora, int) or isinstance(agora, bool) or agora < INITIATIVE_API:
+            self._offers_none(f"no initiative: agora {agora}")
+            return False
+        self._offers_none(None)
+        if self._reply_pending or not self.initiative_is_due(self.clock()):
+            return False
+        self._initiating = True
+        try:
+            return await self._initiative()
+        finally:
+            self._initiating = False
+
+    async def _initiative(self) -> bool:
+        marker = self.timeline[-1][2] if self.timeline else None
+        asked_ms = self.clock()  # an offer's age is counted from the ask: the bridge never knows when Lumi composed it
+        got = await self.lumi.initiative()
+        if got.outcome != "say":
+            if got.outcome.startswith("refused:"):
+                name = got.outcome.split(":", 1)[1]
+                if got.status in (401, 403):
+                    self._refuse(name)
+                elif got.status == 404:
+                    self.healthy, self.health_why = False, name
+            if got.outcome != "none":
+                log.info("initiative: %s", got.outcome)
+            self._initiative_done(None, got.outcome)
+            return False
+        # her compose is spent whether or not the room sees it; its time is Lumi's own, never the poll's
+        self._append_usage(lambda ts: lumi_usage_line(ts, self.cfg.localpart, got.stats, True,
+                                                      got.stats.get("latency_ms"), kind="initiative"))
+        why = self._offer_dropped(marker, asked_ms, got.text)
+        if why is None:
+            try:
+                event_id = await self.send_line(self.cfg.room_id, got.text, f"initiative:{got.initiative_id}")
+            except Exception as exc:  # noqa: BLE001 — never posted: never acked, so never remembered
+                event_id = None
+                log.warning("initiative: send failed (%s)", type(exc).__name__)
+            why = None if event_id else "the room never got it"
+        if why is not None:
+            log.info("initiative: dropped (%s)", why)
+            self._initiative_done("dropped", f"dropped:{why}")
+            return False
+        log.info("initiative: posted")
+        self._initiative_done("posted", "posted")
+        if not await self._ack(got.initiative_id, event_id):
+            self._owe_ack(got.initiative_id, event_id, self.clock())
+        return True
+
+    def _offer_dropped(self, marker: str | None, asked_ms: int, text: str) -> str | None:
+        """The room's rules once more before posting, then the persona rule; the reason it is dropped, or None."""
+        now_ms = self.clock()
+        if (self.timeline[-1][2] if self.timeline else None) != marker:
+            return "the room spoke"
+        if not in_hours(local_now(now_ms, self.tz).hour, self.initiative_hours):
+            return "outside her hours"
+        if self._initiatives()["posted"] >= self.initiatives_per_day:
+            return "the day's cap"
+        if now_ms - asked_ms > INITIATIVE_FRESH_S * 1000:
+            return "stale"
+        if self._reply_pending:
+            return "a reply of hers is on its way"
+        if outs_a_persona(text, self.personas):  # the human-belief rule holds for the room's people (v4.2)
+            return "would out a persona"
+        return None
+
+    async def _ack(self, initiative_id: str, event_id: str) -> bool:
+        """`posted` with the line's event id: True when it is settled (stored, or never to be), False to try again."""
+        status, stored = await self.lumi.posted(initiative_id, event_id)
+        if stored is not None:
+            log.info("initiative: acked — stored: %s", str(stored).lower())
+            return True
+        if status in (401, 403):
+            self._refuse(NAMED[status])
+            return False
+        if status in (200, 422):  # off the contract or malformed: it would fail for good
+            log.warning("initiative: ack given up (%s)", "unreadable" if status == 200 else NAMED[422])
+            return True
+        log.info("initiative: ack failed (%s) — kept for later", "unreachable" if status is None else status)
+        return False
+
+    def _owe_ack(self, initiative_id: str, event_id: str, at_ms: int) -> None:
+        owed = [a for a in self.state.get("pending_acks") or [] if isinstance(a, dict)]
+        owed.append({"initiative_id": initiative_id, "event_id": event_id, "at_ms": at_ms})
+        self.state["pending_acks"] = owed
+        self._save()
+
+    async def retry_acks(self) -> None:
+        """The acks Lumi never got, tried again at most every `INITIATIVE_POLL_S` until settled — or, past
+        `initiative_kept_s`, given up by name (Lumi keeps an offer no longer)."""
+        owed = [a for a in self.state.get("pending_acks") or [] if isinstance(a, dict)]
+        now_ms = self.clock()
+        if not owed or now_ms < self._ack_retry_ms:
+            return
+        self._ack_retry_ms = now_ms + int(INITIATIVE_POLL_S * 1000)
+        kept = []
+        for a in owed:
+            iid, eid, at = a.get("initiative_id"), a.get("event_id"), a.get("at_ms")
+            if not (isinstance(iid, str) and isinstance(eid, str) and isinstance(at, int)):
+                continue
+            if now_ms - at > INITIATIVE_KEPT_S * 1000:
+                log.warning("initiative: ack given up (older than a day)")
+                continue
+            if self._lumi_closed() or not await self._ack(iid, eid):
+                kept.append(a)
+        self.state["pending_acks"] = kept
+        self._save()
+
+    async def initiative_loop(self) -> None:
+        while True:
+            await asyncio.sleep(INITIATIVE_TICK_S)
+            try:
+                await self.maybe_initiative()
+            except Exception:
+                log.exception("initiative failed (she keeps running)")
+
     # --- the process -------------------------------------------------------------------------------------------------
     async def health_loop(self) -> None:
         while True:
@@ -434,6 +608,8 @@ class Bridge(Agent):
         sync_task = asyncio.create_task(self.client.sync_forever(timeout=30000))
         stop_task = asyncio.create_task(stop.wait())
         loops = [asyncio.create_task(self.health_loop()), asyncio.create_task(self.flush_loop())]
+        if self.cfg.can("initiative"):  # v8.3: she speaks first, under the room's rules
+            loops.append(asyncio.create_task(self.initiative_loop()))
         await asyncio.wait({sync_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
         log.info("%s: stopping", self.cfg.localpart)
         for t in (sync_task, stop_task, *loops):

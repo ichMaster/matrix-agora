@@ -35,6 +35,8 @@ SPEAKER_MAX = 64                         # Q3: one line, 1–64 characters, no `
 KEPT = ("outcome", "reply", "turn_id", "stats")  # all the bridge keeps of a turn's response
 STATS = ("model", "input_tokens", "output_tokens", "latency_ms")
 INITIATIVE_KEPT = ("outcome", "initiative_id", "text", "stats")  # v8.3: all the bridge keeps of an offer
+INITIATIVE_FRESH_S = 1800                # `limits.initiative_fresh_s`: an offer older than this is never posted
+INITIATIVE_KEPT_S = 86400                # `limits.initiative_kept_s`: Lumi honours an ack this long
 INITIATIVE_ID_RE = re.compile(r"^[A-Za-z0-9._~-]{1,128}$")       # the contract: an offer's id is URL-safe
 
 # (method, path, body | None, headers, timeout_s) → (status, parsed JSON | None); raises TimeoutError past timeout_s

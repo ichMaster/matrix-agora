@@ -105,6 +105,60 @@ def test_the_rooms_last_speaker_sees_through_purrs():
     assert last_speaker([("Ich", 1, "$o")]) == "Ich"                          # an entry without the purr flag
 
 
+def simulate_her_day(seed: int, per_day: int = 4, window_ms: int = 600_000) -> tuple[list, list]:
+    """A day of the room's own talk — the owner's lines 5–180 minutes apart, each followed by a wave of up to four
+    agent lines — ticked minute by minute; Lumi always has an offer, `initiative_due` decides, and a post appends her
+    line (answered now and then by an agent, as R2 would)."""
+    import random
+    rng = random.Random(seed)
+    day0, _ = at("00:00", "2026-11-16")
+    talk, t = [], day0
+    while t < day0 + 86_400_000:
+        t += rng.randint(5, 180) * 60_000
+        talk.append((t, "Ich"))
+        u = t
+        for _ in range(rng.randint(0, 4)):
+            u += rng.randint(10, 90) * 1000
+            talk.append((u, rng.choice(["Ада", "Бруно", "Леон", "Кіт"])))
+    talk.sort()
+    timeline, posted, last_poll, i = [], [], None, 0
+    for minute in range(24 * 60):
+        now = day0 + minute * 60_000
+        while i < len(talk) and talk[i][0] <= now:
+            timeline.append((talk[i][1], talk[i][0], f"$e{i}", False))
+            i += 1
+        local = datetime.fromtimestamp(now / 1000, KYIV)
+        last_room = timeline[-1][1] if timeline else None
+        if not initiative_due(now, local, last_room, last_speaker(timeline) == "Лілі", len(posted), last_poll,
+                              LILI_IDLE, per_day, LILI_HOURS, POLL):
+            continue
+        last_poll = now
+        before = list(timeline)
+        timeline.append(("Лілі", now, f"$l{minute}", False))
+        posted.append((now, local, before))
+        if rng.random() < 0.7:
+            timeline.append(("Ада", now + 30_000, f"$r{minute}", False))
+    return posted, timeline
+
+
+@pytest.mark.parametrize("seed", range(25))
+def test_a_simulated_day_never_exceeds_her_cap_or_opens_a_line_inside_a_running_wave(seed):
+    """ROADMAP v8.3 DoD: a simulated day with her initiative never exceeds the cap or opens a line inside a running
+    wave — nor outside her hours, nor twice in a row with nobody between."""
+    posted, _ = simulate_her_day(seed)
+    assert len(posted) <= 4
+    for now, local, before in posted:
+        assert 9 <= local.hour < 23
+        assert wave_count([*before, ("Лілі", now, "$l", False)], "Ich", now, 600_000) == 1   # her line opens the wave
+        assert not before or now - before[-1][1] >= LILI_IDLE
+        assert last_speaker(before) != "Лілі"
+
+
+def test_simulated_days_do_give_her_a_say():
+    assert sum(len(simulate_her_day(seed)[0]) for seed in range(25)) > 0
+    assert all(not simulate_her_day(seed, per_day=0)[0] for seed in range(5))   # 0: off
+
+
 def test_hours_parse():
     assert parse_hours("09-22") == (9, 22) and parse_hours("0-24") == (0, 24) and parse_hours("09-03") == (9, 3)
     for bad in ("9", "a-b", "10-25", "24-03", "09-09"):

@@ -99,7 +99,8 @@ def test_kind_list_is_the_contract():
                      "video", "video_note",                # v5.18: her clips and her кружечки
                      "frame",                              # v5.22: a video's first frame
                      "scan",                               # v5.24: Opus naming what may block her prompt
-                     "photo_prompt")                       # v6.5: her backup writing her fal photo's request
+                     "photo_prompt",                       # v6.5: her backup writing her fal photo's request
+                     "initiative")                         # v8.3: Лілі's own line (Lumi's compose, external)
 
 
 def test_a_scan_line_from_before_agora_212_is_still_read_and_priced():
@@ -533,3 +534,14 @@ def test_a_lumi_line_is_the_bridges_external_call_with_her_stats_and_one_shape()
     assert failed["prompt_tokens"] is None and failed["model"] == "lumi" and failed["ok"] is False
     assert "never" not in json.dumps(line)
     assert parse_lines([json.dumps(line)]) == ([line], 0)                                # a valid line
+
+
+def test_her_own_line_is_a_lumi_line_of_the_kind_initiative():
+    """v8.3 (AGORA-274) — an offer of hers: the same external line, kind `initiative`, Lumi's compose time."""
+    from agents.usage import lumi_usage_line
+    line = lumi_usage_line("2026-11-16T14:01:12+02:00", "lili", {"model": "gemini-2.5-flash", "input_tokens": 5880,
+                                                                  "output_tokens": 21,
+                                         "latency_ms": 1520}, True, 1520, kind="initiative")
+    assert (line["kind"], line["engine"], line["billing"], line["latency_ms"]) == ("initiative", "lumi", "external",
+                                                                                   1520)
+    assert parse_lines([json.dumps(line)]) == ([line], 0)
