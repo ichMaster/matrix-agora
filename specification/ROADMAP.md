@@ -4596,7 +4596,7 @@ the contract (contract first).
   - `POST /v1/initiative/{initiative_id}/posted {event_id}` → `{stored: true|false}`, always 200, idempotent. Lumi stores
     the line as hers only on this ack. An offer never acked is never remembered, so a dropped offer needs no retract.
   - `limits`: `initiative_fresh_s` 1800 (and stale at once when a new room line arrives), `initiative_compose_gap_s`
-    1800, `initiative_kept_s` 86400 (a late ack still stores).
+    1800 (600 from Lumi v3.4.1, the owner 2026-11-17), `initiative_kept_s` 86400 (a late ack still stores).
   - `health` `"agora": 2`; the v1 routes are unchanged; the `never` reads «an offer, never a post» and forbids an
     initiative about the owner or carrying «Ich».
 - **The bridge (matrix-agora, step 13):** an initiative of the `bridge` type (one member per initiative, as `nudge` and

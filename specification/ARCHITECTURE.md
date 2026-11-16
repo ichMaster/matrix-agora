@@ -516,7 +516,7 @@ the account `@lili` and the room's rules are the bridge's. So the model is **pul
             ▼
  bridge ── GET /v1/initiative ───────────────▶  no fresh offer → {outcome: "none"},
             │                                   and one compose starts in the background
-            │                                   (the room's own Gemini client, ≤ 1 per 30 min)
+            │                                   (the room's own Gemini client, ≤ 1 per 10 min)
             │   … the next poll …
  bridge ── GET /v1/initiative ───────────────▶  {outcome: "say", initiative_id, text, stats}
             │
@@ -566,7 +566,7 @@ the account `@lili` and the room's rules are the bridge's. So the model is **pul
   - one offer at a time;
   - an offer is stale after 30 minutes, or as soon as a new room line arrives;
   - none when her own line is the room's last;
-  - at most one compose every 30 minutes;
+  - at most one compose every 10 minutes (Lumi v3.4.1; 30 in v3.4.0 — the owner, 2026-11-17);
   - every compose counts against the room's 20 model calls an hour;
   - `agora.initiative` is off by default, and switched on at G8.
 - **What she may open with:** something of hers (her day) or a thread of the room's own talk. Never anything about Ich

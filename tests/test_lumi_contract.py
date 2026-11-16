@@ -71,7 +71,8 @@ def test_v2_her_initiative_is_an_offer_the_bridge_polls_and_acks_never_a_post():
     assert posted["request"]["method"] == "POST" and posted["request"]["path"] == "/v1/initiative/{initiative_id}/posted"
     assert posted["response"]["status"] == 200 and set(posted["response"]["body"]) == {"stored"}
     limits = CONTRACT["limits"]
-    assert (limits["initiative_fresh_s"], limits["initiative_compose_gap_s"], limits["initiative_kept_s"]) == (1800, 1800, 86400)
+    # Lumi v3.4.1 (63df6be, the owner 2026-11-17: «так зміни на боці lumi на 10 хв»): the compose gap 1800 → 600
+    assert (limits["initiative_fresh_s"], limits["initiative_compose_gap_s"], limits["initiative_kept_s"]) == (1800, 600, 86400)
     assert not any("she only answers" in n for n in CONTRACT["never"])          # the `never` changed, contract first
     assert any("Ich" in n for n in CONTRACT["never"])
     assert set(ep) >= {"health", "observe", "turn", "turn_pass", "retract"}      # v1's routes unchanged
