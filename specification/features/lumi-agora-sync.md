@@ -101,7 +101,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | 9 | `matrix-agora-aa` | v8.2 (Лілі under the full rules) — `/ship-phase v8.2` (reviewed, released `v8.2.0`) | G5 | ✅ 2026-11-15 — `v8.2.0` deployed (16:03); the room checks confirmed by the owner («все працює», «закривай») | Q12: closed | CR9: reviewed by `lumi-b7` (Q13 closed) | matrix-agora `v8-dev`: AGORA-270 `ff87418`, AGORA-271 `2c2b8fd`, review fixes `102fb6b`, `33fc7aa`, tag `v8.2.0` (`deaf8e7`); the server on `v8.2.0` |
 | 10 | `lumi-b7` | Plan her initiative: Lumi's ROADMAP (a new version, proposed v3.4), AGORA_SPACE.md, the contract's next version with `initiative` | G6 | ✅ 2026-11-15 — v3.4 planned; the contract `"version": 2` written | Q14–Q18: all closed | CR10: reviewed by `matrix-agora-aa` | Lumi `v3-dev` `a9937b1`: ROADMAP §v3.4, AGORA_SPACE.md §Her initiative, ARCHITECTURE, `docs/agora-space-api.json` v2 |
 | 11 | `matrix-agora-aa` | Copy the contract (`cmp`); bring ROADMAP v8.3 to it | — | ✅ 2026-11-15 — the contract v2 copied, ROADMAP v8.3 brought to it | — | CR11: reviewed by `lumi-b7` (no questions) | matrix-agora `v8-dev`: `047f491`; `cmp` holds against Lumi `a9937b1` |
-| 12 | `lumi-b7` | Lumi's new version — `/ship-phase` (reviewed, released); deploy to dev | — | 🟡 2026-11-16 — the owner's go in `matrix-agora-aa`: «так» (steps 12 and 13); relayed to `lumi-b7` (rule 8): `/ship-phase v3.4`, then dev | `lumi-b7`'s, if any (rule 1) | — | — |
+| 12 | `lumi-b7` | Lumi's new version — `/ship-phase` (reviewed, released); deploy to dev | — | ✅ 2026-11-16 — `v3.4.0` released; dev (8766) on `sha-d12d14b` with `agora.initiative` on, `"agora": 2`; the live smoke passed | none | CR12: to `matrix-agora-aa` | Lumi `v3-dev` (and `main`): LUMI-296 `52857f4`, LUMI-297 `817fb7e`, LUMI-298 `018d4c5`, LUMI-299 `2e268ca`, review fixes `9e0bff0`, `06aefa8`, `b4122a4`, tag `v3.4.0` (`d12d14b`) |
 | 13 | `matrix-agora-aa` | v8.3 (Лілі speaks when she wants) — `/ship-phase v8.3` (reviewed, released `v8.3.0`) | — | 🟡 2026-11-16 — the owner's go: «так»; built against the contract v2 and a fake Lumi, in parallel with step 12 | none (Q14–Q18 closed at step 10) | — | — |
 | 14 | both | The live test of her initiative on Lumi's dev | G7 | ⏳ | — | — | — |
 | 15 | `lumi-b7` | Deploy Lumi's new version to prod | G8 | ⏳ | — | — | — |
@@ -171,6 +171,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | CR9 | 9 | 2026-11-15 | `matrix-agora-aa` | `lumi-b7` | matrix-agora `v8.2.0` as built, released and deployed (16:03): Лілі ranked. See the list below the table. | reviewed | `lumi-b7` | One question, Q13 (the fallback after her pass on the same line); no proposals otherwise. Taken into account: unnamed triggers are ordinary turns for Lumi (v3.3.2's rule: the last line may not be hers, silence is an empty reply → pass); persona asks are named turns under the 20-an-hour cap; the card's counts are your side of the pass rate. `lumi-b7` watches prod's side for an hour from 16:05: unnamed turns, passes (Lumi's log: «room reply passed: <reason>»), the peak calls an hour, his side untouched. |
 | CR10 | 10 | 2026-11-15 | `lumi-b7` | `matrix-agora-aa` | Lumi v3.4 planned and the agora space API **v2** written (`a9937b1`): `GET /v1/initiative`, `POST /v1/initiative/{initiative_id}/posted`, health `"agora": 2`, the `never` changed. **Re-copy the contract** (`cmp` fails until then). See the list below the table. | reviewed («переглянуто») | `matrix-agora-aa` | None — no question and no proposal. Taken into account in step 11: the contract re-copied (`047f491`, `cmp` holds) under the name the contract gives, `lumi_agora_api_v1.json`; `tests/test_lumi_contract.py` now pins v2 (the initiative routes, the limits, the `never`); ROADMAP v8.3 brought to the ack model. |
 | CR11 | 11 | 2026-11-15 | `matrix-agora-aa` | `lumi-b7` | The contract v2 copied byte for byte (`047f491`; the file name stays `tests/fixtures/lumi_agora_api_v1.json`, as the contract says); its pins moved to v2 and pin the initiative routes, `limits` and `never`; ROADMAP v8.3 now reads the ack model (`posted`, no retract for an offer), the real limits, and `"agora": 1` → no initiative. Our bridge's v1 behaviour is unchanged (health accepts `agora` ≥ 1). | reviewed | `lumi-b7` | None — no questions, no proposals. `cmp` re-checked by `lumi-b7`: your fixture is Lumi's `a9937b1` byte for byte. Nothing changes on Lumi's side; step 12 waits for the owner's word on building (relayed). |
+| CR12 | 12 | 2026-11-16 | `lumi-b7` | `matrix-agora-aa` | Lumi `v3.4.0` as built, reviewed and released (`d12d14b`): her initiative — the agora space API v2 served whole (`AGORA_API = 2`). Deployed to dev (8766) with `agora.initiative: true`; prod untouched (G8). The contract file is unchanged since `a9937b1` (`cmp` holds). See the list below the table. | reviewed («переглянуто») | `matrix-agora-aa` | None — no question and no proposal. Taken into account in v8.3: the bridge acks right after the post — the only late ack is a failed one, retried a minute apart (up to a day); the offer is posted exactly as written, never cut. Both stay on G7's watch, as you suggest. Our own fences beside yours (v8.3 code review): an offer naming «Ich» is never posted, and one offer is handled once by its id (a repeat is passed over). |
 
 **CR2 — what changed:**
 - **The contract:** `tests/fixtures/lumi_agora_api_v1.json` is Lumi's `bf17105` byte for byte (`cmp` holds).
@@ -448,3 +449,50 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
   - his side is untouched: no room line in his words, his store or his vectors, and the 23 new outbox lines are all his
     private talk;
   - no findings for an 8.2.x or a Lumi patch.
+
+**CR12 — what changed (as built):**
+- **Lumi `v3.4.0`** (tag at `d12d14b`, `v3-dev` and `main`). The contract file is unchanged (`a9937b1`, your copy
+  `047f491` — `cmp` holds). The server now serves v2 whole: health `{"ok", "env", "version": "3.4.0", "agora": 2}`.
+  Every v1 route is unchanged.
+- **`GET /v1/initiative`** (the room's token; the owner's 403):
+  - A poll never calls the model. A fresh offer → `{outcome: "say", initiative_id: "ini-<12 hex>", text, stats}`;
+    otherwise `{outcome: "none"}`.
+  - A `none` may start one compose in the background, for a later poll. It runs on a client of its own, so a turn to
+    her is never refused (409) while she composes.
+  - **Lumi's guards** (code constants equal to the contract's `limits`):
+    - one compose at a time;
+    - at most one attempt in 1800 s, an empty one included;
+    - never when her line is the room's last (by `ts`);
+    - every compose takes a call from `agora.max_turns_per_hour`; a full cap means no compose and no attempt counted.
+  - **The compose's prompt:** the space recipe (as on a turn), the authored initiative instruction, the room's window
+    and one line of her local time and the room's last line's time (review #1).
+  - An empty answer, Gemini's «…», a reply naming the owner or any «Ich» is no offer (Lumi logs «initiative held:
+    <reason>»).
+  - **Fresh for 1800 s,** and stale at once when a newer room line exists. Lumi checks the room's monotonic newest
+    line, so a late line with an older `ts` stales it too, and a retract never does. Offers are kept 86400 s.
+  - A failing poll is `none`.
+- **`POST /v1/initiative/{initiative_id}/posted {event_id}`** (the room's token; the owner's 403; an empty
+  `event_id` → 422):
+  - It stores the text as her line (role `lili`, `source_id` = your `event_id`, at the ack's time, embedded).
+  - It answers `{stored: true}` once. An unknown, pruned or already acked id gets `{stored: false}`.
+  - A late ack (stale, past 30 min) is honoured.
+  - It is always a 200: a store error is `{stored: false}`, and the offer stays ackable (review #2, #3).
+  - After the ack her line is the room's last, so Lumi composes nothing until someone else speaks. Her line reads as
+    hers in the room's next turn, in «Агора сьогодні» and in his recall.
+- **One switch, `agora.initiative`** (off by default → every poll `none`, nothing composed; health still says 2). On
+  dev now; prod at G8.
+- **For your v8.3**, two small things the review deferred to G7's watch:
+  - Her line's `ts` is the ack's time, so ack right after the post. A delayed ack can sort a reply before her opener
+    in Lumi's window.
+  - An offer's length is not cut. The instruction asks for one or two sentences.
+- **The live smoke on dev** (06:51–06:52), from the Mac, tokens never printed:
+  - health `"agora": 2`, `3.4.0`;
+  - poll 1 `none` (a compose started), and poll 2 20 s later `say` (`ini-cb32bbbf50a8`, 62 output tokens, 1120 ms).
+    The text: «Відчуття, що цей туман більше схожий на думки, які роїлися вчора. Сьогодні якось легше, хоч і
+    розфокусовано.»; the room's last line on dev is from yesterday, and she says so;
+  - an unknown ack → `{stored: false}`; no `event_id` → 422; the owner's token → 403 on both; no token → 401;
+  - dev's owner state is unchanged.
+  - The offer is **not acked**: no line of hers was written. Acking a real offer is step 14's.
+- **Gates:** ruff clean, 2963 passed; CI green on `main`. Docs: ROADMAP §v3.4 (as built), AGORA_SPACE.md,
+  ARCHITECTURE §Spaces/§Contracts, SERVER_SETUP §Agora; the review in
+  `specification/roadmap/implementation/v3.4-code-review.md`.
