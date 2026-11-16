@@ -103,7 +103,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | 11 | `matrix-agora-aa` | Copy the contract (`cmp`); bring ROADMAP v8.3 to it | — | ✅ 2026-11-15 — the contract v2 copied, ROADMAP v8.3 brought to it | — | CR11: reviewed by `lumi-b7` (no questions) | matrix-agora `v8-dev`: `047f491`; `cmp` holds against Lumi `a9937b1` |
 | 12 | `lumi-b7` | Lumi's new version — `/ship-phase` (reviewed, released); deploy to dev | — | ✅ 2026-11-16 — `v3.4.0` released; dev (8766) on `sha-d12d14b` with `agora.initiative` on, `"agora": 2`; the live smoke passed | none | CR12: to `matrix-agora-aa` | Lumi `v3-dev` (and `main`): LUMI-296 `52857f4`, LUMI-297 `817fb7e`, LUMI-298 `018d4c5`, LUMI-299 `2e268ca`, review fixes `9e0bff0`, `06aefa8`, `b4122a4`, tag `v3.4.0` (`d12d14b`) |
 | 13 | `matrix-agora-aa` | v8.3 (Лілі speaks when she wants) — `/ship-phase v8.3` (reviewed, released `v8.3.0`) | — | ✅ 2026-11-16 — built, reviewed (3 fixes), released `v8.3.0`; the live checks waived to G7 by the owner («Випускай, перевірка на G7»); nothing deployed | none (Q14–Q18 closed at step 10) | CR13: reviewed by `lumi-b7` (no questions) | matrix-agora `v8-dev`: AGORA-273 `4175629`, AGORA-274 `d0abfd2`, AGORA-275 `c1c1e97`, review fixes `124b126`, `662a775`, `1bddc5d`, tag `v8.3.0` (`f41cd56`) |
-| 14 | both | The live test of her initiative on Lumi's dev | G7 | 🟡 2026-11-16 16:47 — the owner's go in `matrix-agora-aa`: «Починай G7 зараз»; the server's `lili` stopped, the bridge in dev mode on the Mac against Lumi dev `3.4.0` (`LILI_INITIATIVE_IDLE_S=600` for the test) | — | — | — |
+| 14 | both | The live test of her initiative on Lumi's dev | G7 | 🟡 2026-11-16 16:47 — the owner's go in `matrix-agora-aa`: «Починай G7 зараз»; the server's `lili` stopped, the bridge in dev mode on the Mac against Lumi dev `3.4.0` (`LILI_INITIATIVE_IDLE_S=600` for the test) | — | — | Lumi dev's side: «Step 14 — what Lumi dev saw» at the end (`lumi-b7`, read-only on the box) |
 | 15 | `lumi-b7` | Deploy Lumi's new version to prod | G8 | ⏳ | — | — | — |
 | 16 | `matrix-agora-aa` | Deploy `v8.3.0` | G8 | ⏳ | — | — | — |
 
@@ -541,3 +541,26 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
   - Lumi tag `v3.4.0`, our `v8.3.0`;
   - `cmp` holds;
   - `server/lili.dev.env` set.
+
+**Step 14 — what Lumi dev saw** (`lumi-b7`, read-only on the box: `lumi.log`, `spaces.sqlite`, the ledger, his files;
+dev has no access log, so a poll shows only by what it causes). Running; times are Kyiv.
+- **The baseline (16:47):** dev `3.4.0` (`sha-5d2a619`), `agora.initiative: true`; the room's last line the cat's
+  (16:29:19, seq 166); his `store.json`, `store.db`, `outbox.jsonl` and `telegram-outbound.log` unchanged since 13:26.
+- **Cycle 1:** at 16:56:49 a poll started a compose → `ini-b69b5325a5c2` (6264 → 82 tokens, 1244 ms,
+  `last_seq` 166). At 16:57:47 it was posted and acked: her line seq 167, role `lili`, `source_id` = the event id, in
+  `agora-2026-11-16`, the text exactly as offered, embedded (a vector stored), thoughtful 0.7 — «Мені здається, коли
+  шукаєш масштаб, можна знайти щось інше, ніж очікуєш. Космос відкриває зовсім інші вібрації, ніж ті, що на сцені.»
+- **The owner in the room (17:13):** «привіт всім» → an ordinary turn, «Привіт, Ich. Я чую.» (seq 169); then the
+  wave (seq 170–177). Ада's line picks up «масштаб».
+- **Cycle 2:** at 17:27:35, 30 min 46 s after the first compose (our gap holds) → `ini-5b33cde82e51` (6494 → 62 tokens,
+  1203 ms, playful 0.7). Posted and acked at 17:28:33 (seq 178), the text exactly as offered: «Від зірок є тільки
+  гравітація і світло. А доля - це вже твоя власна "сферична геометрія", як ти кажеш.» It answers Кіра's last line
+  («ти», no name) rather than opening a new one — for the owner's eye. Мія and Кіра went on with the thread.
+- **The cap:** 4 room calls in the hour to 17:40 (the digest 16:47, compose 16:56, the turn 17:13, compose 17:27) of 20.
+- **Nothing of the room reached his side.** His files changed once, at 17:31:02: a scheduled `%catchup` of her own
+  thought stream (`thoughts[776]`, user `owner`, spoken to his Telegram), about the news — nothing from Agora in it.
+- **An observation for the bridge:** Кіра named her at 17:28:56 («лілі, скажи мені…», seq 182); no turn reached Lumi
+  (no room call after 17:27:35, no line of hers). If that is by your rules (an agent's address), no question.
+- **Aside, not G7 (dev only, pre-existing):** dev's thought directives `%think`/`%wonder` fail with Gemini `403` since
+  2026-10-20; the 17:31 `%catchup` carried a raw `<emotion>…</emotion>` tag into the text sent to Telegram. Lumi's
+  own backlog.
