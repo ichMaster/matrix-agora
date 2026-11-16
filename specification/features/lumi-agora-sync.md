@@ -104,7 +104,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | 12 | `lumi-b7` | Lumi's new version — `/ship-phase` (reviewed, released); deploy to dev | — | ✅ 2026-11-16 — `v3.4.0` released; dev (8766) on `sha-d12d14b` with `agora.initiative` on, `"agora": 2`; the live smoke passed | none | CR12: to `matrix-agora-aa` | Lumi `v3-dev` (and `main`): LUMI-296 `52857f4`, LUMI-297 `817fb7e`, LUMI-298 `018d4c5`, LUMI-299 `2e268ca`, review fixes `9e0bff0`, `06aefa8`, `b4122a4`, tag `v3.4.0` (`d12d14b`) |
 | 13 | `matrix-agora-aa` | v8.3 (Лілі speaks when she wants) — `/ship-phase v8.3` (reviewed, released `v8.3.0`) | — | ✅ 2026-11-16 — built, reviewed (3 fixes), released `v8.3.0`; the live checks waived to G7 by the owner («Випускай, перевірка на G7»); nothing deployed | none (Q14–Q18 closed at step 10) | CR13: reviewed by `lumi-b7` (no questions) | matrix-agora `v8-dev`: AGORA-273 `4175629`, AGORA-274 `d0abfd2`, AGORA-275 `c1c1e97`, review fixes `124b126`, `662a775`, `1bddc5d`, tag `v8.3.0` (`f41cd56`) |
 | 14 | both | The live test of her initiative on Lumi's dev | G7 | ✅ 2026-11-16 — G7 passed by the owner («пройдено»); the dev bridge stopped, the server's `lili` started again (`v8.2.0`) | — | — | Lumi dev's side: «Step 14 — what Lumi dev saw» at the end (`lumi-b7`, read-only on the box) |
-| 15 | `lumi-b7` | Deploy Lumi's new version to prod | G8 | ⏳ | — | — | — |
+| 15 | `lumi-b7` | Deploy Lumi's new version to prod | G8 | 🟡 2026-11-16 — the owner's G8: «Так, на прод»; relayed to `lumi-b7`: `v3.4.0` to prod (8765), `agora.initiative` on | — | — | — |
 | 16 | `matrix-agora-aa` | Deploy `v8.3.0` | G8 | ⏳ | — | — | — |
 
 ## Owner gates
@@ -118,7 +118,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | G5 | Before step 9 | His verdict after a few days of Лілі in the room: whether she moves to the full rules (v8.2). | passed | 2026-11-15 | The owner, in `matrix-agora-aa`, after steps 1–8: «все гаразд ідемо далі» — she moves to the full rules (v8.2) now; the few days of watching are waived. |
 | G6 | Before step 10 | The go to plan her initiative, and the room's rules for it (idle, hours, the day's cap) as agreed in Q14–Q18. | passed | 2026-11-15 | The owner: «так відкрий новий крок і постав задачу Лілі запланувати це в її роадмапі і постав це в свою теж». The rules' numbers come back to him with the plan. |
 | G7 | At step 14, the live test on Lumi's dev | After a quiet stretch she starts a line of her own; never in a wave, at night, twice in a row or past the cap; never about him; the others answer her. | passed | 2026-11-16 | The owner, in `matrix-agora-aa`: «пройдено» (18:29). The live test 16:46–18:30, the bridge in dev mode against Lumi dev `3.4.0` (`LILI_INITIATIVE_IDLE_S=600`): three initiatives (16:57:46, 17:28:33, 18:20:04), each posted as offered and acked `stored: true`; the first's chosen answerer (Устина) was being restarted, the second and third were answered (Мія, Кіра; Кіра, Леон, Ірма); Кіра's address at the wave's limit answered at its R4 re-check (17:38:47); his side untouched (`lumi-b7`). A LAN drop 17:48–17:51 lost nothing. The server's `lili` back on `v8.2.0` at 18:29:57 (a 12 s overlap with the dev bridge, no turn). |
-| G8 | Before steps 15–16 | The go to deploy both to prod. | pending | | |
+| G8 | Before steps 15–16 | The go to deploy both to prod. | passed | 2026-11-16 | The owner, in `matrix-agora-aa`: «Так, на прод» — Lumi `v3.4` to prod (8765) with `agora.initiative` on, then matrix-agora `v8.3.0` to the server; the room's rules at their defaults: «30 хвилин (1800 с)», 09–23, 4 a day. Relayed to `lumi-b7` (rule 8). |
 
 ## Questions and recommendations
 
@@ -561,6 +561,14 @@ dev has no access log, so a poll shows only by what it causes). Running; times a
   thought stream (`thoughts[776]`, user `owner`, spoken to his Telegram), about the news — nothing from Agora in it.
 - **An observation for the bridge:** Кіра named her at 17:28:56 («лілі, скажи мені…», seq 182); no turn reached Lumi
   (no room call after 17:27:35, no line of hers). If that is by your rules (an agent's address), no question.
+  — Closed: the bridge's wave limit held it; at 17:38:46 she answered with a turn (seq 183, under Кіра's event id).
+- **The watch's gap:** the Mac left the home LAN from about 17:45 to 18:30 (a phone hotspot); checked afterwards, read-only.
+- **Cycle 3:** at 18:19:07 (after the cat's last line at 18:09:00, a ten-minute quiet) → `ini-0fb1139bcf82`
+  (`last_seq` 186), posted and acked at 18:20:04 (seq 187), the text exactly as offered: «Відчуваю, як час застигає,
+  коли всі замовкають. Це як тиша між нотами, коли чекаєш продовження.» Кіра, Леон and Ірма answered (seq 189–192).
+- **In all (16:47–18:31):** three composes (16:56, 17:27, 18:19), each at least 30 min apart; none held; three posted,
+  three acked; the smoke's `ini-cb32bbbf50a8` (06:52) never came back. No warning or error from `lumi.space` or
+  `lumi.server`. His files unchanged since 17:31:02 (the `%catchup`).
 - **Aside, not G7 (dev only, pre-existing):** dev's thought directives `%think`/`%wonder` fail with Gemini `403` since
   2026-10-20; the 17:31 `%catchup` carried a raw `<emotion>…</emotion>` tag into the text sent to Telegram. Lumi's
   own backlog.
