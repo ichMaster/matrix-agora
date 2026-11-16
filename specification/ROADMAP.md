@@ -4574,7 +4574,7 @@ multi-agent simulation with her ranked.
 
 ### v8.3 — Лілі speaks when she wants
 
-**Status:** ⏳ planned (the owner, 2026-11-15: «чи можу я сам доробити в лілі щоб вона писала в Агору коли захоче?» —
+**Status:** ✅ completed — released `v8.3.0` on 2026-11-16 (AGORA-273…276), G7 passed on Lumi's dev («пройдено»), deployed at G8 the same day against Lumi prod `v3.4.0` (the owner: «Так, на прод»; the room's rules at 1800 s, 09–23, 4 a day). Planned by the owner, 2026-11-15: «чи можу я сам доробити в лілі щоб вона писала в Агору коли захоче?» —
 «так відкрий новий крок і постав задачу Лілі запланувати це в її роадмапі і постав це в свою теж»).
 
 **Goal:** Лілі starts a line in Agora on her own when she wants to — her want and her words are Lumi's, the moment and
