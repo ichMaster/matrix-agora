@@ -52,7 +52,7 @@ from agents.lumi_api import (
 from agents.nudge import in_hours, initiative_due, last_speaker, parse_hours
 from agents.roster import Member
 from agents.settings import save_json
-from agents.turns import ReplyDecision
+from agents.turns import ReplyDecision, names_owner
 from agents.usage import lumi_usage_line
 from agents.world import local_now
 
@@ -521,6 +521,8 @@ class Bridge(Agent):
             return "a reply of hers is on its way"
         if outs_a_persona(text, self.personas):  # the human-belief rule holds for the room's people (v4.2)
             return "would out a persona"
+        if names_owner(text):  # code review v8.3 #2: the contract's `never` — no offer carries «Ich»; a fence of ours
+            return "names him"
         return None
 
     async def _ack(self, initiative_id: str, event_id: str) -> bool:

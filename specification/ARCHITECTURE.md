@@ -552,8 +552,9 @@ the account `@lili` and the room's rules are the bridge's. So the model is **pul
     no usage line, no count, no post; `last_poll` reads `repeat`.
   - A `say` writes one usage line (kind `initiative`, Lumi's `stats`, her compose's own `latency_ms`). Then the room's
     rules once more: the room's last line is the one it was at the poll, still in her hours, under the cap, the offer
-    no older than `initiative_fresh_s` (1800 s) since the ask, no reply of hers on its way, and the persona rule
-    (`outs_a_persona`). Any failing drops the offer: never posted, never acked, logged by its reason
+    no older than `initiative_fresh_s` (1800 s) since the ask, no reply of hers on its way, the persona rule
+    (`outs_a_persona`) and (code review v8.3 #2) a fence of ours on the contract's `never`: an offer naming him
+    (`names_owner`, «Ich») is dropped as `names him`, so his privacy never rests on Lumi's guard alone. Any failing drops the offer: never posted, never acked, logged by its reason
     (`initiative: dropped (the room spoke)`), never its text.
   - Otherwise it is posted exactly as offered (`send_line`, `m.text`; no trimming, no `clean_reply`, no PASS handling);
     a send that fails or returns no event id drops it.

@@ -725,3 +725,25 @@ def test_an_offer_lumi_repeats_is_handled_once():
             b._handle(f"ini-{i}", "posted")
         assert len(b._handled) == 32 and "ini-x" not in b._handled
     asyncio.run(go())
+
+
+@pytest.mark.parametrize("text", ["Ich сьогодні знову мовчить.", "А що скаже ich?", "ICH, ти тут?"])
+def test_an_offer_naming_him_is_never_posted(text, caplog):
+    """Code review v8.3 #2: the contract's `never` forbids an offer carrying «Ich»; the bridge fences it too, so his
+    privacy never rests on Lumi's guard alone."""
+    async def go():
+        b, fake = await speaker()
+        fake.initiative_bodies = [FakeLumi.say(text)]
+        caplog.set_level("INFO")
+        assert await b.maybe_initiative() is False
+        assert sent(b) == [] and fake.acks() == [] and "initiative: dropped (names him)" in caplog.text
+        assert text not in caplog.text
+    asyncio.run(go())
+
+
+def test_a_word_that_only_contains_his_name_is_no_naming():
+    async def go():
+        b, fake = await speaker()
+        fake.initiative_bodies = [FakeLumi.say("Сьогодні вітер — справжній Ichthys над містом.")]
+        assert await b.maybe_initiative() is True
+    asyncio.run(go())
