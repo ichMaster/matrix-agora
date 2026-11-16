@@ -68,6 +68,7 @@ STOP_FLUSH_S = 10.0        # the last flush at a stop, bounded
 PRE_TURN_FLUSH_S = 5.0     # code review v8.1 #5: the flush before a turn waits no longer; the turn goes anyway (Q6)
 INITIATIVE_TICK_S = 15.0   # v8.3: the initiative loop looks this often …
 INITIATIVE_POLL_S = 60.0   # … and asks Lumi (or retries an ack) at most this often
+OFFERS_KEPT = 32           # code review v8.3 #1: the offer ids handled last — one offer is handled once
 
 # v8.1 — whether the line on its way through `Agent.on_message` is one she hears: a room `m.text` (the owner's voice by
 # Hermes's transcript included), never a member's voiced caption (the same words follow as `m.text`, Q8)
@@ -143,6 +144,7 @@ class Bridge(Agent):
         self._initiating = False                  # v8.3: one initiative at a time
         self._no_initiative: str | None = None    # why she offers nothing now, said once
         self._ack_retry_ms = 0
+        self._handled: dict[str, str] = {}       # code review v8.3 #1: offer id → what came of it, the last few
 
     # --- the state ---------------------------------------------------------------------------------------------------
     def _save(self) -> None:
@@ -474,6 +476,9 @@ class Bridge(Agent):
                 log.info("initiative: %s", got.outcome)
             self._initiative_done(None, got.outcome)
             return False
+        if got.initiative_id in self._handled:  # code review v8.3 #1: Lumi offers it again until it is stale — once is all
+            self._initiative_done(None, "repeat")
+            return False
         # her compose is spent whether or not the room sees it; its time is Lumi's own, never the poll's
         self._append_usage(lambda ts: lumi_usage_line(ts, self.cfg.localpart, got.stats, True,
                                                       got.stats.get("latency_ms"), kind="initiative"))
@@ -485,6 +490,7 @@ class Bridge(Agent):
                 event_id = None
                 log.warning("initiative: send failed (%s)", type(exc).__name__)
             why = None if event_id else "the room never got it"
+        self._handle(got.initiative_id, "posted" if why is None else f"dropped:{why}")
         if why is not None:
             log.info("initiative: dropped (%s)", why)
             self._initiative_done("dropped", f"dropped:{why}")
@@ -494,6 +500,11 @@ class Bridge(Agent):
         if not await self._ack(got.initiative_id, event_id):
             self._owe_ack(got.initiative_id, event_id, self.clock())
         return True
+
+    def _handle(self, initiative_id: str, outcome: str) -> None:
+        self._handled[initiative_id] = outcome
+        while len(self._handled) > OFFERS_KEPT:
+            self._handled.pop(next(iter(self._handled)))
 
     def _offer_dropped(self, marker: str | None, asked_ms: int, text: str) -> str | None:
         """The room's rules once more before posting, then the persona rule; the reason it is dropped, or None."""

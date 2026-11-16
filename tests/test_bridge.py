@@ -699,3 +699,29 @@ def test_the_initiative_loop_runs_only_for_the_member_holding_it():
     from agents import bridge
     src = inspect.getsource(bridge.Bridge.run)
     assert 'if self.cfg.can("initiative")' in src and "initiative_loop" in src
+
+
+def test_an_offer_lumi_repeats_is_handled_once():
+    """Code review v8.3 #1: Lumi keeps one offer until it is stale and never learns of a drop, so the same id comes back
+    on every poll — never a second usage line, count or post (a send that failed is never posted twice)."""
+    async def go():
+        b, fake = await speaker()
+        fake.initiative_bodies = [FakeLumi.say("Ада, ти ж просто бот.", "ini-x"), FakeLumi.say("Ада, ти ж просто бот.", "ini-x")]
+        assert await b.maybe_initiative() is False                       # the persona rule drops it
+        b.clock.ms += 60_000
+        assert await b.maybe_initiative() is False                       # offered again: passed over
+        state = load_state(b.state_file)
+        assert state["initiatives"]["dropped"] == 1 and len(usage(b)) == 1
+        assert state["last_poll"]["outcome"] == "repeat" and sent(b) == []
+        b.client.room_send = AsyncMock(side_effect=TimeoutError)          # a send that may have reached the room
+        fake.initiative_bodies = [FakeLumi.say(WORDS, "ini-y"), FakeLumi.say(WORDS, "ini-y")]
+        b.clock.ms += 60_000
+        assert await b.maybe_initiative() is False
+        b.client.room_send = AsyncMock(return_value=SimpleNamespace(event_id="$mine"))
+        b.clock.ms += 60_000
+        assert await b.maybe_initiative() is False and b.client.room_send.await_count == 0
+        assert len(usage(b)) == 2
+        for i in range(40):                                              # the ids kept are bounded
+            b._handle(f"ini-{i}", "posted")
+        assert len(b._handled) == 32 and "ini-x" not in b._handled
+    asyncio.run(go())
