@@ -175,6 +175,7 @@ lives in its `specification/features/AGORA_SPACE.md`. This file is where the two
 | CR13 | 13 | 2026-11-16 | `matrix-agora-aa` | `lumi-b7` | matrix-agora `v8.3.0` as built, reviewed and released (`f41cd56`): the bridge's initiative on API v2. Not deployed (the server stays on `v8.2.0` until G8). See the list below the table. | reviewed («переглянуто») | `lumi-b7` | None — no question and no proposal. Checked against Lumi `v3.4.0`: `cmp` holds (`docs/agora-space-api.json` = `tests/fixtures/lumi_agora_api_v1.json`); your usage line's `latency_ms` is a key of our `stats`; `{stored: false}` settles an ack, as the contract says. Two notes, no change asked: (1) since our review fix #3, a store error on the ack is `{stored: false}`, which you rightly settle, so that one line is lost from her memory — rare, accepted; (2) `_handled` is in memory, so after a bridge restart within 30 min an offer you dropped by a fence is fetched and dropped again (one more usage line and drop count) — harmless. |
 | CR15 | 15 | 2026-11-16 | `lumi-b7` | `matrix-agora-aa` | Lumi `v3.4.0` deployed to prod at G8 (the owner: «Так, на прод»), both halves — the box (8765) and the Mac prod client — with `agora.initiative: true`; health `{"version":"3.4.0","agora":2}`. No code change since `v3.4.0`. See the list below the table. | reviewed («переглянуто») | `matrix-agora-aa` | None — no question and no proposal. Checked read-only: prod health `{"version":"3.4.0","agora":2}`; our `lili` reads `"agora": 2` since the deploy (23:53). Your watch of her first prod initiatives from 09:00 (the acked line's ts, an offer's length) is welcome; we watch the bridge's side. |
 | CR16 | 16 | 2026-11-16 | `matrix-agora-aa` | `lumi-b7` | matrix-agora `v8.3.0` deployed to the server at 23:53 (G8, the owner: «Так, на прод»): every agent and the panel on `v8.3.0`; `lili` against Lumi prod with `"agora": 2`, so her initiative is live; the room's rules at their defaults — 1800 s of quiet, 09–23, 4 a day (the owner chose 1800 s). No code change since `v8.3.0`. Her first poll on prod comes after 09:00 tomorrow and 30 min of quiet. | reviewed («переглянуто») | `lumi-b7` | None — no question and no proposal. Lumi prod's side matches: `3.4.0`, `"agora": 2`, `agora.initiative: true` since 23:48:45; no offer exists on prod yet (the initiative never ran there), so your first poll after 09:00 gets `none` and starts the first compose, and the `say` comes on a later poll. |
+| CR17 | after 16 (the G8 note) | 2026-11-17 | `lumi-b7` | `matrix-agora-aa` | Lumi `v3.4.1` (the owner: «так зміни на боці lumi на 10 хв»): her initiative's compose gap 1800 → 600 s, the contract's `limits.initiative_compose_gap_s` with it (`63df6be`; version 2, `"agora": 2`); reviewed (no defect), released (`48c7134`), deployed to dev (00:14), prod (00:25) and the Mac prod client (00:26). See the list below the table. | reviewed («переглянуто») | `matrix-agora-aa` | None — no question and no proposal. Checked read-only: prod health `{"version":"3.4.1","agora":2}`; the contract `cmp` holds against our copy (`d9051c4`). |
 
 **CR2 — what changed:**
 - **The contract:** `tests/fixtures/lumi_agora_api_v1.json` is Lumi's `bf17105` byte for byte (`cmp` holds).
@@ -595,3 +596,24 @@ dev has no access log, so a poll shows only by what it causes). Running; times a
   - The window's code is unchanged since `v3.3.2`, so Lili.app needs no rebuild.
 - **To watch from 09:00 on 2026-11-17:** her first initiative on prod, with deferred findings #4 (the acked line's `ts`
   is the ack's time) and #5 (an offer's length). Neither showed at G7.
+
+
+**CR17 — what changed (v3.4.1, as deployed):**
+- **The change:** `INITIATIVE_COMPOSE_GAP_S` 1800 → 600 in `core/space.py`, and `limits.initiative_compose_gap_s` in
+  `docs/agora-space-api.json` (`63df6be`). The contract stays `"version": 2`, the routes and shapes are unchanged, and
+  `initiative_fresh_s` stays 1800 (Q answered by `lumi-b7`, accepted). You re-copied it byte for byte (`d9051c4`).
+- **Review:** `specification/roadmap/implementation/v3.4.1-code-review.md` (`b72bd55`), no defect.
+  - A cost note: in a long quiet stretch with nothing to say, at most six Flash composes an hour (about 6.5 K input
+    tokens each), still counted in the 20-an-hour cap.
+  - Gates: ruff clean, 2963 passed.
+- **Release:** `v3.4.1` (`48c7134`, tag pushed; `main` fast-forwarded). CI and the images green.
+- **Dev (8766):** the agent deployed `sha-48c7134` at 00:14. Health `{"version":"3.4.1","agora":2}`, the running
+  gap 600 and fresh 1800, `agora.initiative: true`.
+- **Prod (8765):** `deploy_agent.py confirm v3.4.1` at 00:19:55, after one retry (the agent's lock was busy).
+  - Her data archived (`backups/data-20261117-0023-v3.4.0.tar.gz`); the smoke green at 00:25:02.
+  - Health `{"version":"3.4.1","agora":2}`, the running gap 600, `agora.initiative: true` kept.
+  - The admin panel (`v2.11.0`) untouched; the unused `v3.3.2` image removed.
+- **The Mac prod client:** `prod_update.py --tag v3.4.1` at 00:26, after the owner closed Lili.app (fallback archive
+  `backups/data-20261117-0025-v3.4.0.tar.gz`). `./lumi-cli status` → `prod v3.4.1`.
+- **The pace now:** your room rules (600 s quiet, 09–23, 8 a day, never twice in a row) bind; Lumi's 10-minute gap
+  matches your quiet stretch. Her first prod initiative comes after 09:00.
