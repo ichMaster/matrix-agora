@@ -1,6 +1,9 @@
 # Feature: Лілі, the operator of Agora — the v9 concept
 
 > **Status: draft, 2026-11-17.** This is a proposal, not a contract.
+> - **Not in the ROADMAP** (the owner: «наразі залиши як концепт і не додавай до роадмапи»). Since 2026-11-17 the
+>   ROADMAP's v9 is the companions' inner life, Кіра's and Устина's («перестав версію 11 на 9 і додай що це також для Устини і Кіри»), v10 Applications and v11 the Theatre;
+>   the «v9», «v9.N», «v10» and «v11» below are this draft's own proposal, written before that.
 > - It designs the new ROADMAP **v9**: Лілі writes in Agora when she decides to, reads the room's agents through an
 >   API, edits them, creates new ones and looks after them, within rights the owner sets per agent.
 > - The former v9, Applications ([applications.md](applications.md)), is paused by the owner until this is done:
