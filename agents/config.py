@@ -74,6 +74,9 @@ class AgentConfig:
     # v8.3.4 (the owner, 2026-11-17: «давай 50% щоб був сленг» — «Половина запропонованих — айтішні»): her IT words;
     # with `fillers_each`, half the words each answer offers come from them (`style.woven`)
     fillers_it: tuple[str, ...] = ()
+    # v8.3.6 (the owner, 2026-11-17: «вона далі використовує ваще, але це було забрати»): the words she never says,
+    # each with the word said instead (`swap`, swapped in code before her history, `logic.swap_words`)
+    swap: tuple[tuple[str, str], ...] = ()
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -165,6 +168,11 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         raise ConfigError(f"{toml_path}: 'fillers_it' needs 'fillers_each'")
     if set(fillers_it) & set(fillers):
         raise ConfigError(f"{toml_path}: 'fillers_it' and 'fillers' must not share a word")
+    swap_table = data.get("swap", {})
+    if not isinstance(swap_table, dict) or not all(
+            isinstance(k, str) and k.strip() and isinstance(v, str) and v.strip() for k, v in swap_table.items()):
+        raise ConfigError(f"{toml_path}: 'swap' must be a table of words, each with the non-empty word said instead")
+    swap = tuple((k.strip(), v.strip()) for k, v in swap_table.items())
     slang = data.get("slang", False)
     if not isinstance(slang, bool):
         raise ConfigError(f"{toml_path}: 'slang' must be true or false")
@@ -294,4 +302,5 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         fillers_each=fillers_each,
         slang=slang,
         fillers_it=fillers_it,
+        swap=swap,
     )

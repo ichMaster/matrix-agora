@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from agents.config import AgentConfig, ConfigError, load_config
-from agents.logic import cut_openings
+from agents.logic import cut_openings, swap_words
 from agents.private import PRIVATE_AS_FELT, PRIVATE_BRIEF, PRIVATE_BRIEF_LEAD, PRIVATE_WARM, private_brief
 from agents.style import (
     DETAIL_ENDING,
@@ -184,6 +184,21 @@ def test_no_line_of_hers_opens_with_a_word_she_never_opens_with(text, out):
     assert cut_openings(text, []) == text
 
 
+@pytest.mark.parametrize("text,out", [
+    ("це ваще топ.", "це взагалі топ."),
+    ("Ваще не знаю.", "Взагалі не знаю."),                                            # the capital stays
+    ("ВАЩЕ!", "Взагалі!"),
+    ("ну ваааще, рілі?", "ну взагалі, реально?"),                                      # drawn out; two swaps
+    ("ага, канєшно.", "ага, звісно."),
+    ("[giggles] ваще кайф", "[giggles] взагалі кайф"),                                  # past a voice tag
+    ("вающе і поваще", "вающе і поваще"),                                             # whole words only
+])
+def test_a_word_she_never_says_is_swapped_for_its_word(text, out):
+    swaps = (("ваще", "взагалі"), ("канєшно", "звісно"), ("рілі", "реально"))
+    assert swap_words(text, swaps) == out
+    assert swap_words(text, ()) == text
+
+
 # --- her TOML ---------------------------------------------------------------------------------------------------------
 def _toml(tmp_path, extra: str, private: bool = True):
     toml = tmp_path / "x.toml"
@@ -218,6 +233,9 @@ def test_her_words_and_her_lead_need_the_private_chat(tmp_path, extra, error):
     ('fillers_it = "баг"\n', "'fillers_it' must be a list of non-empty strings"),     # v8.3.4
     ('fillers = ["ну"]\nfillers_it = ["баг"]\n', "'fillers_it' needs 'fillers_each'"),
     ('fillers = ["ну", "баг"]\nfillers_each = 2\nfillers_it = ["баг"]\n', "'fillers_it' and 'fillers' must not share"),
+    ('swap = "ваще"\n', "'swap' must be a table of words"),                          # v8.3.6
+    ('swap = { "ваще" = "" }\n', "'swap' must be a table of words"),
+    ('swap = { "ваще" = 1 }\n', "'swap' must be a table of words"),
 ])
 def test_a_malformed_word_list_or_lead_is_refused(tmp_path, extra, error):
     with pytest.raises(ConfigError, match=error):
@@ -234,12 +252,12 @@ def test_ustynas_toml_names_her_words_and_her_lead_and_kiras_names_none():
     assert ustyna["fillers_each"] == 3 and {"шось", "ніц", "файно", "крінж"} <= set(words)   # v8.3.1; v8.3.3: 3
     assert ustyna["slang"] is True and {"рофл", "база", "імба", "реально"} <= set(words)
     assert not {"ору", "жиза", "рілі"} & set(words)                                  # v8.3.5: the owner took them out
-    it = ustyna["fillers_it"]                                                         # v8.3.4: her IT words apart
-    assert {"баг", "пофіксити", "асап", "таска"} <= set(it) and not set(it) & set(words)
-    assert not {"задеплоїти", "дебажити"} & set(it)                                 # v8.3.5
+    assert "fillers_it" not in ustyna and not {"баг", "пофіксити", "асап"} & set(words)  # v8.3.6: her canon's alone
+    assert "грін флаг" not in words                                                  # v8.3.6
+    assert ustyna["swap"] == {"ваще": "взагалі", "канєшно": "звісно", "рілі": "реально"}  # v8.3.6
     assert "го" not in words                                                          # it would push invitations
     assert not {"ая", "коротше", "ваще", "канєшно"} & set(words)                   # v8.3.2: the owner took them out
-    assert not {"fillers", "never_open", "private_lead", "fillers_each", "slang", "fillers_it"} & set(kira)  # Кіра
+    assert not {"fillers", "never_open", "private_lead", "fillers_each", "slang", "fillers_it", "swap"} & set(kira)
 
 
 @pytest.mark.canon
@@ -248,7 +266,8 @@ def test_ustynas_config_carries_them_and_kiras_does_not():
     kira = load_config("agents/kira.toml", env={**ENV, "KIRA_PASSWORD": "pw-kira"})
     assert cfg.private_lead and cfg.never_open == ("ой",) and "капець" in cfg.fillers and cfg.fillers_each == 3
     assert cfg.slang and not kira.slang                                               # v8.3.3
-    assert "баг" in cfg.fillers_it and "баг" not in cfg.fillers and kira.fillers_it == ()   # v8.3.4
+    assert cfg.fillers_it == () == kira.fillers_it                                    # v8.3.6: her canon's alone
+    assert ("ваще", "взагалі") in cfg.swap and kira.swap == ()                       # v8.3.6
     assert (kira.fillers, kira.never_open, kira.private_lead, kira.fillers_each) == ((), (), False, 0)
 
 
@@ -308,6 +327,16 @@ def test_with_her_it_words_her_answer_offers_two_of_them(tmp_path, monkeypatch):
     agent.rng = lambda: 0.1
     asyncio.run(agent.private_reply())
     assert sum(w in it for w in _woven_words(agent.llm.calls[-1][1])) == 2
+
+
+def test_a_word_she_never_says_is_swapped_before_her_history(tmp_path, monkeypatch):
+    agent = talking(tmp_path, monkeypatch)
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "swap": (("ваще", "взагалі"),)})
+    agent.llm.text = "Ваще не знаю, чесно."
+    agent.private_channel = "matrix"
+    agent.private_history = [("Ich", "Привіт")]
+    asyncio.run(agent.private_reply())
+    assert agent.private_history[-1] == ("Кіра", "Взагалі не знаю, чесно.")
 
 
 def test_without_them_kiras_answer_is_as_before(tmp_path, monkeypatch):

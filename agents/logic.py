@@ -263,6 +263,17 @@ def cut_openings(text: str, words: Iterable[str]) -> str:
     return "\n".join(kept) if any(re.search(r"\w", TAG_RE.sub("", ln)) for ln in kept) else text
 
 
+def swap_words(text: str, swaps: Iterable[tuple[str, str]]) -> str:
+    """v8.3.6 (the owner, 2026-11-17, of Устина: «вона далі використовує ваще, але це було забрати») — every whole word of
+    hers in `swaps` (her TOML's `swap`: word, the word said instead), any case and its letters drawn out («ваааще»),
+    said as its replacement, its capital kept; voice tags are never words of hers. Pure; no swaps: the text as it was."""
+    for word, instead in swaps:
+        drawn = "".join(re.escape(c) + "+" for c in word.lower())
+        pattern = re.compile(rf"(?<![\w'’-]){drawn}(?![\w'’-])", re.IGNORECASE)
+        text = pattern.sub(lambda m, new=instead: new[:1].upper() + new[1:] if m.group()[:1].isupper() else new, text)
+    return text
+
+
 def same_message(a: str, b: str) -> bool:
     """Near-duplicate check: equal after case and punctuation are dropped."""
     norm = lambda s: "".join(ch for ch in s.lower() if ch.isalnum())

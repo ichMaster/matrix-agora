@@ -165,6 +165,7 @@ from agents.logic import (
     should_handle,
     should_join_invite,
     slow_part,
+    swap_words,
     transcript_of,
 )
 from agents.lumi import (
@@ -4784,6 +4785,8 @@ class Agent:
             return None
         if self.cfg.never_open:  # v6.5.1 (the owner, 2026-11-10): never a line of hers opening with «ой»
             text = cut_openings(text, self.cfg.never_open)
+        if self.cfg.swap:  # v8.3.6 (the owner, 2026-11-17): never «ваще» — «взагалі», before her history
+            text = swap_words(text, self.cfg.swap)
         if self.cfg.type == "creature":  # v4.2: a small vocabulary, enforced
             text = cap_words(text, max_words or self.cat_max_words)
         if self.cfg.can("emotion"):  # v5.9: her words for every text, the tags only for her voice
