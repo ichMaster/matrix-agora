@@ -182,7 +182,9 @@ def render_recalled(groups: list[list[Line]], tz, now: datetime) -> str | None:
                 rows.append(f"{when} я думала: {_cut(line.text)}")
                 thought = True
                 continue
-            rows.append(f"{when}, {PLACE_LABEL.get(line.place, line.place)} — {line.speaker}: {_cut(line.text)}")
+            # v8.3.7 (the owner, 2026-11-17: Устина «щось інше відповідає» — a recalled line of his from yesterday
+            # answered as if he had just said it): «Ich тоді: «…»» — never the live talk's «Ich: …»
+            rows.append(f"{when}, {PLACE_LABEL.get(line.place, line.place)} — {line.speaker} тоді: «{_cut(line.text)}»")
         if rows:
             out.append("\n".join(rows))
     return (RECALL_TITLE_THOUGHTS if thought else RECALL_TITLE) + "\n" + "\n\n".join(out) if out else None

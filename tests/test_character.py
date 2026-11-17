@@ -249,7 +249,7 @@ def test_ustynas_toml_names_her_words_and_her_lead_and_kiras_names_none():
     words = ustyna["fillers"]
     assert len(words) == len(set(words)) > len(FILLERS)                              # more than the shared ones
     assert not {"ой", "ммм", "ніби", "наче", "до речі", "уяви", "між іншим"} & set(words)
-    assert ustyna["fillers_each"] == 3 and {"шось", "ніц", "файно", "крінж"} <= set(words)   # v8.3.1; v8.3.3: 3
+    assert ustyna["fillers_each"] == 2 and {"шось", "ніц", "файно", "крінж"} <= set(words)   # v8.3.1; v8.3.7: 2
     assert ustyna["slang"] is True and {"рофл", "база", "імба", "реально"} <= set(words)
     assert not {"ору", "жиза", "рілі"} & set(words)                                  # v8.3.5: the owner took them out
     assert "fillers_it" not in ustyna and not {"баг", "пофіксити", "асап"} & set(words)  # v8.3.6: her canon's alone
@@ -264,7 +264,7 @@ def test_ustynas_toml_names_her_words_and_her_lead_and_kiras_names_none():
 def test_ustynas_config_carries_them_and_kiras_does_not():
     cfg = load_config("agents/ustyna.toml", env={**ENV, "USTYNA_PASSWORD": "pw-ustyna"})
     kira = load_config("agents/kira.toml", env={**ENV, "KIRA_PASSWORD": "pw-kira"})
-    assert cfg.private_lead and cfg.never_open == ("ой",) and "капець" in cfg.fillers and cfg.fillers_each == 3
+    assert cfg.private_lead and cfg.never_open == ("ой",) and "капець" in cfg.fillers and cfg.fillers_each == 2
     assert cfg.slang and not kira.slang                                               # v8.3.3
     assert cfg.fillers_it == () == kira.fillers_it                                    # v8.3.6: her canon's alone
     assert ("ваще", "взагалі") in cfg.swap and kira.swap == ()                       # v8.3.6
@@ -337,6 +337,11 @@ def test_a_word_she_never_says_is_swapped_before_her_history(tmp_path, monkeypat
     agent.private_history = [("Ich", "Привіт")]
     asyncio.run(agent.private_reply())
     assert agent.private_history[-1] == ("Кіра", "Взагалі не знаю, чесно.")
+
+
+def test_her_brief_asks_her_to_answer_what_he_wrote_just_now_never_a_memory():
+    for brief in (PRIVATE_BRIEF, PRIVATE_BRIEF_LEAD):                                 # v8.3.7: both companions
+        assert "Відповідай на те, що він написав щойно" in brief and "минуле: зараз він цього не казав" in brief
 
 
 def test_without_them_kiras_answer_is_as_before(tmp_path, monkeypatch):

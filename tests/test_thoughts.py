@@ -132,7 +132,7 @@ def test_a_private_thought_reads_the_same_and_a_said_line_keeps_its_old_shape():
     now = at(2026, 10, 28, 20)
     out = render_recalled([[line("thought_private", at(2026, 10, 27))], [line("agora", at(2026, 10, 27), "Привіт",
                                                                               "Ада", 2)]], "Europe/Kyiv", now)
-    assert "вчора я думала: Я про це думала." in out and "вчора, в Агорі — Ада: Привіт" in out
+    assert "вчора я думала: Я про це думала." in out and "вчора, в Агорі — Ада тоді: «Привіт»" in out
     plain = render_recalled([[line("agora", at(2026, 10, 27), "Привіт", "Ада", 2)]], "Europe/Kyiv", now)
     assert plain.startswith(RECALL_TITLE + "\n")   # no thought, the old title: nothing changes for the others
 

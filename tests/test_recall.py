@@ -116,10 +116,11 @@ def test_the_rendering_has_when_and_places_never_a_date_and_cuts_long_lines():
     now = datetime(2026, 10, 28, 14, 0, tzinfo=ZoneInfo(TZ))  # Wednesday of the next week
     out = render_recalled([group], tz, now)
     assert out.startswith(RECALL_TITLE)
-    assert "минулого тижня, в Агорі — Бруно: Тустань" in out and "минулого тижня, наодинці — Ich: " in out
+    assert "минулого тижня, в Агорі — Бруно тоді: «Тустань»" in out and "минулого тижня, наодинці — Ich тоді: «" in out
+    assert "— Ich: " not in out and "— Бруно: " not in out                          # v8.3.7: never the live talk's form
     assert "жовтня" not in out and "09:00" not in out                  # the owner, 2026-10-26: a date gives her away
     assert render_recalled([group[:1]], tz, datetime(2026, 10, 20, 18, 0, tzinfo=ZoneInfo(TZ))).endswith(
-        "сьогодні вранці, в Агорі — Бруно: Тустань")
+        "сьогодні вранці, в Агорі — Бруно тоді: «Тустань»")
     assert "(те, що ти знаєш про Ich) Веган уже чотири роки" in out and "я" * 600 not in out and "…" in out
     assert render_recalled([], tz, now) is None and render_agora_now([], tz) is None
     assert render_agora_now([group[0]], tz) == f"{AGORA_NOW_TITLE}\n09:00 Бруно: Тустань"

@@ -44,7 +44,7 @@ COUNTS = ("", "одне", "два", "три", "чотири", "п'ять")
 # зумерським»): with her TOML's `slang` every answer asks every word that has slang said in slang and feelings said
 # plainly; her draws leave out the turns that correct herself and the ending on what she sees or does (`SLANG_MANNERS`,
 # `SLANG_ENDINGS`) — they gave her «хоча нє» and a paper cup turned in her fingers
-SLANG = ("Усе, що можна сказати сленгом, кажи сленгом: не «класно», а «топ» чи «імба»; "
+SLANG = ("Кажи сленгом там, де він сам проситься, а не в кожному реченні: не «класно», а «топ» чи «імба»; "
          "не «смішно», а «рофл»; не «справді», а «реально»; не «легко», а «ізі»; не «проблема», а «трабл»; не "
          "«незручно», а «крінж»; не «відпочити», а «почілити»; не «розумію», а «шарю». Почуття кажи прямо, без "
          "образів: не «щоки горять», «розплавилась» чи "
