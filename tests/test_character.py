@@ -55,7 +55,7 @@ def _woven_words(line: str) -> list[str]:
 
 
 def test_with_fillers_each_every_answer_weaves_her_words_into_spoken_talk():
-    own = ("ади", "капець", "прикинь", "файно", "ваще")
+    own = ("ади", "капець", "прикинь", "файно", "ніц")
     lines = [style_line(random.Random(i).random, [], tags=False, fillers=own, each=2) for i in range(60)]
     for line in lines:
         assert "вплети щонайменше два з цих слів: " in line and SPOKEN in line
@@ -142,7 +142,8 @@ def test_ustynas_toml_names_her_words_and_her_lead_and_kiras_names_none():
     words = ustyna["fillers"]
     assert len(words) == len(set(words)) > len(FILLERS)                              # more than the shared ones
     assert not {"ой", "ммм", "ніби", "наче", "до речі", "уяви", "між іншим"} & set(words)
-    assert ustyna["fillers_each"] == 2 and {"шось", "ваще", "файно", "крінж"} <= set(words)   # v8.3.1
+    assert ustyna["fillers_each"] == 2 and {"шось", "ніц", "файно", "крінж"} <= set(words)   # v8.3.1
+    assert not {"ая", "коротше", "ваще", "канєшно"} & set(words)                   # v8.3.2: the owner took them out
     assert not {"fillers", "never_open", "private_lead", "fillers_each"} & set(kira)  # Кіра: unchanged
 
 
