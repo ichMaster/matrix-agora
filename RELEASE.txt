@@ -1,3 +1,16 @@
+Version 8.3.4 (2026-11-17)
+---------------------------
+- Half the words offered to Устина are IT (the owner: «давай 50% щоб був
+  сленг» — «Половина запропонованих — айтішні»): a person's TOML key
+  `fillers_it` (her IT words, apart from `fillers`; needs `fillers_each`)
+  — `woven` draws half the words it offers from it and the rest from
+  `fillers`, in turn; her repeats are read over both lists; without it the
+  words offered are as before (Кіра).
+- Устина: her 17 IT words moved from `fillers` (99 left) to `fillers_it`;
+  with `fillers_each` 3, two of four offered are IT, at least one used.
+- Code review v8.3.4: 1 LOW deferred to the owner's live check (an IT word
+  in every answer, a tender one too).
+
 Version 8.3.3 (2026-11-17)
 ---------------------------
 - Устина in slang (the owner, of her last two lines: «збільшити кількість не
