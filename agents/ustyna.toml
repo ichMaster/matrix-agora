@@ -24,7 +24,11 @@ fillers = [              # her words of live speech, one or two offered now and 
   "капець", "жесть", "реально", "походу", "прикинь", "чекай", "стоп", "так-так", "окей", "в принципі", "насправді",
   "взагалі-то", "ну-ну", "пф", "ого", "та ну", "серйозно", "ну все", "ну от", "оце так", "ага, звісно", "хех",
   "отож", "ну бо", "хіба",
+  # v8.3.1 (the owner, 2026-11-17: «мову Устини зробити ще більше не формальну»; youth and Galician speech)
+  "шось", "ше", "щас", "нє", "ваще", "тіпа", "канєшно", "файно", "ніц", "сорі", "крінж", "кайф", "вайб", "лол", "топ",
+  "та нє", "ну шо",
 ]
+fillers_each = 2         # v8.3.1: every private answer weaves in at least two of them, in spoken talk, never bookish
 
 [capabilities]           # Кіра's, every one
 private = true           # a private chat with the owner

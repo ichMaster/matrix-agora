@@ -18,6 +18,7 @@ from agents.pastlife import ThesesError, parse_theses
 from agents.place import Place, PlaceError, check_story, parse_places
 from agents.registry import REGISTRY_PATH, RegistryError, load_registry
 from agents.roster import TYPES, RosterError, parse_member
+from agents.style import FILLERS_EACH_MAX
 
 
 class ConfigError(RuntimeError):
@@ -64,6 +65,9 @@ class AgentConfig:
     fillers: tuple[str, ...] = ()
     never_open: tuple[str, ...] = ()
     private_lead: bool = False
+    # v8.3.1 (the owner, 2026-11-17: Устина «зараз літературна»): above 0, every private answer weaves in at least that
+    # many of her words of live speech and keeps her talk spoken (`style.woven`); 0: now and then, as before
+    fillers_each: int = 0
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -145,7 +149,12 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
     private_lead = data.get("private_lead", False)
     if not isinstance(private_lead, bool):
         raise ConfigError(f"{toml_path}: 'private_lead' must be true or false")
-    for key, on in (("fillers", bool(fillers)), ("private_lead", private_lead)):
+    fillers_each = data.get("fillers_each", 0)
+    if isinstance(fillers_each, bool) or not isinstance(fillers_each, int) or not 0 <= fillers_each <= FILLERS_EACH_MAX:
+        raise ConfigError(f"{toml_path}: 'fillers_each' must be a whole number from 0 to {FILLERS_EACH_MAX}")
+    if fillers_each and not fillers:  # the shared FILLERS hold «ой», «ммм», «ніби» — never words she must say
+        raise ConfigError(f"{toml_path}: 'fillers_each' needs her own 'fillers'")
+    for key, on in (("fillers", bool(fillers)), ("fillers_each", fillers_each > 0), ("private_lead", private_lead)):
         if on and not member.can("private"):  # both shape her private chat only
             raise ConfigError(f"{toml_path}: '{key}' needs 'private'")
     canon = ""
@@ -267,4 +276,5 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         fillers=fillers,
         never_open=never_open,
         private_lead=private_lead,
+        fillers_each=fillers_each,
     )

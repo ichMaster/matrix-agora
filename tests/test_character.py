@@ -12,7 +12,7 @@ import pytest
 from agents.config import AgentConfig, ConfigError, load_config
 from agents.logic import cut_openings
 from agents.private import PRIVATE_AS_FELT, PRIVATE_BRIEF, PRIVATE_BRIEF_LEAD, PRIVATE_WARM, private_brief
-from agents.style import FILLERS, style_line
+from agents.style import FILLERS, SPOKEN, style_line
 from agents.topics import TOPICS_CHOOSE, TOPICS_CHOOSE_LEAD, TOPICS_HELD, TOPICS_LED, topics_section
 from tests.test_config import ENV
 from tests.test_topics import talking
@@ -48,6 +48,43 @@ def test_her_own_words_of_live_speech_are_offered_never_the_shared_ones():
     assert same[0] == same[1] == style_line(random.Random(5).random, [], False)      # none named: the shared ones
 
 
+def _woven_words(line: str) -> list[str]:
+    """The words a line's `woven` part offers (between «з цих слів:» and `SPOKEN`)."""
+    part = line.split("з цих слів: ", 1)[1].split(SPOKEN, 1)[0]
+    return [w.strip("«» .,") for w in part.split(",")]
+
+
+def test_with_fillers_each_every_answer_weaves_her_words_into_spoken_talk():
+    own = ("ади", "капець", "прикинь", "файно", "ваще")
+    lines = [style_line(random.Random(i).random, [], tags=False, fillers=own, each=2) for i in range(60)]
+    for line in lines:
+        assert "вплети щонайменше два з цих слів: " in line and SPOKEN in line
+        assert "можеш (але не мусиш)" not in line and "без слів-паразитів" not in line
+        words = _woven_words(line)
+        assert len(words) == len(set(words)) == 3 and set(words) <= set(own)        # each + 1 offered, all hers
+    assert len({w for line in lines for w in _woven_words(line)}) == len(own)       # drawn, not always the same
+    short = style_line(random.Random(1).random, [], tags=False, fillers=("ади",), each=2)
+    assert "вплети щонайменше одне з цих слів: «ади»." in short                       # never more than she has
+
+
+def test_a_word_she_keeps_repeating_is_never_one_she_must_weave_in():
+    own = ("капець", "ади", "прикинь", "файно")
+    her = ["капець, ну й день. миші не спали. кава скінчилась.",                    # «капець» in three of them,
+           "та капець просто. професорка злиться. дощ ллє.",                         # never in their endings
+           "оце капець! плівка засвітилась. гітара розстроєна.", "ага."]
+    for i in range(30):
+        line = style_line(random.Random(i).random, her, tags=False, fillers=own, each=2)
+        assert "капець" not in _woven_words(line) and "казала «капець»" in line     # named to leave out instead
+
+
+def test_without_fillers_each_the_line_is_as_before():
+    own = ("ади", "капець", "прикинь")
+    for i in range(20):
+        assert (style_line(random.Random(i).random, [], False, fillers=own)
+                == style_line(random.Random(i).random, [], False, fillers=own, each=0))
+        assert SPOKEN not in style_line(random.Random(i).random, [], False, fillers=own)
+
+
 @pytest.mark.parametrize("text,out", [
     ("ой, слухай, ти де?", "слухай, ти де?"),
     ("Ой! Віталіку, привіт.", "Віталіку, привіт."),                                  # the capital stays
@@ -75,6 +112,7 @@ def _toml(tmp_path, extra: str, private: bool = True):
 @pytest.mark.parametrize("extra,error", [
     ('fillers = ["ну"]\n', "'fillers' needs 'private'"),
     ("private_lead = true\n", "'private_lead' needs 'private'"),
+    ('fillers = ["ну"]\nfillers_each = 2\n', "needs 'private'"),                     # her words come first
 ])
 def test_her_words_and_her_lead_need_the_private_chat(tmp_path, extra, error):
     with pytest.raises(ConfigError, match=error):
@@ -85,6 +123,12 @@ def test_her_words_and_her_lead_need_the_private_chat(tmp_path, extra, error):
     ('fillers = "ну"\n', "'fillers' must be a list of non-empty strings"),
     ('never_open = ["ой", " "]\n', "'never_open' must be a list of non-empty strings"),
     ('private_lead = "так"\n', "'private_lead' must be true or false"),
+    ('fillers_each = "2"\n', "'fillers_each' must be a whole number from 0 to 5"),
+    ("fillers_each = true\n", "'fillers_each' must be a whole number from 0 to 5"),
+    ("fillers_each = -1\n", "'fillers_each' must be a whole number from 0 to 5"),
+    ("fillers_each = 6\n", "'fillers_each' must be a whole number from 0 to 5"),
+    ("fillers_each = 1.5\n", "'fillers_each' must be a whole number from 0 to 5"),
+    ("fillers_each = 2\n", "'fillers_each' needs her own 'fillers'"),               # never «ой» and its kin
 ])
 def test_a_malformed_word_list_or_lead_is_refused(tmp_path, extra, error):
     with pytest.raises(ConfigError, match=error):
@@ -98,15 +142,16 @@ def test_ustynas_toml_names_her_words_and_her_lead_and_kiras_names_none():
     words = ustyna["fillers"]
     assert len(words) == len(set(words)) > len(FILLERS)                              # more than the shared ones
     assert not {"ой", "ммм", "ніби", "наче", "до речі", "уяви", "між іншим"} & set(words)
-    assert not {"fillers", "never_open", "private_lead"} & set(kira)                  # Кіра: unchanged
+    assert ustyna["fillers_each"] == 2 and {"шось", "ваще", "файно", "крінж"} <= set(words)   # v8.3.1
+    assert not {"fillers", "never_open", "private_lead", "fillers_each"} & set(kira)  # Кіра: unchanged
 
 
 @pytest.mark.canon
 def test_ustynas_config_carries_them_and_kiras_does_not():
     cfg = load_config("agents/ustyna.toml", env={**ENV, "USTYNA_PASSWORD": "pw-ustyna"})
     kira = load_config("agents/kira.toml", env={**ENV, "KIRA_PASSWORD": "pw-kira"})
-    assert cfg.private_lead and cfg.never_open == ("ой",) and "капець" in cfg.fillers
-    assert (kira.fillers, kira.never_open, kira.private_lead) == ((), (), False)
+    assert cfg.private_lead and cfg.never_open == ("ой",) and "капець" in cfg.fillers and cfg.fillers_each == 2
+    assert (kira.fillers, kira.never_open, kira.private_lead, kira.fillers_each) == ((), (), False, 0)
 
 
 # --- the agent --------------------------------------------------------------------------------------------------------
@@ -127,6 +172,19 @@ def test_her_answer_gets_her_brief_her_words_and_her_topic_turns_and_never_opens
     assert agent.private_history[-1] == ("Кіра", "Привіт! А ти де?")               # «ой» cut before her history
 
 
+def test_with_fillers_each_her_answer_asks_for_her_words_in_spoken_talk(tmp_path, monkeypatch):
+    agent = talking(tmp_path, monkeypatch)
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "fillers": ("капець", "ади", "файно"), "fillers_each": 2})
+    agent.llm.text = "Привіт!"
+    agent.private_channel = "matrix"
+    agent.private_history = [("Ich", "Привіт")]
+    agent.rng = lambda: 0.9                                                          # no draw would offer words
+    asyncio.run(agent.private_reply())
+    system = agent.llm.calls[-1][1]
+    assert "вплети щонайменше два з цих слів: " in system and SPOKEN in system
+    assert not any(f"«{w}»" in system for w in FILLERS if w not in ("капець", "ади", "файно"))
+
+
 def test_without_them_kiras_answer_is_as_before(tmp_path, monkeypatch):
     agent = talking(tmp_path, monkeypatch)
     agent.llm.text = "Ой, привіт!"
@@ -136,4 +194,5 @@ def test_without_them_kiras_answer_is_as_before(tmp_path, monkeypatch):
     asyncio.run(agent.private_reply())
     system = agent.llm.calls[-1][1]
     assert PRIVATE_BRIEF in system and TOPICS_CHOOSE in system and TOPICS_CHOOSE_LEAD not in system
+    assert SPOKEN not in system and "вплети щонайменше" not in system                # v8.3.1: hers alone
     assert agent.private_history[-1] == ("Кіра", "Ой, привіт!")

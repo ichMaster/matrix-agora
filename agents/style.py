@@ -32,6 +32,13 @@ FILLERS = ("ну", "типу", "короче", "слухай", "знаєш", "ч
            "е-е", "ну таке", "загалом", "блін", "мабуть", "наче", "ніби", "щось типу", "як би це сказати",
            "ну ти зрозумів", "і от", "а взагалі", "коротше", "ой", "хм", "ага", "ну да")
 FILLERS_P = 0.6
+# v8.3.1 (the owner, 2026-11-17, of Устина: «мову Устини зробити ще більше не формальну, вона зараз літературна»; her
+# canon alone changed little — «нема змін особливих»: «речення і описи», «слова»): with her TOML's `fillers_each` every
+# answer asks her to weave in at least that many of a few words offered, and to keep her talk spoken, never bookish
+SPOKEN = ("Мова в тебе розмовна, не книжна: прості короткі речення, без описів і гарних образів, без «адже», «втім», "
+          "«проте», «зрештою».")
+FILLERS_EACH_MAX = 5
+COUNTS = ("", "одне", "два", "три", "чотири", "п'ять")
 # v5.25 (the owner, 2026-11-05: «вона далі стрибає по темам»): a turn never takes her to another topic — three of
 # them did («перейди до іншої», «перескоч на інше», «далі вже про інше»)
 MANNERS = (
@@ -157,16 +164,33 @@ def repeats(her_lines: Sequence[str]) -> tuple[list[str], list[str]]:
     return words, openings
 
 
+def woven(rng: Callable[[], float], fillers: Sequence[str], each: int, her_lines: Sequence[str]) -> str:
+    """v8.3.1 — the words of live speech she weaves into this answer: `each` + 1 offered (fewer when her list is
+    short), at least `each` of them asked for, never one she is told she keeps repeating; then `SPOKEN`."""
+    left_out = {stem(w) for w in repeats(her_lines)[0]}
+    pool = [f for f in fillers if stem(f) not in left_out] or list(fillers)
+    picks: list[str] = []
+    while pool and len(picks) < each + 1:
+        pick = _pick(rng, pool)
+        picks.append(pick)
+        pool = [f for f in pool if f != pick]
+    need = COUNTS[min(each, len(picks))]
+    return f"вплети щонайменше {need} з цих слів: " + ", ".join(f"«{p}»" for p in picks) + f". {SPOKEN}"
+
+
 def style_line(rng: Callable[[], float], her_lines: Sequence[str], tags: bool, own: str = "",
-               fillers: Sequence[str] = FILLERS) -> str:
+               fillers: Sequence[str] = FILLERS, each: int = 0) -> str:
     """The line for this answer: «Як сказати цього разу: …» — the words of live speech or none, maybe one turn of a
     real chat, maybe an open ending, else how the finished thought ends (v5.24), most often no send-off, where a voice
     tag may go (`tags`: she has a palette), what her last endings shared (v5.24), and her repeats. `own` (v5.25): the
     titles of her prompt's sections of her day («Сьогодні», «Що ти сьогодні думала»); with them, now and then
-    something of her own. `fillers` (v6.5.1): her own words of live speech, from her TOML; empty, `FILLERS`."""
+    something of her own. `fillers` (v6.5.1): her own words of live speech, from her TOML; empty, `FILLERS`. `each`
+    (v8.3.1, her TOML's `fillers_each`): above 0, every answer weaves in at least that many (`woven`); 0, as before."""
     fillers = tuple(fillers) or FILLERS
     parts = []
-    if rng() < FILLERS_P:
+    if each > 0:
+        parts.append(woven(rng, fillers, each, her_lines))
+    elif rng() < FILLERS_P:
         first = _pick(rng, fillers)
         rest = [f for f in fillers if f != first]
         picks = [first, _pick(rng, rest)] if rest and rng() < 0.4 else [first]
