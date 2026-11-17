@@ -12,7 +12,16 @@ import pytest
 from agents.config import AgentConfig, ConfigError, load_config
 from agents.logic import cut_openings
 from agents.private import PRIVATE_AS_FELT, PRIVATE_BRIEF, PRIVATE_BRIEF_LEAD, PRIVATE_WARM, private_brief
-from agents.style import FILLERS, SPOKEN, style_line
+from agents.style import (
+    DETAIL_ENDING,
+    FILLERS,
+    MANNERS,
+    SLANG,
+    SLANG_MANNERS,
+    SPOKEN,
+    filler_repeats,
+    style_line,
+)
 from agents.topics import TOPICS_CHOOSE, TOPICS_CHOOSE_LEAD, TOPICS_HELD, TOPICS_LED, topics_section
 from tests.test_config import ENV
 from tests.test_topics import talking
@@ -85,6 +94,52 @@ def test_without_fillers_each_the_line_is_as_before():
         assert SPOKEN not in style_line(random.Random(i).random, [], False, fillers=own)
 
 
+def test_with_slang_every_answer_asks_slang_and_never_a_turn_that_corrects_herself():
+    own = ("ади", "рофл", "баг", "файно")
+    lines = [style_line(random.Random(i).random, [], tags=False, fillers=own, each=3, slang=True) for i in range(80)]
+    for line in lines:
+        assert SLANG in line and DETAIL_ENDING not in line
+        assert not any(m.capitalize() in line for m in MANNERS if m not in SLANG_MANNERS)
+    assert any(m.capitalize() in line for line in lines for m in SLANG_MANNERS)     # a plain turn, drawn
+    assert any(DETAIL_ENDING in style_line(random.Random(i).random, [], False, fillers=own, each=3)
+               for i in range(80))                                                  # off: the ending as before
+
+
+class _Counted:
+    def __init__(self, seed: int):
+        self.rng, self.n = random.Random(seed), 0
+
+    def __call__(self) -> float:
+        self.n += 1
+        return self.rng.random()
+
+
+def test_slang_takes_as_many_draws_so_off_it_the_line_is_as_before():
+    own = ("ади", "рофл", "баг")
+    for i in range(20):
+        on, off = _Counted(i), _Counted(i)
+        style_line(on, [], True, fillers=own, each=3, slang=True)
+        style_line(off, [], True, fillers=own, each=3)
+        assert on.n == off.n
+        assert (style_line(random.Random(i).random, [], True, fillers=own, each=3)
+                == style_line(random.Random(i).random, [], True, fillers=own, each=3, slang=False))
+        assert SLANG not in style_line(random.Random(i).random, [], True, fillers=own, each=3)
+
+
+def test_her_own_short_word_said_twice_lately_is_named_and_never_offered():
+    own = ("топ", "ади", "файно", "ніц", "лол", "шо", "та ну")
+    her = ["шо, це просто топ.", "ну шо. миші спали.", "та ну, реально топ!", "шо далі?"]   # «топ» in two of four
+    assert filler_repeats(her, own) == ["топ"]                                        # «шо»: two letters, never
+    assert filler_repeats(her[:-2] + ["ага.", "ну."], own) == []                      # once in the last four: not yet
+    assert filler_repeats(["топіться!", "топити", "ага"], own) == []                 # a whole word only
+    for i in range(30):
+        line = style_line(random.Random(i).random, her, tags=False, fillers=own, each=3)
+        assert "топ" not in _woven_words(line) and "казала «топ»" in line
+        assert "«шо»" not in line.split("цих слів:")[0] and "казала «шо»" not in line
+    kira = style_line(random.Random(1).random, her, tags=False, fillers=own)          # without fillers_each: as before
+    assert "казала «топ»" not in kira
+
+
 @pytest.mark.parametrize("text,out", [
     ("ой, слухай, ти де?", "слухай, ти де?"),
     ("Ой! Віталіку, привіт.", "Віталіку, привіт."),                                  # the capital stays
@@ -113,6 +168,7 @@ def _toml(tmp_path, extra: str, private: bool = True):
     ('fillers = ["ну"]\n', "'fillers' needs 'private'"),
     ("private_lead = true\n", "'private_lead' needs 'private'"),
     ('fillers = ["ну"]\nfillers_each = 2\n', "needs 'private'"),                     # her words come first
+    ("slang = true\n", "'slang' needs 'private'"),                                    # v8.3.3
 ])
 def test_her_words_and_her_lead_need_the_private_chat(tmp_path, extra, error):
     with pytest.raises(ConfigError, match=error):
@@ -129,6 +185,8 @@ def test_her_words_and_her_lead_need_the_private_chat(tmp_path, extra, error):
     ("fillers_each = 6\n", "'fillers_each' must be a whole number from 0 to 5"),
     ("fillers_each = 1.5\n", "'fillers_each' must be a whole number from 0 to 5"),
     ("fillers_each = 2\n", "'fillers_each' needs her own 'fillers'"),               # never «ой» and its kin
+    ('slang = "так"\n', "'slang' must be true or false"),                             # v8.3.3
+    ("slang = 1\n", "'slang' must be true or false"),
 ])
 def test_a_malformed_word_list_or_lead_is_refused(tmp_path, extra, error):
     with pytest.raises(ConfigError, match=error):
@@ -142,16 +200,19 @@ def test_ustynas_toml_names_her_words_and_her_lead_and_kiras_names_none():
     words = ustyna["fillers"]
     assert len(words) == len(set(words)) > len(FILLERS)                              # more than the shared ones
     assert not {"ой", "ммм", "ніби", "наче", "до речі", "уяви", "між іншим"} & set(words)
-    assert ustyna["fillers_each"] == 2 and {"шось", "ніц", "файно", "крінж"} <= set(words)   # v8.3.1
+    assert ustyna["fillers_each"] == 3 and {"шось", "ніц", "файно", "крінж"} <= set(words)   # v8.3.1; v8.3.3: 3
+    assert ustyna["slang"] is True and {"рофл", "жиза", "імба", "рілі", "баг", "пофіксити", "асап"} <= set(words)
+    assert "го" not in words                                                          # it would push invitations
     assert not {"ая", "коротше", "ваще", "канєшно"} & set(words)                   # v8.3.2: the owner took them out
-    assert not {"fillers", "never_open", "private_lead", "fillers_each"} & set(kira)  # Кіра: unchanged
+    assert not {"fillers", "never_open", "private_lead", "fillers_each", "slang"} & set(kira)  # Кіра: unchanged
 
 
 @pytest.mark.canon
 def test_ustynas_config_carries_them_and_kiras_does_not():
     cfg = load_config("agents/ustyna.toml", env={**ENV, "USTYNA_PASSWORD": "pw-ustyna"})
     kira = load_config("agents/kira.toml", env={**ENV, "KIRA_PASSWORD": "pw-kira"})
-    assert cfg.private_lead and cfg.never_open == ("ой",) and "капець" in cfg.fillers and cfg.fillers_each == 2
+    assert cfg.private_lead and cfg.never_open == ("ой",) and "капець" in cfg.fillers and cfg.fillers_each == 3
+    assert cfg.slang and not kira.slang                                               # v8.3.3
     assert (kira.fillers, kira.never_open, kira.private_lead, kira.fillers_each) == ((), (), False, 0)
 
 
@@ -186,6 +247,20 @@ def test_with_fillers_each_her_answer_asks_for_her_words_in_spoken_talk(tmp_path
     assert not any(f"«{w}»" in system for w in FILLERS if w not in ("капець", "ади", "файно"))
 
 
+def test_with_slang_her_answer_asks_for_slang(tmp_path, monkeypatch):
+    agent = talking(tmp_path, monkeypatch)
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "fillers": ("рофл", "баг", "файно", "ади"), "fillers_each": 3,
+                               "slang": True})
+    agent.llm.text = "Привіт!"
+    agent.private_channel = "matrix"
+    agent.private_history = [("Ich", "Привіт")]
+    agent.rng = lambda: 0.1                                                          # every draw taken
+    asyncio.run(agent.private_reply())
+    system = agent.llm.calls[-1][1]
+    assert SLANG in system and "вплети щонайменше три з цих слів: " in system
+    assert DETAIL_ENDING not in system
+
+
 def test_without_them_kiras_answer_is_as_before(tmp_path, monkeypatch):
     agent = talking(tmp_path, monkeypatch)
     agent.llm.text = "Ой, привіт!"
@@ -196,4 +271,5 @@ def test_without_them_kiras_answer_is_as_before(tmp_path, monkeypatch):
     system = agent.llm.calls[-1][1]
     assert PRIVATE_BRIEF in system and TOPICS_CHOOSE in system and TOPICS_CHOOSE_LEAD not in system
     assert SPOKEN not in system and "вплети щонайменше" not in system                # v8.3.1: hers alone
+    assert SLANG not in system                                                        # v8.3.3: hers alone
     assert agent.private_history[-1] == ("Кіра", "Ой, привіт!")

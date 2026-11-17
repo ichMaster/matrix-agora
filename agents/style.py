@@ -39,6 +39,17 @@ SPOKEN = ("Мова в тебе розмовна, не книжна: прост�
           "«проте», «зрештою».")
 FILLERS_EACH_MAX = 5
 COUNTS = ("", "одне", "два", "три", "чотири", "п'ять")
+# v8.3.3 (the owner, 2026-11-17, of Устина's last two lines: «збільшити кількість не літературних слів», «додай більше
+# зумерського сленгу», «всі слова що можна замінити на сленг міняй на сленг», «трохи айтішного сленгу в перемішку з
+# зумерським»): with her TOML's `slang` every answer asks every word that has slang said in slang and feelings said
+# plainly; her draws leave out the turns that correct herself and the ending on what she sees or does (`SLANG_MANNERS`,
+# `SLANG_ENDINGS`) — they gave her «хоча нє» and a paper cup turned in her fingers
+SLANG = ("Усе, що можна сказати сленгом, кажи сленгом — зумерським упереміш з айтішним: не «класно», а «топ» чи «імба»; "
+         "не «смішно», а «рофл» чи «ору»; не «справді», а «рілі»; не «легко», а «ізі»; не «проблема», а «трабл» чи "
+         "«баг»; не «незручно», а «крінж»; не «відпочити», а «почілити»; не «розумію», а «шарю»; не «швидко», а "
+         "«асап»; не «виправити», а «пофіксити». Почуття кажи прямо, без образів: не «щоки горять», «розплавилась» чи "
+         "«серце завмерло», а «мені кайф», «я в шоці», «скучила». Не описуй, що навколо тебе і що ти робиш руками, і "
+         "без книжного: «маю надію», «відчуваю, що», «страшенно».")
 # v5.25 (the owner, 2026-11-05: «вона далі стрибає по темам»): a turn never takes her to another topic — three of
 # them did («перейди до іншої», «перескоч на інше», «далі вже про інше»)
 MANNERS = (
@@ -51,6 +62,12 @@ MANNERS = (
     "плутано поясни те, що сама ще не до кінця зрозуміла",
 )
 MANNER_P = 0.7
+# v8.3.3: with `slang`, none of the turns that correct herself or ramble — one plain turn of these instead
+SLANG_MANNERS = (
+    "скажи коротко і просто, без жодного образу",
+    "одна думка — одне коротке речення",
+    "скажи так, як сказала б це вголос, а не як написала б",
+)
 OPEN_ENDINGS = (
     "лиши кінець відкритим — без висновку й без підсумку",
     "закінчи питанням, яке лишиться висіти",
@@ -59,12 +76,14 @@ OPEN_ENDINGS = (
 OPEN_ENDING_P = 0.2
 FINISHED = "Думку договори до кінця — просто, без підсумку й без обриву."
 # v5.24: how a finished thought ends, drawn — and, most of the time, no send-off unless he says goodbye himself
+DETAIL_ENDING = "Закінчи деталлю того, що ти зараз робиш, бачиш чи чуєш."
 ENDINGS = (
     "Закінчи на самій думці — там, де вона скінчилась.",
-    "Закінчи деталлю того, що ти зараз робиш, бачиш чи чуєш.",
+    DETAIL_ENDING,
     "Закінчи питанням до нього — про те, що він щойно сказав.",
     "Закінчи короткою реакцією чи жартом.",
 )
+SLANG_ENDINGS = tuple(e for e in ENDINGS if e != DETAIL_ENDING)  # v8.3.3: never on what she sees or does
 NO_SENDOFF = ("Якщо він сам не прощається — без прощання, без «до зустрічі», без нагадувань про те, що ви "
               "запланували, і без порад йому, що робити.")
 NO_SENDOFF_P = 0.75
@@ -87,6 +106,9 @@ ENDING_SENTENCES = 2  # … a line's ending: its last two sentences
 ENDING_REPEATS = 3  # … a stem in this many of them is a repeat
 ENDING_MAX = 4
 STEM_LEN = 5        # v5.24: a word stands for its first five letters once one ending is cut off
+FILLER_LINES = 4    # v8.3.3 (v8.3.1 review #2): her last four lines read for her own words of live speech …
+FILLER_REPEATS = 2  # … one in two of them is a repeat, however short («топ», «лол»)
+FILLER_MAX = 4
 # Ukrainian endings, longest first: one is cut, if at least four letters stay («звітів», «звіти» → «звіт»)
 SUFFIXES = tuple(sorted(("ами", "ями", "ові", "еві", "ого", "ому", "ими", "іми", "ться", "ся", "сь", "ий", "ій",
                          "ою", "ею", "єю", "ів", "їв", "ах", "ях", "ам", "ям", "ом", "ем", "ти", "ть", "ую", "юю",
@@ -164,11 +186,26 @@ def repeats(her_lines: Sequence[str]) -> tuple[list[str], list[str]]:
     return words, openings
 
 
+def _says(line: str, word: str) -> bool:
+    """Whether a line says a word or phrase whole — «топ» never in «топити», «та ну» never in «та нуль»."""
+    text = TAG_RE.sub(" ", line).lower().replace("’", "'")
+    return re.search(rf"(?<![\w'-]){re.escape(word.lower())}(?![\w'-])", text) is not None
+
+
+def filler_repeats(her_lines: Sequence[str], fillers: Sequence[str]) -> list[str]:
+    """v8.3.3 (v8.3.1 review #2): her own words of live speech in `FILLER_REPEATS` or more of her last `FILLER_LINES`
+    lines, matched whole — so a short one («топ», «лол») is named too, never one of two letters («шо», «ну»)."""
+    recent = list(her_lines)[-FILLER_LINES:]
+    return [f for f in fillers if len(f) > 2 and sum(_says(x, f) for x in recent) >= FILLER_REPEATS][:FILLER_MAX]
+
+
 def woven(rng: Callable[[], float], fillers: Sequence[str], each: int, her_lines: Sequence[str]) -> str:
     """v8.3.1 — the words of live speech she weaves into this answer: `each` + 1 offered (fewer when her list is
-    short), at least `each` of them asked for, never one she is told she keeps repeating; then `SPOKEN`."""
+    short), at least `each` of them asked for, never one she is told she keeps repeating (v8.3.3: her own short ones
+    too, `filler_repeats`); then `SPOKEN`."""
     left_out = {stem(w) for w in repeats(her_lines)[0]}
-    pool = [f for f in fillers if stem(f) not in left_out] or list(fillers)
+    said = set(filler_repeats(her_lines, fillers))
+    pool = [f for f in fillers if stem(f) not in left_out and f not in said] or list(fillers)
     picks: list[str] = []
     while pool and len(picks) < each + 1:
         pick = _pick(rng, pool)
@@ -179,13 +216,15 @@ def woven(rng: Callable[[], float], fillers: Sequence[str], each: int, her_lines
 
 
 def style_line(rng: Callable[[], float], her_lines: Sequence[str], tags: bool, own: str = "",
-               fillers: Sequence[str] = FILLERS, each: int = 0) -> str:
+               fillers: Sequence[str] = FILLERS, each: int = 0, slang: bool = False) -> str:
     """The line for this answer: «Як сказати цього разу: …» — the words of live speech or none, maybe one turn of a
     real chat, maybe an open ending, else how the finished thought ends (v5.24), most often no send-off, where a voice
     tag may go (`tags`: she has a palette), what her last endings shared (v5.24), and her repeats. `own` (v5.25): the
     titles of her prompt's sections of her day («Сьогодні», «Що ти сьогодні думала»); with them, now and then
     something of her own. `fillers` (v6.5.1): her own words of live speech, from her TOML; empty, `FILLERS`. `each`
-    (v8.3.1, her TOML's `fillers_each`): above 0, every answer weaves in at least that many (`woven`); 0, as before."""
+    (v8.3.1, her TOML's `fillers_each`): above 0, every answer weaves in at least that many (`woven`), and her own
+    words she said twice lately are named (v8.3.3); 0, as before. `slang` (v8.3.3, her TOML): `SLANG` in every answer,
+    and her turn and ending drawn from `SLANG_MANNERS` and `SLANG_ENDINGS` — as many draws, so off it is as before."""
     fillers = tuple(fillers) or FILLERS
     parts = []
     if each > 0:
@@ -197,12 +236,14 @@ def style_line(rng: Callable[[], float], her_lines: Sequence[str], tags: bool, o
         parts.append("можеш (але не мусиш) вплести " + " чи ".join(f"«{p}»" for p in picks) + ".")
     else:
         parts.append("без слів-паразитів.")
+    if slang:
+        parts.append(SLANG)
     if rng() < MANNER_P:
-        parts.append(_pick(rng, MANNERS).capitalize() + ".")
+        parts.append(_pick(rng, SLANG_MANNERS if slang else MANNERS).capitalize() + ".")
     if rng() < OPEN_ENDING_P:
         parts.append(_pick(rng, OPEN_ENDINGS).capitalize() + ".")
     else:
-        parts.append(f"{FINISHED} {_pick(rng, ENDINGS)}")
+        parts.append(f"{FINISHED} {_pick(rng, SLANG_ENDINGS if slang else ENDINGS)}")
     if rng() < NO_SENDOFF_P:
         parts.append(NO_SENDOFF)
     if own and rng() < OWN_P:
@@ -224,6 +265,9 @@ def style_line(rng: Callable[[], float], her_lines: Sequence[str], tags: bool, o
     words, openings = repeats(her_lines)
     ended = {stem(w) for w in ends}
     words = [w for w in words if stem(w) not in ended]
+    if each > 0:  # v8.3.3: her own short words too, once said in two of her last four lines
+        named = {stem(w) for w in words} | ended
+        words += [f for f in filler_repeats(her_lines, fillers) if stem(f) not in named]
     if words:
         parts.append("Ти вже кілька разів казала " + ", ".join(f"«{w}»" for w in words) + " — цього разу без них.")
     if openings:
