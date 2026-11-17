@@ -1,3 +1,14 @@
+Version 8.3.8 (2026-11-17)
+---------------------------
+- Устина's slang as seasoning (the owner: «забагато сленгу, реально
+  втрачається суть меседжів»; she built her lines around slang words and
+  kept saying the very ones `SLANG` offered as examples): `SLANG` names no
+  slang word — at most one or two slang words a message where they fit,
+  never instead of the thought, the thought first in plain words; her
+  `fillers_each` is 1; her private canon the same (not committed).
+- Code review v8.3.8: 1 LOW deferred (her live window's slang-heavy lines
+  for a few hours).
+
 Version 8.3.7 (2026-11-17)
 ---------------------------
 - A recalled line is the past (the owner: Устина «щось інше відповідає» —
