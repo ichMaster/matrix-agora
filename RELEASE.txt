@@ -1,3 +1,13 @@
+Version 8.3.5 (2026-11-17)
+---------------------------
+- Устина's slang without «задеплоїти», «дебажити», «ору», «жиза» and «рілі»
+  (the owner reviewed her lists: «забери: задеплоїти, дебажити, ору, жиза,
+  замість рілі - реально»): `fillers_it` 15 words, `fillers` 96 («реально»
+  already in it); `SLANG` says «реально» for «справді» and no longer «ору»;
+  a test pins that they stay out; her private canon edited the same way
+  (not committed).
+- Code review v8.3.5: no findings.
+
 Version 8.3.4 (2026-11-17)
 ---------------------------
 - Half the words offered to Устина are IT (the owner: «давай 50% щоб був
