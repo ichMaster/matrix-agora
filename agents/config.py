@@ -71,6 +71,9 @@ class AgentConfig:
     # v8.3.3 (the owner, 2026-11-17: «всі слова що можна замінити на сленг міняй на сленг»): every private answer asks
     # her slang wherever it fits and feelings said plainly, never the turns that correct herself (`style.SLANG`)
     slang: bool = False
+    # v8.3.4 (the owner, 2026-11-17: «давай 50% щоб був сленг» — «Половина запропонованих — айтішні»): her IT words;
+    # with `fillers_each`, half the words each answer offers come from them (`style.woven`)
+    fillers_it: tuple[str, ...] = ()
 
     def can(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -157,6 +160,11 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         raise ConfigError(f"{toml_path}: 'fillers_each' must be a whole number from 0 to {FILLERS_EACH_MAX}")
     if fillers_each and not fillers:  # the shared FILLERS hold «ой», «ммм», «ніби» — never words she must say
         raise ConfigError(f"{toml_path}: 'fillers_each' needs her own 'fillers'")
+    fillers_it = _words(data, "fillers_it", toml_path)
+    if fillers_it and not fillers_each:
+        raise ConfigError(f"{toml_path}: 'fillers_it' needs 'fillers_each'")
+    if set(fillers_it) & set(fillers):
+        raise ConfigError(f"{toml_path}: 'fillers_it' and 'fillers' must not share a word")
     slang = data.get("slang", False)
     if not isinstance(slang, bool):
         raise ConfigError(f"{toml_path}: 'slang' must be true or false")
@@ -285,4 +293,5 @@ def load_config(toml_path: str | Path, env: dict[str, str] | None = None,
         private_lead=private_lead,
         fillers_each=fillers_each,
         slang=slang,
+        fillers_it=fillers_it,
     )

@@ -1300,7 +1300,8 @@ class Agent:
                              if self.cfg.can(c))  # v5.25: the sections of her day her prompt holds
             brief = (f"{brief}\n\n"  # v6.5.1: her own words of live speech, when her TOML names them
                      f"{style_line(self.rng, her_lines, self.cfg.can('emotion'), own, self.cfg.fillers or FILLERS,
-                                   self.cfg.fillers_each, self.cfg.slang)}")  # v8.3.1/v8.3.3: by her TOML
+                                   self.cfg.fillers_each, self.cfg.slang,
+                                   self.cfg.fillers_it)}")  # v8.3.1/v8.3.3/v8.3.4: by her TOML
             # v5.25 (the owner, 2026-11-04): what their last messages are about, and she picks which to go on with
             # v5.25 (the owner, 2026-11-05): Gemini's prompt alone — the list is of the talk open to Gemini, so on the
             # backup it named the talk before the scene and drew her away from it

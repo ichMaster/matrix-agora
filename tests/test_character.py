@@ -140,6 +140,34 @@ def test_her_own_short_word_said_twice_lately_is_named_and_never_offered():
     assert "казала «топ»" not in kira
 
 
+def test_with_her_it_words_half_the_words_offered_are_it():
+    own, it = ("ади", "рофл", "жиза", "файно", "ніц"), ("баг", "асап", "пофіксити", "таска")
+    lines = [style_line(random.Random(i).random, [], tags=False, fillers=own, each=3, half=it) for i in range(60)]
+    for line in lines:
+        assert "вплети щонайменше три з цих слів: " in line
+        words = _woven_words(line)
+        assert len(words) == len(set(words)) == 4
+        assert words[0] in it and words[1] in own and words[2] in it and words[3] in own   # two of each, in turn
+    assert {w for line in lines for w in _woven_words(line)} == set(own) | set(it)    # drawn, not always the same
+    odd = _woven_words(style_line(random.Random(2).random, [], False, fillers=own, each=2, half=it))
+    assert len(odd) == 3 and sum(w in it for w in odd) == 1                           # half of three: one
+
+
+def test_without_her_it_words_the_words_offered_are_as_before():
+    own = ("ади", "рофл", "жиза", "файно", "ніц")
+    for i in range(20):
+        assert (style_line(random.Random(i).random, [], True, fillers=own, each=3, slang=True)
+                == style_line(random.Random(i).random, [], True, fillers=own, each=3, slang=True, half=()))
+
+
+def test_an_it_word_she_said_twice_lately_is_named_and_never_offered():
+    own, it = ("ади", "рофл", "жиза"), ("баг", "асап", "таска")
+    her = ["ну це баг.", "ага.", "знов баг!", "ок."]
+    for i in range(20):
+        line = style_line(random.Random(i).random, her, tags=False, fillers=own, each=3, half=it)
+        assert "баг" not in _woven_words(line) and "казала «баг»" in line
+
+
 @pytest.mark.parametrize("text,out", [
     ("ой, слухай, ти де?", "слухай, ти де?"),
     ("Ой! Віталіку, привіт.", "Віталіку, привіт."),                                  # the capital stays
@@ -187,6 +215,9 @@ def test_her_words_and_her_lead_need_the_private_chat(tmp_path, extra, error):
     ("fillers_each = 2\n", "'fillers_each' needs her own 'fillers'"),               # never «ой» and its kin
     ('slang = "так"\n', "'slang' must be true or false"),                             # v8.3.3
     ("slang = 1\n", "'slang' must be true or false"),
+    ('fillers_it = "баг"\n', "'fillers_it' must be a list of non-empty strings"),     # v8.3.4
+    ('fillers = ["ну"]\nfillers_it = ["баг"]\n', "'fillers_it' needs 'fillers_each'"),
+    ('fillers = ["ну", "баг"]\nfillers_each = 2\nfillers_it = ["баг"]\n', "'fillers_it' and 'fillers' must not share"),
 ])
 def test_a_malformed_word_list_or_lead_is_refused(tmp_path, extra, error):
     with pytest.raises(ConfigError, match=error):
@@ -201,10 +232,12 @@ def test_ustynas_toml_names_her_words_and_her_lead_and_kiras_names_none():
     assert len(words) == len(set(words)) > len(FILLERS)                              # more than the shared ones
     assert not {"ой", "ммм", "ніби", "наче", "до речі", "уяви", "між іншим"} & set(words)
     assert ustyna["fillers_each"] == 3 and {"шось", "ніц", "файно", "крінж"} <= set(words)   # v8.3.1; v8.3.3: 3
-    assert ustyna["slang"] is True and {"рофл", "жиза", "імба", "рілі", "баг", "пофіксити", "асап"} <= set(words)
+    assert ustyna["slang"] is True and {"рофл", "жиза", "імба", "рілі"} <= set(words)
+    it = ustyna["fillers_it"]                                                         # v8.3.4: her IT words apart
+    assert {"баг", "пофіксити", "асап", "задеплоїти"} <= set(it) and not set(it) & set(words)
     assert "го" not in words                                                          # it would push invitations
     assert not {"ая", "коротше", "ваще", "канєшно"} & set(words)                   # v8.3.2: the owner took them out
-    assert not {"fillers", "never_open", "private_lead", "fillers_each", "slang"} & set(kira)  # Кіра: unchanged
+    assert not {"fillers", "never_open", "private_lead", "fillers_each", "slang", "fillers_it"} & set(kira)  # Кіра
 
 
 @pytest.mark.canon
@@ -213,6 +246,7 @@ def test_ustynas_config_carries_them_and_kiras_does_not():
     kira = load_config("agents/kira.toml", env={**ENV, "KIRA_PASSWORD": "pw-kira"})
     assert cfg.private_lead and cfg.never_open == ("ой",) and "капець" in cfg.fillers and cfg.fillers_each == 3
     assert cfg.slang and not kira.slang                                               # v8.3.3
+    assert "баг" in cfg.fillers_it and "баг" not in cfg.fillers and kira.fillers_it == ()   # v8.3.4
     assert (kira.fillers, kira.never_open, kira.private_lead, kira.fillers_each) == ((), (), False, 0)
 
 
@@ -259,6 +293,19 @@ def test_with_slang_her_answer_asks_for_slang(tmp_path, monkeypatch):
     system = agent.llm.calls[-1][1]
     assert SLANG in system and "вплети щонайменше три з цих слів: " in system
     assert DETAIL_ENDING not in system
+
+
+def test_with_her_it_words_her_answer_offers_two_of_them(tmp_path, monkeypatch):
+    agent = talking(tmp_path, monkeypatch)
+    it = ("баг", "асап", "таска")
+    agent.cfg = AgentConfig(**{**agent.cfg.__dict__, "fillers": ("рофл", "файно", "ади"), "fillers_each": 3,
+                               "fillers_it": it})
+    agent.llm.text = "Привіт!"
+    agent.private_channel = "matrix"
+    agent.private_history = [("Ich", "Привіт")]
+    agent.rng = lambda: 0.1
+    asyncio.run(agent.private_reply())
+    assert sum(w in it for w in _woven_words(agent.llm.calls[-1][1])) == 2
 
 
 def test_without_them_kiras_answer_is_as_before(tmp_path, monkeypatch):

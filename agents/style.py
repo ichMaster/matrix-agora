@@ -199,24 +199,40 @@ def filler_repeats(her_lines: Sequence[str], fillers: Sequence[str]) -> list[str
     return [f for f in fillers if len(f) > 2 and sum(_says(x, f) for x in recent) >= FILLER_REPEATS][:FILLER_MAX]
 
 
-def woven(rng: Callable[[], float], fillers: Sequence[str], each: int, her_lines: Sequence[str]) -> str:
-    """v8.3.1 — the words of live speech she weaves into this answer: `each` + 1 offered (fewer when her list is
-    short), at least `each` of them asked for, never one she is told she keeps repeating (v8.3.3: her own short ones
-    too, `filler_repeats`); then `SPOKEN`."""
-    left_out = {stem(w) for w in repeats(her_lines)[0]}
-    said = set(filler_repeats(her_lines, fillers))
-    pool = [f for f in fillers if stem(f) not in left_out and f not in said] or list(fillers)
+def _draw(rng: Callable[[], float], pool: list[str], n: int) -> list[str]:
+    """`n` different words drawn from `pool` (fewer when it is short)."""
     picks: list[str] = []
-    while pool and len(picks) < each + 1:
+    while pool and len(picks) < n:
         pick = _pick(rng, pool)
         picks.append(pick)
         pool = [f for f in pool if f != pick]
+    return picks
+
+
+def woven(rng: Callable[[], float], fillers: Sequence[str], each: int, her_lines: Sequence[str],
+          half: Sequence[str] = ()) -> str:
+    """v8.3.1 — the words of live speech she weaves into this answer: `each` + 1 offered (fewer when her list is
+    short), at least `each` of them asked for, never one she is told she keeps repeating (v8.3.3: her own short ones
+    too, `filler_repeats`); then `SPOKEN`. `half` (v8.3.4, her TOML's `fillers_it`): half the words offered (rounded
+    down) are drawn from it, the rest from `fillers`, the two in turn; empty, as before."""
+    left_out = {stem(w) for w in repeats(her_lines)[0]}
+    said = set(filler_repeats(her_lines, tuple(fillers) + tuple(half)))
+
+    def pool_of(words: Sequence[str]) -> list[str]:
+        return [f for f in words if stem(f) not in left_out and f not in said] or list(words)
+
+    if half:
+        own = _draw(rng, pool_of(half), (each + 1) // 2)
+        rest = _draw(rng, pool_of([f for f in fillers if f not in half]), each + 1 - len(own))
+        picks = [w for pair in zip(own, rest) for w in pair] + own[len(rest):] + rest[len(own):]
+    else:
+        picks = _draw(rng, pool_of(fillers), each + 1)
     need = COUNTS[min(each, len(picks))]
     return f"вплети щонайменше {need} з цих слів: " + ", ".join(f"«{p}»" for p in picks) + f". {SPOKEN}"
 
 
 def style_line(rng: Callable[[], float], her_lines: Sequence[str], tags: bool, own: str = "",
-               fillers: Sequence[str] = FILLERS, each: int = 0, slang: bool = False) -> str:
+               fillers: Sequence[str] = FILLERS, each: int = 0, slang: bool = False, half: Sequence[str] = ()) -> str:
     """The line for this answer: «Як сказати цього разу: …» — the words of live speech or none, maybe one turn of a
     real chat, maybe an open ending, else how the finished thought ends (v5.24), most often no send-off, where a voice
     tag may go (`tags`: she has a palette), what her last endings shared (v5.24), and her repeats. `own` (v5.25): the
@@ -224,11 +240,12 @@ def style_line(rng: Callable[[], float], her_lines: Sequence[str], tags: bool, o
     something of her own. `fillers` (v6.5.1): her own words of live speech, from her TOML; empty, `FILLERS`. `each`
     (v8.3.1, her TOML's `fillers_each`): above 0, every answer weaves in at least that many (`woven`), and her own
     words she said twice lately are named (v8.3.3); 0, as before. `slang` (v8.3.3, her TOML): `SLANG` in every answer,
-    and her turn and ending drawn from `SLANG_MANNERS` and `SLANG_ENDINGS` — as many draws, so off it is as before."""
+    and her turn and ending drawn from `SLANG_MANNERS` and `SLANG_ENDINGS` — as many draws, so off it is as before.
+    `half` (v8.3.4, her TOML's `fillers_it`): with `each`, half the words offered come from it (`woven`)."""
     fillers = tuple(fillers) or FILLERS
     parts = []
     if each > 0:
-        parts.append(woven(rng, fillers, each, her_lines))
+        parts.append(woven(rng, fillers, each, her_lines, half))
     elif rng() < FILLERS_P:
         first = _pick(rng, fillers)
         rest = [f for f in fillers if f != first]
@@ -267,7 +284,7 @@ def style_line(rng: Callable[[], float], her_lines: Sequence[str], tags: bool, o
     words = [w for w in words if stem(w) not in ended]
     if each > 0:  # v8.3.3: her own short words too, once said in two of her last four lines
         named = {stem(w) for w in words} | ended
-        words += [f for f in filler_repeats(her_lines, fillers) if stem(f) not in named]
+        words += [f for f in filler_repeats(her_lines, tuple(fillers) + tuple(half)) if stem(f) not in named]
     if words:
         parts.append("Ти вже кілька разів казала " + ", ".join(f"«{w}»" for w in words) + " — цього разу без них.")
     if openings:
