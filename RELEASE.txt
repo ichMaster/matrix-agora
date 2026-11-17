@@ -1,3 +1,14 @@
+Version 8.3.2 (2026-11-17)
+---------------------------
+- Устина's words of live speech without «ая», «коротше», «ваще» and
+  «канєшно» (the owner reviewed her list: «забери такі слова: ая, коротше,
+  ваще, канєшно»): her TOML's `fillers` lose them (71 left;
+  `fillers_each` 2 unchanged), and a test pins that they stay out.
+- Her private canon's word lists and examples edited the same way (not
+  committed; the originals backed up on the Mac).
+- Code review v8.3.2: 1 LOW deferred (her live window may echo the
+  removed words for a few hours).
+
 Version 8.3.1 (2026-11-17)
 ---------------------------
 - Устина less literary (the owner: «мову Устини зробити ще більше не
