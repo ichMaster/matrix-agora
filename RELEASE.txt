@@ -1,3 +1,25 @@
+Version 8.3.1 (2026-11-17)
+---------------------------
+- Устина less literary (the owner: «мову Устини зробити ще більше не
+  формальну, вона зараз літературна»; youth + Galician, everywhere; after
+  the canon alone: «нема змін особливих» — «речення і описи», «слова»):
+  a person's TOML key `fillers_each` (0-5, needs `private` and her own
+  `fillers`) — every private answer's style line asks her to weave in at
+  least that many of `fillers_each` + 1 words drawn from her list (never
+  one named as her repeat), with SPOKEN: plain short sentences, no
+  descriptions or fine images, no «адже», «втім», «проте», «зрештою».
+  Устина: 2, her list grown by youth and Galician words (шось, ше, щас,
+  нє, ваще, тіпа, канєшно, файно, ніц, сорі, крінж, кайф, вайб, лол, топ,
+  та нє, ну шо). With 0 the line is drawn as before: Кіра unchanged.
+- The same morning, private canon (not in the image): her speech passages
+  rewritten (ustyna.md, ustyna.private.md, ustyna.backup.md) and a
+  «Як ти пишеш» paragraph in her voice palette, the prompt's tail, in both
+  her prompts; measured by counts only: before, 27% of her lines held a
+  colloquial word; after the tail paragraph, all.
+- Code review v8.3.1: 1 fixed (fillers_each needs her own fillers, never
+  the shared ones with «ой»), 1 deferred (short words such as «шо» never
+  named as a repeat).
+
 Version 8.3.0 (2026-11-16)
 ---------------------------
 - Лілі speaks when she wants (v8.3, sync step 13; the owner's go: «так»):
