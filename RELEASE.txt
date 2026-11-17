@@ -1,3 +1,17 @@
+Version 8.3.7 (2026-11-17)
+---------------------------
+- A recalled line is the past (the owner: Устина «щось інше відповідає» —
+  on «як твої миші?» her recall brought yesterday's mice talk with a line of
+  his about «мільйони» and «приватність», and she asked him where he got it;
+  «Чіткіше позначити минуле»): `render_recalled` writes «вчора, наодинці —
+  Ich тоді: «…»», never the live talk's «Ich: …»; `PRIVATE_BRIEF` (Кіра and
+  Устина) asks her to answer what he wrote just now — a recalled line is
+  never answered or asked about as if he had just said it.
+- Slang eased («Трохи менше»: 13 slang words in five sentences): `SLANG`
+  opens «Кажи сленгом там, де він сам проситься, а не в кожному реченні»;
+  Устина's `fillers_each` back to 2.
+- Code review v8.3.7: 2 LOW deferred.
+
 Version 8.3.6 (2026-11-17)
 ---------------------------
 - Устина never says «ваще» (the owner: «вона далі використовує ваще, але це
