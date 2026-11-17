@@ -1,3 +1,18 @@
+Version 8.3.6 (2026-11-17)
+---------------------------
+- Устина never says «ваще» (the owner: «вона далі використовує ваще, але це
+  було забрати»): a person's TOML table `swap` (word -> the word said
+  instead), swapped in code in every reply of hers right after
+  `never_open`, before her history and her voice (`logic.swap_words`:
+  whole words, any case, letters drawn out, the capital kept). Устина:
+  «ваще» -> «взагалі», «канєшно» -> «звісно», «рілі» -> «реально».
+- Her IT words hers to use when she wants (the owner: «забери їй айтішний
+  сленг просто додай слова айтішні і хай їх юзає коли хоче сама» — «Лише в
+  канон»): her TOML names no `fillers_it`, `SLANG` names no IT word; her
+  private canon keeps her 15 IT words, «коли самій захочеться» (not
+  committed). «грін флаг» out of her list.
+- Code review v8.3.6: 1 LOW deferred (a quoted word is swapped too).
+
 Version 8.3.5 (2026-11-17)
 ---------------------------
 - Устина's slang without «задеплоїти», «дебажити», «ору», «жиза» and «рілі»
