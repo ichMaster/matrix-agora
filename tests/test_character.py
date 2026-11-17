@@ -114,6 +114,11 @@ class _Counted:
         return self.rng.random()
 
 
+def test_slang_offers_no_slang_word_to_copy_and_caps_it():
+    assert "щонайбільше одне-два сленгові слова" in SLANG and "ніколи замість думки" in SLANG   # v8.3.8
+    assert not any(f"«{w}»" in SLANG for w in ("топ", "рофл", "ізі", "шарю", "імба", "крінж", "кайф", "реально"))
+
+
 def test_slang_takes_as_many_draws_so_off_it_the_line_is_as_before():
     own = ("ади", "рофл", "баг")
     for i in range(20):
@@ -249,7 +254,7 @@ def test_ustynas_toml_names_her_words_and_her_lead_and_kiras_names_none():
     words = ustyna["fillers"]
     assert len(words) == len(set(words)) > len(FILLERS)                              # more than the shared ones
     assert not {"ой", "ммм", "ніби", "наче", "до речі", "уяви", "між іншим"} & set(words)
-    assert ustyna["fillers_each"] == 2 and {"шось", "ніц", "файно", "крінж"} <= set(words)   # v8.3.1; v8.3.7: 2
+    assert ustyna["fillers_each"] == 1 and {"шось", "ніц", "файно", "крінж"} <= set(words)   # v8.3.1; v8.3.8: 1
     assert ustyna["slang"] is True and {"рофл", "база", "імба", "реально"} <= set(words)
     assert not {"ору", "жиза", "рілі"} & set(words)                                  # v8.3.5: the owner took them out
     assert "fillers_it" not in ustyna and not {"баг", "пофіксити", "асап"} & set(words)  # v8.3.6: her canon's alone
@@ -264,7 +269,7 @@ def test_ustynas_toml_names_her_words_and_her_lead_and_kiras_names_none():
 def test_ustynas_config_carries_them_and_kiras_does_not():
     cfg = load_config("agents/ustyna.toml", env={**ENV, "USTYNA_PASSWORD": "pw-ustyna"})
     kira = load_config("agents/kira.toml", env={**ENV, "KIRA_PASSWORD": "pw-kira"})
-    assert cfg.private_lead and cfg.never_open == ("ой",) and "капець" in cfg.fillers and cfg.fillers_each == 2
+    assert cfg.private_lead and cfg.never_open == ("ой",) and "капець" in cfg.fillers and cfg.fillers_each == 1
     assert cfg.slang and not kira.slang                                               # v8.3.3
     assert cfg.fillers_it == () == kira.fillers_it                                    # v8.3.6: her canon's alone
     assert ("ваще", "взагалі") in cfg.swap and kira.swap == ()                       # v8.3.6
