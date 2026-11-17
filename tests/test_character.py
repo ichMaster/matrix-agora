@@ -232,9 +232,11 @@ def test_ustynas_toml_names_her_words_and_her_lead_and_kiras_names_none():
     assert len(words) == len(set(words)) > len(FILLERS)                              # more than the shared ones
     assert not {"ой", "ммм", "ніби", "наче", "до речі", "уяви", "між іншим"} & set(words)
     assert ustyna["fillers_each"] == 3 and {"шось", "ніц", "файно", "крінж"} <= set(words)   # v8.3.1; v8.3.3: 3
-    assert ustyna["slang"] is True and {"рофл", "жиза", "імба", "рілі"} <= set(words)
+    assert ustyna["slang"] is True and {"рофл", "база", "імба", "реально"} <= set(words)
+    assert not {"ору", "жиза", "рілі"} & set(words)                                  # v8.3.5: the owner took them out
     it = ustyna["fillers_it"]                                                         # v8.3.4: her IT words apart
-    assert {"баг", "пофіксити", "асап", "задеплоїти"} <= set(it) and not set(it) & set(words)
+    assert {"баг", "пофіксити", "асап", "таска"} <= set(it) and not set(it) & set(words)
+    assert not {"задеплоїти", "дебажити"} & set(it)                                 # v8.3.5
     assert "го" not in words                                                          # it would push invitations
     assert not {"ая", "коротше", "ваще", "канєшно"} & set(words)                   # v8.3.2: the owner took them out
     assert not {"fillers", "never_open", "private_lead", "fillers_each", "slang", "fillers_it"} & set(kira)  # Кіра
