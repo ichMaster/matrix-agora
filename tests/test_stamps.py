@@ -80,7 +80,7 @@ def test_recall_rows_by_their_age_and_date_and_still_then():
     thought = Line(2, "k2", k(2026, 11, 17, 21, 40), "thought", "thought", "Кіра", "Думала про нього.", "gemini")
     fact = Line(3, "k3", k(2026, 10, 18, 10, 0), "facts", "facts", "Ich", "У нього є сестра.", "gemini")
     got = render_recalled([[line], [thought], [fact]], "Europe/Kyiv", AT, stamped=True,
-                          fact_days={"k3": datetime(2026, 10, 18).date()})
+                          fact_days={"k3": datetime(2026, 10, 18, tzinfo=KYIV).date()})
     assert "6 годин тому (сьогодні, 08:15), " in got and "Ich тоді: «Я завтра їду.»" in got
     assert "16 годин тому (вчора, 21:40) я думала: Думала про нього." in got
     assert "(те, що ти знаєш про Ich, з 18.10) У нього є сестра." in got
