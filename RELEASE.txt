@@ -1,3 +1,31 @@
+Version 9.2.0 (2026-11-19)
+---------------------------
+- Phase v9.2 — her checklist, for Кіра and Устина (the persona
+  capability `checklist`, needs `private`, on in both TOMLs; the owner,
+  2026-11-18: «має бути чекліст що вже виконалось а що ні»; «щоб вона
+  могла позначити це виконано чи ні»).
+- The append-only state/<name>.checklist.jsonl folded into her list;
+  «час минув — не знаєш, чи це було» when a time passes with no mark
+  (AGORA-282).
+- plan_add / plan_mark: two Gemini functions in her own words beside
+  recall and day_talk, in both memory modes, each tool set under its own
+  cache key; kept only when her Gemini answer goes out (a blocked, backup
+  or silent one keeps none). Each past day plan's items are written once
+  its day has ended, with their outcome by their hidden tags (AGORA-283).
+- «Твої справи і домовленості» in her prompt's tail with CHECKLIST_RULE:
+  whether a thing happened she knows only from this list, and a passed
+  time with no mark she asks about; Agora without his items (AGORA-284).
+- Her checklist in the panel — a card line, a Checklist tab and the
+  owner's status (POST /api/agents/{name}/checklist/{number})
+  (AGORA-285); CHECKLIST_DAYS 7, CHECKLIST_N 20.
+- Deployed for the owner as sha-08ccdcc; his live checks over the next
+  days, fixes as 9.2.x patches (the owner: «релізь і я потестую це
+  наступні декілька днів, фікси підуть патчем») (AGORA-286).
+- Code review v9.2: a malformed due never breaks her prompt; her item
+  keeps its number when a day plan took it meanwhile; her own closed
+  arrangements come before the day plans' (1 HIGH, 2 MEDIUM fixed; 3 LOW
+  deferred).
+
 Version 9.1.0 (2026-11-18)
 ---------------------------
 - Phase v9.1 — when it was: a time on every memory and every plan, for
