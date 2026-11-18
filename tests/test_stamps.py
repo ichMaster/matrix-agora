@@ -311,3 +311,9 @@ def test_in_layered_mode_her_windows_time_lines_stay_the_same_all_day_for_the_ca
     agent.clock = lambda: NOW + 3_600_000
     assert shown == [t for w, t in (e for _, e in agent.gemini_history_shown()) if not w]  # an hour on: the same
     assert all("тому" not in x for x in shown) and shown[0] == "— вчора (13.11, 20:00): —"
+
+
+def test_an_out_of_range_thought_time_never_breaks_her_prompt():
+    """#3: the day file's «## 25:10 · …» parsed by `\\d{2}:\\d{2}` raised in `now.replace` — her whole answer silent."""
+    t = [Thought("25:10", "reflection", "thought", "", "Дивна година.")]
+    assert thought_rows(t, True, 5, AT) == ["- вночі: Дивна година."]

@@ -90,11 +90,11 @@ def thought_rows(thoughts: Iterable[Thought], private: bool, n: int, now: dateti
     `stamps`) — today's thought by its age and its hour, «5 годин тому (сьогодні, 09:12)»."""
     rows = []
     for t in today_thoughts(thoughts, private, n):
-        if now is not None:
-            hh, mm = int(t.time[:2]), int(t.time[3:5])
+        hh, mm = int(t.time[:2]), int(t.time[3:5])
+        if now is not None and hh < 24 and mm < 60:  # code review v9.1 #3: an out-of-range time — its part of the day
             when = stamp(now.replace(hour=hh, minute=mm, second=0, microsecond=0), now)
         else:
-            when = PART_ADVERB[part_of_day(int(t.time[:2]))]
+            when = PART_ADVERB[part_of_day(hh)]
         read = f", прочитавши «{t.title}»" if t.kind == "news" and t.title else ""
         link = f" (посилання: {t.link})" if private and t.kind == "news" and t.link else ""
         rows.append(f"- {when}{read}: {t.text}{link}")
