@@ -95,15 +95,17 @@ def span(pause_ms: int) -> str:
 
 
 def history_times(stamps: list[int], now: datetime, tz: str, gap_ms: int = HISTORY_GAP_MS,
-                  stamped: bool = False) -> dict[int, str]:
+                  stamped: bool = False, fine: bool = True) -> dict[int, str]:
     """Her private history's time lines (the owner, 2026-11-01: Gemini's history held Wednesday's talk right before
     Sunday's, so «I'm off to Kyiv» read as tonight's): index → the line shown before that history line — the first
     line's when, and after a pause of at least `gap_ms` how long it was and when the next line came («— через 3 дні,
     сьогодні ввечері: —»). As a person remembers it (`ago`), never a date or an hour. Pure. v9.1 (AGORA-277/278):
-    `stamped` — its age and its date (`stamp`): «— 6 годин тому (сьогодні, 08:15): —»."""
+    `stamped` — its age and its date (`stamp`): «— 6 годин тому (сьогодні, 08:15): —»; not `fine` (code review v9.1
+    #2: a history Gemini's cache holds) by the day, with the hour: «— сьогодні (18.11, 08:15): —», the same all day."""
     out: dict[int, str] = {}
     for i, ts in enumerate(stamps):
-        when = stamp(local_now(ts, tz), now) if stamped else ago(local_now(ts, tz), now)
+        when = (stamp(local_now(ts, tz), now, fine=fine, hour=True if not fine else None) if stamped
+                else ago(local_now(ts, tz), now))
         if i == 0:
             out[i] = f"— {when}: —"
         elif ts - stamps[i - 1] >= gap_ms:

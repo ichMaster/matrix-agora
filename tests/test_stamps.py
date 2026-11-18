@@ -291,3 +291,23 @@ def test_a_recalled_fact_is_dated_by_the_day_she_learned_it_never_by_the_archive
     key = next(iter(days))
     got = render_recalled([[dataclasses.replace(fact, key=key)]], "Europe/Kyiv", AT, stamped=True, fact_days=days)
     assert "(те, що ти знаєш про Ich, з 18.10) У нього є сестра." in got
+
+
+def test_in_layered_mode_her_windows_time_lines_stay_the_same_all_day_for_the_cache(tmp_path, monkeypatch):
+    """#2: in `layered` Gemini's cache holds her history and is used only while it begins with the same lines — an
+    hour-level time line («— 40 хвилин тому …») changed every call and the cache was made again on every answer. There
+    the label is by the day with its hour; `lumi` (the cache holds the start alone) keeps the hour-level age."""
+    stamps_ = [k(2026, 11, 18, 8, 15), k(2026, 11, 18, 13, 0)]
+    coarse = history_times(stamps_, AT, "Europe/Kyiv", stamped=True, fine=False)
+    assert coarse == {0: "— сьогодні (18.11, 08:15): —", 1: "— через 4 години, сьогодні (18.11, 13:00): —"}
+    assert coarse == history_times(stamps_, AT.replace(hour=23, minute=59), "Europe/Kyiv", stamped=True, fine=False)
+    agent = stamped(lumi(tmp_path, monkeypatch))
+    seeded(agent)
+    tick(agent)
+    first = next(t for w, t in (e for _, e in agent.gemini_history_shown()) if not w)
+    assert first.startswith("— 8 годин тому")                                       # `lumi`: by the hour
+    monkeypatch.setenv("MEMORY_MODE", "layered")
+    shown = [t for w, t in (e for _, e in agent.gemini_history_shown()) if not w]
+    agent.clock = lambda: NOW + 3_600_000
+    assert shown == [t for w, t in (e for _, e in agent.gemini_history_shown()) if not w]  # an hour on: the same
+    assert all("тому" not in x for x in shown) and shown[0] == "— вчора (13.11, 20:00): —"

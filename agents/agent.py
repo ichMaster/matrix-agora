@@ -1769,8 +1769,10 @@ class Agent:
         if keep is not None:
             lines = [x for x in lines if any(a <= x.ts_ms < b for a, b in keep)]
         items = soften([(line.ts_ms, line) for line in lines], list(soft.values()))
+        # v9.1 (AGORA-278): its age and its date — by the hour in `lumi`, where the cache holds the start alone; by the
+        # day in `layered`, whose cache holds her history and is used only while it begins the same (code review #2)
         times = history_times([ts for ts, _ in items], local_now(self.clock(), self.tz), self.tz,
-                              stamped=self.cfg.can("stamps"))  # v9.1 (AGORA-278): its age and its date
+                              stamped=self.cfg.can("stamps"), fine=self.memory_mode() == "lumi")
         out: list[tuple[str | None, tuple[str, str]]] = []
         for i, (_, item) in enumerate(items):
             if i in times:
