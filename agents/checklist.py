@@ -233,15 +233,20 @@ def line(item: Item, now: datetime) -> str:
 
 def section_lines(items: list[Item], now: datetime, private: bool, days: int, cap: int) -> list[str]:
     """The lines her prompt shows (pure): every open item — the soonest due first, one without a time last —, then
-    what closed within the last `days` days, the newest first; at most `cap`, the open ones first. In Agora
+    what closed within the last `days` days: her own and the owner's first, the newest first, then her day plans'
+    outcomes, the newest day first (code review v9.2 #3: written after their day, they were the «newest» and crowded
+    her arrangements with him out; a plan item counts by its own day); at most `cap`, the open ones first. In Agora
     (`private` False) never an item that concerns Ich."""
     seen = [x for x in items if private or not x.ich]
     far = datetime.max.replace(tzinfo=now.tzinfo)
     opened = sorted((x for x in seen if is_open(x)), key=lambda x: (due_moment(x.due, now.tzinfo) or far, x.id))
     since = int((now - timedelta(days=max(days, 0))).timestamp() * 1000)
-    closed = sorted((x for x in seen if not is_open(x) and (x.marked_ms or x.made_ms) >= since),
+    closed = sorted((x for x in seen if not is_open(x) and x.by != "plan" and (x.marked_ms or x.made_ms) >= since),
                     key=lambda x: (x.marked_ms or x.made_ms, x.id), reverse=True)
-    return [line(x, now) for x in (opened + closed)[:max(cap, 0)]]
+    first = (now - timedelta(days=max(days, 0))).date().isoformat()
+    planned = sorted((x for x in seen if x.by == "plan" and (x.plan_day or "") >= first),
+                     key=lambda x: (x.plan_day or "", -x.id), reverse=True)
+    return [line(x, now) for x in (opened + closed + planned)[:max(cap, 0)]]
 
 
 # --- her life's day plan, once its day has ended -------------------------------------------------------------------

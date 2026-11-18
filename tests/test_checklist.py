@@ -201,3 +201,18 @@ def test_a_malformed_due_is_no_time_and_never_breaks_her_prompt(tmp_path, monkey
     assert "№1 [перенесено] кіно" in agent.build_prompt(private=PRIVATE_BRIEF)
     monkeypatch.setattr("agents.agent.section_lines", lambda *a: 1 / 0)
     assert "Твої справи" not in agent.build_prompt(private=PRIVATE_BRIEF)            # an error: no section, an answer
+
+
+
+def test_her_own_closed_arrangements_come_before_the_day_plans_and_a_plan_counts_by_its_day():
+    """#3: 35 plan outcomes written at 01:09 were the «newest» closed items — «сходити в кіно — зроблено», marked the
+    day before, fell out of the cap; and a week-old plan stayed another week."""
+    entries = [add_entry(1, "сходити в кіно", at(2026, 11, 17, 20), who="Ich", ich=True, due="2026-11-18T19:00"),
+               mark_entry(1, "done", at(2026, 11, 18, 22))]
+    entries += plan_outcomes("- лекція\n- кава\n", date(2026, 11, 18), 2, at(2026, 11, 19, 1, 9))
+    entries += plan_outcomes("- давнє\n", date(2026, 11, 10), 4, at(2026, 11, 19, 1, 9))
+    lines = section_lines(fold(entries), NOW, True, 7, 20)
+    assert lines[0].startswith("№1 [зроблено] сходити в кіно")                       # hers first
+    assert [x.split(" [")[0] for x in lines[1:]] == ["№2", "№3"]                     # the plan's, by its day
+    assert all("давнє" not in x for x in lines)                                      # 10.11's plan: 9 days old
+    assert section_lines(fold(entries), NOW, True, 7, 1) == lines[:1]
