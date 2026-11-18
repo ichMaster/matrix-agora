@@ -30,9 +30,11 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from agents.emotion import split_tags
+from agents.world import day_age
 
 FACTS_TITLE = "Що ти знаєш про Ich:"
 SOURCES = ("private", "agora", "asked")
@@ -285,13 +287,15 @@ def prompt_facts(facts: list[Fact], in_prompt: int, gemini: bool = True) -> list
     return sorted(sorted(pinned, key=lambda f: (f.added, f.id), reverse=True), key=lambda f: f.pin)[:max(in_prompt, 0)]
 
 
-def facts_section(facts: list[Fact], in_prompt: int, max_chars: int, gemini: bool = True) -> str | None:
+def facts_section(facts: list[Fact], in_prompt: int, max_chars: int, gemini: bool = True,
+                  today: date | None = None) -> str | None:
     """Her private prompt's block (`prompt_facts`) — past the limit a fact just asked for still gets in (v5.8 review
-    #7)."""
+    #7). v9.1 (AGORA-279): `today` (a member with `stamps`) — each with the day she learned it, «(з 17.11, вчора)»."""
     chosen = prompt_facts(facts, in_prompt, gemini)
     if not chosen:
         return None
-    lines = [f"- {f.text if len(f.text) <= max_chars else f.text[:max_chars - 1].rstrip() + '…'}" for f in chosen]
+    lines = [f"- {_since(f, today)}{f.text if len(f.text) <= max_chars else f.text[:max_chars - 1].rstrip() + '…'}"
+             for f in chosen]
     return FACTS_TITLE + "\n" + "\n".join(lines)
 
 
@@ -452,3 +456,14 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def _since(fact: Fact, today: date | None) -> str:
+    """«(з 17.11, вчора) » — the day a fact was kept and its age; nothing without `today` or a readable day."""
+    if today is None:
+        return ""
+    try:
+        kept = date.fromisoformat(fact.added.strip()[:10])
+    except ValueError:
+        return ""
+    return f"(з {kept:%d.%m}{f'.{kept.year}' if kept.year != today.year else ''}, {day_age(kept, today)}) "

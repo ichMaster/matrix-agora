@@ -348,6 +348,7 @@ def instruction_and_start(
     digest: str | None = None,
     voice: str | None = None,
     can_pass: bool = True,
+    summary_when: str | None = None,
 ) -> tuple[str, str]:
     """(the system instruction, its start) in contract order (ARCHITECTURE §Prompt assembly). v7.5 (AGORA-255): what
     changes slowly first, so a cache reads it from one call to the next, then what changes every call:
@@ -367,7 +368,8 @@ def instruction_and_start(
     start = [canon]
     start += [s for s in (life, memories, plans, mood) if s]  # by the day
     if summary:
-        start.append(f"Що ти пам'ятаєш з минулої розмови: {summary}")  # by the session
+        when = f" — {summary_when}" if summary_when else ""  # v9.1 (AGORA-279): «— вчора (17.11, 21:40)»
+        start.append(f"Що ти пам'ятаєш з минулої розмови{when}: {summary}")  # by the session
     start += [s for s in (facts, talk) if s]  # v5.8: when she keeps a fact; v5.20: by the hour
     # «Зараз …» to the minute, …; v7.6 (AGORA-260): her day's digest grows with every batch — never in the start
     tail = [s for s in (world, today, digest, thoughts, pastlife, nudge) if s]

@@ -345,3 +345,35 @@ def with_time_lines(lines: list[tuple[str, str]], times: list[int], now: datetim
             out.append(("", marks[i]))
         out.append(line)
     return out
+
+
+def day_age(d: date, today: date) -> str:
+    """v9.1 (AGORA-279) — a day's age from dates alone (pure): «сьогодні», «вчора», «3 дні тому», «місяць тому»;
+    ahead «завтра», «у неділю». The cached start's labels, so they change only with the date."""
+    if d == today:
+        return "сьогодні"
+    return _past_days(d, today) if d < today else _ahead_days(d, today)
+
+
+def _noon(d: date) -> datetime:
+    return datetime(d.year, d.month, d.day, 12, tzinfo=ZoneInfo("UTC"))
+
+
+def _midnight(d: date) -> datetime:
+    return datetime(d.year, d.month, d.day, tzinfo=ZoneInfo("UTC"))
+
+
+def layer_age(kind: str, key, today: date) -> str:
+    """v9.1 (AGORA-279) — how long ago a memory's layer was, by dates alone: a day «3 дні тому», a week «тиждень тому»,
+    a month «місяць тому», a year «рік тому» (pure; «цього тижня», «цього місяця», «цього року» for the current)."""
+    if kind == "day":
+        return day_age(key, today)
+    if kind == "week":
+        first = key
+        after = first + timedelta(days=7)
+    elif kind == "month":
+        first = date(*key, 1)
+        after = date(key[0] + key[1] // 12, key[1] % 12 + 1, 1)
+    else:
+        first, after = date(key, 1, 1), date(key + 1, 1, 1)
+    return span_stamp(_midnight(first), _midnight(after), _noon(today)).split(" (")[0]

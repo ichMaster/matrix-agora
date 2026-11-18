@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from agents.memory import HUMAN_MEMORY
-from agents.world import PART_ADVERB, ago, part_of_day
+from agents.world import PART_ADVERB, ago, part_of_day, span_stamp
 
 LEVELS = ("hour", "day")  # v5.23; the older rows' `4h` and `week` are kept, never due or shown
 DAY_MS = 86_400_000
@@ -169,7 +169,7 @@ def day_when(start_ms: int, now: datetime, tz: str) -> str:
 
 
 def talk_section(rows: list, before_ms: int, now: datetime, tz: str, words_budget: int = TALK_PROMPT_WORDS,
-                 day_days: int = 7) -> str | None:
+                 day_days: int = 7, stamped: bool = False) -> str | None:
     """Her private prompt's summaries (pure): v5.23 — only the `hour` and `day` rows, those ended within the last
     `day_days` days (nothing older: her recall brings it back), each period at the coarsest level written for it — an
     hour is left out when a day with text covers its start (an empty one hides nothing) — only those that began
@@ -180,7 +180,7 @@ def talk_section(rows: list, before_ms: int, now: datetime, tz: str, words_budge
     shown = [r for r in kept if r.text and r.start_ms < before_ms and not (r.level == "hour" and any(
         o.text and o.level == "day" and o.start_ms <= r.start_ms < o.end_ms for o in kept))]  # (review v5.20 #3)
     shown.sort(key=lambda r: r.start_ms)
-    lines = [f"- {_label(r, now, tz)}: {r.text}" for r in shown]
+    lines = [f"- {_stamped(r, now, tz) if stamped else _label(r, now, tz)}: {r.text}" for r in shown]
     while lines and sum(len(x.split()) for x in lines) > words_budget:
         lines.pop(0)
     return TALK_TITLE + "\n" + "\n".join(lines) if lines else None
@@ -294,12 +294,18 @@ def week_label(start_ms: int, now: datetime, tz: str) -> str:
 
 
 def gist_section(rows: list, now: datetime, tz: str, gist_days: int = GIST_DAYS,
-                 gist_weeks: int = GIST_WEEKS) -> str | None:
+                 gist_weeks: int = GIST_WEEKS, stamped: bool = False) -> str | None:
     """Her private prompt's talk in `lumi` mode (pure): a line for each week shown, then for each day shown, oldest
     first, each labelled as she remembers it, an empty one skipped; no hour's text. None when nothing is left."""
     now_ms = int(now.timestamp() * 1000)
     days, weeks = _bands(now_ms, tz, gist_days, gist_weeks)
     by = {(r.level, r.start_ms): r for r in rows if r.level in GIST_LEVELS and r.text}
+    if stamped:  # v9.1 (AGORA-279): each by its age and its dates
+        lines = [f"- {_stamped(by[('gist_week', s)], now, tz)}: {by[('gist_week', s)].text}" for s, _ in weeks
+                 if ("gist_week", s) in by]
+        lines += [f"- {_stamped(by[('gist_day', s)], now, tz)}: {by[('gist_day', s)].text}" for s, _ in days
+                  if ("gist_day", s) in by]
+        return GIST_TITLE + "\n" + "\n".join(lines) if lines else None
     lines = [f"- {week_label(s, now, tz)}: {by[('gist_week', s)].text}" for s, _ in weeks if ("gist_week", s) in by]
     lines += [f"- {_label(by[('gist_day', s)], now, tz)}: {by[('gist_day', s)].text}" for s, _ in days
               if ("gist_day", s) in by]
@@ -319,3 +325,11 @@ def gist_request(level: str, name: str, canon: str, items: list[str], max_words:
     head = "Що ти пам'ятаєш про той день, по черзі:" if level == "gist_day" else "Що ти пам'ятаєш про дні того тижня:"
     return system, head + "\n" + "\n".join(f"- {x}" for x in items)
 
+
+
+def _stamped(row, now: datetime, tz: str) -> str:
+    """v9.1 (AGORA-279) — a summary's or a gist's period by its age and its dates, day-level (the cached start):
+    «сьогодні, 08:00–09:00 (18.11)», «вчора (17.11)», «тиждень тому (09–15.11)»."""
+    zone = ZoneInfo(tz)
+    return span_stamp(datetime.fromtimestamp(row.start_ms / 1000, zone), datetime.fromtimestamp(row.end_ms / 1000, zone),
+                      now.astimezone(zone))

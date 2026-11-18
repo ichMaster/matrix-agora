@@ -777,6 +777,18 @@ over the cap by its `Content-Length` or by what arrives (never more than the cap
     - its request asks each part to begin with its time (`DIGEST_HOURS`, in place of «Без годин»);
     - its section adds each mark's age («[09:12, 5 годин тому]», `aged_marks`), while the file keeps its marks as
       written.
+  - **By the day, in the cached start (AGORA-279).** These labels change only with the date, so v7.5's cache is
+    rebuilt no more often than before (a test builds the start at 09:00 and 23:59 and finds it the same):
+    - her memories: «3 дні тому — неділя, 15 листопада: …», «тиждень тому — тиждень …», «місяць тому — жовтень
+      2026» (`layer_age`; `layer_label` stays for the generators);
+    - her plans:
+      - each names its period with its dates and the day it was written (the file's time): «На цей тиждень
+        (16.11–22.11), складений позавчора:», «На сьогодні (середа, 18.11), складений сьогодні:», «На листопад
+        2026:»;
+      - a weekday in a week's or a day's item gets its date in that period («у четвер (19.11)», `date_weekdays`);
+    - the facts: «(з 17.11, вчора) …»;
+    - her talk's summaries and gists (`span_stamp`): «вчора, 20:00–21:00 (17.11)», «тиждень тому (09–15.11)»;
+    - the last summary: «Що ти пам'ятаєш з минулої розмови — вчора (17.11, 21:40): …» (`summary_when`).
   - Without `stamps` every text is as before.
 
 ## Prompt assembly

@@ -165,3 +165,25 @@ def split_summary(text: str) -> tuple[str, str | None]:
     note = m[1].strip()
     today = (m[2] or "").strip() or None
     return note, today
+
+
+# v9.1 (AGORA-279, the owner, 2026-11-18: «всі плани теж мали б мати мітку часу») — a weekday a plan's item names gets
+# its date in the plan's period: «у четвер» → «у четвер (19.11)»
+WEEKDAY_FORMS = ("понеділок", "вівторок", "середу", "четвер", "п['’ʼ]ятницю", "суботу", "неділю")
+WEEKDAY_RE = re.compile(r"(?<!\w)([ув]\s+(?:" + "|".join(WEEKDAY_FORMS) + r"))(?!\w)(?!\s*\()", re.IGNORECASE)
+
+
+def date_weekdays(text: str, first, last) -> str:
+    """Each «у <weekday>» in a plan's text with its date inside [`first`, `last`] (pure); a weekday the period does not
+    hold, or one already followed by a bracket, as it is."""
+    days = {}
+    d = first
+    while d <= last:
+        days[d.weekday()] = d
+        d = d.fromordinal(d.toordinal() + 1)
+
+    def dated(m: re.Match) -> str:
+        word = m.group(1).split()[-1].lower().replace("’", "'").replace("ʼ", "'")
+        n = [w.replace("['’ʼ]", "'") for w in WEEKDAY_FORMS].index(word)
+        return f"{m.group(1)} ({days[n]:%d.%m})" if n in days else m.group(1)
+    return WEEKDAY_RE.sub(dated, text)

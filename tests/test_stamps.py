@@ -135,3 +135,89 @@ def test_her_agora_prompt_has_time_lines_and_the_rooms_others_none(tmp_path):
     mine.responder = watcher = Watcher()
     asyncio.run(mine._compose("Інструкція."))
     assert watcher.lines[0][0][0] == "" and watcher.lines[0][-1] == plain.agora_lines()[-1]
+
+
+# --- AGORA-279: the start, by the day -------------------------------------------------------------------------------
+def test_facts_with_the_day_she_learned_them():
+    from agents.facts import Fact, facts_section
+    facts = [Fact("a", 1, "2026-11-17", "private", "У нього є сестра."), Fact("b", 1, "", "private", "Він любить чай.")]
+    got = facts_section(facts, 10, 200, today=AT.date())
+    assert "- (з 17.11, вчора) У нього є сестра." in got and "- Він любить чай." in got  # an unreadable day: as is
+    assert "(з " not in facts_section(facts, 10, 200)                                  # without `stamps` as before
+
+
+def test_talk_rows_and_gists_by_their_age_and_dates():
+    from types import SimpleNamespace as Row
+
+    from agents.talk import gist_section, talk_section
+    hour = Row(level="hour", start_ms=k(2026, 11, 17, 20), end_ms=k(2026, 11, 17, 21), text="Про Атакаму.")
+    day = Row(level="day", start_ms=k(2026, 11, 16), end_ms=k(2026, 11, 17), text="Про зорі.")
+    got = talk_section([hour, day], k(2026, 11, 18, 9), AT, "Europe/Kyiv", stamped=True)
+    assert "- позавчора (16.11): Про зорі." in got and "- вчора, 20:00–21:00 (17.11): Про Атакаму." in got
+    gd = Row(level="gist_day", start_ms=k(2026, 11, 17), end_ms=k(2026, 11, 18), text="День про телескоп.")
+    gw = Row(level="gist_week", start_ms=k(2026, 11, 9), end_ms=k(2026, 11, 16), text="Тиждень про Чилі.")
+    got = gist_section([gd, gw], AT, "Europe/Kyiv", stamped=True)
+    assert "- тиждень тому (09–15.11): Тиждень про Чилі." in got and "- вчора (17.11): День про телескоп." in got
+    assert "(17.11)" not in gist_section([gd, gw], AT, "Europe/Kyiv")                  # without `stamps` as before
+
+
+def test_a_weekday_in_a_plan_gets_its_date_in_the_plans_period():
+    from datetime import date
+
+    from agents.plans import date_weekdays
+    week = (date(2026, 11, 16), date(2026, 11, 22))
+    assert date_weekdays("- У четвер зустріч; у п’ятницю кіно; в неділю (22.11) пікнік", *week) == (
+        "- У четвер (19.11) зустріч; у п’ятницю (20.11) кіно; в неділю (22.11) пікнік")
+    assert date_weekdays("- у четвер, у середу", date(2026, 11, 18), date(2026, 11, 18)) == "- у четвер, у середу (18.11)"
+    assert date_weekdays("- четвер без прийменника", *week) == "- четвер без прийменника"
+
+
+def test_a_layers_age_by_dates_alone():
+    from datetime import date
+
+    from agents.world import day_age, layer_age
+    today = date(2026, 11, 18)
+    assert [layer_age("day", date(2026, 11, 15), today), layer_age("week", date(2026, 11, 9), today),
+            layer_age("month", (2026, 10), today), layer_age("year", 2025, today)] == [
+        "3 дні тому", "тиждень тому", "місяць тому", "рік тому"]
+    assert day_age(today, today) == "сьогодні" and day_age(date(2026, 11, 19), today) == "завтра"
+
+
+def test_the_last_summary_names_when_it_was():
+    from agents.logic import instruction_and_start
+    _, start = instruction_and_start("Кіра", "Канон.", "Говорили про зорі.", summary_when="вчора (17.11, 21:40)")
+    assert "Що ти пам'ятаєш з минулої розмови — вчора (17.11, 21:40): Говорили про зорі." in start
+    _, start = instruction_and_start("Кіра", "Канон.", "Говорили про зорі.")
+    assert "Що ти пам'ятаєш з минулої розмови: Говорили про зорі." in start
+
+
+def test_her_plans_and_memories_stamped_and_the_start_the_same_all_day(tmp_path):
+    import os
+
+    from agents.agent import Agent
+    from agents.logic import instruction_and_start
+    from tests.test_plans import CFG, FakeLLM
+    agent = Agent(dataclasses.replace(CFG, capabilities=CFG.capabilities | {"plans", "chronicle", "stamps"}),
+                  llm=FakeLLM("-"))
+    agent.memory_file = tmp_path / "ada.memory.md"
+    today = AT.date()
+    paths = agent.plan_paths(today)
+    for horizon, text in (("week", "- у четвер кіно"), ("day", "- лекція")):
+        paths[horizon].parent.mkdir(parents=True, exist_ok=True)
+        paths[horizon].write_text(text + "\n", encoding="utf-8")
+    written = k(2026, 11, 16, 9) / 1000
+    os.utime(paths["week"], (written, written))
+    memory = agent._memory_path("day", today.replace(day=15))
+    memory.parent.mkdir(parents=True, exist_ok=True)
+    memory.write_text("Ходила в обсерваторію.", encoding="utf-8")
+
+    def start_at(*when):
+        agent.clock = lambda: k(*when)
+        return instruction_and_start(**agent.prompt_layers())[1]
+
+    morning = start_at(2026, 11, 18, 9, 0)
+    assert "На цей тиждень (16.11–22.11), складений позавчора:\n- у четвер (19.11) кіно" in morning
+    assert "На сьогодні (середа, 18.11), складений" in morning
+    assert "3 дні тому — неділя, 15 листопада: Ходила в обсерваторію." in morning
+    assert start_at(2026, 11, 18, 23, 59) == morning                                 # v7.5's cache: the same all day
+    assert start_at(2026, 11, 19, 0, 1) != morning                                   # a new day, new labels

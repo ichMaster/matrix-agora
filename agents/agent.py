@@ -240,6 +240,7 @@ from agents.photo import (
 from agents.place import Place, awake_at, home_place, nights_line, place_at
 from agents.plans import (
     HORIZONS,
+    date_weekdays,
     parse_items,
     plan_request,
     render_plan,
@@ -429,13 +430,16 @@ from agents.weather import fetch_weather, load_weather, save_weather
 from agents.world import (
     MONTHS_NOM,
     WEEKDAYS,
+    day_age,
     day_label,
     history_times,
     last_talk_line,
+    layer_age,
     local_now,
     month_label,
     now_line,
     span_stamp,
+    stamp,
     week_label,
     with_time_lines,
     year_label,
@@ -1834,12 +1838,13 @@ class Agent:
             return None
         try:
             if self.memory_mode() == "lumi":  # v7.6 (AGORA-261): a line a day, a line a week — never an hour's
-                return gist_section(self.archive.talk_rows(), now, self.tz, self.gist_days, self.gist_weeks)
+                return gist_section(self.archive.talk_rows(), now, self.tz, self.gist_days, self.gist_weeks,
+                                    stamped=self.cfg.can("stamps"))  # v9.1 (AGORA-279)
             lines = self._gemini_lines() or []
             if self.talk_prompt_words <= 0:  # the owner's switch: no summaries in her prompt
                 return None
             return talk_section(self.archive.talk_rows(), lines[0].ts_ms if lines else self.clock(), now, self.tz,
-                                self.talk_prompt_words, self.talk_day_days)
+                                self.talk_prompt_words, self.talk_day_days, stamped=self.cfg.can("stamps"))
         except Exception as exc:  # noqa: BLE001
             log.error("talk: the summaries were not read (%s)", type(exc).__name__)
             return None
@@ -2077,7 +2082,8 @@ class Agent:
                 self._facts_seen = seen
             except Exception as exc:  # noqa: BLE001
                 log.error("archive: the facts were not mirrored (%s)", type(exc).__name__)
-        return facts_section(facts, self.facts_in_prompt, self.fact_max_chars, gemini)
+        return facts_section(facts, self.facts_in_prompt, self.fact_max_chars, gemini,
+                             local_now(self.clock(), self.tz).date() if self.cfg.can("stamps") else None)  # v9.1
 
     def remember(self, text: str, source: str, pin: int = 1) -> bool:
         """One fact kept — never its words in a log (v5.21: never one the backup asked for)."""
@@ -3159,7 +3165,8 @@ class Agent:
                                     backup)
         prompt, start = instruction_and_start(**layers)
         # v5.22: its parts' sizes (the rules and the joins are what is left), for the answer call's usage line
-        parts = {PART_NAMES.get(k, k): len(v) for k, v in layers.items() if k != "name" and isinstance(v, str) and v}
+        parts = {PART_NAMES.get(k, k): len(v) for k, v in layers.items()
+                 if k not in ("name", "summary_when") and isinstance(v, str) and v}  # v9.1: its label is the rules' part
         parts["rules"] = max(0, len(prompt) - sum(parts.values()))
         # v7.5 (AGORA-255): its slow part is the whole start — what a cache reads from one call to the next
         _LAST_PARTS.set((prompt, parts, slow_part(prompt, start)))
@@ -3195,6 +3202,9 @@ class Agent:
                        else self.cfg.canon_private if private is not None and self.cfg.canon_private else self.cfg.canon)
                       if can("canon") else ""),
             "summary": self.summary if can("summary") and "summary" not in skip_layers else None,  # v5.26: the backup
+            # v9.1 (AGORA-279): when that talk was, day-level with its hour — «вчора (17.11, 21:40)»
+            "summary_when": (stamp(local_now(self.summary_ms, self.tz), now, fine=False, hour=True)
+                             if can("stamps") and self.summary_ms is not None else None),
             "life": life, "world": world,
             "memories": self.memories_section(now, skip_layers) if can("chronicle") else None,
             "plans": self.plans_section(now) if can("plans") else None,
@@ -3356,11 +3366,30 @@ class Agent:
         today = now.date()
         names = {"year": f"На {today.year} рік", "month": f"На {MONTHS_NOM[today.month - 1]}",
                  "week": "На цей тиждень", "day": "На сьогодні"}
+        stamped = self.cfg.can("stamps")
+        if stamped:  # v9.1 (AGORA-279, the owner: «всі плани теж мали б мати мітку часу») — each by its dates
+            monday = today - timedelta(days=today.weekday())
+            names = {"year": f"На {today.year} рік", "month": f"На {MONTHS_NOM[today.month - 1]} {today.year}",
+                     "week": f"На цей тиждень ({monday:%d.%m}–{monday + timedelta(days=6):%d.%m})",
+                     "day": f"На сьогодні ({WEEKDAYS[today.weekday()]}, {today:%d.%m})"}
+            spans = {"week": (monday, monday + timedelta(days=6)), "day": (today, today)}
         parts = []
         for horizon, path in self.plan_paths(today).items():
             text = self._read(path)
-            if text:
-                parts.append(f"{names[horizon]}:\n{strip_tags(text)}")
+            if not text:
+                continue
+            text = strip_tags(text)
+            if not stamped:
+                parts.append(f"{names[horizon]}:\n{text}")
+                continue
+            if horizon in spans:
+                text = date_weekdays(text, *spans[horizon])
+            try:
+                written = local_now(int(path.stat().st_mtime * 1000), self.tz).date()
+                made = f", складений {day_age(written, today)}"
+            except OSError:
+                made = ""
+            parts.append(f"{names[horizon]}{made}:\n{text}")
         return "Твої плани:\n" + "\n\n".join(parts) if parts else None
 
     # --- v2.2: the chronicle -----------------------------------------------------
@@ -3738,7 +3767,10 @@ class Agent:
             text = self._read(self._memory_path(kind, key))
             if text and lumi:  # v7.6 (AGORA-261): in `lumi` mode a memory in one line — its gist, else its first sentence
                 text = self._read(gist_path(self._memory_path(kind, key))) or first_sentence(text, self.gist_words)
-            if text:
+            if text and self.cfg.can("stamps"):  # v9.1 (AGORA-279): its age, then what it is — «3 дні тому — субота, …»
+                plain = layer_label(kind, key, today).removeprefix("вчора, ").removeprefix("позавчора, ")
+                parts.append(f"{layer_age(kind, key, today)} — {plain}: {text}")
+            elif text:
                 parts.append(f"{layer_label(kind, key, today)}: {text}")
         return "Твої спогади:\n\n" + "\n\n".join(parts) if parts else None
 
