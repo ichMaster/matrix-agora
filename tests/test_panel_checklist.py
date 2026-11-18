@@ -77,6 +77,8 @@ def test_the_owner_sets_a_status_appended_as_his(client, state):
     ("/api/agents/kira/checklist/1", {"status": "maybe"}, 422),
     ("/api/agents/kira/checklist/1", {"status": "moved"}, 422),                    # moved needs a time
     ("/api/agents/kira/checklist/1", {"status": "moved", "due": "завтра"}, 422),
+    ("/api/agents/kira/checklist/1", {"status": "moved", "due": "2026-11-31T19:00"}, 422),   # review #1: no such day
+    ("/api/agents/kira/checklist/1", {"status": "moved", "due": "2026-11-21T25:00"}, 422),   # nor such an hour
     ("/api/agents/kira/checklist/3", {"status": "missed"}, 422),                   # already closed
     ("/api/agents/kira/checklist/9", {"status": "done"}, 404),                     # no such item
     ("/api/agents/ada/checklist/1", {"status": "done"}, 404),                      # no checklist

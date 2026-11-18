@@ -1610,7 +1610,11 @@ class Agent:
         except Exception as exc:  # noqa: BLE001 — her answer never fails for her checklist
             log.error("checklist: unreadable (%s)", type(exc).__name__)
             entries = []
-        lines = section_lines(fold_checklist(entries), now, private, self.checklist_days, self.checklist_n)
+        try:  # code review v9.2 #1: her checklist never breaks her prompt
+            lines = section_lines(fold_checklist(entries), now, private, self.checklist_days, self.checklist_n)
+        except Exception as exc:  # noqa: BLE001
+            log.error("checklist: not shown (%s)", type(exc).__name__)
+            lines = []
         if not lines:
             return CHECKLIST_RULE_EMPTY if private else None
         return "\n".join([CHECKLIST_TITLE, *lines, CHECKLIST_RULE if private else CHECKLIST_RULE_AGORA])

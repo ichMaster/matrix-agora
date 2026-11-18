@@ -285,7 +285,7 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
     # ── v9.2 (AGORA-285): her checklist — the owner sets an item's status, appended to her log as his ──
     @app.post("/api/agents/{name}/checklist/{number}")
     async def checklist_mark(name: str, number: int, request: Request) -> dict:
-        from agents.checklist import DUE_RE, append, fold, load, mark_entry, mark_problem
+        from agents.checklist import append, fold, load, mark_entry, mark_problem, valid_due
 
         found = reg.agent(name)
         if found is None or "checklist" not in found.capabilities:
@@ -296,8 +296,8 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
             body = None
         status = body.get("status") if isinstance(body, dict) else None
         due = body.get("due") if isinstance(body, dict) else None
-        if due is not None and (not isinstance(due, str) or not DUE_RE.match(due)):
-            raise HTTPException(422, "due is YYYY-MM-DD or YYYY-MM-DDTHH:MM")
+        if due is not None and valid_due(due) is None:  # code review v9.2 #1: a real day and minute
+            raise HTTPException(422, "due is a real YYYY-MM-DD or YYYY-MM-DDTHH:MM")
         path = state_dir / f"{found.name}.checklist.jsonl"
         with checklist_lock:
             entries, _ = load(path)

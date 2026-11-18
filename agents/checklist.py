@@ -97,6 +97,18 @@ def _ms(ts: str) -> int | None:
         return None
 
 
+def valid_due(due: object) -> str | None:
+    """A due as kept: the pattern and a real day and minute (code review v9.2 #1: «2026-11-31» or «T25:00» matched the
+    pattern and raised later in every prompt); anything else — no time at all."""
+    if not isinstance(due, str) or not DUE_RE.match(due):
+        return None
+    try:
+        datetime.fromisoformat(due) if "T" in due else date.fromisoformat(due)
+    except ValueError:
+        return None
+    return due
+
+
 def next_id(entries: list[dict]) -> int:
     return max((e["id"] for e in entries if e.get("op") == "add"), default=0) + 1
 
@@ -122,13 +134,13 @@ def fold(entries: list[dict]) -> list[Item]:
     items: dict[int, Item] = {}
     for e in entries:
         if e.get("op") == "add" and e["id"] not in items and str(e.get("what", "")).strip():
-            due = e.get("due") if isinstance(e.get("due"), str) and DUE_RE.match(e["due"]) else None
+            due = valid_due(e.get("due"))
             items[e["id"]] = Item(e["id"], str(e["what"]), str(e.get("who") or ""), bool(e.get("ich")), due,
                                   int(e.get("made_ms") or 0), e.get("by") if e.get("by") in BYS else "her",
                                   e.get("plan_day") if isinstance(e.get("plan_day"), str) else None)
         elif e.get("op") == "mark" and e["id"] in items and e.get("status") in STATUSES:
             item = items[e["id"]]
-            due = e.get("due") if isinstance(e.get("due"), str) and DUE_RE.match(e["due"]) else None
+            due = valid_due(e.get("due"))
             items[e["id"]] = replace(item, status=e["status"], marked_ms=_ms(str(e.get("ts"))),
                                      due=due if e["status"] == "moved" and due else item.due)
     return list(items.values())

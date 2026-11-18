@@ -181,3 +181,23 @@ def test_kira_and_ustyna_have_their_checklists_and_no_one_else():
     from agents.roster import load_roster
     roster = load_roster("agora")
     assert sorted(n for n, m in roster.items() if m.can("checklist")) == ["kira", "ustyna"]
+
+
+
+# --- code review v9.2 ----------------------------------------------------------------------------------------------
+def test_a_malformed_due_is_no_time_and_never_breaks_her_prompt(tmp_path, monkeypatch):
+    """#1: «2026-11-31» or «T25:00» matched the pattern; due_moment raised in every prompt she built — silence."""
+    from agents.checklist import valid_due
+    from agents.private import PRIVATE_BRIEF
+    assert valid_due("2026-11-31") is None and valid_due("2026-11-20T25:00") is None and valid_due(None) is None
+    assert valid_due("2026-11-20") == "2026-11-20" and valid_due("2026-11-20T19:00") == "2026-11-20T19:00"
+    entries = [add_entry(1, "кіно", NOW, due="2026-11-20"), {**mark_entry(1, "moved", NOW), "due": "2026-11-31T19:00"},
+               {**add_entry(2, "лекція", NOW), "due": "2026-02-30"}]
+    items = fold(entries)
+    assert [(x.status, x.due) for x in items] == [("moved", "2026-11-20"), ("planned", None)]
+    assert len(section_lines(items, NOW, True, 7, 20)) == 2                         # no raise
+    agent = _kira(tmp_path, monkeypatch)
+    append(agent.checklist_file, entries)
+    assert "№1 [перенесено] кіно" in agent.build_prompt(private=PRIVATE_BRIEF)
+    monkeypatch.setattr("agents.agent.section_lines", lambda *a: 1 / 0)
+    assert "Твої справи" not in agent.build_prompt(private=PRIVATE_BRIEF)            # an error: no section, an answer
