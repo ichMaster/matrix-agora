@@ -73,7 +73,8 @@ def test_the_page_follows_capabilities():
     pronoun; with every capability on (Ada, Bruno) the page is unchanged."""
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert ('const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", '
-            'facts: "facts",\n                 voice: "voice", events: "events", thoughts: "thoughts", talk: "talk", prompt: "private"};') in js
+            'facts: "facts",\n                 voice: "voice", events: "events", thoughts: "thoughts", talk: "talk", prompt: "private",\n'
+            '                 checklist: "checklist"};') in js  # v9.2: her checklist's tab
     # v5.8 Facts, v5.9 Voice, v5.11 Events, v5.12 Thoughts need their capability
     assert 'rel="noopener noreferrer"' in js and "eventsTabHtml(a, mem)" in js
     assert 'PRONOUN = {she: "She", he: "He", it: "It"}' in js

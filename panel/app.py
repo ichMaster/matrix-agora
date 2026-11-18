@@ -13,6 +13,7 @@ import hmac
 import json
 import logging
 import os
+import threading
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -225,7 +226,8 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
                            "events" in found.capabilities, "thoughts" in found.capabilities,
                            "fallback" in found.capabilities, "talk" in found.capabilities, found.engine,
                            found.type == "bridge",  # v8.1: Лілі's bridge — Lumi's state, never her words
-                           "stamps" in found.capabilities)  # v9.1: the dates she said today
+                           "stamps" in found.capabilities,  # v9.1: the dates she said today
+                           "checklist" in found.capabilities)  # v9.2: her checklist
 
     @app.get("/api/agents/{name}/prompt")
     def agent_prompt(name: str) -> dict:
@@ -237,6 +239,8 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
         return {"prompt": prompt_view(state_dir, found.name)}
 
     # ── v5.8: a person's facts about the owner — re-pin or delete one; the id resolves only inside her own folder ──
+    checklist_lock = threading.Lock()  # v9.2: one owner's mark at a time
+
     def facts_folder(name: str) -> Path:
         found = reg.agent(name)
         if found is None or "facts" not in found.capabilities:
@@ -277,6 +281,31 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
         if not remove_fact(facts_folder(name), fact_id):
             raise HTTPException(404, "not found")
         return {"id": fact_id, "deleted": True}
+
+    # ── v9.2 (AGORA-285): her checklist — the owner sets an item's status, appended to her log as his ──
+    @app.post("/api/agents/{name}/checklist/{number}")
+    async def checklist_mark(name: str, number: int, request: Request) -> dict:
+        from agents.checklist import DUE_RE, append, fold, load, mark_entry, mark_problem
+
+        found = reg.agent(name)
+        if found is None or "checklist" not in found.capabilities:
+            raise HTTPException(404, "not found")
+        try:
+            body = await request.json()
+        except ValueError:
+            body = None
+        status = body.get("status") if isinstance(body, dict) else None
+        due = body.get("due") if isinstance(body, dict) else None
+        if due is not None and (not isinstance(due, str) or not DUE_RE.match(due)):
+            raise HTTPException(422, "due is YYYY-MM-DD or YYYY-MM-DDTHH:MM")
+        path = state_dir / f"{found.name}.checklist.jsonl"
+        with checklist_lock:
+            entries, _ = load(path)
+            problem = mark_problem(fold(entries), number, status if isinstance(status, str) else "", due)
+            if problem:
+                raise HTTPException(404 if "немає" in problem else 422, problem)
+            append(path, [mark_entry(number, status, local_now(), due if status == "moved" else None, by="owner")])
+        return {"id": number, "status": status}
 
     @app.get("/api/usage")
     def usage(days: int = 7, agent: str | None = None) -> dict:

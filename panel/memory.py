@@ -82,6 +82,32 @@ def plan_items(text: str) -> list[dict]:
     return items
 
 
+CHECKLIST_CLOSED_SHOWN = 60  # the closed items the tab shows, newest first — every open one always
+
+
+def checklist_view(state_dir: Path, name: str, now: datetime | None = None) -> dict | None:
+    """v9.2 (AGORA-285) — her checklist folded from `<name>.checklist.jsonl`: every open item (the soonest due first),
+    then the newest `CHECKLIST_CLOSED_SHOWN` closed ones, each with its status as her prompt reads it (`overdue` when
+    its time passed with no mark); the open and overdue counts and the corrupt lines. Never a 500: None when the file
+    cannot be read."""
+    from agents.checklist import due_moment, fold, is_open, load, state_of
+
+    now = now or local_now()
+    try:
+        entries, corrupt = load(state_dir / f"{name}.checklist.jsonl")
+    except (OSError, UnicodeDecodeError):
+        return None
+    items = fold(entries)
+    far = datetime.max.replace(tzinfo=now.tzinfo)
+    opened = sorted((x for x in items if is_open(x)), key=lambda x: (due_moment(x.due, now.tzinfo) or far, x.id))
+    closed = sorted((x for x in items if not is_open(x)), key=lambda x: (x.marked_ms or x.made_ms, x.id), reverse=True)
+    rows = [{"id": x.id, "what": x.what, "who": x.who, "ich": x.ich, "status": x.status, "state": state_of(x, now),
+             "due": x.due, "made_ms": x.made_ms, "by": x.by, "plan_day": x.plan_day, "open": is_open(x)}
+            for x in opened + closed[:CHECKLIST_CLOSED_SHOWN]]
+    return {"items": rows, "open": len(opened), "overdue": sum(1 for x in opened if state_of(x, now) == "overdue"),
+            "closed": len(closed), "corrupt": corrupt}
+
+
 def dates_view(state_dir: Path, name: str, today: date) -> int | None:
     """v9.1 (AGORA-280) — how many dates a `stamps` member named today: the sum of `dates` over today's lines of
     `<name>.answers.jsonl` (a line without it, an old or corrupt one, counts 0); None when the file is unreadable."""
@@ -465,7 +491,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
                 with_archive: bool = False, with_models: bool = False, voice_spec: Path | None = None,
                 with_events: bool = False, with_thoughts: bool = False, with_route: bool = False,
                 with_talk: bool = False, engine: str = "gemini", with_bridge: bool = False,
-                with_stamps: bool = False) -> dict:
+                with_stamps: bool = False, with_checklist: bool = False) -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -520,6 +546,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "route": route_view(state_dir, name, today) if with_route else None,             # v5.14: her backup
         "bridge": bridge_view(state_dir, name, today) if with_bridge else None,          # v8.1: Лілі's bridge
         "dates_today": dates_view(state_dir, name, today) if with_stamps else None,     # v9.1: dates she said
+        "checklist": checklist_view(state_dir, name) if with_checklist else None,       # v9.2: her checklist
     }
 
 

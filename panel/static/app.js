@@ -8,11 +8,12 @@ const KIND_ORDER = ["reply", "summary", "plan", "day_memory", "digest", "today",
 // review #11: a kind not listed above still shows, after the listed ones — a tab's rows always add up to its total
 function kindsOf(byKind) { return [...KIND_ORDER.filter((k) => byKind[k]), ...Object.keys(byKind).filter((k) => !KIND_ORDER.includes(k)).sort()]; }
 const TABS = [["log", "Log"], ["session", "Last session"], ["memory", "Memories"], ["plans", "Plans"],
-              ["today", "Today"], ["mood", "Mood"], ["events", "Events"], ["thoughts", "Thoughts"], ["talk", "Talk"], ["prompt", "Prompt"], ["facts", "Facts"], ["voice", "Voice"], ["tokens", "Tokens"],
+              ["today", "Today"], ["mood", "Mood"], ["events", "Events"], ["thoughts", "Thoughts"], ["talk", "Talk"], ["prompt", "Prompt"], ["facts", "Facts"], ["checklist", "Checklist"], ["voice", "Voice"], ["tokens", "Tokens"],
               ["files", "Files"], ["settings", "Settings"]];
 // v4.1: a tab needs its capability; "Log" and "Tokens" every agent has
 const TAB_CAP = {session: "summary", memory: "chronicle", plans: "plans", today: "today", mood: "mood", facts: "facts",
-                 voice: "voice", events: "events", thoughts: "thoughts", talk: "talk", prompt: "private"};
+                 voice: "voice", events: "events", thoughts: "thoughts", talk: "talk", prompt: "private",
+                 checklist: "checklist"};  // v9.2
 const SERIES = ["a", "b", "c", "d", "e"];  // stacked token bars: one tint of the accent per agent (v4.2: N agents)
 const PRONOUN = {she: "She", he: "He", it: "It"};
 function can(a, cap) { return !a.capabilities || a.capabilities.includes(cap); }
@@ -422,6 +423,7 @@ function agentCardHtml(a) {
     ${a.capabilities && can(a, "recall") ? `<div class="muted" style="font-size:12px">${archiveLine(mem)}</div>` : ""}
     ${a.capabilities && can(a, "fallback") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Route</div><div class="muted" style="font-size:13px">${esc(routeLine(mem))}</div></div>` : ""}
     ${blocksLine(a.name)}
+    ${a.capabilities && can(a, "checklist") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Checklist</div><div class="muted" style="font-size:13px">${checklistLine(mem)}</div></div>` : ""}
     ${a.capabilities && can(a, "stamps") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Dates said today</div><div class="muted" style="font-size:13px">${mem.available && mem.dates_today != null ? esc(fmtInt(mem.dates_today)) : "unreadable"}</div></div>` : ""}
     ${mem.models ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Models</div>${modelLines(mem.models)}</div>` : ""}
     <div class="card-foot rule-t"><div class="meta">${tokens == null ? `${icon("database", 13)} Memory unavailable` : `7 days · ${esc(tokens)}`}</div>
@@ -1225,6 +1227,43 @@ async function updateFacts(agent) {
   }
   await refreshMemory();
 }
+// v9.2 — her checklist: what she arranged or means to do, and what came of it; the owner may set an item's status
+const CHECK_STATE = {planned: "planned", overdue: "time passed — unknown", moved: "moved", done: "done",
+                     missed: "didn't happen", cancelled: "cancelled"};
+function checklistLine(mem) {
+  if (!mem.available) return "Memory unavailable";
+  const c = mem.checklist;
+  if (!c) return "Checklist unreadable";
+  return `${fmtInt(c.open)} open · ${fmtInt(c.overdue)} overdue · ${fmtInt(c.closed)} closed`;
+}
+function checklistTabHtml(a, mem) {
+  const c = mem.checklist;
+  if (!c) return `<p class="muted">Checklist unreadable.</p>`;
+  if (!c.items.length) return `<p class="muted">${esc(a.display)} has written nothing down yet.</p>`;
+  const rows = c.items.map((x) => {
+    const when = x.due ? x.due.replace("T", " ") : "no date";
+    const who = x.by === "plan" ? " · her day plan" : x.who ? ` · with ${esc(x.who)}` : "";
+    const buttons = x.open ? `<div style="display:flex;gap:4px;flex-wrap:wrap">${["done", "missed", "cancelled"].map((s) =>
+      `<button class="btn btn-ghost" data-act="check-mark" data-id="${x.id}" data-status="${s}">${CHECK_STATE[s]}</button>`).join("")}
+      <button class="btn btn-ghost" data-act="check-move" data-id="${x.id}">moved…</button></div>` : "";
+    return `<div class="rule-b" style="padding:10px 0;display:flex;gap:12px;align-items:flex-start">
+      <div style="flex:1;min-width:0"><div lang="uk">№${x.id} ${esc(x.what)}</div>
+        <div class="muted mono" style="font-size:11.5px;margin-top:3px">${esc(CHECK_STATE[x.state] || x.state)} · ${esc(when)}${who}${x.ich ? " · about you" : ""}</div></div>
+      ${buttons}</div>`;
+  }).join("");
+  return `<div class="muted" style="font-size:12.5px;margin-bottom:12px">${fmtInt(c.open)} open · ${fmtInt(c.overdue)} overdue · a status you set is in her next answer's prompt${c.corrupt ? ` · ${fmtInt(c.corrupt)} unreadable lines` : ""}</div>${rows}`;
+}
+async function markChecklist(agent, id, status, due) {
+  try {
+    await send("POST", `/api/agents/${encodeURIComponent(agent)}/checklist/${encodeURIComponent(id)}`, due ? {status, due} : {status});
+    showToast("ok", `№${id}: ${CHECK_STATE[status]}`);
+  } catch (err) {
+    if (err instanceof Unauthorized) return signOut(true);
+    showToast("err", `Change failed: ${err.message}`);
+  }
+  await refreshMemory();
+}
+
 async function changeFact(agent, id, pin) {
   try {
     if (pin === null) await send("DELETE", `/api/agents/${encodeURIComponent(agent)}/facts/${encodeURIComponent(id)}`);
@@ -1349,6 +1388,7 @@ function agentTabHtml(a, mem, tab) {
   if (tab === "talk") return talkTabHtml(a, mem);
   if (tab === "prompt") return promptTabHtml(a);
   if (tab === "facts") return factsTabHtml(a, mem);
+  if (tab === "checklist") return checklistTabHtml(a, mem);
   if (tab === "voice") return voiceTabHtml(a, mem);
   if (tab === "session") {
     const state = a.container_state?.state;
@@ -1821,6 +1861,11 @@ document.addEventListener("click", (e) => {
   else if (act === "file-download") downloadFile(S.drawer.id, id);
   else if (act === "file-delete") { S.dialog = {action: "delete", kind: "file", id, fresh: true}; render(); }
   else if (act === "fact-pin") changeFact(S.drawer.id, id, Number(el.dataset.pin));
+  else if (act === "check-mark") markChecklist(S.drawer.id, id, el.dataset.status);
+  else if (act === "check-move") {
+    const due = window.prompt("Moved to (YYYY-MM-DD or YYYY-MM-DD HH:MM)");
+    if (due && due.trim()) markChecklist(S.drawer.id, id, "moved", due.trim().replace(" ", "T"));
+  }
   else if (act === "facts-update") updateFacts(S.drawer.id);
   else if (act === "fact-delete") { S.dialog = {action: "delete", kind: "fact", id, fresh: true}; render(); }
   else if (act === "file-pick") filePicker().click();
