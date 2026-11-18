@@ -56,7 +56,8 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
                                                                               "emotion", "events", "thoughts",
                                                                               "fallback", "photos", "videos",
                                                                               "talk", "photos_fal",
-                                                                              "initiative"}  # v8.3: a bridge's
+                                                                              "initiative",  # v8.3: a bridge's
+                                                                              "stamps"}  # v9.1: a person's TOML
     assert ada.panel["name"] == "Ada"
 
 
@@ -591,3 +592,13 @@ def test_photos_fal_is_a_persons_switch_never_without_her_photos_and_only_ustyna
         parse_member("x", {**base, "capabilities": {**caps, "photos": False}}, "x.toml")
     with pytest.raises(RosterError, match="persona type only"):
         parse_member("x", {**base, "type": "creature", "capabilities": {"photos_fal": True}}, "x.toml")
+
+
+def test_stamps_is_a_persons_capability():
+    """v9.1 (AGORA-277): a time on every memory and plan — a person's TOML switches it on; no other type has it."""
+    member = parse_member("kira", {"name": "Кіра", "user_id": "@kira:agora.lan", "capabilities": {"stamps": True}})
+    assert member.can("stamps")
+    assert not load_roster("agora")["ada"].can("stamps")
+    with pytest.raises(RosterError, match="'stamps' belongs to the persona type only"):
+        parse_member("kit", {"name": "Кіт", "user_id": "@kit:agora.lan", "type": "creature",
+                             "capabilities": {"stamps": True}})

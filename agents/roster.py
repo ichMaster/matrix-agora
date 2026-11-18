@@ -25,7 +25,8 @@ CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "worl
                 "news", "digest", "transcribe", "voice", "private", "telegram", "recall", "facts",
                 "emotion", "events", "thoughts", "fallback", "photos", "videos", "talk",
                 "photos_fal",  # v6.5: the owner's switch of her photos to fal (Seedream, the checker off)
-                "initiative")  # v8.3: a bridge's own line in the room, when Lumi offers one
+                "initiative",  # v8.3: a bridge's own line in the room, when Lumi offers one
+                "stamps")  # v9.1: a time — its age and its date — on every memory and plan in her prompt
 TYPES: dict[str, frozenset[str]] = {
     # a human persona: the full memory stack, no horoscope — v5.10: a person's TOML may switch `mood` on (Кіра)
     "persona": frozenset({"canon", "life", "summary", "chronicle", "plans", "today", "world", "voice"}),
@@ -49,7 +50,7 @@ ASSISTANT_ONLY = frozenset({"news"})               # v4.5: only Claude brings ne
 HERALD_ONLY = frozenset({"digest", "transcribe"})  # v5.1: only the herald digests; v5.2: and transcribes
 BRIDGE_ONLY = frozenset({"initiative"})            # v8.3: only a bridge posts Lumi's offers
 PERSONA_ONLY = frozenset({"private", "telegram", "recall", "facts", "emotion", "events", "thoughts", "fallback",
-                          "photos", "videos", "talk", "photos_fal"})  # v5.6: a private chat with the owner is a person's;
+                          "photos", "videos", "talk", "photos_fal", "stamps"})  # v5.6: a private chat with the owner is a person's;
                                                   # no type has it by default — a person's TOML switches it on;
                                                   # v5.7: her own Telegram bot, a second door to that chat; v5.8: an
                                                   # archive of what she sees, recalled before each answer

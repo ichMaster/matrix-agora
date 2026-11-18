@@ -3,6 +3,7 @@ system locale; the clock is injected (ARCHITECTURE §World awareness)."""
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -162,3 +163,166 @@ def month_label(year: int, month: int) -> str:
 
 def year_label(year: int) -> str:
     return f"{year} рік"
+
+
+# --- v9.1 (AGORA-277): a time on every memory and every plan — its age and its date ------------------------------
+# The owner, 2026-11-18: «всі спогади мають мати мітку часу щоб було відомо що відбулось 6 год тому а що 12 а що вчора
+# а що місяць тому. Давати їй дати але гвоорити вона має як зараз не з датами»; «всі плани теж мали б мати мітку
+# часу». The age first, as a person says it, then the date in brackets. `fine` (the prompt's tail and history, read
+# anew each call): minutes and hours within a day; not `fine` (the cached start): the day is the smallest unit, so the
+# text changes only when the date does (v7.5's cache is rebuilt no more often than before).
+WEEKDAY_ON = ("у понеділок", "у вівторок", "у середу", "у четвер", "у п'ятницю", "у суботу", "у неділю")
+_UNITS = {  # the accusative after «тому» and «через»: 1 · 2–4 · 5+
+    "minute": ("хвилину", "хвилини", "хвилин"),
+    "hour": ("годину", "години", "годин"),
+    "day": ("день", "дні", "днів"),
+    "week": ("тиждень", "тижні", "тижнів"),
+    "month": ("місяць", "місяці", "місяців"),
+    "year": ("рік", "роки", "років"),
+}
+
+
+def _count(n: int, unit: str) -> str:
+    """«годину», «2 години», «5 годин» — one alone says no number."""
+    one, few, many = _UNITS[unit]
+    if n == 1:
+        return one
+    if n % 10 == 1 and n % 100 != 11:
+        return f"{n} {one}"
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return f"{n} {few}"
+    return f"{n} {many}"
+
+
+def _date(d: date, today: date) -> str:
+    """«17.11»; the year only when it is not this one: «18.11.2025»."""
+    return f"{d.day:02d}.{d.month:02d}" + (f".{d.year}" if d.year != today.year else "")
+
+
+def _months_between(earlier: date, later: date) -> int:
+    """Whole calendar months from `earlier` to `later` (0 when less than one)."""
+    months = (later.year - earlier.year) * 12 + later.month - earlier.month
+    return months - 1 if later.day < earlier.day else months
+
+
+def _past_days(d: date, today: date) -> str:
+    """The age of a day before today, as a person says it: 3 дні тому, тиждень тому, місяць тому, рік тому."""
+    diff = (today - d).days
+    if diff == 1:
+        return "вчора"
+    if diff == 2:
+        return "позавчора"
+    if diff < 7:
+        return f"{_count(diff, 'day')} тому"
+    months = _months_between(d, today)
+    if months < 1:
+        return f"{_count(diff // 7, 'week')} тому"
+    if months < 12:
+        return f"{_count(months, 'month')} тому"
+    return f"{_count(months // 12, 'year')} тому"
+
+
+def _ahead_days(d: date, today: date) -> str:
+    diff = (d - today).days
+    if diff == 1:
+        return "завтра"
+    if diff == 2:
+        return "післязавтра"
+    if diff < 7:
+        return WEEKDAY_ON[d.weekday()]
+    months = _months_between(today, d)
+    if months < 1:
+        return f"через {_count(diff, 'day')}"
+    if months < 12:
+        return f"через {_count(months, 'month')}"
+    return f"через {_count(months // 12, 'year')}"
+
+
+def stamp(then: datetime, now: datetime, fine: bool = True, hour: bool | None = None) -> str:
+    """A memory's or a plan's time (pure): its age, then its date in brackets — «6 годин тому (сьогодні, 08:15)»,
+    «вчора ввечері (17.11, 21:40)», «5 днів тому (13.11)», «місяць тому (18.10)», «через 3 години (17:00)», «завтра
+    (19.11)». `fine` False: the day is the smallest unit («сьогодні (18.11)», «вчора (17.11)»), the same text all day.
+    `hour`: show the hour — by default, when `fine`, within today and yesterday (and tomorrow ahead); `then` is taken in `now`'s
+    zone, so the age is counted in her local calendar days."""
+    then = then.astimezone(now.tzinfo)
+    today, d = now.date(), then.date()
+    diff = (today - d).days
+    at = f"{then:%H:%M}"
+    show_hour = hour if hour is not None else fine and -1 <= diff <= 1
+    if fine and then <= now:
+        secs = (now - then).total_seconds()
+        if secs < 60:
+            return f"щойно ({at})"
+        if secs < 3600:
+            return f"{_count(int(secs // 60), 'minute')} тому ({at})"
+        if secs < 86400:
+            return f"{_count(int(secs // 3600), 'hour')} тому ({'сьогодні' if diff == 0 else 'вчора'}, {at})"
+    if fine and then > now:
+        secs = (then - now).total_seconds()
+        if secs < 60:
+            return f"зараз ({at})"
+        if secs < 3600:
+            return f"через {_count(max(1, int(secs // 60)), 'minute')} ({at})"
+        if diff == 0:
+            return f"через {_count(int(secs // 3600), 'hour')} ({at})"
+    if diff == 0:
+        word = "сьогодні"
+    elif diff > 0:
+        word = _past_days(d, today)
+        if fine and diff in (1, 2):
+            word += f" {PART_ADVERB[part_of_day(then.hour)]}"
+    else:
+        word = _ahead_days(d, today)
+    shown = _date(d, today) + (f", {at}" if show_hour else "")
+    return f"{word} ({shown})"
+
+
+def _range(first: date, last: date, today: date) -> str:
+    """«10–16.11», «27.10–02.11», a year's when not this one."""
+    if first.month == last.month and first.year == last.year:
+        return f"{first.day:02d}–{_date(last, today)}"
+    return f"{_date(first, today)}–{_date(last, today)}"
+
+
+def span_stamp(start: datetime, end: datetime, now: datetime, fine: bool = False) -> str:
+    """A period's time (pure), `end` exclusive, in `now`'s zone: a year, a month, a week from Monday, a day — each by
+    its age and its dates («тиждень тому (10–16.11)», «місяць тому (жовтень 2026)», «вчора (17.11)») — or hours
+    («сьогодні, 08:00–09:00 (18.11)»; `fine`: «3 години тому (11:00–12:00)», its age from its end)."""
+    start, end = start.astimezone(now.tzinfo), end.astimezone(now.tzinfo)
+    today, first = now.date(), start.date()
+    midnight = start.time() == end.time() == datetime.min.time()
+    if midnight and first.month == 1 and first.day == 1 and end.date() == date(first.year + 1, 1, 1):
+        n = today.year - first.year
+        return f"{'цього року' if n == 0 else _count(n, 'year') + ' тому'} ({first.year})"
+    if midnight and first.day == 1 and end.date() == date(first.year + first.month // 12, first.month % 12 + 1, 1):
+        n = (today.year - first.year) * 12 + today.month - first.month
+        name = f"{MONTHS_NOM[first.month - 1]} {first.year}"
+        return f"{'цього місяця' if n == 0 else _count(n, 'month') + ' тому'} ({name})"
+    if midnight and (end.date() - first).days == 7 and first.weekday() == 0:
+        n = ((today - timedelta(days=today.weekday())) - first).days // 7
+        word = "цього тижня" if n == 0 else f"{_count(n, 'week')} тому" if n > 0 else "наступного тижня"
+        return f"{word} ({_range(first, first + timedelta(days=6), today)})"
+    if midnight and (end.date() - first).days == 1:
+        return stamp(start, now, fine=False, hour=False)
+    hours = f"{start:%H:%M}–{end:%H:%M}"
+    if fine and end <= now and (now - end).total_seconds() < 86400:
+        return f"{stamp(end, now, fine=True).split(' (')[0]} ({hours})"
+    word = stamp(start, now, fine=False, hour=False).split(" (")[0]
+    return f"{word}, {hours} ({_date(first, today)})"
+
+
+_DATE_ISO = re.compile(r"(?<![\d.\-])\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(?![\d\-])")
+_DATE_DOTS = re.compile(r"(?<![\d.:,])(0?[1-9]|[12]\d|3[01])\.(0[1-9]|1[0-2])(?:\.(?:\d{4}|\d{2}))?(?![\d:]|\.\d)")
+_DATE_WORDS = re.compile(r"(?<!\d)(0?[1-9]|[12]\d|3[01])(?:-?(?:го|ого|е))?\s+(" + "|".join(MONTHS_GEN) + r")(?!\w)",
+                         re.IGNORECASE)
+
+
+def says_date(text: str) -> int:
+    """How many dates an answer names (pure; v9.1, the owner: she speaks without dates) — «17.11», «17.11.2026», «17
+    листопада», «2026-11-17». Not an hour («14:20», «17.30»), a count («17 разів»), a year alone or a decimal («3.5»)."""
+    text = text or ""
+    n = len(_DATE_ISO.findall(text))
+    text = _DATE_ISO.sub(" ", text)
+    n += len(_DATE_DOTS.findall(text))
+    text = _DATE_DOTS.sub(" ", text)
+    return n + len(_DATE_WORDS.findall(text))
