@@ -100,7 +100,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v8.1 | Лілі hears the room and answers when named (Lumi's `agora` channel) | ✅ completed | `v8.1.0` (2026-11-15) |
 | v8.2 | Лілі under the full rules | ✅ completed | `v8.2.0` (2026-11-15) |
 | v8.3 | Лілі speaks when she wants | ✅ completed | `v8.3.0` (2026-11-16) |
-| v9.1 | When it was: a time on every memory and every plan (Кіра and Устина) | ⏳ planned | — |
+| v9.1 | When it was: a time on every memory and every plan (Кіра and Устина) | ✅ completed | `v9.1.0` (2026-11-18) |
 | v9.2 | Her checklist: what she plans herself, and what is done (Кіра and Устина) | ⏳ planned | — |
 | v10.1 | The moment and the day: her state and her voice (Кіра and Устина) | ⏳ planned | — |
 | v10.2 | Feelings, open threads and her behaviour (Кіра and Устина) | ⏳ planned | — |
@@ -4651,7 +4651,7 @@ recall by function calling).
 
 ### v9.1 — When it was: a time on every memory and every plan
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v9.1.0` on 2026-11-18 (AGORA-277…281). Deployed first for the owner's live test as `sha-0e35848`, accepted with «релізь»; the week without dates waived to after the release, watched on her card; then reviewed (2 MEDIUM, 1 LOW fixed), released and deployed — the first phase in the owner's order of 2026-11-18.
 
 **Goal:** every memory and every plan in a companion's prompt says when it was, or when it is due.
 - **How long ago:** in hours within a day («6 годин тому», «12 годин тому»), then in days, weeks and months
