@@ -87,6 +87,9 @@ Summarize:
 
 ## Important Rules
 
+- **A hardening release is deployed** by `/release-version` automatically, never asked (the owner,
+  2026-11-18; `release-version` §Deploy).
+
 - **Only HIGH and MEDIUM.** LOW findings stay deferred to their documented homes.
 - **Invocation is consent**, at whatever level the invocation happened. The **release** is never
   implicit: a patch needs `--release` or an explicit confirmation, and only on an already-released phase.

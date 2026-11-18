@@ -120,6 +120,9 @@ EOF
 - **Manual checks still pending:** write `Refs #N` instead of `Closes #N`, so that pushing doesn't close an
   issue the owner hasn't verified.
 - **`ops` issue with no repo artifact:** it has no commit; go straight to 2g once the owner confirms.
+- **A deploy is never asked about** (the owner, 2026-11-18): an `ops` issue that deploys the phase build is
+  Claude's, done automatically by `release-version` §Deploy (under `/ship-phase`: its step 4, after every code
+  issue is closed); only the owner's live checks that follow it wait for him.
 
 #### 2f. Push
 

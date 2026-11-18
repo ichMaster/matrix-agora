@@ -1,11 +1,17 @@
 ---
 name: release-version
-description: Bump the project version (ROADMAP phase vA.B -> A.B.0, post-release fix -> A.B.C), update VERSION / pyproject.toml / uv.lock / RELEASE.txt / the CLAUDE.md status line, commit, create an annotated tag, and push.
+description: Bump the project version (ROADMAP phase vA.B -> A.B.0, post-release fix -> A.B.C), update VERSION / pyproject.toml / uv.lock / RELEASE.txt / the CLAUDE.md status line, commit, create an annotated tag, push, then DEPLOY the release to the server automatically (never ask). Holds the canonical deploy procedure the other delivery skills use.
 ---
 
 # Skill: Release Version
 
-Bump the project version, update every version reference, write release notes, commit, tag and push.
+Bump the project version, update every version reference, write release notes, commit, tag, push, and
+**deploy the release automatically** (Step 7).
+
+> **Deploys are automatic** (the owner, 2026-11-18: «і не питай мене про деплой, це має бити автоматично»).
+> Never ask whether to deploy — a release is deployed as part of releasing, a phase build before its review
+> as part of `/ship-phase`. This overrides any older «only when the owner asks» for deploys; anything else on
+> the host still waits for the owner's word.
 
 ## Usage
 
@@ -113,7 +119,12 @@ git push origin "v<version>"
 
 Without a remote, say that the release is local only.
 
-### Step 7: Report
+### Step 7: Deploy — automatic, never asked
+
+Run **§Deploy** below with the release's own images (`v<version>`, built by CI from the tag). A patch is
+deployed the same way as a phase. Without a remote (no CI, no images) say the release is not deployed.
+
+### Step 8: Report
 
 ```
 Released v<version>
@@ -121,12 +132,36 @@ Released v<version>
   Commit: <short hash>
   Tag:    v<version>
   Pushed: yes / no (no remote)
+  Deployed: v<version> at HH:MM / not deployed (why)
   Files updated:
     - VERSION
     - pyproject.toml, uv.lock
     - RELEASE.txt
     - CLAUDE.md
 ```
+
+## Deploy (the procedure every delivery skill uses)
+
+Deploying is Claude's job, done without asking. The owner only tests what is deployed.
+
+1. **The images.** CI (`.github/workflows/`) builds the agent, agent-claude and panel images:
+   - from a **release tag** `vA.B.C` → `:vA.B.C` (and `:latest`);
+   - from a **push to `main`** → `:sha-<short>` (and `:edge`). This is how a phase build reaches the host
+     **before** its release (for the owner's live test): fast-forward `main` to the working branch —
+     `git push origin <branch>:main` — only when `main` is an ancestor of it (`git merge-base --is-ancestor`);
+     if it is not, stop and report, never force.
+2. **Wait for CI:** `gh run list --branch <main|tag> --limit 1`, then `gh run watch <id> --exit-status`
+   (in the background). A red CI stops the deploy; report it.
+3. **Set the tags** in `server/.env` without printing it: `sed -i ''
+   -e 's/^AGENT_IMAGE_TAG=.*/AGENT_IMAGE_TAG=<tag>/' -e 's/^PANEL_IMAGE_TAG=.*/PANEL_IMAGE_TAG=<tag>/'
+   server/.env`, then check with `grep -c '^AGENT_IMAGE_TAG=<tag>$' server/.env` (never `cat`).
+4. **Deploy from the Mac:** `export PATH="/opt/homebrew/bin:$PATH"`, then `server/deploy.sh --dry-run`,
+   then `server/deploy.sh`. It syncs the compose file, `.env`, the env files and the private canon, pulls and
+   runs `up -d`.
+5. **Check:** the containers run the new image tag, and each changed agent's log since its start has no
+   ERROR or traceback — counts and log levels only, never a message text. A failed deploy is reported with
+   what failed; never roll back on your own.
+6. **Record:** say in the report what was deployed and when; update the live-settings memory with the tag.
 
 ## Important Rules
 
@@ -138,4 +173,6 @@ Released v<version>
 - **Version metadata only.** This skill touches `VERSION`, `pyproject.toml`, `uv.lock`, `RELEASE.txt`,
   `README.md` and CLAUDE.md's status line, never agent, panel or server code.
 - **Confirm the changelog** when it is auto-generated.
+- **Deploy every release, never ask** (§Deploy). The only deploy-related pause is a red CI or a failed deploy,
+  reported as such.
 - **Plain-text release notes** in `RELEASE.txt`.

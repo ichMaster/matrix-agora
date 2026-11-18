@@ -169,6 +169,10 @@ review docs and release tags.
 
 ## Important Rules
 
+- **The owner's order and automatic deploys** (2026-11-18) hold here as in `/ship-phase`: build → deploy
+  the build → the owner tests it → review and fixes → release and deploy; a deploy is never asked about
+  (`release-version` §Deploy). Offline, with no remote and so no CI images, say a build cannot be deployed.
+
 - **File-driven, no GitHub.** Issues come from `specification/implementation/vA.B-issues.md`. A required
   phase with **no issues file** is a hard stop, never a silent skip.
 - **Reconcile, don't regenerate.** Correct the pre-generated issues in place, with `⟳ Reconciled` marks.

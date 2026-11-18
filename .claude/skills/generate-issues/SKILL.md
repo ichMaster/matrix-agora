@@ -88,7 +88,9 @@ be a single issue. Don't pad. Each issue is a coherent, independently verifiable
   - `config`: `pyproject.toml`, `.env.example`, `.gitignore`, `agents/Dockerfile`, `panel/Dockerfile`, `server/deploy.sh`, `.github/workflows/`.
   - `tests`.
   - `docs`: the `specification/` files, README.md, CLAUDE.md.
-  - `ops`: steps the owner performs on the Ubuntu host or in Element.
+  - `ops`: steps on the Ubuntu host or in Element. A phase's deploy is one of them, but it is Claude's and
+    automatic, never asked (`release-version` §Deploy); its issue lists the owner's live checks that follow
+    as **Manual (owner):**. Order: build → deploy → the owner tests → review and fixes → release and deploy.
 - **Order by dependency.** The first issue is usually the gate that everything builds on. In v0.5 that is
   the project skeleton plus config loading and the session login; in v1.2 it is the pure turn-taking module.
 - **Tests in every code issue.** Keep decision logic pure so it can be unit-tested with plain data: the

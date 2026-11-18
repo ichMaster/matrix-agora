@@ -15,6 +15,10 @@ One loop over the codebase: **review → recommend → fix → record.**
 
 The recommendations and the results live in **one document**.
 
+Under `/ship-phase` it runs **after** the phase build is deployed and the owner has tested it (the owner's
+order, 2026-11-18: deploy → his test → review and fixes → deploy and release); a finding from his test is
+an input to the review. The fixes are deployed with the release, never on their own.
+
 This skill fixes only small, in-scope, high-value findings. It **never** bumps the version or cuts a
 release (that stays with `/release-version`), and it never pulls deferred or larger work forward without
 flagging it.

@@ -1,6 +1,6 @@
 ---
 name: ship-phase
-description: Full GitHub-backed delivery pipeline over ROADMAP phases. Takes one selector or a comma-separated LIST of phases/versions/ranges (e.g. v0.4, v1, v0-v2). The list names TARGETS - missing earlier phases are added automatically, the set is de-duplicated, sorted into roadmap order, and already-released phases are skipped. Per phase - generate-issues (with reconcile), upload-issues, execute-issues, review-and-fix-issues, release-version A.B.0. At the END of the run a HARDEN sweep runs BY DEFAULT (opt out with --no-harden). Gated; stops on failure; pauses for owner-run steps.
+description: Full GitHub-backed delivery pipeline over ROADMAP phases. Takes one selector or a comma-separated LIST of phases/versions/ranges (e.g. v0.4, v1, v0-v2). The list names TARGETS - missing earlier phases are added automatically, the set is de-duplicated, sorted into roadmap order, and already-released phases are skipped. Per phase - generate-issues (with reconcile), upload-issues, execute-issues, DEPLOY the build (automatic, never asked), the OWNER TESTS it live, review-and-fix-issues, then release-version A.B.0 which DEPLOYS the release. At the END of the run a HARDEN sweep runs BY DEFAULT (opt out with --no-harden). Gated; stops on failure; pauses only for the owner's live test and owner-run steps.
 ---
 
 # Skill: Ship Phase — the full delivery pipeline
@@ -20,9 +20,11 @@ for each PHASE vA.B in PLAN (in order):
     0. RECONCILE  — ground vA.B in the real implementation + all prior fixes (inside generate-issues)
     1. generate-issues vA.B
     2. upload-issues @specification/implementation/vA.B-issues.md
-    3. execute-issues vA.B::phase   (implement → gates → owner checks → commit → push → close)
-    4. review-and-fix-issues vA.B   (review → ranked doc → fix-now fixes → same doc)
-    5. release-version A.B.0        ← RELEASE PER PHASE (tag vA.B.0)
+    3. execute-issues vA.B::phase   (implement → gates → commit → push → close the code issues)
+    4. DEPLOY the phase build        ← AUTOMATIC, never asked (main → :sha-<short>; release-version §Deploy)
+    5. OWNER TESTS it live           ← the only pause: the phase's Manual (owner) DoD, confirmed or waived
+    6. review-and-fix-issues vA.B   (review → ranked doc → fix-now fixes → same doc)
+    7. release-version A.B.0        ← RELEASE PER PHASE (tag vA.B.0) and DEPLOY it (:vA.B.0), automatic
     → REPORT the phase to chat
 → END OF RUN: HARDEN (harden-findings <plan scope> --release) — BY DEFAULT, skipped with --no-harden
 → overall summary to chat
@@ -31,9 +33,22 @@ for each PHASE vA.B in PLAN (in order):
 This skill is a **thin orchestrator**. It sequences the sub-skills, adds the gating and the end-of-run
 hardening, and releases per phase; each sub-skill keeps its own discipline.
 
-> **This pipeline releases.** Invoking `/ship-phase` is the explicit opt-in to the automated per-phase
-> releases (real tags and pushes) **and** to the HARDEN sweep. `/release-version`'s own rules still hold:
-> it never downgrades and it confirms the changelog. To build without releasing, use the individual skills.
+> **This pipeline releases and deploys.** Invoking `/ship-phase` is the explicit opt-in to the automated
+> per-phase releases (real tags and pushes), **to every deploy** and to the HARDEN sweep. `/release-version`'s
+> own rules still hold: it never downgrades and it confirms the changelog. To build without releasing, use the
+> individual skills.
+
+> **The owner's order** (2026-11-18: «порядок такий - спочатку деплой мое тестування, потім код ревью і фікси і
+> потім деплой і реліз»; «і не питай мене про деплой, це має бити автоматично»):
+> 1. the phase's code is built (its code issues closed, gates green);
+> 2. **deploy** that build — automatically, never asking;
+> 3. **the owner tests it** live (the phase's Manual (owner) DoD);
+> 4. **code review and fixes** (`review-and-fix-issues`);
+> 5. **deploy and release** — the release tag, then its images deployed, automatically.
+>
+> A fix found later — in the owner's test, in the room, or by HARDEN — ships as a patch `A.B.C` through the
+> same order where it applies: fix → review → release → deploy (the owner, 2026-11-15: every versioned step
+> runs through this pipeline, reviewed and released).
 
 ## Usage
 
@@ -81,7 +96,7 @@ ignored.
    - The automated gates are green, or `n/a` before v0.5. Never start on a red suite.
 8. **Flag the owner's work up front.** Most of v0 (v0.1, v0.3, v0.4) is steps the owner performs on the Ubuntu host
    and in Element, and every phase's DoD has **Manual (owner)** checks. Tell the user at confirmation
-   that the run **will pause** for them.
+   that the run **will pause** for them — for the live test after the deploy, never for the deploy itself.
 9. **Confirm the plan once.** Show:
    - the ordered phase list, grouped by version;
    - the filled-in phases, any reordering and the skips;
@@ -114,20 +129,28 @@ sub-skill through the **Skill tool** and follow its instructions fully.
 1. **`generate-issues vA.B`** writes `specification/implementation/vA.B-issues.md`.
 2. **`upload-issues @specification/implementation/vA.B-issues.md`** creates the GitHub issues, labels and
    dependency comments, and `vA.B-github-report.md`, and commits them.
-3. **`execute-issues vA.B::phase`** implements the issues one per commit, runs the gates, gets the owner's
-   manual checks, pushes, closes the issues, and writes `vA.B-execution-report.md`.
-4. **`review-and-fix-issues vA.B`** writes the ranked review doc, fixes only the FIX NOW items (with
+3. **`execute-issues vA.B::phase`** implements the code issues one per commit, runs the gates, pushes and
+   closes them. The phase's `ops` issue (deploy and live checks) stays open for steps 4–5.
+4. **DEPLOY the phase build — automatically, never asked.** Fast-forward `main` to the working branch, wait
+   for CI's `:sha-<short>` images, set them in `server/.env` and run `server/deploy.sh` (the procedure:
+   `release-version` §Deploy). A red CI or a failed deploy stops the run and is reported.
+5. **The OWNER TESTS it.** Give the owner the phase's Manual (owner) DoD as a short checklist and wait for his
+   word: each check confirmed, or waived. Fix what his test finds first (one commit each, gates green,
+   deployed again the same way) before the review. Then close the `ops` issue and write
+   `vA.B-execution-report.md`.
+6. **`review-and-fix-issues vA.B`** writes the ranked review doc, fixes only the FIX NOW items (with
    regression tests) and records them in that same doc.
-5. **`release-version A.B.0`** bumps the version, tags `vA.B.0` and pushes.
+7. **`release-version A.B.0`** bumps the version, tags `vA.B.0`, pushes, and **deploys the release**
+   (`:vA.B.0`) automatically.
 
 **Gate the hand-offs:**
 
 - upload only after generate wrote the file;
 - execute only after the issues exist;
-- review only after execute finished with every issue closed (none failed or `awaiting owner`);
-- release only after the review's fix-now items are committed, the gates are green, and the phase's manual
-  DoD is confirmed by the owner;
-- start the next phase only after this one is released.
+- deploy only after every code issue is closed and the gates are green;
+- review only after the owner has tested the deployed build (confirmed or waived) and every issue is closed;
+- release only after the review's fix-now items are committed and the gates are green;
+- start the next phase only after this one is released **and deployed**.
 
 **Every phase boundary ends pushed and clean.** Before the next phase, check that `git status` is clean and
 there are no unpushed commits, and `git push` if there are. This skill **stops on failure by design**, so a
@@ -139,7 +162,8 @@ After each release, report:
 
 - the `AGORA-###` range → GitHub numbers;
 - the execution commit range and the gate status;
-- the manual checks the owner confirmed;
+- the deploys (the test build's `:sha-…` and the release's `:vA.B.0`, with their times);
+- the manual checks the owner confirmed or waived;
 - the review findings (fixed now / deferred, with homes);
 - any "Architecture impact" notes;
 - the release tag.
@@ -164,8 +188,13 @@ outcome, anything that stopped early and what remains, and what's next.
 
 ## Important Rules
 
-- **Release per phase (`A.B.0`)**, after it is built, reviewed, fix-now-fixed and owner-verified. Never
-  batch phases into one release; never release mid-phase.
+- **The order is fixed:** build → deploy → the owner tests → review and fixes → release and deploy.
+- **Deploys are automatic — never ask.** Every phase build and every release is deployed by Claude
+  (`release-version` §Deploy). Only a red CI or a failed deploy pauses, as a failure.
+- **Release per phase (`A.B.0`)**, after it is built, deployed, owner-tested, reviewed and fix-now-fixed.
+  Never batch phases into one release; never release mid-phase.
+- **Later fixes are patches** (`A.B.1`, …) — reviewed, released and deployed the same way; nothing is
+  hand-built outside the pipeline.
 - **Next phase only after the previous one is released.** This strict order is what makes reconciliation
   meaningful.
 - **HARDEN runs once at the end of the run, by default.** Invoking the skill is the consent; `--no-harden`
@@ -173,8 +202,9 @@ outcome, anything that stopped early and what remains, and what's next.
 - **Every phase boundary ends pushed and clean.**
 - **Stop on failure; don't paper over it.** A failed sub-skill or a red gate halts the run. Report what
   completed and what remains. Never release a phase whose gates aren't green.
-- **Pause for the owner.** Owner-run steps and manual DoD checks are confirmed by the owner, never assumed.
-  Don't act on the Ubuntu host or in Element unless asked.
+- **Pause for the owner** only for his live test and owner-run steps: manual DoD checks are confirmed (or
+  waived) by the owner, never assumed. Deploys are not owner steps. Anything else on the host or in Element
+  waits for his word.
 - **Pause for real decisions:** an id or tag collision, an overwrite-or-append prompt, a held HARDEN
   finding, a failure. Routine confirmations run straight through.
 - **Delegate, never duplicate.** This skill sequences `generate-issues`, `upload-issues`, `execute-issues`,
