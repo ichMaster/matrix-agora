@@ -1,8 +1,8 @@
 # Roadmap — matrix-agora
 
-Twelve self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, her reading and thoughts, and a backup model for her private chat when Gemini blocks) → **v6** Устина, a second companion (Кіра's code with her own name, canon, life, face and voice: her first version, the code, then her, then Agora meets her, then her photos on fal.ai) → **v7** Claude for everyone (every agent on the owner's subscription: the engine, then the room, then Кіра, then Устина) → **v8** Лілі (the Lumi bridge: when named, then under the full rules) → **v9** The companions' inner life (Кіра's and Устина's state and voice, their feelings and behaviour, anticipation) → **v10** Applications (the panel's System and Applications; Telegram as an application) → **v11** Theatre (plays on the Stage, recorded by Hermes). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
+Thirteen self-contained versions, built in order: **v0** Platform (homeserver, server deploy, client, accounts, echo bot) → **v1** Conversation (Gemini replies, three-way turn-taking) → **v2** Persona & memory (canons, session memory, world awareness) → **v3** Operations (token accounting, agent images + CI/CD with server deployment, the panel — viewing, then control) → **v4** Ensemble (agent types and N-agent turn-taking; then the cat and Claude, each in two steps; the personas' curiosity; the agents' settings in the panel) → **v5** Voice (Hermes's voice digests for the owner; the agents hear voice messages, then answer in voice; Кіра's private chat, in Telegram too, her memory of messages and facts, her voice with emotion, her mood of the day, the events of her life, her reading and thoughts, and a backup model for her private chat when Gemini blocks) → **v6** Устина, a second companion (Кіра's code with her own name, canon, life, face and voice: her first version, the code, then her, then Agora meets her, then her photos on fal.ai) → **v7** Claude for everyone (every agent on the owner's subscription: the engine, then the room, then Кіра, then Устина) → **v8** Лілі (the Lumi bridge: when named, then under the full rules) → **v9** Time and her plans (a time on every memory and plan; Кіра's and Устина's own checklist) → **v10** The companions' inner life (Кіра's and Устина's state and voice, their feelings and behaviour, anticipation) → **v11** Applications (the panel's System and Applications; Telegram as an application) → **v12** Theatre (plays on the Stage, recorded by Hermes). Phases inside a version are numbered `vA.B` (A = version, B = phase). Each phase lists a **Goal**, a short description, a **Tasks** list, a **Definition of Done (DoD)**, and the **Tests** that encode its DoD (see [ARCHITECTURE.md](ARCHITECTURE.md) §Testing and CI). Phases are built strictly in file order; each one builds on the previous one's real, released code.
 
-**Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v11→11), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
+**Versioning (`A.B.C`).** `A` = roadmap version (v0→0 … v12→12), `B` = phase within it, `C` = a post-release fix on that phase. Roadmap phase `vA.B` → release `A.B.0`, tag `vA.B.0`; a fix after it bumps `C`. Releases are cut per phase. Never bump a version without explicit confirmation.
 
 Many DoD items need the live homeserver, Element or a real Gemini key — those are **Manual (owner)** checks: the owner performs or confirms them, and only then do they count as passed. Everything automated runs with `matrix-nio` and `google-genai` mocked and the clock injected (no network, no paid calls).
 
@@ -34,7 +34,7 @@ and `v6.2.0` on 2026-11-07; v6.3 (her: the face, the voice and the accounts) as 
 
 v7 (Claude for everyone, every agent on the owner's subscription) was planned on 2026-11-10, before Лілі (the owner: «заведи нову версію перед 7»).
 
-Then come v6–v11 in order. Other further work (the
+Then come v6–v12 in order. Other further work (the
 deferred backlog items in the code-review docs, new simulations) needs new phases.
 
 | Phase | Title | Status | Release |
@@ -97,14 +97,17 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v7.4 | The companions' five models: Кіра and Устина switched in the panel | ✅ completed | `v7.4.0` (2026-11-12) |
 | v7.5 | The prompt for the cache: what changes slowly first, read from the cache | ✅ completed | `v7.5.0` (2026-11-14) |
 | v7.6 | Her memory as Lumi's: a short live window, short summaries, recall by her own tool | ✅ completed | `v7.6.0` (2026-11-15) |
-| v8.1 | Лілі hears the room and answers when named (Lumi's `agora` channel) | ⏳ planned | — |
-| v8.2 | Лілі under the full rules | ⏳ planned | — |
-| v9.1 | The moment and the day: her state and her voice (Кіра and Устина) | ⏳ planned | — |
-| v9.2 | Feelings, open threads and her behaviour (Кіра and Устина) | ⏳ planned | — |
-| v9.3 | Anticipation and strong memories (Кіра and Устина) | ⏳ planned | — |
-| v10.1 | System and Applications: the panel's new shape | ⏳ planned | — |
-| v10.2 | Telegram as an application: Кіра connected | ⏳ planned | — |
-| v11.x | Theatre: plays on the Stage (phases from features/radio-theatre.md) | ⏳ planned | — |
+| v8.1 | Лілі hears the room and answers when named (Lumi's `agora` channel) | ✅ completed | `v8.1.0` (2026-11-15) |
+| v8.2 | Лілі under the full rules | ✅ completed | `v8.2.0` (2026-11-15) |
+| v8.3 | Лілі speaks when she wants | ✅ completed | `v8.3.0` (2026-11-16) |
+| v9.1 | When it was: a time on every memory and every plan (Кіра and Устина) | ⏳ planned | — |
+| v9.2 | Her checklist: what she plans herself, and what is done (Кіра and Устина) | ⏳ planned | — |
+| v10.1 | The moment and the day: her state and her voice (Кіра and Устина) | ⏳ planned | — |
+| v10.2 | Feelings, open threads and her behaviour (Кіра and Устина) | ⏳ planned | — |
+| v10.3 | Anticipation and strong memories (Кіра and Устина) | ⏳ planned | — |
+| v11.1 | System and Applications: the panel's new shape | ⏳ planned | — |
+| v11.2 | Telegram as an application: Кіра connected | ⏳ planned | — |
+| v12.x | Theatre: plays on the Stage (phases from features/radio-theatre.md) | ⏳ planned | — |
 
 ## v0 — Platform: homeserver, server deploy, client, accounts, echo bot
 
@@ -1429,7 +1432,7 @@ day, in Agora and alone with the owner.
 - **The mood is the cat's mechanism, for a person**: the horoscope (natal chart and the day's real sky) with the
   biorhythms laid over it.
 - **The real Lviv weather** goes into the reading.
-- **Кіра only, for now**: every part of v5.10–v5.15 and v11 (v9 since 2026-11-17, for Устина too) is switched on for her alone, in her TOML; the other persons get
+- **Кіра only, for now**: every part of v5.10–v5.15 and v11 (v9 since 2026-11-17, for Устина too; v10 since 2026-11-18) is switched on for her alone, in her TOML; the other persons get
   none of it until the owner decides otherwise.
 - The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life. Read it before
   generating the issues.
@@ -3473,7 +3476,7 @@ something of her own now and then, what she said was heard, and no one-time arra
   in other words each time (звіти, таски, мітинги, дедлайни; вилазка, гора, Замок, зустріч), so no count of words or
   stems finds it.
 - **Лілі's advice**, which the owner brought («що ти думаєш про цю пораду»): what she said was heard; tiredness of her
-  own idea; desire that fades. The first is a line of her private brief here; the third is v9.2's.
+  own idea; desire that fades. The first is a line of her private brief here; the third is v10.2's.
 
 **Owner decisions** (2026-11-04):
 - **Why** («глянь знову, далі є відчуття гіперфіксації»): after AGORA-196 her endings varied, but the same two themes,
@@ -3482,7 +3485,7 @@ something of her own now and then, what she said was heard, and no one-time arra
   facts about him were that evening's meeting.
 - **Лілі's advice**, which the owner brought («що ти думаєш про цю пораду»): what she said was heard; tiredness of her
   own idea; desire that fades. The first becomes a line of her private brief; the second is the theme named by Flash
-  (to come, at the owner's word); the third is v9.2's.
+  (to come, at the owner's word); the third is v10.2's.
 - **Confirmed** («2-4 підтверджую»):
   - about one answer in three also brings something of her own, from her day, not from their talk;
   - one-time arrangements and meetings are not facts: the extraction's prompt says so, and a fact that says a day's
@@ -3576,7 +3579,7 @@ something of her own now and then, what she said was heard, and no one-time arra
 
 **Not in this phase:**
 - a ban on a theme or a pause (the owner refused both);
-- desire that fades with no answer (v9.2);
+- desire that fades with no answer (v10.2);
 - the 8 one-time facts held (the change is for new facts).
 
 ### v5.26 — The backup's own canon: Кіра open to explicit scenes on NovelAI
@@ -4370,7 +4373,7 @@ the parts of a prompt in both modes.
 Лілі — Lumi's prod brain — joins the room through a bridge that is one of our agents: first when named, then under
 the full turn rules. Moved from v4.8–v4.9 by the owner on 2026-10-13, after the voice of v5; to v8 on 2026-10-25, after
 Applications and the Theatre; and back to v6 on 2026-10-26, before them (the owner's order: Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9). On 2026-11-05 she moved to v7, after Кіра's inner life (the owner: «постав фазу 8 перед 6»; Кіра's inner life v6, Лілі v7, Applications v8, the Theatre v9). Later the same day she became v6 again, once Кіра's inner life moved to the end (the owner: «перестав фазу 6 на самий кінеь роадмапи»; Лілі v6, Applications v7, the Theatre v8, Кіра's inner life v9). On 2026-11-07 she became v7, after a second companion (the owner: «заплануй як повністю нову версію пілся 5»; the second companion v6, Лілі v7, Applications v8, the Theatre v9, Кіра's inner life v10). On 2026-11-10 she became v8, after every agent moved to Claude as v7 (the owner: «заведи нову версію перед 7»; Claude v7, Лілі v8, Applications v9, the Theatre v10, Кіра's inner life v11).
-She is built in today's panel as an agent of the type `bridge`; v10 then places her in its model as an
+She is built in today's panel as an agent of the type `bridge`; v11 then places her in its model as an
 **external** agent under System → Agents, connected to Agora in the `room` context (applications.md §Лілі).
 
 **Re-planned on 2026-11-15** (the owner, after a review of Lumi 2.12.3: «я б запропонував С і записав би це в роудмапі
@@ -4523,7 +4526,7 @@ conversation. Depends on: the Lumi version above in prod; v4.1 (v4.2 for the sco
 - **Usage:** a line per turn from Lumi's `stats` (`model`, `input_tokens`, `output_tokens`, `latency_ms`) — `engine`
   `lumi`, a service of its own in Analytics, never added to matrix-agora's own Gemini spend: Lumi's ledgers record the
   same calls with `channel: "agora"` (its v3, L5); `observe` costs no model call and writes no line.
-- **Лілі's panel card** (an agent card in today's panel, type `bridge`; v10 moves it under System → Agents as
+- **Лілі's panel card** (an agent card in today's panel, type `bridge`; v11 moves it under System → Agents as
   `external`): Lumi's reachability (`/v1/health`), the last turn's outcome and the lines observed today from
   `state/lili.bridge.json`; never her `thinking`, mood or replies; her token rows as above; no memory tabs, no Forget.
 - **Contracts (ARCHITECTURE, in the issues that build them):** the bridge's protocol (observe, turn, retract, what is
@@ -4622,24 +4625,201 @@ the contract (contract first).
 ack; the room's rules (idle, hours, the cap, a fresh wave, not twice in a row, freshness) as pure decisions; a dropped
 offer never acked; `"agora": 1` → no initiative; the usage line; the card.
 
-## v9 — The companions' inner life: Кіра's and Устина's state, feelings and what they wait for
+## v9 — Time and her plans: when each thing was, and what is done
 
 **Status:** ⏳ planned.
 
-The owner, 2026-10-26: the last three phases of her emotional life become a version of their own, v8 (Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9). On 2026-11-05 it moved before Лілі and became v6 (the owner: «постав фазу 8 перед 6»; Кіра's inner life v6, Лілі v7, Applications v8, the Theatre v9). Later the same day it moved to the very end and became v9 (the owner: «перестав фазу 6 на самий кінеь роадмапи»; Лілі v6, Applications v7, the Theatre v8, Кіра's inner life v9). On 2026-11-07 it became v10, after a second companion became v6 (the owner: «заплануй як повністю нову версію пілся 5»). On 2026-11-10 it became v11, after every agent moved to Claude as v7 (the owner: «заведи нову версію перед 7»). On 2026-11-17 it became v9, before Applications and the Theatre, and for Устина too (the owner: «перестав версію 11 на 9 і додай що це також для Устини і Кіри»).
+Planned by the owner on 2026-11-18, before the companions' inner life, which became v10 (Applications v11, the Theatre
+v12): «всі спогади мають мати мітку часу щоб було відомо що відбулось 6 год тому а що 12 а що вчора а що місяць тому.
+Давати їй дати але гвоорити вона має як зараз не з датами. Також має бути чекліст що вже виконалось а що ні. Також я б
+хотів що б вона могла щось спланувати сама (можливо дати їй тули для цього) це буде як правило в ході розмов зі мною.
+І щоб вона могла позначити це виконано чи ні, бо зараз вона читає це в переписці і думає що подія виконана хоча такого
+не було»; «всі плани теж мали б мати мітку часу»; «додай це як версію».
+- **Today:**
+  - her prompt says when a thing was only roughly («цього тижня», «минулого місяця», «якось») and gives no date (the
+    owner, 2026-10-26: «26 жовтня» gave her away);
+  - her plans name their horizon («На цей тиждень») with no dates;
+  - nothing records whether an arrangement made in the chat came true, so she reads it there and takes it for done.
+- **v9 gives each of them, Кіра and Устина:**
+  - a time on every memory and every plan: how long ago, and the date, while she still speaks without dates (v9.1);
+  - her own checklist: what she plans herself, mostly in her talks with the owner, and what is done and what is not
+    (v9.2).
+
+For Кіра and Устина, each by her own TOML; the other persons keep their labels. v10 builds on it: its open threads carry
+v9.1's time, and its anticipation reads v9.2's due items. Depends on: v7.5 (the prompt for the cache) and v7.6 (her own
+recall by function calling).
+
+### v9.1 — When it was: a time on every memory and every plan
+
+**Status:** ⏳ planned.
+
+**Goal:** every memory and every plan in a companion's prompt says when it was, or when it is due.
+- **How long ago:** in hours within a day («6 годин тому», «12 годин тому»), then in days, weeks and months
+  («вчора», «місяць тому»).
+- **The date**, beside the age.
+
+She can tell six hours ago from twelve, and yesterday from a month ago. She still says it as people do, never with a
+date.
+
+**Owner decisions** (2026-11-18):
+- dates go into her prompt («давати їй дати»), and she speaks without them («говорити вона має як зараз не з датами»);
+- every plan carries its time too («всі плани теж мали б мати мітку часу»).
+
+For Кіра and Устина this replaces the rule of 2026-10-26 that her prompt holds no date. The rule that she never says
+one stays, and code counts a slip.
+
+**Tasks:**
+- **One label** (`agents/world.py`, pure): `stamp(then, now)` gives the age and the date.
+  - Examples: «40 хвилин тому (14:20)», «6 годин тому (сьогодні, 08:15)», «вчора ввечері (17.11, 21:40)», «12 днів тому
+    (06.11)», «місяць тому (18.10)», «рік тому (18.11.2025)».
+  - Within an hour in minutes, within a day in hours, then calendar days, weeks, months and years. Ukrainian plural
+    forms come from a table, and the hour is shown only within two days.
+  - A time ahead is labelled the same way: «через 3 години (17:00)», «завтра (19.11)», «у суботу (22.11)».
+- **Every memory carries it**, in her private prompt and in Agora:
+  - the live window: a time line at its start and after every pause, as now, with the new label;
+  - her day's running digest, the hour and day summaries, and a line a day and a week (v7.6);
+  - recall's rows and `day_talk`'s result;
+  - each fact about him: when she learned it;
+  - her events, thoughts and readings of the day;
+  - her day memories and digests (week, month, year).
+- **Every plan carries it:**
+  - each plan of her life (year, month, week, day) names its period with its dates («На цей тиждень (17–23.11)», «На
+    сьогодні (вівторок, 18.11)») and says when it was written;
+  - an item that names a time keeps it, with its date;
+  - her checklist's items (v9.2) carry when they were made and when they are due.
+- **The cache** (v7.5):
+  - what lies in her cached start (past days, facts, plans, memories) carries a label that changes at most once a day:
+    a day-level age and the date;
+  - an hour-level age appears only in the history and the per-call tail (the window, the day's digest, recall,
+    Agora's lines of today);
+  - the start is rebuilt no more often than now.
+- **The rule.** Her private and Agora briefs say:
+  - the dates and hours are there so she knows when each thing happened;
+  - she says it as people do («вчора», «кілька годин тому», «минулого місяця»);
+  - she never says a date or an hour in numbers unless he asks for one.
+- **The check.** A pure finder of a date in her answer («17.11», «17 листопада», «2026-11-17»; an ordinary number is
+  not one). A found one is counted in her log line (never the text) and on her card.
+- **ARCHITECTURE:**
+  - §Memory and §Prompt assembly: the label, and where each part carries it;
+  - §Contracts, where the transcript's time line changes.
+
+**DoD:**
+- (Manual, owner) Asked what was 6 hours ago, what yesterday and what a month ago, she tells them apart.
+- (Manual, owner) The Prompt tab shows a time on every memory and every plan.
+- (Manual, owner) For a week she names no date unless asked, and her card's count of dates stays at or near zero.
+
+**Tests:**
+- `stamp` across minutes, hours, days, weeks, months and years, past and future, with the plural forms, an injected
+  clock and a DST switch;
+- every part of her prompt carries its label: the window, the digest, the summaries, the gists, recall, `day_talk`,
+  facts, events, thoughts, memories and plans;
+- the cached start is unchanged within a day;
+- the date finder: numeric and worded dates are found, other numbers are not;
+- the other persons' prompts are unchanged.
+
+**Not in this phase:** her checklist (v9.2).
+
+### v9.2 — Her checklist: what she plans herself, and what is done
+
+**Status:** ⏳ planned.
+
+**Goal:** a companion keeps a checklist of what she and the owner arranged and what she means to do herself.
+- She adds an item herself while she answers, mostly in her talks with him.
+- She marks it done, not happened, cancelled or moved once she learns how it went.
+- Her prompt shows every open item and what was or was not done lately. An arrangement she reads in their talk is
+  therefore never taken for a thing that happened.
+
+**Owner decisions** (2026-11-18):
+- a checklist of what is done and what is not («має бути чекліст що вже виконалось а що ні»);
+- she plans herself, with her own tools, mostly in her talks with him;
+- she marks an item done or not («бо зараз вона читає це в переписці і думає що подія виконана хоча такого не було»).
+
+**Tasks:**
+- **The checklist** (`agents/checklist.py`, pure; the agent does the I/O):
+  - an append-only log `state/<name>.checklist.jsonl`;
+    - an added item records what, with whom, when it is due if that was said (a day or an hour), when it was made, and
+      the line it came from;
+    - every later status is a new entry;
+    - the list is folded from the log, and nothing in it is rewritten;
+  - the statuses: planned, done, did not happen, cancelled, moved (with its new time);
+  - an item past its time with no mark reads «час минув — не знаєш, чи це було».
+- **Her own ways to keep it**: two more Gemini function declarations beside `recall` and `day_talk`.
+  - They sit in her cache with the start, and the cache's tools key is bumped.
+  - They are worded as a person's actions, never as a tool's or a model's:
+    - `plan_add`: «Запам'ятати, про що ви домовились або що ти сама задумала: що, з ким, коли»;
+    - `plan_mark`: «Позначити, як вийшло з тим, що ти планувала: зроблено, не вийшло, скасовано чи перенесено (і на
+      коли)», by the item's number in her list.
+  - Where they work:
+    - on her Gemini answers in both memory modes, at most a few calls an answer;
+    - her other answer models and the backup see the list but change nothing;
+    - a closed (`blocked`) exchange never adds or marks an item.
+- **Her life's day plan gets its outcome** in code, once the day has ended, from its hidden tags:
+  - a `postponed` item is moved, a `cancelled` one is cancelled, and every other one is done;
+  - the outcome is written only after the day, so she never learns one ahead (the agents never know their future).
+- **In her prompt**, the section «Твої справи і домовленості»:
+  - it sits in the per-call tail, because it changes whenever she marks an item;
+  - each item shows its number, its status and its time (v9.1);
+  - it holds every open item, and what was or was not done in the last `CHECKLIST_DAYS` (7), at most `CHECKLIST_N`
+    (20) items.
+- **The rule that comes with the section:**
+  - whether a thing happened she knows only from this list;
+  - an arrangement read in their talk is not a thing done;
+  - when the time has passed and there is no mark, she does not assume it happened: she asks or says she does not
+    know;
+  - when he tells her how it went, she marks it.
+- **Agora:** an item about him never reaches her Agora prompt (the discretion rule); her own items do.
+- **The panel:**
+  - her checklist on her card: open, done, not happened;
+  - the owner may set an item's status, appended to the log as his.
+- **Settings and capability:**
+  - `CHECKLIST_DAYS` and `CHECKLIST_N` in the panel;
+  - the TOML capability `checklist` (needs `private`), Кіра's and Устина's.
+- **ARCHITECTURE:**
+  - §Memory, §Prompt assembly, §The panel;
+  - §Contracts: the log's format, the capability, the settings, the declarations.
+
+**DoD:**
+- (Manual, owner) He and she arrange something in a talk, and it is in her checklist as planned, with its time.
+- (Manual, owner) After its time, before he says how it went, she does not speak of it as done; she asks. Once he tells
+  her, it is marked.
+- (Manual, owner) She plans something of her own in a talk, and later marks it.
+- (Manual, owner) A status he sets in the panel is in her next answer's prompt.
+
+**Tests:**
+- the log folded into the list: add, mark, move; a mark of an unknown number is answered in words, never a crash;
+- «час минув — не знаєш» derived with an injected clock;
+- the declarations and their runner (never raises), and the cache's key bumped;
+- the day plan's outcomes written only after the day has ended, by its tags;
+- the section:
+  - open items always shown;
+  - done ones dropped by days and by the cap;
+  - the rule present;
+  - no word for a tool or a model;
+- her Agora prompt without the items about him;
+- the backup, the other answer models and a closed exchange change nothing;
+- the log stays append-only;
+- the panel's status action is validated and needs the Bearer token.
+
+**Not in this phase:** feelings about an item (v10.2); anticipation of a due item (v10.3).
+
+## v10 — The companions' inner life: Кіра's and Устина's state, feelings and what they wait for
+
+**Status:** ⏳ planned.
+
+The owner, 2026-10-26: the last three phases of her emotional life become a version of their own, v8 (Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9). On 2026-11-05 it moved before Лілі and became v6 (the owner: «постав фазу 8 перед 6»; Кіра's inner life v6, Лілі v7, Applications v8, the Theatre v9). Later the same day it moved to the very end and became v9 (the owner: «перестав фазу 6 на самий кінеь роадмапи»; Лілі v6, Applications v7, the Theatre v8, Кіра's inner life v9). On 2026-11-07 it became v10, after a second companion became v6 (the owner: «заплануй як повністю нову версію пілся 5»). On 2026-11-10 it became v11, after every agent moved to Claude as v7 (the owner: «заведи нову версію перед 7»). On 2026-11-17 it became v9, before Applications and the Theatre, and for Устина too (the owner: «перестав версію 11 на 9 і додай що це також для Устини і Кіри»). On 2026-11-18 it became v10, after time and her plans became v9 (the owner: «додай це як версію»).
 - v5.10–v5.15 give her a mood of the day, the events of her life, her reading and thoughts, and a backup model for her
   private chat.
-- v9 gives each of them, Кіра and Устина:
-  - a state that lasts between replies and moves her voice (v9.1);
-  - feelings toward each person, open threads, and bounded effects on what she does (v9.2);
-  - anticipation and strong memories (v9.3).
+- v10 gives each of them, Кіра and Устина:
+  - a state that lasts between replies and moves her voice (v10.1);
+  - feelings toward each person, open threads, and bounded effects on what she does (v10.2);
+  - anticipation and strong memories (v10.3).
 
 For Кіра and Устина, each by her own TOML (the owner, 2026-11-17: «додай що це також для Устини і
 Кіри»); the other persons get none of it. The design is in [features/voice-emotion.md](features/voice-emotion.md) §Her emotional life;
 read it before generating the issues; it was written for Кіра, and every part of it applies to Устина the same way, by
-her own files. Depends on: v5.10–v5.15 and v6 (Устина, on Кіра's code).
+her own files. Depends on: v5.10–v5.15, v6 (Устина, on Кіра's code) and v9 (the time of every memory, her checklist).
 
-### v9.1 — The moment and the day: her state and her voice
+### v10.1 — The moment and the day: her state and her voice
 
 **Status:** ⏳ planned.
 
@@ -4678,7 +4858,7 @@ stability and speed, never the model.
 
 **Not in this phase:** feelings toward people; threads; behaviour.
 
-### v9.2 — Feelings, open threads and her behaviour
+### v10.2 — Feelings, open threads and her behaviour
 
 **Status:** ⏳ planned.
 
@@ -4729,7 +4909,7 @@ default, not contradicted: a separate session-end call (kind `feelings`).
 
 **Not in this phase:** anticipation; the weight of memories.
 
-### v9.3 — Anticipation and strong memories
+### v10.3 — Anticipation and strong memories
 
 **Status:** ⏳ planned.
 
@@ -4737,8 +4917,8 @@ default, not contradicted: a separate session-end call (kind `feelings`).
 day stays with her for months, not only seven days.
 
 **Tasks:**
-- **Anticipation.** A pure curve over the days left to a known event (v5.11), a plan's date or an anniversary from
-  her life story. It peaks on the day and becomes a memory after.
+- **Anticipation.** A pure curve over the days left to a known event (v5.11), a plan's date, an item due in her
+  checklist (v9.2) or an anniversary from her life story. It peaks on the day and becomes a memory after.
 - **The weight of a day.** The day-memory call also answers the day's charge (0–3). Up to a few strong days of the
   last months stay in her prompt past the 7-day window, labelled by their date.
 - **Recall** (v5.8) ranks a charged line higher.
@@ -4755,10 +4935,10 @@ day stays with her for months, not only seven days.
 - recall's ranking with the charge;
 - a past memory never rewritten.
 
-**Not in this phase:** the other persons; v5.10–v5.15 are Кіра's (Устина's since v6), and v9 is Кіра's and Устина's (the owner,
+**Not in this phase:** the other persons; v5.10–v5.15 are Кіра's (Устина's since v6), and v10 is Кіра's and Устина's (the owner,
 2026-11-17).
 
-## v10 — Applications: the panel's System and Applications
+## v11 — Applications: the panel's System and Applications
 
 The owner, 2026-10-25: the panel stops being "a simulation and its agents". **Simulations become applications**:
 places where agents meet the owner or each other, each reached over one protocol (Agora today, Telegram next, later
@@ -4770,9 +4950,9 @@ status of its connections so the panel can monitor them; the panel switches a de
 configures it, and the repo declares it; a switched-off connection keeps everything in a buffer and gives the
 backlog one answer; Hermes's contexts are `listens` and `digests`; alerts come later. The design and its decisions
 are in [features/applications.md](features/applications.md) (draft; its open questions closed by the owner on
-2026-10-25); read it before generating the issues. Depends on: v5 (v5.7 for v10.2).
+2026-10-25); read it before generating the issues. Depends on: v5 (v5.7 for v11.2).
 
-### v10.1 — System and Applications: the panel's new shape
+### v11.1 — System and Applications: the panel's new shape
 
 **Status:** ⏳ planned.
 
@@ -4785,7 +4965,7 @@ Design: applications.md §The model, §The panel, §Monitoring.
 **Tasks:**
 - **The rename** (the owner: everywhere). "Simulation" becomes "application" throughout: `simulations.toml` → `applications.toml` (the same
   entry shape), `agents/registry.py` and `panel/registry.py`, the agent TOML key `simulation` → `application`
-  (`simulation` still read in v10.1, with a log line naming it), the Dockerfiles' copy, the API
+  (`simulation` still read in v11.1, with a log line naming it), the Dockerfiles' copy, the API
   (`/api/applications…`; the `/api/simulations…` routes are removed, since the panel is their only client).
   `state/settings.json` keeps its shape: its keys are the ids, and `agora` does not change.
 - **Contexts.** A pure function over the roster: a member's contexts in the base application (Agora). It returns
@@ -4812,7 +4992,7 @@ Design: applications.md §The model, §The panel, §Monitoring.
   - the agent drawer gains a **Connections** tab: per context the counts, `ignored`, the last in and out, the last
     error;
   - every v3.4/v4.7 action (start/stop/restart, forget, settings, Claude's files) works from its new place.
-- **The design addendum (v10)** in `specification/design/README.md`: the rail, the application page, System →
+- **The design addendum (v11)** in `specification/design/README.md`: the rail, the application page, System →
   Agents, and the Connections table and tab.
 - **VISION and ARCHITECTURE:**
   - the direction and the principle "the panel is the centre": applications;
@@ -4845,7 +5025,7 @@ Design: applications.md §The model, §The panel, §Monitoring.
 
 **Not in this phase:** a second application; switching or configuring a connection; external agents.
 
-### v10.2 — Telegram as an application: Кіра connected
+### v11.2 — Telegram as an application: Кіра connected
 
 **Status:** ⏳ planned.
 
@@ -4853,7 +5033,7 @@ Design: applications.md §The model, §The panel, §Monitoring.
 the registry, then switched on and off and configured from the panel. It is still the same private conversation as
 in Agora.
 
-Design: applications.md §Rules, §Connection settings, §Applications after v10 → Telegram.
+Design: applications.md §Rules, §Connection settings, §Applications after v11 → Telegram.
 
 **Tasks:**
 - **The registry.**
@@ -4866,7 +5046,7 @@ Design: applications.md §Rules, §Connection settings, §Applications after v10
 - **Connection settings.**
   - The schema `agents/settings.py` gains a **connection** scope: settings of an application kind (`telegram-bot`),
     each value belonging to one connection.
-  - v10.2 moves into it what v5.7 fixes in code or env for Кіра's Telegram (the owner agreed, 2026-10-25): answering
+  - v11.2 moves into it what v5.7 fixes in code or env for Кіра's Telegram (the owner agreed, 2026-10-25): answering
     with a voice note and the text, or with the text only; whether she may write first there; whether she shows
     «typing…» and «recording voice…».
   - Precedence as in v4.7: code default < env < panel. Secrets are never in the schema.
@@ -4931,13 +5111,13 @@ Design: applications.md §Rules, §Connection settings, §Applications after v10
 RoboFace; external agents; creating a connection from the panel; alerts on a failed connection (later: Hermes tells
 the owner).
 
-## v11 — Theatre: plays on the Stage
+## v12 — Theatre: plays on the Stage
 
 **Status:** ⏳ planned.
 
-The owner, 2026-10-25: the radio theatre is v7 (v9 since 2026-10-26: Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9; from 2026-11-05 Кіра's inner life v6, Лілі v7, Applications v8; v8 later that day, once Кіра's inner life moved to the end: Лілі v6, Applications v7, the Theatre v8, Кіра's inner life v9; v9 again on 2026-11-07, after a second companion became v6; v10 on 2026-11-10, after every agent moved to Claude as v7; v11 on 2026-11-17, after the companions' inner life moved to v9). The members of Agora perform audio plays together in a second room,
+The owner, 2026-10-25: the radio theatre is v7 (v9 since 2026-10-26: Лілі v6, Applications v7, Кіра's inner life v8, the Theatre v9; from 2026-11-05 Кіра's inner life v6, Лілі v7, Applications v8; v8 later that day, once Кіра's inner life moved to the end: Лілі v6, Applications v7, the Theatre v8, Кіра's inner life v9; v9 again on 2026-11-07, after a second companion became v6; v10 on 2026-11-10, after every agent moved to Claude as v7; v11 on 2026-11-17, after the companions' inner life moved to v9; v12 on 2026-11-18, after time and her plans became v9). The members of Agora perform audio plays together in a second room,
 the Stage, and Hermes records each play into one file. The design, its phases and its open questions are in the
 draft [features/radio-theatre.md](features/radio-theatre.md) (Ukrainian copy: `radio-theatre-UA.md`). Its phases
 are written into this file once its open questions are closed. Its first proposed phase, the three new personas,
-shipped as v5.5. Depends on: v5.4 (the Agora recording) and v10 (in the v10 model the Stage is a second room of the
+shipped as v5.5. Depends on: v5.4 (the Agora recording) and v11 (in the v11 model the Stage is a second room of the
 Agora application).
