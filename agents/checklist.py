@@ -128,6 +128,24 @@ def mark_entry(item_id: int, status: str, now: datetime, due: str | None = None,
             "by": by}
 
 
+def renumber(logged: list[dict], pending: list[dict]) -> list[dict]:
+    """Code review v9.2 #2 — her waiting entries made safe to append after `logged` (pure): an add whose number the
+    log now holds (a day plan written while she answered) takes the next free number, and the waiting marks that named
+    it follow; a mark of a logged item keeps its number."""
+    taken = {e["id"] for e in logged if e.get("op") == "add"}
+    free = next_id(logged + pending)
+    moved: dict[int, int] = {}
+    out = []
+    for e in pending:
+        if e.get("op") == "add" and e["id"] in taken:
+            moved[e["id"]], free = free, free + 1
+            e = {**e, "id": moved[e["id"]]}
+        elif e.get("op") == "mark" and e["id"] in moved:
+            e = {**e, "id": moved[e["id"]]}
+        out.append(e)
+    return out
+
+
 def fold(entries: list[dict]) -> list[Item]:
     """The list, in the order the items were added: each with its last status and its current due. A mark of an
     unknown number, or with an unknown status, changes nothing."""

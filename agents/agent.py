@@ -71,6 +71,7 @@ from agents.checklist import TITLE as CHECKLIST_TITLE
 from agents.checklist import append as append_checklist
 from agents.checklist import fold as fold_checklist
 from agents.checklist import load as load_checklist
+from agents.checklist import renumber as renumber_checklist
 from agents.chronicle import (
     day_memory_request,
     days_due,
@@ -1596,7 +1597,11 @@ class Agent:
                 log.info("checklist: %d entries dropped (%s)", len(pending), by or "silence")
             return
         try:
-            append_checklist(self.checklist_file, pending)
+            logged, _ = load_checklist(self.checklist_file)
+            safe = renumber_checklist(logged, pending)  # code review v9.2 #2: a number taken meanwhile is not hers
+            if safe != pending:
+                log.info("checklist: renumbered (a number was taken meanwhile)")
+            append_checklist(self.checklist_file, safe)
             log.info("checklist: %d entries kept", len(pending))
         except Exception as exc:  # noqa: BLE001
             log.error("checklist: not written (%s)", type(exc).__name__)

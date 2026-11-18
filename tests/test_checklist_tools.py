@@ -133,3 +133,24 @@ def test_a_past_day_plans_outcomes_once_and_today_never(tmp_path, monkeypatch):
         (1, "спортзал", "cancelled", "2026-11-12"), (2, "лекція", "done", "2026-11-13"),
         (3, "кава", "moved", "2026-11-13")]
     assert all(x.plan_day != today.isoformat() for x in items)
+
+
+
+# --- code review v9.2 ----------------------------------------------------------------------------------------------
+def test_her_item_keeps_its_own_number_when_a_day_plan_took_it_meanwhile(tmp_path, monkeypatch):
+    """#2: she wrote «№1» while answering; at her midnight the tick wrote yesterday's plan as №1–2; her add appended
+    after them was dropped by the fold (the first add of a number wins) and her mark hit the plan item."""
+    from agents.checklist import renumber
+    agent = with_checklist(lumi(tmp_path, monkeypatch))
+    asyncio.run(agent._run_memory_tool(PLAN_ADD, {"what": "сходити в кіно"}))
+    asyncio.run(agent._run_memory_tool(PLAN_MARK, {"number": 1, "status": "перенесено", "date": "2026-11-16"}))
+    path = agent.plan_paths(date(2026, 11, 13))["day"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("- лекція\n- кава\n", encoding="utf-8")
+    agent.ensure_plan_outcomes(date(2026, 11, 14))                                    # №1–2 taken meanwhile
+    agent._commit_checklist("gemini")
+    items = {x.id: x for x in fold(load(agent.checklist_file)[0])}
+    assert items[3].what == "сходити в кіно" and items[3].status == "moved" and items[3].due == "2026-11-16"
+    assert items[1].what == "лекція" and items[1].status == "done"                    # the plan item untouched
+    logged = [{"op": "add", "id": 1, "what": "a"}]
+    assert renumber(logged, [{"op": "mark", "id": 1, "status": "done"}])[0]["id"] == 1  # a logged item's mark stays
