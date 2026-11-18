@@ -57,7 +57,8 @@ def test_the_real_roster_holds_ada_and_bruno_as_ranked_personas():
                                                                               "fallback", "photos", "videos",
                                                                               "talk", "photos_fal",
                                                                               "initiative",  # v8.3: a bridge's
-                                                                              "stamps"}  # v9.1: a person's TOML
+                                                                              "stamps",  # v9.1: a person's TOML
+                                                                              "checklist"}  # v9.2: a person's TOML
     assert ada.panel["name"] == "Ada"
 
 

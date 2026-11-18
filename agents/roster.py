@@ -26,7 +26,8 @@ CAPABILITIES = ("canon", "life", "summary", "chronicle", "plans", "today", "worl
                 "emotion", "events", "thoughts", "fallback", "photos", "videos", "talk",
                 "photos_fal",  # v6.5: the owner's switch of her photos to fal (Seedream, the checker off)
                 "initiative",  # v8.3: a bridge's own line in the room, when Lumi offers one
-                "stamps")  # v9.1: a time — its age and its date — on every memory and plan in her prompt
+                "stamps",  # v9.1: a time — its age and its date — on every memory and plan in her prompt
+                "checklist")  # v9.2: her checklist — what she plans herself and what came of it
 TYPES: dict[str, frozenset[str]] = {
     # a human persona: the full memory stack, no horoscope — v5.10: a person's TOML may switch `mood` on (Кіра)
     "persona": frozenset({"canon", "life", "summary", "chronicle", "plans", "today", "world", "voice"}),
@@ -50,7 +51,7 @@ ASSISTANT_ONLY = frozenset({"news"})               # v4.5: only Claude brings ne
 HERALD_ONLY = frozenset({"digest", "transcribe"})  # v5.1: only the herald digests; v5.2: and transcribes
 BRIDGE_ONLY = frozenset({"initiative"})            # v8.3: only a bridge posts Lumi's offers
 PERSONA_ONLY = frozenset({"private", "telegram", "recall", "facts", "emotion", "events", "thoughts", "fallback",
-                          "photos", "videos", "talk", "photos_fal", "stamps"})  # v5.6: a private chat with the owner is a person's;
+                          "photos", "videos", "talk", "photos_fal", "stamps", "checklist"})  # v5.6: a private chat with the owner is a person's;
                                                   # no type has it by default — a person's TOML switches it on;
                                                   # v5.7: her own Telegram bot, a second door to that chat; v5.8: an
                                                   # archive of what she sees, recalled before each answer
@@ -63,7 +64,8 @@ NEEDS = {"telegram": "private",                    # v5.7: the bot is a door to 
          "photos": "telegram",                     # v5.17: her photos go only through her Telegram bot
          "videos": ("photos", "voice"),            # v5.18: a video starts from her photo; her кружечок is her voice
          "talk": ("private", "recall"),            # v5.20: summaries of her private chat, from her archive
-         "photos_fal": "photos"}                   # v6.5: the switch moves her photos, never without them
+         "photos_fal": "photos",                   # v6.5: the switch moves her photos, never without them
+         "checklist": "private"}                   # v9.2: her arrangements with him are made alone with him
 INITIATIVES = ("nudge", "news", "initiative")      # who may speak first: one member per initiative (v8.3: a bridge)
 SINGLES = (*INITIATIVES, "digest", "transcribe")   # one member per simulation with each of these
 ENGINES = ("gemini", "claude-sdk",  # v4.4: Claude through the Agent SDK, on the subscription only
