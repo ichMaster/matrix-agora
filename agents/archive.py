@@ -166,18 +166,21 @@ def _cut(text: str) -> str:
     return text if len(text) <= LINE_MAX_CHARS else text[:LINE_MAX_CHARS - 1].rstrip() + "…"
 
 
-def render_recalled(groups: list[list[Line]], tz, now: datetime, stamped: bool = False) -> str | None:
+def render_recalled(groups: list[list[Line]], tz, now: datetime, stamped: bool = False,
+                    fact_days: dict | None = None) -> str | None:
     """The recall section: each recalled line with its neighbours, a group a paragraph, oldest first, each line
     with when it was, as a person remembers it, and its place («минулого тижня, в Агорі — Ада: …»; never a date —
     the owner, 2026-10-26); a fact as what she knows; v5.12: a thought as hers, «вчора я думала: …» — never said.
-    v9.1 (AGORA-278): `stamped` — each by its age and its date («6 годин тому (сьогодні, 08:15), …»), a fact by the
-    day it was kept."""
+    v9.1 (AGORA-278): `stamped` — each by its age and its date («6 годин тому (сьогодні, 08:15), …»); a fact by the
+    day she learned it, from `fact_days` (its key → `Fact.added` as a date; code review v9.1 #1: never the row's time,
+    which is the archive's last sync), none when that day is unknown."""
     out, thought = [], False
     for group in groups:
         rows = []
         for line in group:
             if line.place == "facts":
-                since = f", з {local_now(line.ts_ms, tz):%d.%m}" if stamped else ""
+                day = (fact_days or {}).get(line.key) if stamped else None
+                since = f", з {day:%d.%m}{f'.{day.year}' if day.year != now.year else ''}" if day else ""
                 rows.append(f"(те, що ти знаєш про Ich{since}) {_cut(line.text)}")
                 continue
             when = stamp(local_now(line.ts_ms, tz), now) if stamped else ago(local_now(line.ts_ms, tz), now)

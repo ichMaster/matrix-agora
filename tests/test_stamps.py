@@ -79,7 +79,8 @@ def test_recall_rows_by_their_age_and_date_and_still_then():
     line = Line(1, "k1", k(2026, 11, 18, 8, 15), "private", "telegram", "Ich", "Я завтра їду.", "gemini")
     thought = Line(2, "k2", k(2026, 11, 17, 21, 40), "thought", "thought", "Кіра", "Думала про нього.", "gemini")
     fact = Line(3, "k3", k(2026, 10, 18, 10, 0), "facts", "facts", "Ich", "У нього є сестра.", "gemini")
-    got = render_recalled([[line], [thought], [fact]], "Europe/Kyiv", AT, stamped=True)
+    got = render_recalled([[line], [thought], [fact]], "Europe/Kyiv", AT, stamped=True,
+                          fact_days={"k3": datetime(2026, 10, 18).date()})
     assert "6 годин тому (сьогодні, 08:15), " in got and "Ich тоді: «Я завтра їду.»" in got
     assert "16 годин тому (вчора, 21:40) я думала: Думала про нього." in got
     assert "(те, що ти знаєш про Ich, з 18.10) У нього є сестра." in got
@@ -270,3 +271,23 @@ def test_her_card_sums_todays_dates(tmp_path):
     (tmp_path / "kira.memory.md").write_text("x", encoding="utf-8")
     view = memory_view(tmp_path, "kira", date(2026, 11, 18), with_stamps=True)
     assert view["dates_today"] == 2 and memory_view(tmp_path, "kira", date(2026, 11, 18))["dates_today"] is None
+
+
+# --- code review v9.1 ----------------------------------------------------------------------------------------------
+def test_a_recalled_fact_is_dated_by_the_day_she_learned_it_never_by_the_archives_sync(tmp_path, monkeypatch):
+    """#1: the archive rewrites every fact row with the sync's time (at each start, at each change) — a recalled fact
+    said «з 18.11» for a fact of October. Its day comes from the fact's `added`; an unknown day shows none."""
+    from datetime import date
+
+    from agents.facts import add_fact
+    fact = Line(3, "fact:x", k(2026, 11, 18, 23, 9), "facts", "", "факт", "У нього є сестра.", "gemini")
+    assert "з 18.11" not in render_recalled([[fact]], "Europe/Kyiv", AT, stamped=True)   # the sync's day: never
+    assert "(те, що ти знаєш про Ich) У нього є сестра." in render_recalled([[fact]], "Europe/Kyiv", AT, stamped=True)
+    agent = stamped(lumi(tmp_path, monkeypatch))
+    agent.facts_dir = tmp_path / "kira.facts"
+    assert add_fact(agent.facts_dir, "У нього є сестра.", 1, "private", date(2026, 10, 18), 100, 300) is not None
+    days = agent._fact_days()
+    assert list(days.values()) == [date(2026, 10, 18)]
+    key = next(iter(days))
+    got = render_recalled([[dataclasses.replace(fact, key=key)]], "Europe/Kyiv", AT, stamped=True, fact_days=days)
+    assert "(те, що ти знаєш про Ich, з 18.10) У нього є сестра." in got

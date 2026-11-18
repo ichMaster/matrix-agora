@@ -2003,6 +2003,23 @@ class Agent:
         self.last_private_ms = max(self.last_private_ms or 0, lines[-1].ts_ms)
         log.info("private chat: %d lines of history from the archive", len(lines))
 
+    def _fact_days(self) -> dict:
+        """Code review v9.1 #1 — the day she learned each fact, by its archive key (`fact:<id>` → a date), from her
+        facts' `added`; a fact without a readable day is left out. Empty without facts or when they cannot be read."""
+        if self.facts_dir is None:
+            return {}
+        try:
+            facts = load_facts(self.facts_dir)
+        except Exception:  # noqa: BLE001 — a recall never fails for a label
+            return {}
+        days = {}
+        for fact in facts:
+            try:
+                days[f"fact:{fact.id}"] = date.fromisoformat(fact.added.strip()[:10])
+            except ValueError:
+                continue
+        return days
+
     async def recall_section(self, query: str, places: tuple[str, ...], exclude: set,
                              gemini: bool = True, meaning: bool = True, n: int | None = None) -> str | None:
         """What she recalls before an answer: the message she answers is the query — the word search and (when its
@@ -2042,7 +2059,8 @@ class Agent:
                       for g in groups]
             groups = [g for g in groups if g]
             return render_recalled(groups, self.tz, local_now(self.clock(), self.tz),
-                                   stamped=self.cfg.can("stamps"))  # v9.1 (AGORA-278)
+                                   stamped=self.cfg.can("stamps"),  # v9.1 (AGORA-278)
+                                   fact_days=self._fact_days() if self.cfg.can("stamps") else None)
         except Exception as exc:  # noqa: BLE001
             log.error("recall failed (%s) — answering without it", type(exc).__name__)
             return None
