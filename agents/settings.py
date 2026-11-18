@@ -294,6 +294,11 @@ SCHEMA: tuple[Setting, ...] = (
     _s("PHOTO_WINDOW_MAX", "int", "3", "private", "cap:photos", None, "Скільки фото щонайбільше за вікно (0 — без ліміту)",
        "", 0, 100),
     _s("PHOTO_WINDOW_S", "int", "1800", "private", "cap:photos", None, "Вікно для ліміту фото", "s", 60, 86400),
+    # v9.2 (AGORA-283) — her checklist (`checklist`): what closed stays in her prompt so many days, and so many lines
+    _s("CHECKLIST_DAYS", "int", "7", "private", "cap:checklist", None, "Скільки днів зроблене лишається в її списку справ",
+       "days", 0, 60),
+    _s("CHECKLIST_N", "int", "20", "private", "cap:checklist", None, "Скільки справ щонайбільше в її промпті", "",
+       1, 100),
     # v5.18 — her videos in Telegram (`videos`): her clips' model and size, her кружечок's model and length, and a
     # day's cap for both together (the owner: as free as her photos — a safeguard only; a video costs $0.5–2; 0: off)
     _s("VIDEO_MODEL", "choice", "gemini-omni-1.1-flash", "private", "cap:videos", None, "Модель її відео",

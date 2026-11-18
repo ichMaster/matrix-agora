@@ -23,6 +23,13 @@ from google.genai import types
 RECALL = "recall"
 DAY_TALK = "day_talk"
 TOOLS_KEY = "recall+day_talk/1"  # in her cache's fingerprint: a cache with the tools never serves one without them
+# v9.2 (AGORA-283): her checklist — what she arranged or means to do, and how it went; each set its own key, so a cache
+# made with one set never serves another
+PLAN_ADD = "plan_add"
+PLAN_MARK = "plan_mark"
+TOOLS_KEY_ALL = "recall+day_talk+plans/1"
+TOOLS_KEY_PLANS = "plans/1"
+MARK_WORDS = ("зроблено", "не вийшло", "скасовано", "перенесено")
 NOTHING = "Нічого не згадується."
 NO_MORE = "Більше нічого не згадується — відповідай з того, що пам'ятаєш."
 DAY_RESULT_WORDS = 300
@@ -31,9 +38,40 @@ RECALL_TOOL_ROUNDS = 3
 LUMI_RECALL_N = 4
 
 
-def declarations() -> list[types.Tool]:
-    """Her two ways to look back, as Gemini's function declarations."""
-    return [types.Tool(function_declarations=[
+def plan_declarations() -> list[types.FunctionDeclaration]:
+    """v9.2 (AGORA-283) — her two ways to keep her checklist, in a person's words (the owner, 2026-11-18: «щоб вона
+    могла щось спланувати сама … і щоб вона могла позначити це виконано чи ні»)."""
+    day = types.Schema(type=types.Type.STRING, description="День: РРРР-ММ-ДД")
+    hour = types.Schema(type=types.Type.STRING, description="Година: ГГ:ХХ, якщо домовились про годину")
+    return [
+        types.FunctionDeclaration(
+            name=PLAN_ADD,
+            description=("Запам'ятати, про що ви домовились або що ти сама задумала зробити: що, з ким і коли. Записуй "
+                         "щоразу, коли ви про щось домовляєтесь або ти щось задумуєш."),
+            parameters=types.Schema(type=types.Type.OBJECT, properties={
+                "what": types.Schema(type=types.Type.STRING, description="Що саме, кількома словами"),
+                "who": types.Schema(type=types.Type.STRING, description="З ким, якщо не сама"),
+                "ich": types.Schema(type=types.Type.BOOLEAN, description="Чи це з Ich або про нього"),
+                "date": day, "time": hour}, required=["what"])),
+        types.FunctionDeclaration(
+            name=PLAN_MARK,
+            description=("Позначити, як вийшло з тим, що ти планувала: зроблено, не вийшло, скасовано чи перенесено "
+                         "(і на коли) — за номером зі списку твоїх справ."),
+            parameters=types.Schema(type=types.Type.OBJECT, properties={
+                "number": types.Schema(type=types.Type.INTEGER, description="Номер справи зі списку"),
+                "status": types.Schema(type=types.Type.STRING, enum=list(MARK_WORDS), description="Як вийшло"),
+                "date": day, "time": hour}, required=["number", "status"])),
+    ]
+
+
+def declarations(recall: bool = True, plans: bool = False) -> list[types.Tool]:
+    """Her ways to look back, as Gemini's function declarations; v9.2: and to keep her checklist (`plans`)."""
+    return [types.Tool(function_declarations=(_recall_declarations() if recall else []) +
+                       (plan_declarations() if plans else []))]
+
+
+def _recall_declarations() -> list[types.FunctionDeclaration]:
+    return [
         types.FunctionDeclaration(
             name=RECALL,
             description=("Згадати, що ти пам'ятаєш про щось — з ваших розмов, свого життя, своїх думок і того, що ти "
@@ -47,7 +85,7 @@ def declarations() -> list[types.Tool]:
             parameters=types.Schema(type=types.Type.OBJECT, properties={
                 "date": types.Schema(type=types.Type.STRING, description="День: РРРР-ММ-ДД")},
                 required=["date"])),
-    ])]
+    ]
 
 
 @dataclass

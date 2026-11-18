@@ -57,6 +57,18 @@ from agents.archive import (
     render_agora_now,
     render_recalled,
 )
+from agents.checklist import (
+    HER_STATUS,
+    add_entry,
+    mark_entry,
+    mark_problem,
+    next_id,
+    parse_due,
+    plan_outcomes,
+)
+from agents.checklist import append as append_checklist
+from agents.checklist import fold as fold_checklist
+from agents.checklist import load as load_checklist
 from agents.chronicle import (
     day_memory_request,
     days_due,
@@ -187,7 +199,19 @@ from agents.lumi import MODES as MEMORY_MODES
 from agents.matrix import join_room as matrix_join
 from agents.matrix import login as matrix_login
 from agents.memory import build_summary_request, cap_words, load_memory, save_memory, session_ended
-from agents.memory_tools import DAY_TALK, NOTHING, RECALL, ToolSet, day_result, declarations
+from agents.memory_tools import (
+    DAY_TALK,
+    NOTHING,
+    PLAN_ADD,
+    PLAN_MARK,
+    RECALL,
+    TOOLS_KEY,
+    TOOLS_KEY_ALL,
+    TOOLS_KEY_PLANS,
+    ToolSet,
+    day_result,
+    declarations,
+)
 from agents.memory_tools import parse_day as parse_tool_day
 from agents.mood import (
     MOOD_MAX_TOKENS,
@@ -883,7 +907,14 @@ class Agent:
         self.archive: Archive | None = None
         self.recall_n, self.private_agora_n = 0, 0
         self.recall_tool_n, self.recall_tool_rounds, self.lumi_recall_n = 0, 0, 0  # v7.6 (AGORA-262)
-        self._recall_tools: list | None = None
+        self._recall_tools: dict = {}  # v9.2: by the set's key
+        # v9.2 (AGORA-283) — her checklist (`checklist`): what she arranged or means to do, and what came of it; her
+        # calls' entries wait in the answer and reach the log only when her Gemini answer goes out
+        self._checklist_pending: list[dict] = []
+        self.checklist_days, self.checklist_n = 0, 0
+        if cfg.can("checklist"):
+            self.checklist_days = int(os.environ.get("CHECKLIST_DAYS", "7"))
+            self.checklist_n = int(os.environ.get("CHECKLIST_N", "20"))
         if cfg.can("recall"):
             try:  # v5.8 review #4: a bad archive never stops her start — she answers without recall
                 self.archive = Archive(self.memory_file.parent / f"{cfg.localpart}.archive.db")
@@ -1384,6 +1415,7 @@ class Agent:
             self.record_answer("private", door, "none" if nudge else "owner", asked_ms, delay_ms, by,  # v5.22
                                [p for p, on in (("voice", self.voice_sent),
                                                 ("photo", made is not None and self.photo_sent)) if on], text)
+            self._commit_checklist(by)  # v9.2 (AGORA-283): her calls kept only with her Gemini answer sent
             if self.cfg.can("summary"):
                 self.session.append((private_label(self.cfg.name), text))
             if video is not None:  # v5.18: made and sent in the background — her next answer never waits for it
@@ -1482,19 +1514,115 @@ class Agent:
 
     def _memory_tools(self, kind: str) -> ToolSet | None:
         """v7.6 (AGORA-262) — what her answer offers to recall by herself: in `lumi` mode, alone with him (an answer or
-        a line written first), with her archive; None otherwise."""
-        if kind not in ("private", "private_nudge") or self.archive is None or self.recall_tool_rounds <= 0:
+        a line written first), with her archive; None otherwise. v9.2 (AGORA-283): with `checklist` her two ways to keep
+        her checklist too, in both memory modes — each set under its own key."""
+        if kind not in ("private", "private_nudge") or self.recall_tool_rounds <= 0:
             return None
-        if not self.cfg.can("recall") or self.memory_mode() != "lumi":
+        recall = self.archive is not None and self.cfg.can("recall") and self.memory_mode() == "lumi"
+        plans = self.cfg.can("checklist")
+        if not recall and not plans:
             return None
-        if self._recall_tools is None:
-            self._recall_tools = declarations()
-        return ToolSet(self._recall_tools, self._run_memory_tool, self.recall_tool_rounds)
+        key = TOOLS_KEY_ALL if recall and plans else TOOLS_KEY if recall else TOOLS_KEY_PLANS
+        if key not in self._recall_tools:
+            self._recall_tools[key] = declarations(recall=recall, plans=plans)
+        return ToolSet(self._recall_tools[key], self._run_memory_tool, self.recall_tool_rounds, key)
+
+    # --- v9.2 (AGORA-283): her checklist ---------------------------------------------------------------------------
+    @property
+    def checklist_file(self) -> Path:
+        return self.memory_file.parent / f"{self.cfg.localpart}.checklist.jsonl"
+
+    def _checklist_entries(self) -> list[dict]:
+        """The log's entries and her calls still waiting in this answer; an unreadable log is none."""
+        try:
+            entries, _ = load_checklist(self.checklist_file)
+        except Exception:  # noqa: BLE001 — her answer never fails for her checklist
+            entries = []
+        return entries + self._checklist_pending
+
+    def _his_last_key(self) -> str | None:
+        """The archive key of his newest line in her window — what her item came from."""
+        for line in reversed(self._gemini_lines() or []):
+            if line.speaker != self.cfg.name:
+                return line.key
+        return None
+
+    def _checklist_call(self, name: str, args: dict) -> str:
+        """One of her checklist calls: `plan_add` writes an item down, `plan_mark` how it went — both kept in this
+        answer until it goes out (`_commit_checklist`), answered in her words, never raising; the log names the call and
+        its outcome, never what the item says."""
+        try:
+            entries = self._checklist_entries()
+            now = local_now(self.clock(), self.tz)
+            if name == PLAN_ADD:
+                what = " ".join(str(args.get("what") or "").split())[:300]
+                if not what:
+                    log.info("checklist: add refused (empty)")
+                    return "Не зрозуміло, що саме записати — скажи кількома словами."
+                due = parse_due(args.get("date"), args.get("time")) if args.get("date") else None
+                item_id = next_id(entries)
+                self._checklist_pending.append(add_entry(
+                    item_id, what, now, who=str(args.get("who") or "")[:100], ich=args.get("ich") is True, due=due,
+                    source=self._his_last_key()))
+                log.info("checklist: add №%d%s", item_id, " with a time" if due else "")
+                return f"Записала: №{item_id}."
+            raw = args.get("number")
+            number = int(raw) if isinstance(raw, float) and raw.is_integer() else raw
+            word = " ".join(str(args.get("status") or "").lower().split())
+            status = HER_STATUS.get(word, word)
+            due = parse_due(args.get("date"), args.get("time")) if args.get("date") else None
+            problem = mark_problem(fold_checklist(entries), number, status, due)
+            if problem:
+                log.info("checklist: mark refused")
+                return problem
+            self._checklist_pending.append(mark_entry(number, status, now, due))
+            log.info("checklist: mark №%d %s", number, status)
+            return f"Позначила №{number}: {word}."
+        except Exception as exc:  # noqa: BLE001
+            log.error("checklist: %s failed (%s)", name, type(exc).__name__)
+            return "Зараз не вийшло записати — спробуй ще раз пізніше."
+
+    def _commit_checklist(self, by: str | None) -> None:
+        """Her calls' entries into the log — only when her Gemini answer went out; any other (the backup's, another
+        model's) leaves them out, so a closed exchange never adds or marks an item."""
+        pending, self._checklist_pending = self._checklist_pending, []
+        if not pending or by != "gemini":
+            if pending:
+                log.info("checklist: %d entries dropped (%s)", len(pending), by or "silence")
+            return
+        try:
+            append_checklist(self.checklist_file, pending)
+            log.info("checklist: %d entries kept", len(pending))
+        except Exception as exc:  # noqa: BLE001
+            log.error("checklist: not written (%s)", type(exc).__name__)
+
+    def ensure_plan_outcomes(self, today) -> None:
+        """Each past day plan of the last `CHECKLIST_DAYS` days, once its day has ended and not yet in her checklist:
+        its items with their outcome (`plan_outcomes`, by their hidden tags); today's never — she never learns an
+        outcome ahead."""
+        try:
+            entries, _ = load_checklist(self.checklist_file)
+            done = {e.get("plan_day") for e in entries if e.get("by") == "plan"}
+            new: list[dict] = []
+            now = local_now(self.clock(), self.tz)
+            for back in range(max(self.checklist_days, 1), 0, -1):
+                day = today - timedelta(days=back)
+                text = self._read(self.plan_paths(day)["day"])
+                if text and day.isoformat() not in done:
+                    new += plan_outcomes(text, day, next_id(entries + new), now)
+            if new:
+                append_checklist(self.checklist_file, new)
+                log.info("checklist: %d day plan items with their outcome", len(new) // 2)
+        except Exception as exc:  # noqa: BLE001
+            log.error("checklist: the day plan's outcomes not written (%s)", type(exc).__name__)
 
     async def _run_memory_tool(self, name: str, args: dict) -> str:
         """One of her recall calls: `recall` — her archive by meaning and words, what her prompt already holds left out;
         `day_talk` — a day's gist and summaries, today her digest, a day not yet come nothing. Never a closed line, a
-        softened span's line or her future; the log names the call and whether it found anything, never a text."""
+        softened span's line or her future; the log names the call and whether it found anything, never a text. v9.2
+        (AGORA-283): `plan_add` / `plan_mark` — her checklist (`_checklist_call`)."""
+        if name in (PLAN_ADD, PLAN_MARK):
+            return self._checklist_call(name, args) if self.cfg.can("checklist") else NOTHING
         if name == RECALL:
             query = " ".join(str(args.get("query", "")).split())[:300]
             if not query:
@@ -1625,6 +1753,7 @@ class Agent:
     async def _gemini_text(self, brief: str, kind: str):
         """Gemini's line, and its block or refusal (v5.13's `LAST_BLOCK`, read in this task) when it gave none."""
         LAST_BLOCK.set(None)
+        self._checklist_pending = []  # v9.2 (AGORA-283): only this answer's own calls ever reach her checklist
         shots: list = []
         prompt = await self._gemini_private_prompt(brief)
         lines = [entry for _, entry in self.gemini_history_shown()]
@@ -3776,6 +3905,8 @@ class Agent:
             if ok and self.cfg.can("plans"):
                 await self.ensure_plans(today)
                 ok = all(p.exists() for p in self.plan_paths(today).values())
+                if self.cfg.can("checklist"):  # v9.2 (AGORA-283): a past day plan's outcomes, once its day has ended
+                    self.ensure_plan_outcomes(today)
             if not ok:
                 self._gen_retry_ms = now_ms + 600_000
 
