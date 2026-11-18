@@ -101,7 +101,7 @@ deferred backlog items in the code-review docs, new simulations) needs new phase
 | v8.2 | Лілі under the full rules | ✅ completed | `v8.2.0` (2026-11-15) |
 | v8.3 | Лілі speaks when she wants | ✅ completed | `v8.3.0` (2026-11-16) |
 | v9.1 | When it was: a time on every memory and every plan (Кіра and Устина) | ✅ completed | `v9.1.0` (2026-11-18) |
-| v9.2 | Her checklist: what she plans herself, and what is done (Кіра and Устина) | ⏳ planned | — |
+| v9.2 | Her checklist: what she plans herself, and what is done (Кіра and Устина) | ✅ completed | `v9.2.0` (2026-11-19) |
 | v10.1 | The moment and the day: her state and her voice (Кіра and Устина) | ⏳ planned | — |
 | v10.2 | Feelings, open threads and her behaviour (Кіра and Устина) | ⏳ planned | — |
 | v10.3 | Anticipation and strong memories (Кіра and Устина) | ⏳ planned | — |
@@ -4627,7 +4627,7 @@ offer never acked; `"agora": 1` → no initiative; the usage line; the card.
 
 ## v9 — Time and her plans: when each thing was, and what is done
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — v9.1.0 and v9.2.0 released (2026-11-18/19).
 
 Planned by the owner on 2026-11-18, before the companions' inner life, which became v10 (Applications v11, the Theatre
 v12): «всі спогади мають мати мітку часу щоб було відомо що відбулось 6 год тому а що 12 а що вчора а що місяць тому.
@@ -4721,7 +4721,7 @@ one stays, and code counts a slip.
 
 ### v9.2 — Her checklist: what she plans herself, and what is done
 
-**Status:** ⏳ planned.
+**Status:** ✅ completed — released `v9.2.0` on 2026-11-19 (AGORA-282…286). Deployed first for the owner as `sha-08ccdcc`, then reviewed (1 HIGH, 2 MEDIUM fixed), released and deployed; his live checks over the next days, waived to after the release — «релізь і я потестую це наступні декілька днів, фікси підуть патчем».
 
 **Goal:** a companion keeps a checklist of what she and the owner arranged and what she means to do herself.
 - She adds an item herself while she answers, mostly in her talks with him.
