@@ -349,6 +349,7 @@ def instruction_and_start(
     voice: str | None = None,
     can_pass: bool = True,
     summary_when: str | None = None,
+    time_rule: str | None = None,
 ) -> tuple[str, str]:
     """(the system instruction, its start) in contract order (ARCHITECTURE §Prompt assembly). v7.5 (AGORA-255): what
     changes slowly first, so a cache reads it from one call to the next, then what changes every call:
@@ -385,7 +386,8 @@ def instruction_and_start(
     rules = f"Ти — {name}. Відповідай лише від себе, коротко, без префікса з іменем."
     if can_pass:
         rules += " Якщо тобі нема чого додати — відповідай рівно PASS."
-    rules = " ".join(r for r in (rules, rules_extra, discretion) if r)  # v5.6: the discretion line, in Agora
+    rules = " ".join(r for r in (rules, rules_extra, discretion, time_rule) if r)  # v5.6: the discretion line, in Agora;
+    # v9.1 (AGORA-280): a `stamps` member's rule for the dates beside her memories, last
     tail.append(rules)
     return "\n\n".join(start + tail), "\n\n".join(start)
 

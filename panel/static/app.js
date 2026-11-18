@@ -422,6 +422,7 @@ function agentCardHtml(a) {
     ${a.capabilities && can(a, "recall") ? `<div class="muted" style="font-size:12px">${archiveLine(mem)}</div>` : ""}
     ${a.capabilities && can(a, "fallback") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Route</div><div class="muted" style="font-size:13px">${esc(routeLine(mem))}</div></div>` : ""}
     ${blocksLine(a.name)}
+    ${a.capabilities && can(a, "stamps") ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Dates said today</div><div class="muted" style="font-size:13px">${mem.available && mem.dates_today != null ? esc(fmtInt(mem.dates_today)) : "unreadable"}</div></div>` : ""}
     ${mem.models ? `<div style="display:flex;flex-direction:column;gap:3px"><div class="label">Models</div>${modelLines(mem.models)}</div>` : ""}
     <div class="card-foot rule-t"><div class="meta">${tokens == null ? `${icon("database", 13)} Memory unavailable` : `7 days · ${esc(tokens)}`}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${actionButtons({kind: "agent", id: a.name, state: d.health.docker ? c.state : "unknown", big: true})}</div>

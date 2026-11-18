@@ -82,6 +82,28 @@ def plan_items(text: str) -> list[dict]:
     return items
 
 
+def dates_view(state_dir: Path, name: str, today: date) -> int | None:
+    """v9.1 (AGORA-280) — how many dates a `stamps` member named today: the sum of `dates` over today's lines of
+    `<name>.answers.jsonl` (a line without it, an old or corrupt one, counts 0); None when the file is unreadable."""
+    path = state_dir / f"{name}.answers.jsonl"
+    if not path.exists():
+        return 0
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    total, day = 0, today.isoformat()
+    for line in raw.splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        n = row.get("dates") if isinstance(row, dict) else None
+        if isinstance(n, int) and not isinstance(n, bool) and n > 0 and str(row.get("ts", "")).startswith(day):
+            total += n
+    return total
+
+
 def readable(state_dir: Path) -> bool:
     return os.access(state_dir, os.R_OK | os.X_OK)
 
@@ -442,7 +464,8 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
                 with_news: bool = False, with_digest: bool = False, with_facts: bool = False,
                 with_archive: bool = False, with_models: bool = False, voice_spec: Path | None = None,
                 with_events: bool = False, with_thoughts: bool = False, with_route: bool = False,
-                with_talk: bool = False, engine: str = "gemini", with_bridge: bool = False) -> dict:
+                with_talk: bool = False, engine: str = "gemini", with_bridge: bool = False,
+                with_stamps: bool = False) -> dict:
     if not readable(state_dir):
         return {"available": False}
     summary_path = state_dir / f"{name}.memory.md"
@@ -496,6 +519,7 @@ def memory_view(state_dir: Path, name: str, today: date, natal: Path | None = No
         "thoughts": thoughts_view(state_dir, name, today) if with_thoughts else None,    # v5.12: her thoughts
         "route": route_view(state_dir, name, today) if with_route else None,             # v5.14: her backup
         "bridge": bridge_view(state_dir, name, today) if with_bridge else None,          # v8.1: Лілі's bridge
+        "dates_today": dates_view(state_dir, name, today) if with_stamps else None,     # v9.1: dates she said
     }
 
 

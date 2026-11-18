@@ -26,6 +26,7 @@ fallback = true         # v5.14: GLM-4.6 on NovelAI answers her private chat whe
 photos = true           # v5.17: her photos in Telegram — Google's image model, her face from agents/canon/kira.face/
 videos = true           # v5.18: her кружечок in her voice (Fabric 1.0 on fal, FAL_KEY) and short clips (Omni Flash)
 talk = true             # v5.20: her private chat in layers — the last messages, then the open talk by hour, block, week
+stamps = true           # v9.1: a time — its age and its date — on every memory and plan; she speaks without dates
 
 [turns]
 mode = "ranked"         # ranked | ambient | mention-only

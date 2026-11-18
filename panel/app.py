@@ -224,7 +224,8 @@ def create_app(token: str | None = None, registry: Registry | None = None, docke
                            Path(found.voice_spec) if found.voice_spec and "emotion" in found.capabilities else None,
                            "events" in found.capabilities, "thoughts" in found.capabilities,
                            "fallback" in found.capabilities, "talk" in found.capabilities, found.engine,
-                           found.type == "bridge")  # v8.1: Лілі's bridge — Lumi's state, never her words
+                           found.type == "bridge",  # v8.1: Лілі's bridge — Lumi's state, never her words
+                           "stamps" in found.capabilities)  # v9.1: the dates she said today
 
     @app.get("/api/agents/{name}/prompt")
     def agent_prompt(name: str) -> dict:

@@ -221,3 +221,52 @@ def test_her_plans_and_memories_stamped_and_the_start_the_same_all_day(tmp_path)
     assert "3 дні тому — неділя, 15 листопада: Ходила в обсерваторію." in morning
     assert start_at(2026, 11, 18, 23, 59) == morning                                 # v7.5's cache: the same all day
     assert start_at(2026, 11, 19, 0, 1) != morning                                   # a new day, new labels
+
+
+# --- AGORA-280: the rule, the count, the card, the switch ----------------------------------------------------------
+def test_the_rule_is_hers_in_both_prompts_and_never_outs_her():
+    from agents.agent import Agent
+    from agents.logic import BANNED_RE
+    from agents.private import PRIVATE_BRIEF, STAMPS_RULE
+    from agents.roster import load_roster
+    from tests.test_plans import CFG, FakeLLM
+    assert not BANNED_RE.search(STAMPS_RULE) and "інструмент" not in STAMPS_RULE
+    plain = Agent(CFG, llm=FakeLLM("-"))
+    mine = Agent(dataclasses.replace(CFG, capabilities=CFG.capabilities | {"stamps"}), llm=FakeLLM("-"))
+    assert STAMPS_RULE not in plain.build_prompt() and STAMPS_RULE not in plain.build_prompt(private=PRIVATE_BRIEF)
+    assert mine.build_prompt().endswith(STAMPS_RULE) and mine.build_prompt(private=PRIVATE_BRIEF).endswith(STAMPS_RULE)
+    roster = load_roster("agora")
+    assert sorted(n for n, m in roster.items() if m.can("stamps")) == ["kira", "ustyna"]  # the switch: both, no other
+
+
+def test_a_date_she_says_is_counted_never_kept(tmp_path, monkeypatch):
+    import json
+
+    from agents.usage import answer_line
+    assert answer_line("t", "kira", "private", "telegram", "owner", 5, 0, "gemini", (), 2)["dates"] == 2
+    assert "dates" not in answer_line("t", "kira", "private", "telegram", "owner", 5, 0, "gemini")  # 0: absent
+    agent = stamped(lumi(tmp_path, monkeypatch))
+    agent.answers_file.parent.mkdir(parents=True, exist_ok=True)
+    agent.record_answer("private", "telegram", "owner", NOW - 1000, 0, "gemini", [], "Пам'ятаєш 17.11? Це було класно.")
+    agent.record_answer("private", "telegram", "owner", NOW - 1000, 0, "gemini", [], "Вчора було класно.")
+    rows = [json.loads(x) for x in agent.answers_file.read_text(encoding="utf-8").splitlines()]
+    assert rows[0]["dates"] == 1 and "dates" not in rows[1]
+    assert "17.11" not in agent.answers_file.read_text(encoding="utf-8")                # the count alone, never the text
+
+
+def test_her_card_sums_todays_dates(tmp_path):
+    import json
+    from datetime import date
+
+    from panel.memory import dates_view, memory_view
+    path = tmp_path / "kira.answers.jsonl"
+    path.write_text("\n".join([json.dumps({"ts": "2026-11-18T10:00:00+02:00", "dates": 2}),
+                               json.dumps({"ts": "2026-11-18T11:00:00+02:00"}),            # an old line: 0
+                               "not json",                                                 # a corrupt one: 0
+                               json.dumps({"ts": "2026-11-17T23:00:00+02:00", "dates": 5}),  # yesterday
+                               json.dumps({"ts": "2026-11-18T12:00:00+02:00", "dates": True})]), encoding="utf-8")
+    assert dates_view(tmp_path, "kira", date(2026, 11, 18)) == 2
+    assert dates_view(tmp_path, "ustyna", date(2026, 11, 18)) == 0                       # no file yet
+    (tmp_path / "kira.memory.md").write_text("x", encoding="utf-8")
+    view = memory_view(tmp_path, "kira", date(2026, 11, 18), with_stamps=True)
+    assert view["dates_today"] == 2 and memory_view(tmp_path, "kira", date(2026, 11, 18))["dates_today"] is None

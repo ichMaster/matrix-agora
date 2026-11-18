@@ -78,7 +78,8 @@ def test_the_four_newcomers_are_people_like_ada_and_bruno(name, shown, forms):
                                                   "thoughts", "fallback",  # v5.14: her backup
                                                   "photos",  # v5.17: her photos in Telegram
                                                   "videos",  # v5.18: her кружечок and clips
-                                                  "talk"}  # v5.20: her private chat in layers
+                                                  "talk",  # v5.20: her private chat in layers
+                                                  "stamps"}  # v9.1: a time on every memory and plan
                                                  if name == "kira" else set())
     assert m.natal == ("agents/canon/kira.natal.md" if name == "kira" else "")
     assert m.panel["name"] == name.capitalize()

@@ -153,12 +153,12 @@ def test_in_agora_each_is_one_of_the_others_speakers(pair):
 def test_her_agora_prompt_keeps_what_is_between_her_and_him_out(pair):
     """v6.4: in Agora her prompt is her main canon, closed by the discretion line — her private canon only alone with
     him (made-up canon lines)."""
-    from agents.private import PRIVATE_BRIEF, PRIVATE_DISCRETION
+    from agents.private import PRIVATE_BRIEF, PRIVATE_DISCRETION, STAMPS_RULE
     agents, _ = pair
     ustyna = agents["ustyna"]
     ustyna.cfg = AgentConfig(**{**ustyna.cfg.__dict__, "canon": "СПІЛЬНЕ. ЇЇ КАНОН.", "canon_private": "НАОДИНЦІ."})
     agora = ustyna.build_prompt()
     assert agora.startswith("СПІЛЬНЕ. ЇЇ КАНОН.") and "НАОДИНЦІ." not in agora
-    assert agora.split("\n\n")[-1].endswith(PRIVATE_DISCRETION)
+    assert agora.split("\n\n")[-1].endswith(f"{PRIVATE_DISCRETION} {STAMPS_RULE}")  # v9.1: the dates' rule last
     alone = ustyna.build_prompt(private=PRIVATE_BRIEF)
     assert alone.startswith("НАОДИНЦІ.") and PRIVATE_DISCRETION not in alone

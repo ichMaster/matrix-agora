@@ -255,6 +255,7 @@ from agents.private import (
     PRIVATE_NOT_HEARD,
     PRIVATE_NUDGE,
     PRIVATE_NUDGE_THOUGHTS,
+    STAMPS_RULE,
     live_room,
     load_private_state,
     pick_door,
@@ -438,6 +439,7 @@ from agents.world import (
     local_now,
     month_label,
     now_line,
+    says_date,
     span_stamp,
     stamp,
     week_label,
@@ -1381,7 +1383,7 @@ class Agent:
             self._archive(key, self.clock(), "private", door, self.cfg.name, text)
             self.record_answer("private", door, "none" if nudge else "owner", asked_ms, delay_ms, by,  # v5.22
                                [p for p, on in (("voice", self.voice_sent),
-                                                ("photo", made is not None and self.photo_sent)) if on])
+                                                ("photo", made is not None and self.photo_sent)) if on], text)
             if self.cfg.can("summary"):
                 self.session.append((private_label(self.cfg.name), text))
             if video is not None:  # v5.18: made and sent in the background — her next answer never waits for it
@@ -3166,7 +3168,7 @@ class Agent:
         prompt, start = instruction_and_start(**layers)
         # v5.22: its parts' sizes (the rules and the joins are what is left), for the answer call's usage line
         parts = {PART_NAMES.get(k, k): len(v) for k, v in layers.items()
-                 if k not in ("name", "summary_when") and isinstance(v, str) and v}  # v9.1: its label is the rules' part
+                 if k not in ("name", "summary_when", "time_rule") and isinstance(v, str) and v}  # v9.1: the rules'
         parts["rules"] = max(0, len(prompt) - sum(parts.values()))
         # v7.5 (AGORA-255): its slow part is the whole start — what a cache reads from one call to the next
         _LAST_PARTS.set((prompt, parts, slow_part(prompt, start)))
@@ -3234,6 +3236,7 @@ class Agent:
             # refusal
             "can_pass": private is None,
             "voice": self.cfg.voice_spec if can("emotion") and self.cfg.voice_spec else None,  # v5.9: both her prompts
+            "time_rule": STAMPS_RULE if can("stamps") else None,  # v9.1 (AGORA-280): both her prompts
         }
 
     def draw_move(self, event_id: str, now) -> str | None:
@@ -3572,13 +3575,17 @@ class Agent:
         return self.memory_file.parent / f"{self.cfg.localpart}.answers.jsonl"
 
     def record_answer(self, place: str, door: str, answered: str, asked_ms: int | None, delay_ms: int | None,
-                      by: str, parts: list[str]) -> None:
+                      by: str, parts: list[str], text: str | None = None) -> None:
         """v5.22 — one line per answer sent (`answer_line`): how long the message it answered waited, from that
         message's own time to now, and the deliberate pause in it; no text, and a failed write never stops an
-        answer."""
+        answer. v9.1 (AGORA-280): a `stamps` member's `text` is counted for the dates it names (`says_date`) — the
+        count alone is kept, in the line and the log."""
         wait = self.clock() - asked_ms if asked_ms else None
+        dates = says_date(text) if text and self.cfg.can("stamps") else 0
+        if dates:
+            log.info("answer: dates=%d (%s)", dates, place)
         self._append_jsonl(self.answers_file, lambda ts: answer_line(ts, self.cfg.localpart, place, door, answered,
-                                                                     wait, delay_ms, by, parts), "answer")
+                                                                     wait, delay_ms, by, parts, dates), "answer")
 
     def _event_at(self, event_id: str) -> tuple[int, str] | None:
         """v5.22 — a room message's own time and whose it was (`owner` | `agent`), from the shared timeline."""
@@ -4774,7 +4781,7 @@ class Agent:
             asked = self._event_at(answered_id) if answered_id else None  # v5.22: how long it waited
             self.record_answer("agora", "matrix", asked[1] if asked else "none", asked[0] if asked else None,
                                delay_ms, self._served(),  # code review v7.1 #6: the fallback's own
-                               ["voice"] if self.voice_sent else [])
+                               ["voice"] if self.voice_sent else [], text)
             if memory is not None:
                 self.told.add(memory)
             return True
