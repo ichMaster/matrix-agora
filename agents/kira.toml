@@ -27,6 +27,7 @@ photos = true           # v5.17: her photos in Telegram — Google's image model
 videos = true           # v5.18: her кружечок in her voice (Fabric 1.0 on fal, FAL_KEY) and short clips (Omni Flash)
 talk = true             # v5.20: her private chat in layers — the last messages, then the open talk by hour, block, week
 stamps = true           # v9.1: a time — its age and its date — on every memory and plan; she speaks without dates
+checklist = true        # v9.2: her checklist — what she plans herself and what came of it
 
 [turns]
 mode = "ranked"         # ranked | ambient | mention-only

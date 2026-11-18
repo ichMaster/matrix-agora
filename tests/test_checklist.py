@@ -129,3 +129,55 @@ def test_the_checklist_is_a_persons_and_needs_her_private_chat():
     with pytest.raises(RosterError, match="persona type only"):
         parse_member("kit", {"name": "Кіт", "user_id": "@kit:agora.lan", "type": "creature",
                              "capabilities": {"checklist": True}})
+
+
+# --- AGORA-284: the section and its rule in her prompt --------------------------------------------------------------
+def test_the_checklist_sits_in_the_tail_after_the_digest_and_before_her_thoughts():
+    from agents.logic import instruction_and_start
+    prompt, start = instruction_and_start("Кіра", "Канон.", world="СВІТ", digest="ДАЙДЖЕСТ", checklist="СПРАВИ",
+                                          thoughts="ДУМКИ", memories="СПОГАДИ")
+    assert prompt.index("ДАЙДЖЕСТ") < prompt.index("СПРАВИ") < prompt.index("ДУМКИ")
+    assert "СПРАВИ" not in start                                                   # never in the cached start
+
+
+def _kira(tmp_path, monkeypatch):
+    import dataclasses
+
+    from tests.test_lumi_memory import lumi
+    agent = lumi(tmp_path, monkeypatch)
+    agent.cfg = dataclasses.replace(agent.cfg, capabilities=agent.cfg.capabilities | {"checklist"})
+    agent.checklist_days, agent.checklist_n = 7, 20
+    return agent
+
+
+def test_her_private_prompt_holds_her_list_and_the_rule_and_agora_none_about_him(tmp_path, monkeypatch):
+    from agents.private import CHECKLIST_RULE, CHECKLIST_RULE_AGORA, CHECKLIST_RULE_EMPTY, PRIVATE_BRIEF
+    agent = _kira(tmp_path, monkeypatch)
+    assert CHECKLIST_RULE_EMPTY in agent.build_prompt(private=PRIVATE_BRIEF)       # none yet: the rule alone
+    assert "Твої справи" not in agent.build_prompt() and CHECKLIST_RULE_EMPTY not in agent.build_prompt()
+    now = at(2026, 11, 14, 12)
+    append(agent.checklist_file, [add_entry(1, "сходити в кіно", now, who="Ich", ich=True, due="2026-11-15T19:00"),
+                                  add_entry(2, "дочитати статтю", now)])
+    alone = agent.build_prompt(private=PRIVATE_BRIEF)
+    assert "Твої справи і домовленості" in alone and "№1 [заплановано] сходити в кіно (з Ich)" in alone
+    assert CHECKLIST_RULE in alone and "№2" in alone
+    agora = agent.build_prompt()
+    assert "№2 [заплановано] дочитати статтю" in agora and "кіно" not in agora and CHECKLIST_RULE_AGORA in agora
+    assert CHECKLIST_RULE not in agora
+
+
+def test_a_mark_changes_the_tail_never_the_start(tmp_path, monkeypatch):
+    from agents.logic import instruction_and_start
+    from agents.private import PRIVATE_BRIEF
+    agent = _kira(tmp_path, monkeypatch)
+    append(agent.checklist_file, [add_entry(1, "сходити в кіно", at(2026, 11, 14, 12), due="2026-11-15")])
+    before = instruction_and_start(**agent.prompt_layers(private=PRIVATE_BRIEF))
+    append(agent.checklist_file, [mark_entry(1, "done", at(2026, 11, 14, 13))])
+    after = instruction_and_start(**agent.prompt_layers(private=PRIVATE_BRIEF))
+    assert before[1] == after[1] and before[0] != after[0] and "[зроблено]" in after[0]
+
+
+def test_kira_and_ustyna_have_their_checklists_and_no_one_else():
+    from agents.roster import load_roster
+    roster = load_roster("agora")
+    assert sorted(n for n, m in roster.items() if m.can("checklist")) == ["kira", "ustyna"]

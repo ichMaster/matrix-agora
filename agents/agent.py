@@ -65,7 +65,9 @@ from agents.checklist import (
     next_id,
     parse_due,
     plan_outcomes,
+    section_lines,
 )
+from agents.checklist import TITLE as CHECKLIST_TITLE
 from agents.checklist import append as append_checklist
 from agents.checklist import fold as fold_checklist
 from agents.checklist import load as load_checklist
@@ -273,6 +275,9 @@ from agents.plans import (
     strip_tags,
 )
 from agents.private import (
+    CHECKLIST_RULE,
+    CHECKLIST_RULE_AGORA,
+    CHECKLIST_RULE_EMPTY,
     PRIVATE_CANT_LISTEN,
     PRIVATE_DISCRETION,
     PRIVATE_MARK,
@@ -1595,6 +1600,20 @@ class Agent:
             log.info("checklist: %d entries kept", len(pending))
         except Exception as exc:  # noqa: BLE001
             log.error("checklist: not written (%s)", type(exc).__name__)
+
+    def checklist_section(self, now, private: bool) -> str | None:
+        """«Твої справи і домовленості»: her checklist's lines (`section_lines`) and its rule — alone with him the rule
+        alone when there is none, so she still writes a new arrangement down; in Agora none about him, and nothing
+        without lines."""
+        try:
+            entries, _ = load_checklist(self.checklist_file)
+        except Exception as exc:  # noqa: BLE001 — her answer never fails for her checklist
+            log.error("checklist: unreadable (%s)", type(exc).__name__)
+            entries = []
+        lines = section_lines(fold_checklist(entries), now, private, self.checklist_days, self.checklist_n)
+        if not lines:
+            return CHECKLIST_RULE_EMPTY if private else None
+        return "\n".join([CHECKLIST_TITLE, *lines, CHECKLIST_RULE if private else CHECKLIST_RULE_AGORA])
 
     def ensure_plan_outcomes(self, today) -> None:
         """Each past day plan of the last `CHECKLIST_DAYS` days, once its day has ended and not yet in her checklist:
@@ -3380,6 +3399,8 @@ class Agent:
             "talk": self.talk_now(now) if talk and private is not None and can("talk") else None,  # v5.20
             # v7.6 (AGORA-260): her day's running digest, in the tail — her private prompt in `lumi` mode alone
             "digest": self.talk_digest_now(now) if talk and private is not None else None,
+            # v9.2 (AGORA-284): her checklist with its rule — per call, as she marks; in Agora none about him
+            "checklist": self.checklist_section(now, private is not None) if can("checklist") else None,
             # v5.22 (the owner, 2026-11-02: «прибрати рядок про PASS з її промпту, щоб вона завжди відповідала»; «коли
             # вона пише першою — теж забери»): alone with him she is never offered PASS — Gemini took it for a quiet
             # refusal
