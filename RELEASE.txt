@@ -1,3 +1,30 @@
+Version 9.1.0 (2026-11-18)
+---------------------------
+- Phase v9.1 — when it was: a time on every memory and every plan, for
+  Кіра and Устина (the persona capability `stamps`, on in both TOMLs; the
+  owner, 2026-11-18: «всі спогади мають мати мітку часу …»; «всі плани
+  теж мали б мати мітку часу»).
+- world.stamp / span_stamp: the age, then the date. By the hour in the
+  prompt's tail and history: her window's time lines, new time lines in
+  her own Agora history, «Востаннє ви говорили», today's thoughts,
+  recall, day_talk, «Сьогодні (weekday, DD.MM)», her day's digest with
+  «[HH:MM, N годин тому]». By the day in the cached start: memories,
+  plans with their period's dates, «складений …» and dated weekdays,
+  facts «(з DD.MM, …)», talk summaries and gists, the last summary — the
+  start the same all day, so v7.5's cache is rebuilt no more often
+  (AGORA-277…279).
+- STAMPS_RULE: she says time as people do, never a date unless asked; a
+  date she still names is counted (`dates` in answers.jsonl, never the
+  text) and shown on her card, «Dates said today» (AGORA-280).
+- Deployed for the owner's live test as sha-0e35848 before the review
+  (the owner's new order: deploy, his test, review and fixes, release and
+  deploy), accepted with «релізь»; the week without dates waived to after
+  the release, watched on her card (AGORA-281).
+- Code review v9.1: a recalled fact dated by the day she learned it, not
+  the archive's sync; in layered mode the window's time lines by the day,
+  for Gemini's history cache; an out-of-range thought time never breaks
+  her prompt (2 MEDIUM, 1 LOW fixed; 3 LOW deferred).
+
 Version 8.3.8 (2026-11-17)
 ---------------------------
 - Устина's slang as seasoning (the owner: «забагато сленгу, реально
