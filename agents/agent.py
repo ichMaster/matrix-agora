@@ -171,6 +171,7 @@ from agents.logic import (
 from agents.lumi import (
     DIGEST_BATCHES_PER_TICK,
     DIGEST_CHECK_MS,
+    aged_marks,
     batches_due,
     first_sentence,
     gist_path,
@@ -427,13 +428,16 @@ from agents.voice import (
 from agents.weather import fetch_weather, load_weather, save_weather
 from agents.world import (
     MONTHS_NOM,
+    WEEKDAYS,
     day_label,
     history_times,
     last_talk_line,
     local_now,
     month_label,
     now_line,
+    span_stamp,
     week_label,
+    with_time_lines,
     year_label,
 )
 
@@ -1506,9 +1510,14 @@ class Agent:
             rows = self.archive.talk_rows() if self.archive is not None else []
             gist = next((r.text for r in rows if r.level == "gist_day" and r.start_ms == start and r.text), None)
             digest = load_digest(self.digest_file)
-            text = day_result(day, now.date(), day_when(start, now, self.tz), gist,
-                              gist_items("gist_day", start, end, rows, self.tz),
-                              digest.text if digest.day == now.date().isoformat() else None)
+            stamped = self.cfg.can("stamps")  # v9.1 (AGORA-278): the day by its age and its date, today's parts aged
+            label = (span_stamp(local_now(start, self.tz), local_now(end, self.tz), now) if stamped
+                     else day_when(start, now, self.tz))
+            today_text = digest.text if digest.day == now.date().isoformat() else None
+            if today_text and stamped:
+                today_text = aged_marks(today_text, now)
+            text = day_result(day, now.date(), label, gist, gist_items("gist_day", start, end, rows, self.tz),
+                              today_text)
             log.info("recall tool: day_talk — %s", "nothing" if text == NOTHING else "found")
             return text
         return NOTHING
@@ -1754,7 +1763,8 @@ class Agent:
         if keep is not None:
             lines = [x for x in lines if any(a <= x.ts_ms < b for a, b in keep)]
         items = soften([(line.ts_ms, line) for line in lines], list(soft.values()))
-        times = history_times([ts for ts, _ in items], local_now(self.clock(), self.tz), self.tz)
+        times = history_times([ts for ts, _ in items], local_now(self.clock(), self.tz), self.tz,
+                              stamped=self.cfg.can("stamps"))  # v9.1 (AGORA-278): its age and its date
         out: list[tuple[str | None, tuple[str, str]]] = []
         for i, (_, item) in enumerate(items):
             if i in times:
@@ -1814,7 +1824,8 @@ class Agent:
         """v7.6 (AGORA-260) — her day's running digest for the prompt's tail, in `lumi` mode only."""
         if self.memory_mode() != "lumi":
             return None
-        return talk_digest_section(load_digest(self.digest_file), now.date().isoformat())
+        return talk_digest_section(load_digest(self.digest_file), now.date().isoformat(),
+                                   now if self.cfg.can("stamps") else None)  # v9.1: each part by its age
 
     def talk_now(self, now) -> str | None:
         """v5.20 — the summaries of her private chat older than the first line of Gemini's history window (`talk_section`);
@@ -2023,7 +2034,8 @@ class Agent:
             groups = [[dataclasses.replace(n, text=strip_notes(n.text)) for n in g if strip_notes(n.text)]  # v5.23
                       for g in groups]
             groups = [g for g in groups if g]
-            return render_recalled(groups, self.tz, local_now(self.clock(), self.tz))
+            return render_recalled(groups, self.tz, local_now(self.clock(), self.tz),
+                                   stamped=self.cfg.can("stamps"))  # v9.1 (AGORA-278)
         except Exception as exc:  # noqa: BLE001
             log.error("recall failed (%s) — answering without it", type(exc).__name__)
             return None
@@ -3029,9 +3041,13 @@ class Agent:
         lines a reply sees: the last `AGORA_HISTORY_HOURS` hours of its window (`HISTORY_N` lines at most), never
         fewer than `AGORA_HISTORY_MIN` lines; 0 hours — the whole window, as before."""
         lines, times = (self.wide_history, self.wide_ts) if wide else (self.history, self.history_ts)
-        if self.agora_history_hours <= 0 or len(times) != len(lines):
+        if len(times) != len(lines):
             return list(lines)
-        return list(lines[window_start(times, self.clock(), self.agora_history_hours, self.agora_history_min):])
+        start = (window_start(times, self.clock(), self.agora_history_hours, self.agora_history_min)
+                 if self.agora_history_hours > 0 else 0)
+        if self.cfg.can("stamps") and not wide:  # v9.1 (AGORA-278): her own prompt's time lines, never the room's
+            return with_time_lines(list(lines[start:]), list(times[start:]), local_now(self.clock(), self.tz), self.tz)
+        return list(lines[start:])
 
     def _remember_text(self, event_id: str, text: str) -> None:
         """What a reply answers (v4.5: Claude's mode depends on it) — bounded like the windows."""
@@ -3167,7 +3183,7 @@ class Agent:
             if self.cfg.night_place and (nights := nights_line(now, self.cfg.life)):
                 world += " " + nights  # v5.27: her nights at the telescope
             if self.summary_ms is not None:
-                world += " " + last_talk_line(local_now(self.summary_ms, self.tz), now)
+                world += " " + last_talk_line(local_now(self.summary_ms, self.tz), now, stamped=can("stamps"))
         # v5.22 (the owner): alone with him the shorter story, when her canon has one (`life_private`)
         story = self.cfg.life_private if private is not None and self.cfg.life_private else self.cfg.life
         life = life_section(story, now.date()) if can("life") and story else None
@@ -3185,7 +3201,8 @@ class Agent:
             "today": self.today_section(now) if can("today") else None,
             "mood": self.mood_section(now) if can("mood") else None,
             # v5.12: today's thoughts — alone with him all of them, a news one with its link; in Agora not the private
-            "thoughts": (thoughts_section(self.day_thoughts(now.date()), private is not None, self.thoughts_in_prompt)
+            "thoughts": (thoughts_section(self.day_thoughts(now.date()), private is not None, self.thoughts_in_prompt,
+                                          now if can("stamps") else None)  # v9.1: by its age and its hour
                          if can("thoughts") else None),
             "pastlife": pastlife if can("pastlife") else None,
             "nudge": nudge if can("nudge") else None,
@@ -3753,7 +3770,8 @@ class Agent:
         text = self._read(self.today_file)
         if not text or not text.startswith(f"<!-- {now.date().isoformat()}T"):
             return None  # reset at midnight
-        return "Сьогодні:\n" + text.split("-->", 1)[1].strip()
+        title = f"Сьогодні ({WEEKDAYS[now.weekday()]}, {now:%d.%m}):" if self.cfg.can("stamps") else "Сьогодні:"  # v9.1
+        return title + "\n" + text.split("-->", 1)[1].strip()
 
     # --- v4.2: the mood of the day (Lumi's horoscope service) ----------------------------------------------------
     @property
@@ -4058,7 +4076,9 @@ class Agent:
             while j < len(waiting) and waiting[j].ts_ms == waiting[j - 1].ts_ms:  # code review v7.6 #4: a batch never
                 j += 1                                                            # ends inside one second's lines
             chunk, i = waiting[i:j], j
-            items = [(x.speaker, history_entry(strip_notes(x.text))) for x in chunk
+            stamped = self.cfg.can("stamps")  # v9.1 (AGORA-278): each line with its time, «[09:12] Ich»
+            items = [(f"[{local_now(x.ts_ms, self.tz):%H:%M}] {x.speaker}" if stamped else x.speaker,
+                      history_entry(strip_notes(x.text))) for x in chunk
                      if local_now(x.ts_ms, self.tz).date().isoformat() == today and (x.speaker, x.text) not in hidden]
             if items:
                 if calls >= DIGEST_BATCHES_PER_TICK:
@@ -4092,7 +4112,7 @@ class Agent:
         canon = self.cfg.canon_private or self.cfg.canon
         for strict in range(len(TALK_GENTLE)):
             system, contents = talk_digest_request(self.cfg.name, self.cfg.canon, so_far, items, self.digest_words,
-                                                   strict)
+                                                   strict, stamped=self.cfg.can("stamps"))
             text = None
             for _ in range(2):
                 out = await self.llm.complete(contents, system, self.digest_words * 4, kind="talk_digest", model=model)

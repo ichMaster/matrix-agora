@@ -195,7 +195,8 @@ def build_transcript(history: list[tuple[str, str]]) -> str:
     return "\n".join(f"{name}: {text}" if name else text for name, text in history)
 
 
-TIME_LINE_RE = re.compile(r"^— (?:через [^,\n]+, )?[^:\n—]+: —$")  # `history_times`' line, never hers to say
+TIME_LINE_RE = re.compile(r"^— (?:через [^,\n]+, )?[^\n—]+?: —$")  # `history_times`' line, never hers to say
+# (v9.1: a stamped one holds its hour — «— 6 годин тому (сьогодні, 08:15): —»)
 # v5.24 (AGORA-212): a span the scan softened, in her history as she remembers it — never hers to say either
 SOFT_LINE = "— далі ви говорили, і ти пам'ятаєш це так, не дослівно: {text} —"
 SOFT_LINE_RE = re.compile(r"^— далі ви говорили, і ти пам'ятаєш це так, не дослівно: .* —$")

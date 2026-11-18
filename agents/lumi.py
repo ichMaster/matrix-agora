@@ -16,12 +16,15 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import tempfile
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
 
 from agents.memory import HUMAN_MEMORY
 from agents.talk import TALK_GENTLE
+from agents.world import stamp
 
 LIVE_WINDOW_N = 40       # Lumi's live window is 40–60 messages
 LIVE_WINDOW_BATCH = 20   # … its oldest 20 folded at once
@@ -29,6 +32,10 @@ DIGEST_WORDS = 120
 DIGEST_BATCHES_PER_TICK = 3  # a backlog (the first switch to `lumi`) is folded over a few ticks, never in one
 DIGEST_CHECK_MS = 30_000
 DIGEST_TITLE = "Раніше сьогодні ви говорили (твоя пам'ять, а не те, що кажуть зараз):"
+# v9.1 (AGORA-278): with `stamps` each part of her day's digest keeps the time it was — the owner, 2026-11-18: «щоб
+# було відомо що відбулось 6 год тому а що 12»
+DIGEST_HOURS = ("Кожну частину дня починай з часу, коли це було, у квадратних дужках, як у рядках нижче: «[09:12] …»; "
+                "частини в тому порядку, як усе йшло.")
 MODES = ("layered", "lumi")
 
 
@@ -98,24 +105,44 @@ def rolled(digest: Digest, today: str) -> Digest:
     return Digest(today, digest.upto_ms, "", digest.previous_day, digest.previous_text)
 
 
-def talk_digest_section(digest: Digest, today: str) -> str | None:
-    """The tail's layer (pure): her day's digest, today's only; None when there is none."""
+def talk_digest_section(digest: Digest, today: str, now: datetime | None = None) -> str | None:
+    """The tail's layer (pure): her day's digest, today's only; None when there is none. v9.1 (AGORA-278): `now` (a
+    member with `stamps`) — the title names the day, and each part's «[09:12]» gets its age («[09:12, 5 годин
+    тому]»); a digest written before, with no marks, as it is."""
     if digest.day != today or not digest.text.strip():
         return None
-    return f"{DIGEST_TITLE}\n{digest.text.strip()}"
+    if now is None:
+        return f"{DIGEST_TITLE}\n{digest.text.strip()}"
+    return f"{DIGEST_TITLE_DAY.format(day=now.strftime('%d.%m'))}\n{aged_marks(digest.text.strip(), now)}"
+
+
+DIGEST_TITLE_DAY = "Раніше сьогодні ({day}) ви говорили (твоя пам'ять, а не те, що кажуть зараз):"
+DIGEST_MARK_RE = re.compile(r"\[([01]?\d|2[0-3]):([0-5]\d)\]")
+
+
+def aged_marks(text: str, now: datetime) -> str:
+    """v9.1 — each «[HH:MM]» of today in `text` with its age: «[09:12, 5 годин тому]» (pure); a time still ahead of
+    `now` as it is."""
+    def age(m: re.Match) -> str:
+        then = now.replace(hour=int(m.group(1)), minute=int(m.group(2)), second=0, microsecond=0)
+        if then > now:
+            return m.group(0)
+        return f"[{m.group(1).zfill(2)}:{m.group(2)}, {stamp(then, now).split(' (')[0]}]"
+    return DIGEST_MARK_RE.sub(age, text)
 
 
 def talk_digest_request(name: str, canon: str, so_far: str, items: list[tuple[str, str]], max_words: int,
-                   strict: int = 0) -> tuple[str, str]:
+                   strict: int = 0, stamped: bool = False) -> tuple[str, str]:
     """(system instruction, contents) for folding a batch of her day's lines into her running digest: her own memory
     of the day's talk alone with Ich so far, first person, at most `max_words` words, from what she remembered and the
     lines that came after — never an hour, which her prompt does not need; their closeness told as
-    `TALK_GENTLE[strict]` says (each rewrite one step stricter, as a talk summary's)."""
+    `TALK_GENTLE[strict]` says (each rewrite one step stricter, as a talk summary's). v9.1 (AGORA-278): `stamped` —
+    the lines carry their time («[09:12] Ich»), and each part of the day begins with its own «[HH:MM]»."""
     system = (f"{canon}\n\nТи — {name}. Онови свою коротку пам'ять про сьогоднішню розмову наодинці з Ich: нижче те, що "
               "ти вже пам'ятаєш про раніше сьогодні, і те, що було далі. Напиши одну пам'ять про весь день досі — від "
               f"першої особи, мовою розмови, не більше {max_words} слів: про що говорили, що вирішили, що Ich розповів "
               "про себе, що ви одне одному пообіцяли, що ти відчувала. Найновіше — докладніше, давнє — коротше. Тільки "
-              "те, що є нижче, нічого не вигадуй. Без годин.\n\n"
+              f"те, що є нижче, нічого не вигадуй. {DIGEST_HOURS if stamped else 'Без годин.'}\n\n"
               f"{TALK_GENTLE[min(max(strict, 0), len(TALK_GENTLE) - 1)]}\n\n"
               f"{HUMAN_MEMORY}")
     before = f"Що ти вже пам'ятаєш про раніше сьогодні:\n{so_far.strip()}\n\n" if so_far.strip() else ""

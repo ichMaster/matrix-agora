@@ -18,8 +18,9 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import datetime
 
-from agents.world import PART_ADVERB, part_of_day
+from agents.world import PART_ADVERB, part_of_day, stamp
 
 KINDS = ("news", "reflection")
 PLACES = ("thought", "thought_private")  # the archive's places of her thoughts
@@ -83,20 +84,25 @@ def today_thoughts(thoughts: Iterable[Thought], private: bool, n: int) -> list[T
     return seen[-n:] if n > 0 else []
 
 
-def thought_rows(thoughts: Iterable[Thought], private: bool, n: int) -> list[str]:
+def thought_rows(thoughts: Iterable[Thought], private: bool, n: int, now: datetime | None = None) -> list[str]:
     """The last `n` of a day's thoughts a prompt may see, a line each with its part of the day — never a clock time;
-    a news thought names its title, and alone with the owner carries its link."""
+    a news thought names its title, and alone with the owner carries its link. v9.1 (AGORA-278): `now` (a member with
+    `stamps`) — today's thought by its age and its hour, «5 годин тому (сьогодні, 09:12)»."""
     rows = []
     for t in today_thoughts(thoughts, private, n):
-        when = PART_ADVERB[part_of_day(int(t.time[:2]))]
+        if now is not None:
+            hh, mm = int(t.time[:2]), int(t.time[3:5])
+            when = stamp(now.replace(hour=hh, minute=mm, second=0, microsecond=0), now)
+        else:
+            when = PART_ADVERB[part_of_day(int(t.time[:2]))]
         read = f", прочитавши «{t.title}»" if t.kind == "news" and t.title else ""
         link = f" (посилання: {t.link})" if private and t.kind == "news" and t.link else ""
         rows.append(f"- {when}{read}: {t.text}{link}")
     return rows
 
 
-def thoughts_section(thoughts: Iterable[Thought], private: bool, n: int) -> str | None:
+def thoughts_section(thoughts: Iterable[Thought], private: bool, n: int, now: datetime | None = None) -> str | None:
     """«Що ти сьогодні думала»: in Agora her `thought` place only, with no link; alone with the owner all of them,
     a news thought with its link — so a line she writes first can share it. None without one."""
-    rows = thought_rows(thoughts, private, n)
+    rows = thought_rows(thoughts, private, n, now)
     return THOUGHTS_TITLE + "\n" + "\n".join(rows) if rows else None

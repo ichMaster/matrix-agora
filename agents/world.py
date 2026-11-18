@@ -94,14 +94,16 @@ def span(pause_ms: int) -> str:
     return f"{days} {_days_word(days)}"
 
 
-def history_times(stamps: list[int], now: datetime, tz: str, gap_ms: int = HISTORY_GAP_MS) -> dict[int, str]:
+def history_times(stamps: list[int], now: datetime, tz: str, gap_ms: int = HISTORY_GAP_MS,
+                  stamped: bool = False) -> dict[int, str]:
     """Her private history's time lines (the owner, 2026-11-01: Gemini's history held Wednesday's talk right before
     Sunday's, so «I'm off to Kyiv» read as tonight's): index → the line shown before that history line — the first
     line's when, and after a pause of at least `gap_ms` how long it was and when the next line came («— через 3 дні,
-    сьогодні ввечері: —»). As a person remembers it (`ago`), never a date or an hour. Pure."""
+    сьогодні ввечері: —»). As a person remembers it (`ago`), never a date or an hour. Pure. v9.1 (AGORA-277/278):
+    `stamped` — its age and its date (`stamp`): «— 6 годин тому (сьогодні, 08:15): —»."""
     out: dict[int, str] = {}
     for i, ts in enumerate(stamps):
-        when = ago(local_now(ts, tz), now)
+        when = stamp(local_now(ts, tz), now) if stamped else ago(local_now(ts, tz), now)
         if i == 0:
             out[i] = f"— {when}: —"
         elif ts - stamps[i - 1] >= gap_ms:
@@ -133,8 +135,9 @@ def ago(then: datetime, now: datetime) -> str:
     return "якось"
 
 
-def last_talk_line(then: datetime, now: datetime) -> str:
-    return f"Востаннє ви говорили {relative_when(then, now)}."
+def last_talk_line(then: datetime, now: datetime, stamped: bool = False) -> str:
+    """«Востаннє ви говорили …»; v9.1: `stamped` — its age and its date."""
+    return f"Востаннє ви говорили {stamp(then, now) if stamped else relative_when(then, now)}."
 
 
 def day_label(d: date, today: date) -> str:
@@ -326,3 +329,19 @@ def says_date(text: str) -> int:
     n += len(_DATE_DOTS.findall(text))
     text = _DATE_DOTS.sub(" ", text)
     return n + len(_DATE_WORDS.findall(text))
+
+
+def with_time_lines(lines: list[tuple[str, str]], times: list[int], now: datetime, tz: str,
+                    gap_ms: int = HISTORY_GAP_MS) -> list[tuple[str, str]]:
+    """v9.1 (AGORA-278) — a history with its stamped time lines (`history_times`) as nameless entries before the lines
+    they mark: her own Agora prompt's, so she knows what was said hours ago. Pure; the lines unchanged and in order;
+    `times` must align with `lines`, else the lines as they are."""
+    if len(times) != len(lines):
+        return list(lines)
+    marks = history_times(times, now, tz, gap_ms, stamped=True)
+    out: list[tuple[str, str]] = []
+    for i, line in enumerate(lines):
+        if i in marks:
+            out.append(("", marks[i]))
+        out.append(line)
+    return out
