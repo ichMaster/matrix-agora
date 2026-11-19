@@ -281,6 +281,44 @@ def same_message(a: str, b: str) -> bool:
     return bool(a) and norm(a) == norm(b)
 
 
+REPEAT_WORDS = 8  # v9.2.1: a part of a reply copying this many consecutive words of a line already said is a repeat
+_REPEAT_WORD_RE = re.compile(r"\w+")
+_PART_SPLIT = re.compile(r"(\n+)")
+
+
+def _repeat_words(text: str) -> list[str]:
+    return [w.lower() for w in _REPEAT_WORD_RE.findall(TAG_RE.sub(" ", text))]
+
+
+def drop_repeats(text: str, said: Iterable[str], n: int = REPEAT_WORDS) -> tuple[str | None, int]:
+    """v9.2.1 (the owner, 2026-11-19: «Кіра дивно поводиться в Агорі, виглядає що вона одне то саме по колу пише») —
+    a reply without its parts (its lines) that copy `n` or more consecutive words of a line already said: her own
+    lines in her window, the lines she recalls. On Agora's model she stitched them into a new reply word for word.
+    Voice tags are never words. (the reply, unchanged when nothing repeats; None when no part with a word is left —
+    the parts dropped). Pure."""
+    grams: set[tuple[str, ...]] = set()
+    for line in said:
+        words = _repeat_words(line or "")
+        grams.update(tuple(words[i:i + n]) for i in range(len(words) - n + 1))
+    pieces = _PART_SPLIT.split(text)
+    kept: list[str] = []
+    dropped = 0
+    for i in range(0, len(pieces), 2):
+        part = pieces[i]
+        words = _repeat_words(part)
+        if grams and any(tuple(words[j:j + n]) in grams for j in range(len(words) - n + 1)):
+            dropped += 1
+            continue
+        if kept and part.strip():
+            kept.append(pieces[i - 1])  # the break before it, as the reply had it
+        if part.strip() or kept:
+            kept.append(part)
+    if not dropped:
+        return text, 0
+    rest = "".join(kept).strip()
+    return (rest if re.search(r"\w", TAG_RE.sub(" ", rest)) else None), dropped
+
+
 ASKED_KEPT = 8            # the persona's own questions of this session it is reminded of (v5.3, the owner)
 ASKED_MAX_CHARS = 200
 

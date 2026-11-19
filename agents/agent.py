@@ -168,6 +168,7 @@ from agents.logic import (
     build_transcript,
     clean_reply,
     cut_openings,
+    drop_repeats,
     fit_budget,
     history_entry,
     instruction_and_start,
@@ -881,6 +882,7 @@ class Agent:
         self._pending_trigger: str | None = None  # what the pending reply answers: an agent message, or None
         self._owner_coalesced = self._owner_seen = 0  # owner messages coalesced into a pending reply (review #4)
         self._last_sent = ""
+        self._repeated = False  # v9.2.1: the last composed reply was all what it already said
         self._tasks: set[asyncio.Task] = set()  # strong refs: pending tasks are only weakly referenced
         self.mood: MoodState | None = None  # v4.2: the day's horoscope (a `mood` agent)
         self._sky: tuple[str, str] | None = None  # (day, line): the day's astrological sky (the owner, 2026-10-11)
@@ -2180,12 +2182,14 @@ class Agent:
         return days
 
     async def recall_section(self, query: str, places: tuple[str, ...], exclude: set,
-                             gemini: bool = True, meaning: bool = True, n: int | None = None) -> str | None:
+                             gemini: bool = True, meaning: bool = True, n: int | None = None,
+                             said: list[str] | None = None) -> str | None:
         """What she recalls before an answer: the message she answers is the query — the word search and (when its
         embedding comes back) the meaning search within `places`, fused; the best `RECALL_N` lines not already in the
         prompt's window, each with its neighbours. `gemini=False` reads closed lines too; `meaning=False` is words
         only (v5.21: the backup's recall — open lines only, and its query never goes to Gemini's embeddings). A failure
-        is no section, never a blocked answer."""
+        is no section, never a blocked answer. `said` (v9.2.1): gets the texts of the recalled lines that were said —
+        neither a fact nor a thought — for the reply's repeat check."""
         n = self.recall_n if n is None else n  # v7.6: her own recall's, or `lumi`'s smaller recall
         if self.archive is None or n <= 0 or not (query or "").strip():
             return None
@@ -2217,6 +2221,8 @@ class Agent:
             groups = [[dataclasses.replace(n, text=strip_notes(n.text)) for n in g if strip_notes(n.text)]  # v5.23
                       for g in groups]
             groups = [g for g in groups if g]
+            if said is not None:
+                said.extend(n.text for g in groups for n in g if n.place not in ("facts", *THOUGHT_PLACES))
             return render_recalled(groups, self.tz, local_now(self.clock(), self.tz),
                                    stamped=self.cfg.can("stamps"),  # v9.1 (AGORA-278)
                                    fact_days=self._fact_days() if self.cfg.can("stamps") else None)
@@ -4923,9 +4929,11 @@ class Agent:
             answered_id = answered  # v5.3: the message this line answers — a transcript of the owner's voice is voiced
             move = self.draw_move(answered, local_now(self.clock(), self.tz))
             recalled = None
+            # v9.2.1: what it already said — its own lines in its window and the lines it recalls — never said again
+            said = [text for speaker, text in self.history if speaker == self.cfg.name]
             if self.archive is not None:  # v5.8: Agora recalls only Agora — the place is the search's, in code
                 query = self._texts.get(trigger, "") if trigger else (self.last_owner[1] if self.last_owner else "")
-                recalled = await self.recall_section(query, self.agora_places, set(self.history))
+                recalled = await self.recall_section(query, self.agora_places, set(self.history), said=said)
             prompt = self.build_prompt(pastlife_section(self.cfg.theses[memory]) if memory is not None else None,
                                        move=move, recalled=recalled)
             lines, effort = None, None
@@ -4936,7 +4944,10 @@ class Agent:
                     prompt, lines, effort = self.brief(CLAUDE_BRIEF_PHILOSOPHER), self.agora_lines(wide=True), "high"
                     log.info("claude mode: philosopher")
             self._owner_seen = self._owner_coalesced  # the owner's messages so far are in this reply's context
-            text = await self._compose(prompt, lines=lines, effort=effort)
+            text = await self._compose(prompt, lines=lines, effort=effort, said=said)
+            if text is None and self._repeated:  # v9.2.1: all of it was said before — once more, then silence
+                log.info("repeat: composing once more")
+                text = await self._compose(prompt, lines=lines, effort=effort, said=said)
             if text is not None and memory is not None and self._verbatim(text, memory):
                 log.info("verbatim memory: regenerating once")  # his own words, never the thesis (v4.3)
                 text = await self._compose(prompt)
@@ -4971,9 +4982,12 @@ class Agent:
 
     async def _compose(self, prompt: str, max_words: int | None = None, lines: list | None = None,
                        effort: str | None = None, toolset: str | None = None, kind: str = "reply",
-                       responder=None, shots: list | None = None) -> str | None:
+                       responder=None, shots: list | None = None, said: list[str] | None = None) -> str | None:
         """One model call → the line as it would be sent, or None (logged): never half a sentence, never another's
-        words, PASS honoured, the creature's word cap applied (`max_words` overrides it: a telegram's joke)."""
+        words, PASS honoured, the creature's word cap applied (`max_words` overrides it: a telegram's joke). `said`
+        (v9.2.1): the lines already said — a part of the reply that copies one is dropped (`drop_repeats`); when
+        nothing is left, `_repeated` is set and the reply is None."""
+        self._repeated = False
         history = list(self.agora_lines() if lines is None else lines)  # v7.5: the room's window by the hour
         built = _LAST_PARTS.get()  # v5.22: the prompt's parts, when this prompt is the one last built in this task
         parts = {**built[1], "history": len(build_transcript(history))} if built and built[0] is prompt else None
@@ -5023,6 +5037,14 @@ class Agent:
         if text is None:
             _silent("model passed")
             return None
+        if said:  # v9.2.1 (the owner, 2026-11-19): never what it already said, stitched into a new reply
+            text, dropped = drop_repeats(text, said)
+            if dropped:
+                log.info("repeat: %d parts dropped", dropped)  # counts only, never a text
+            if text is None:
+                self._repeated = True
+                _silent("only what it already said")
+                return None
         if self.cfg.never_open:  # v6.5.1 (the owner, 2026-11-10): never a line of hers opening with «ой»
             text = cut_openings(text, self.cfg.never_open)
         if self.cfg.swap:  # v8.3.6 (the owner, 2026-11-17): never «ваще» — «взагалі», before her history
