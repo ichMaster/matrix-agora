@@ -1,3 +1,16 @@
+Version 9.2.1 (2026-11-19)
+---------------------------
+- An Agora reply never says again what was already said (the owner,
+  2026-11-19: «Кіра дивно поводиться в Агорі, виглядає що вона одне то
+  саме по колу пише»): on gemini-2.5-flash Кіра stitched her earlier
+  lines — from her 300-line window and from what she recalled — into
+  new replies word for word (a 1206-character line sent twice).
+- Each part of a reply copying 8 consecutive words of her own window's
+  line or of a recalled said line (never a fact or a thought) is dropped
+  (logic.drop_repeats), compared after her «ой» cut and swaps; nothing
+  left — composed once more, then silence; counts only in the log.
+- Code review 9.2.1: 1 LOW fixed, 2 LOW deferred.
+
 Version 9.2.0 (2026-11-19)
 ---------------------------
 - Phase v9.2 — her checklist, for Кіра and Устина (the persona

@@ -963,7 +963,7 @@ wheels = [
 
 [[package]]
 name = "matrix-agora"
-version = "9.2.0"
+version = "9.2.1"
 source = { virtual = "." }
 dependencies = [
     { name = "aiohttp" },
