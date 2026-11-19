@@ -119,3 +119,17 @@ def test_a_recalled_thought_or_fact_is_never_counted_as_said(tmp_path, monkeypat
     section = asyncio.run(agent.recall_section("музика всесвіту", ("agora", "thought"), set(), said=said))
     assert section and "я думала" in section
     assert said == ["Музика всесвіту — красиво сказано, Кіро."]
+
+
+def test_a_line_said_again_with_a_swapped_word_is_still_a_repeat(tmp_path, monkeypatch):
+    """Her history holds her line after her swaps («ваще» → «взагалі»): the reply is compared in that form."""
+    import dataclasses
+    said = "я взагалі не розумію, як можна спати цієї ночі"  # 9 words: each 8 in a row hold the swap
+    fresh = "Бруно, а ти бачив сьогодні Венеру?"
+    agent = agent_with(tmp_path, monkeypatch, f"я ваще не розумію, як можна спати цієї ночі\n{fresh}")
+    agent.cfg = dataclasses.replace(agent.cfg, swap=(("ваще", "взагалі"),))
+    agent.archive = None
+    agent.history = [("Кіра", said), ("Ich", "Кіро, що там на небі?")]
+    agent.history_ts = [ms(17), ms(17, 50)]
+    assert asyncio.run(agent.reply(AGORA)) is True
+    assert sent(agent) == [fresh]

@@ -5037,7 +5037,11 @@ class Agent:
         if text is None:
             _silent("model passed")
             return None
-        if said:  # v9.2.1 (the owner, 2026-11-19): never what it already said, stitched into a new reply
+        if self.cfg.never_open:  # v6.5.1 (the owner, 2026-11-10): never a line of hers opening with «ой»
+            text = cut_openings(text, self.cfg.never_open)
+        if self.cfg.swap:  # v8.3.6 (the owner, 2026-11-17): never «ваще» — «взагалі», before her history
+            text = swap_words(text, self.cfg.swap)
+        if said:  # v9.2.1 (the owner, 2026-11-19): never what it already said — compared as her history holds it
             text, dropped = drop_repeats(text, said)
             if dropped:
                 log.info("repeat: %d parts dropped", dropped)  # counts only, never a text
@@ -5045,10 +5049,6 @@ class Agent:
                 self._repeated = True
                 _silent("only what it already said")
                 return None
-        if self.cfg.never_open:  # v6.5.1 (the owner, 2026-11-10): never a line of hers opening with «ой»
-            text = cut_openings(text, self.cfg.never_open)
-        if self.cfg.swap:  # v8.3.6 (the owner, 2026-11-17): never «ваще» — «взагалі», before her history
-            text = swap_words(text, self.cfg.swap)
         if self.cfg.type == "creature":  # v4.2: a small vocabulary, enforced
             text = cap_words(text, max_words or self.cat_max_words)
         if self.cfg.can("emotion"):  # v5.9: her words for every text, the tags only for her voice
